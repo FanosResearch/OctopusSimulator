@@ -1,0 +1,5 @@
+m_lower_level_ids(vi),0,1,2,3,,
+upper_level_cache_ids(vi),10,,,,,
+controller_type(s),Unified,,,,,
+buffers_max_size(i),16,,,,,
+m_clk_period(i),50,,,,,#Clk period in nano seconds

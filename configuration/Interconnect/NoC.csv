@@ -1,0 +1,8 @@
+Extends,Mesh,,,,,
+switch_ids(vi),200,,,,,#Ids of the switches in the network
+connection_matrix[0](vi),0,200,10,,,#first entry is the node id and the other entries are what the node is connected to
+connection_matrix[1](vi),1,200,10,,,#first entry is the node id and the other entries are what the node is connected to
+connection_matrix[2](vi),2,200,10,,,#first entry is the node id and the other entries are what the node is connected to
+connection_matrix[3](vi),3,200,10,,,#first entry is the node id and the other entries are what the node is connected to
+connection_matrix[4](vi),10,0,1,2,3,#first entry is the node id and the other entries are what the node is connected to
+connection_matrix[5](vi),200,0,1,2,3,#first entry is the node id and the other entries are what the node is connected to

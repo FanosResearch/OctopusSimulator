@@ -1,0 +1,2 @@
+Extends,BusController,,
+arbiter_type(s),FCFSArbiter,,#Type should match the name of the arbiter class

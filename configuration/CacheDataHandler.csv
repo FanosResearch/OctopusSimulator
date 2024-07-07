@@ -1,0 +1,5 @@
+cache_size(i),16384,,,#Cache size in bytes
+m_block_size(i),64,,,#Block size in bytes
+m_ways_count(i),1,,,#Number of ways. If the number is 1 this will make the cache a direct-mapped cache
+m_data_access_latency(i),0,,,#The latency of reading or writing data. This latency does not apply on reading or writing cache lines bits
+replacement_policy_name(s),LRU,,,#Choose out of LRU or RANDOM

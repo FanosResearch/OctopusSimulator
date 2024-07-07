@@ -1,0 +1,2 @@
+buffers_max_size(i),16,,,,,
+m_clk_period(i),50,,,,,#Clk period in nano seconds
