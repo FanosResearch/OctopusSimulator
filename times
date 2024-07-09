@@ -1,0 +1,48 @@
+TIMING:
+4	256	1.00e-06	5
+Time Step 0
+Processor 0
+	Total Time = 943
+Processor 1
+	Total Time = 924
+Processor 2
+	Total Time = 921
+Processor 3
+	Total Time = 961
+Time Step 1
+Processor 0
+	Total Time = 722
+Processor 1
+	Total Time = 742
+Processor 2
+	Total Time = 740
+Processor 3
+	Total Time = 674
+Time Step 2
+Processor 0
+	Total Time = 654
+Processor 1
+	Total Time = 652
+Processor 2
+	Total Time = 652
+Processor 3
+	Total Time = 652
+Time Step 3
+Processor 0
+	Total Time = 640
+Processor 1
+	Total Time = 640
+Processor 2
+	Total Time = 640
+Processor 3
+	Total Time = 640
+Time Step 4
+Processor 0
+	Total Time = 630
+Processor 1
+	Total Time = 631
+Processor 2
+	Total Time = 630
+Processor 3
+	Total Time = 630
+END

@@ -1,0 +1,1616 @@
+4
+/home/gem5/gem5_new/ext/CMSpec/CMSpec/test/myTests/tc1_l1l2_llc_4.xml
+Global frequency set at 1000000000000 ticks per second
+build/X86/mem/dram_interface.cc:690: warn: DRAM device capacity (8192 Mbytes) does not match the address range assigned (4096 Mbytes)
+simpleCache
+DEBUG COH Protocol Name in XML header: MSI
+/home/gem5/gem5_new/ext/CMSpec/CMSpec/test/myTests/tc1_l1l2_llc_4.xml
+FSM path: /home/gem5/gem5_new/ext/CMSpec/CMSpec/Protocols_FSM/
+simpleCache
+simpleCache
+simpleCache
+build/X86/mem/coherent_xbar.cc:140: warn: CoherentXBar board.cache_hierarchy.membus has no snooping ports attached!
+0: board.remote_gdb: listening for remote gdb on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 22.1.0.0
+gem5 compiled Jun 16 2024 22:09:04
+gem5 started Jun 20 2024 21:47:40
+gem5 executing on gem5-VirtualBox, pid 12514
+command line: ./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -f /home/gem5/gem5_new/ext/CMSpec/CMSpec/test/myTests/tc1_l1l2_llc_4.xml -c 4 -b RADIX -m Octopus
+
+warn: The simulate package is still in a beta state. The gem5 project does not guarantee the APIs within this package will remain consistent across upcoming releases.
+warn: No dot file generated. Please install pydot to generate the dot file and pdf.
+build/X86/sim/simulate.cc:192: info: Entering event queue @ 0.  Starting simulation...
+build/X86/arch/x86/cpuid.cc:180: warn: x86 cpuid family 0x0000: unimplemented function 13
+build/X86/sim/mem_state.cc:443: info: Increasing stack size by one page.
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigaction(...)
+      (further warnings will be suppressed)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigprocmask(...)
+      (further warnings will be suppressed)
+
+Integer Radix Sort
+     262144 Keys
+     4 Processors
+     Radix = 1024
+     Max key = 524288
+
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/power_state.cc:105: warn: PowerState: Already in the requested power state, request ignored
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7fd6000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff729b000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7249000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e1e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+
+                 PROCESS STATISTICS
+               Total            Rank            Sort
+ Proc          Time             Time            Time
+    0           2975            1106            1843
+
+                 TIMING INFORMATION
+Start time                        : 1000000000000185
+Initialization finish time        : 1000000000008465
+Overall finish time               : 1000000000011440
+Total time with initialization    :            11255
+Total time without initialization :             2975
+
+	Command being timed: "./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -f /home/gem5/gem5_new/ext/CMSpec/CMSpec/test/myTests/tc1_l1l2_llc_4.xml -c 4 -b RADIX -m Octopus"
+	User time (seconds): 2252.99
+	System time (seconds): 0.18
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 37:33.55
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 253460
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 50797
+	Voluntary context switches: 43
+	Involuntary context switches: 15085
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 1360
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+8
+/home/gem5/gem5_new/ext/CMSpec/CMSpec/test/myTests/tc1_l1l2_llc_8.xml
+Global frequency set at 1000000000000 ticks per second
+build/X86/mem/dram_interface.cc:690: warn: DRAM device capacity (8192 Mbytes) does not match the address range assigned (4096 Mbytes)
+simpleCache
+DEBUG COH Protocol Name in XML header: MSI
+/home/gem5/gem5_new/ext/CMSpec/CMSpec/test/myTests/tc1_l1l2_llc_8.xml
+FSM path: /home/gem5/gem5_new/ext/CMSpec/CMSpec/Protocols_FSM/
+simpleCache
+simpleCache
+simpleCache
+simpleCache
+simpleCache
+simpleCache
+simpleCache
+build/X86/mem/coherent_xbar.cc:140: warn: CoherentXBar board.cache_hierarchy.membus has no snooping ports attached!
+0: board.remote_gdb: listening for remote gdb on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 22.1.0.0
+gem5 compiled Jun 16 2024 22:09:04
+gem5 started Jun 20 2024 22:25:14
+gem5 executing on gem5-VirtualBox, pid 12577
+command line: ./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -f /home/gem5/gem5_new/ext/CMSpec/CMSpec/test/myTests/tc1_l1l2_llc_8.xml -c 8 -b RADIX -m Octopus
+
+warn: The simulate package is still in a beta state. The gem5 project does not guarantee the APIs within this package will remain consistent across upcoming releases.
+warn: No dot file generated. Please install pydot to generate the dot file and pdf.
+build/X86/sim/simulate.cc:192: info: Entering event queue @ 0.  Starting simulation...
+build/X86/arch/x86/cpuid.cc:180: warn: x86 cpuid family 0x0000: unimplemented function 13
+build/X86/sim/mem_state.cc:443: info: Increasing stack size by one page.
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigaction(...)
+      (further warnings will be suppressed)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigprocmask(...)
+      (further warnings will be suppressed)
+
+Integer Radix Sort
+     262144 Keys
+     8 Processors
+     Radix = 1024
+     Max key = 524288
+
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/power_state.cc:105: warn: PowerState: Already in the requested power state, request ignored
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7fd6000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7299000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72ff000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72f3000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7320000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff721f000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7180000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff727b000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7319000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7326000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7177000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff719f000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71fe000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff715f000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71c2000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7181000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72dc000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff725b000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72fa000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71ae000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7221000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71fa000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71ce000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71ab000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7238000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7332000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+
+                 PROCESS STATISTICS
+               Total            Rank            Sort
+ Proc          Time             Time            Time
+    0           2229             805            1389
+
+                 TIMING INFORMATION
+Start time                        : 1000000000000185
+Initialization finish time        : 1000000000004417
+Overall finish time               : 1000000000006646
+Total time with initialization    :             6461
+Total time without initialization :             2229
+
+	Command being timed: "./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -f /home/gem5/gem5_new/ext/CMSpec/CMSpec/test/myTests/tc1_l1l2_llc_8.xml -c 8 -b RADIX -m Octopus"
+	User time (seconds): 2323.13
+	System time (seconds): 0.22
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 38:43.59
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 319004
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 67062
+	Voluntary context switches: 41
+	Involuntary context switches: 13565
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 2440
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+16
+/home/gem5/gem5_new/ext/CMSpec/CMSpec/test/myTests/tc1_l1l2_llc_16.xml
+Global frequency set at 1000000000000 ticks per second
+build/X86/mem/dram_interface.cc:690: warn: DRAM device capacity (8192 Mbytes) does not match the address range assigned (4096 Mbytes)
+simpleCache
+DEBUG COH Protocol Name in XML header: MSI
+/home/gem5/gem5_new/ext/CMSpec/CMSpec/test/myTests/tc1_l1l2_llc_16.xml
+FSM path: /home/gem5/gem5_new/ext/CMSpec/CMSpec/Protocols_FSM/
+simpleCache
+simpleCache
+simpleCache
+simpleCache
+simpleCache
+simpleCache
+simpleCache
+simpleCache
+simpleCache
+simpleCache
+simpleCache
+simpleCache
+simpleCache
+simpleCache
+simpleCache
+build/X86/mem/coherent_xbar.cc:140: warn: CoherentXBar board.cache_hierarchy.membus has no snooping ports attached!
+0: board.remote_gdb: listening for remote gdb on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 22.1.0.0
+gem5 compiled Jun 16 2024 22:09:04
+gem5 started Jun 20 2024 23:03:57
+gem5 executing on gem5-VirtualBox, pid 12600
+command line: ./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -f /home/gem5/gem5_new/ext/CMSpec/CMSpec/test/myTests/tc1_l1l2_llc_16.xml -c 16 -b RADIX -m Octopus
+
+warn: The simulate package is still in a beta state. The gem5 project does not guarantee the APIs within this package will remain consistent across upcoming releases.
+warn: No dot file generated. Please install pydot to generate the dot file and pdf.
+build/X86/sim/simulate.cc:192: info: Entering event queue @ 0.  Starting simulation...
+build/X86/arch/x86/cpuid.cc:180: warn: x86 cpuid family 0x0000: unimplemented function 13
+build/X86/sim/mem_state.cc:443: info: Increasing stack size by one page.
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigaction(...)
+      (further warnings will be suppressed)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigprocmask(...)
+      (further warnings will be suppressed)
+
+Integer Radix Sort
+     262144 Keys
+     16 Processors
+     Radix = 1024
+     Max key = 524288
+
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/power_state.cc:105: warn: PowerState: Already in the requested power state, request ignored
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7fd6000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72c2000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff716f000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72b9000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff715a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7192000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72cb000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72cb000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72b6000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff729d000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72e0000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72b7000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71b1000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72a0000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7185000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72a4000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff728f000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff726e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7176000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff715f000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff732a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff715f000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7256000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71ed000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7195000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72da000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72db000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7334000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7335000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7335000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72d5000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71fe000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff722d000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71e3000 already mapped
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+
+                 PROCESS STATISTICS
+               Total            Rank            Sort
+ Proc          Time             Time            Time
+    0           3299             949            2280
+
+                 TIMING INFORMATION
+Start time                        : 1000000000000185
+Initialization finish time        : 1000000000002415
+Overall finish time               : 1000000000005714
+Total time with initialization    :             5529
+Total time without initialization :             3299
+
+	Command being timed: "./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -f /home/gem5/gem5_new/ext/CMSpec/CMSpec/test/myTests/tc1_l1l2_llc_16.xml -c 16 -b RADIX -m Octopus"
+	User time (seconds): 2991.70
+	System time (seconds): 0.30
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 49:52.35
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 442352
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 97485
+	Voluntary context switches: 41
+	Involuntary context switches: 18976
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 4600
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+2
+Global frequency set at 1000000000000 ticks per second
+build/X86/mem/dram_interface.cc:690: warn: DRAM device capacity (8192 Mbytes) does not match the address range assigned (4096 Mbytes)
+build/X86/base/statistics.hh:280: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+0: board.remote_gdb: listening for remote gdb on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 22.1.0.0
+gem5 compiled Jun 16 2024 22:09:04
+gem5 started Jun 20 2024 23:53:50
+gem5 executing on gem5-VirtualBox, pid 12653
+command line: ./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -c 2 -b RADIX -m Ruby
+
+warn: The simulate package is still in a beta state. The gem5 project does not guarantee the APIs within this package will remain consistent across upcoming releases.
+warn: No dot file generated. Please install pydot to generate the dot file and pdf.
+build/X86/sim/simulate.cc:192: info: Entering event queue @ 0.  Starting simulation...
+build/X86/mem/ruby/system/Sequencer.cc:613: warn: Replacement policy updates recently became the responsibility of SLICC state machines. Make sure to setMRU() near callbacks in .sm files!
+build/X86/arch/x86/cpuid.cc:180: warn: x86 cpuid family 0x0000: unimplemented function 13
+build/X86/sim/mem_state.cc:443: info: Increasing stack size by one page.
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigaction(...)
+      (further warnings will be suppressed)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigprocmask(...)
+      (further warnings will be suppressed)
+
+Integer Radix Sort
+     262144 Keys
+     2 Processors
+     Radix = 1024
+     Max key = 524288
+
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/power_state.cc:105: warn: PowerState: Already in the requested power state, request ignored
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71eb000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff723c000 already mapped
+
+                 PROCESS STATISTICS
+               Total            Rank            Sort
+ Proc          Time             Time            Time
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+    0          13572            2014           11486
+
+                 TIMING INFORMATION
+Start time                        : 1000000000000224
+Initialization finish time        : 1000000000016651
+Overall finish time               : 1000000000030223
+Total time with initialization    :            29999
+Total time without initialization :            13572
+
+	Command being timed: "./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -c 2 -b RADIX -m Ruby"
+	User time (seconds): 2045.94
+	System time (seconds): 0.27
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 34:06.47
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 696464
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 162704
+	Voluntary context switches: 43
+	Involuntary context switches: 14200
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 1616
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+4
+Global frequency set at 1000000000000 ticks per second
+build/X86/mem/dram_interface.cc:690: warn: DRAM device capacity (8192 Mbytes) does not match the address range assigned (4096 Mbytes)
+build/X86/base/statistics.hh:280: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+0: board.remote_gdb: listening for remote gdb on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 22.1.0.0
+gem5 compiled Jun 16 2024 22:09:04
+gem5 started Jun 21 2024 00:27:56
+gem5 executing on gem5-VirtualBox, pid 12707
+command line: ./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -c 4 -b RADIX -m Ruby
+
+warn: The simulate package is still in a beta state. The gem5 project does not guarantee the APIs within this package will remain consistent across upcoming releases.
+warn: No dot file generated. Please install pydot to generate the dot file and pdf.
+build/X86/sim/simulate.cc:192: info: Entering event queue @ 0.  Starting simulation...
+build/X86/mem/ruby/system/Sequencer.cc:613: warn: Replacement policy updates recently became the responsibility of SLICC state machines. Make sure to setMRU() near callbacks in .sm files!
+build/X86/arch/x86/cpuid.cc:180: warn: x86 cpuid family 0x0000: unimplemented function 13
+build/X86/sim/mem_state.cc:443: info: Increasing stack size by one page.
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigaction(...)
+      (further warnings will be suppressed)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigprocmask(...)
+      (further warnings will be suppressed)
+
+Integer Radix Sort
+     262144 Keys
+     4 Processors
+     Radix = 1024
+     Max key = 524288
+
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/power_state.cc:105: warn: PowerState: Already in the requested power state, request ignored
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e6d000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e6d000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7fd6000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7303000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff731d000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7249000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72aa000 already mapped
+
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e1e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e1e000 already mapped
+                 PROCESS STATISTICS
+               Total            Rank            Sort
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+ Proc          Time             Time            Time
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+    0          10983            1436            9503
+
+                 TIMING INFORMATION
+Start time                        : 1000000000000224
+Initialization finish time        : 1000000000008527
+Overall finish time               : 1000000000019510
+Total time with initialization    :            19286
+Total time without initialization :            10983
+
+	Command being timed: "./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -c 4 -b RADIX -m Ruby"
+	User time (seconds): 2202.25
+	System time (seconds): 0.19
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 36:42.90
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 735212
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 172644
+	Voluntary context switches: 41
+	Involuntary context switches: 15821
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 2888
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+8
+Global frequency set at 1000000000000 ticks per second
+build/X86/mem/dram_interface.cc:690: warn: DRAM device capacity (8192 Mbytes) does not match the address range assigned (4096 Mbytes)
+build/X86/base/statistics.hh:280: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+0: board.remote_gdb: listening for remote gdb on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 22.1.0.0
+gem5 compiled Jun 16 2024 22:09:04
+gem5 started Jun 21 2024 01:04:39
+gem5 executing on gem5-VirtualBox, pid 12728
+command line: ./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -c 8 -b RADIX -m Ruby
+
+warn: The simulate package is still in a beta state. The gem5 project does not guarantee the APIs within this package will remain consistent across upcoming releases.
+warn: No dot file generated. Please install pydot to generate the dot file and pdf.
+build/X86/sim/simulate.cc:192: info: Entering event queue @ 0.  Starting simulation...
+build/X86/mem/ruby/system/Sequencer.cc:613: warn: Replacement policy updates recently became the responsibility of SLICC state machines. Make sure to setMRU() near callbacks in .sm files!
+build/X86/arch/x86/cpuid.cc:180: warn: x86 cpuid family 0x0000: unimplemented function 13
+build/X86/sim/mem_state.cc:443: info: Increasing stack size by one page.
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigaction(...)
+      (further warnings will be suppressed)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigprocmask(...)
+      (further warnings will be suppressed)
+
+Integer Radix Sort
+     262144 Keys
+     8 Processors
+     Radix = 1024
+     Max key = 524288
+
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/power_state.cc:105: warn: PowerState: Already in the requested power state, request ignored
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e6d000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e6d000 already mapped
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7fdc000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7fd6000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7214000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72ff000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff715a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7304000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7198000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72b7000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff727b000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7193000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7248000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff725d000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71b3000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71fe000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff715f000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7263000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7242000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72db000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71c2000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7321000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71b9000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7221000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71b9000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72d1000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7332000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e1e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e1e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e1e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e1e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/arch/x86/faults.cc:166: panic: Tried to read unmapped address 0x7ffff714ce4c.
+PC: (0x7ffff7e6dabc=>0x7ffff7e6dac0).(0=>1), Instr:   MOV_R_M : ld   eax, SS:[t0 + rsp + 0x1c]
+Memory Usage: 5036228 KBytes
+Program aborted at tick 15068369000
+--- BEGIN LIBC BACKTRACE ---
+./build/X86/gem5.debug(+0x119e119)[0x563885777119]
+./build/X86/gem5.debug(+0x11c46b4)[0x56388579d6b4]
+/lib/x86_64-linux-gnu/libpthread.so.0(+0x14420)[0x7f0390d29420]
+/lib/x86_64-linux-gnu/libc.so.6(gsignal+0xcb)[0x7f03901d300b]
+/lib/x86_64-linux-gnu/libc.so.6(abort+0x12b)[0x7f03901b2859]
+./build/X86/gem5.debug(+0x204f94)[0x5638847ddf94]
+./build/X86/gem5.debug(+0x277f59)[0x563884850f59]
+./build/X86/gem5.debug(+0x137ade7)[0x563885953de7]
+./build/X86/gem5.debug(+0x136bdae)[0x563885944dae]
+./build/X86/gem5.debug(+0x136a356)[0x563885943356]
+./build/X86/gem5.debug(+0x1369a2e)[0x563885942a2e]
+./build/X86/gem5.debug(+0x13680b1)[0x5638859410b1]
+./build/X86/gem5.debug(+0x1378ee6)[0x563885951ee6]
+./build/X86/gem5.debug(+0x1375d15)[0x56388594ed15]
+./build/X86/gem5.debug(+0x137f52c)[0x56388595852c]
+./build/X86/gem5.debug(+0x2972a0)[0x5638848702a0]
+./build/X86/gem5.debug(+0x294784)[0x56388486d784]
+./build/X86/gem5.debug(+0x11b26c0)[0x56388578b6c0]
+./build/X86/gem5.debug(+0x11df305)[0x5638857b8305]
+./build/X86/gem5.debug(+0x11dedbb)[0x5638857b7dbb]
+./build/X86/gem5.debug(+0x197a3b0)[0x563885f533b0]
+./build/X86/gem5.debug(+0x1978a62)[0x563885f51a62]
+./build/X86/gem5.debug(+0x1974c15)[0x563885f4dc15]
+./build/X86/gem5.debug(+0x1974c80)[0x563885f4dc80]
+./build/X86/gem5.debug(+0x218fe4)[0x5638847f1fe4]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(+0x2a8748)[0x7f0390fe2748]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyEval_EvalFrameDefault+0x8dd8)[0x7f0390db7f48]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyEval_EvalCodeWithName+0x8fb)[0x7f0390f04e4b]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyFunction_Vectorcall+0x94)[0x7f0390fe2124]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(+0x74d6d)[0x7f0390daed6d]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyEval_EvalFrameDefault+0x7d86)[0x7f0390db6ef6]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyEval_EvalCodeWithName+0x8fb)[0x7f0390f04e4b]
+--- END LIBC BACKTRACE ---
+Command terminated by signal 6
+	Command being timed: "./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -c 8 -b RADIX -m Ruby"
+	User time (seconds): 2549.99
+	System time (seconds): 0.22
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 42:30.57
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 806340
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 1
+	Minor (reclaiming a frame) page faults: 190700
+	Voluntary context switches: 17
+	Involuntary context switches: 14017
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 3952
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+16
+Global frequency set at 1000000000000 ticks per second
+build/X86/mem/dram_interface.cc:690: warn: DRAM device capacity (8192 Mbytes) does not match the address range assigned (4096 Mbytes)
+build/X86/base/statistics.hh:280: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+0: board.remote_gdb: listening for remote gdb on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 22.1.0.0
+gem5 compiled Jun 16 2024 22:09:04
+gem5 started Jun 21 2024 01:47:10
+gem5 executing on gem5-VirtualBox, pid 12750
+command line: ./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -c 16 -b RADIX -m Ruby
+
+warn: The simulate package is still in a beta state. The gem5 project does not guarantee the APIs within this package will remain consistent across upcoming releases.
+warn: No dot file generated. Please install pydot to generate the dot file and pdf.
+build/X86/sim/simulate.cc:192: info: Entering event queue @ 0.  Starting simulation...
+build/X86/mem/ruby/system/Sequencer.cc:613: warn: Replacement policy updates recently became the responsibility of SLICC state machines. Make sure to setMRU() near callbacks in .sm files!
+build/X86/arch/x86/cpuid.cc:180: warn: x86 cpuid family 0x0000: unimplemented function 13
+build/X86/sim/mem_state.cc:443: info: Increasing stack size by one page.
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigaction(...)
+      (further warnings will be suppressed)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigprocmask(...)
+      (further warnings will be suppressed)
+
+Integer Radix Sort
+     262144 Keys
+     16 Processors
+     Radix = 1024
+     Max key = 524288
+
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/power_state.cc:105: warn: PowerState: Already in the requested power state, request ignored
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e6d000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e6d000 already mapped
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7fdc000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7fd6000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7317000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff723c000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7252000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff720e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff724a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7218000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7337000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72e5000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7243000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7180000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71bd000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7315000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7153000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7177000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7319000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72bc000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7177000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7188000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7263000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7188000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72f6000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7204000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71e4000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71b5000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7344000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7334000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7205000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff731d000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71c7000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72d5000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72d5000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7323000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e1e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e1e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e1e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/arch/x86/faults.cc:166: panic: Tried to read unmapped address 0x7ffff714cf08.
+PC: (0x7ffff7fd1641=>0x7ffff7fd1646).(0=>1), Instr:   MOV_R_M : ld   rax, SS:[t0 + rsp + 0x8]
+Memory Usage: 5203912 KBytes
+Program aborted at tick 14138363000
+--- BEGIN LIBC BACKTRACE ---
+./build/X86/gem5.debug(+0x119e119)[0x55763a6fb119]
+./build/X86/gem5.debug(+0x11c46b4)[0x55763a7216b4]
+/lib/x86_64-linux-gnu/libpthread.so.0(+0x14420)[0x7fd70f557420]
+/lib/x86_64-linux-gnu/libc.so.6(gsignal+0xcb)[0x7fd70ea0100b]
+/lib/x86_64-linux-gnu/libc.so.6(abort+0x12b)[0x7fd70e9e0859]
+./build/X86/gem5.debug(+0x204f94)[0x557639761f94]
+./build/X86/gem5.debug(+0x277f59)[0x5576397d4f59]
+./build/X86/gem5.debug(+0x137ade7)[0x55763a8d7de7]
+./build/X86/gem5.debug(+0x136bdae)[0x55763a8c8dae]
+./build/X86/gem5.debug(+0x136a356)[0x55763a8c7356]
+./build/X86/gem5.debug(+0x1369a2e)[0x55763a8c6a2e]
+./build/X86/gem5.debug(+0x13680b1)[0x55763a8c50b1]
+./build/X86/gem5.debug(+0x1378ee6)[0x55763a8d5ee6]
+./build/X86/gem5.debug(+0x1375d15)[0x55763a8d2d15]
+./build/X86/gem5.debug(+0x137f52c)[0x55763a8dc52c]
+./build/X86/gem5.debug(+0x2972a0)[0x5576397f42a0]
+./build/X86/gem5.debug(+0x294784)[0x5576397f1784]
+./build/X86/gem5.debug(+0x11b26c0)[0x55763a70f6c0]
+./build/X86/gem5.debug(+0x11df305)[0x55763a73c305]
+./build/X86/gem5.debug(+0x11dedbb)[0x55763a73bdbb]
+./build/X86/gem5.debug(+0x197a3b0)[0x55763aed73b0]
+./build/X86/gem5.debug(+0x1978a62)[0x55763aed5a62]
+./build/X86/gem5.debug(+0x1974c15)[0x55763aed1c15]
+./build/X86/gem5.debug(+0x1974c80)[0x55763aed1c80]
+./build/X86/gem5.debug(+0x218fe4)[0x557639775fe4]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(+0x2a8748)[0x7fd70f810748]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyEval_EvalFrameDefault+0x8dd8)[0x7fd70f5e5f48]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyEval_EvalCodeWithName+0x8fb)[0x7fd70f732e4b]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyFunction_Vectorcall+0x94)[0x7fd70f810124]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(+0x74d6d)[0x7fd70f5dcd6d]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyEval_EvalFrameDefault+0x7d86)[0x7fd70f5e4ef6]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyEval_EvalCodeWithName+0x8fb)[0x7fd70f732e4b]
+--- END LIBC BACKTRACE ---
+Command terminated by signal 6
+	Command being timed: "./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -c 16 -b RADIX -m Ruby"
+	User time (seconds): 3432.38
+	System time (seconds): 0.31
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 57:13.28
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 975968
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 234734
+	Voluntary context switches: 17
+	Involuntary context switches: 33833
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 10728
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+32
+Global frequency set at 1000000000000 ticks per second
+build/X86/mem/dram_interface.cc:690: warn: DRAM device capacity (8192 Mbytes) does not match the address range assigned (4096 Mbytes)
+build/X86/base/statistics.hh:280: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+0: board.remote_gdb: listening for remote gdb on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 22.1.0.0
+gem5 compiled Jun 16 2024 22:09:04
+gem5 started Jun 21 2024 02:44:23
+gem5 executing on gem5-VirtualBox, pid 12789
+command line: ./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -c 32 -b RADIX -m Ruby
+
+warn: The simulate package is still in a beta state. The gem5 project does not guarantee the APIs within this package will remain consistent across upcoming releases.
+warn: No dot file generated. Please install pydot to generate the dot file and pdf.
+build/X86/sim/simulate.cc:192: info: Entering event queue @ 0.  Starting simulation...
+build/X86/mem/ruby/system/Sequencer.cc:613: warn: Replacement policy updates recently became the responsibility of SLICC state machines. Make sure to setMRU() near callbacks in .sm files!
+build/X86/arch/x86/cpuid.cc:180: warn: x86 cpuid family 0x0000: unimplemented function 13
+build/X86/sim/mem_state.cc:443: info: Increasing stack size by one page.
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigaction(...)
+      (further warnings will be suppressed)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigprocmask(...)
+      (further warnings will be suppressed)
+
+Integer Radix Sort
+     262144 Keys
+     32 Processors
+     Radix = 1024
+     Max key = 524288
+
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/power_state.cc:105: warn: PowerState: Already in the requested power state, request ignored
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e6d000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e6d000 already mapped
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7fd6000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7fd6000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff716f000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71f7000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff725e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7167000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7191000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72b7000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7191000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff720d000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7175000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7314000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7328000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7311000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71a1000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72ff000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72f6000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7281000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71c0000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71fa000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72ae000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71f1000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72e3000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7294000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff733e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72ce000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff728f000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff730e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff730c000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff728f000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff729a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7222000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7198000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff722a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72c2000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7276000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71bc000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff731b000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff732a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7276000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff732a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72cc000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71f0000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7229000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7344000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72fb000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71f9000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72d9000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff726e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71f0000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff717a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff726e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff72f1000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71c7000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7290000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7290000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/arch/x86/faults.cc:166: panic: Tried to write unmapped address 0x7ffff710bee0.
+PC: (0x7ffff8017a74=>0x7ffff8017a75).(0=>1), Instr:   PUSH_R : st   rbx, SS:[t0 + rsp + 0xfffffffffffffff8]
+Memory Usage: 5546772 KBytes
+Program aborted at tick 16987610000
+--- BEGIN LIBC BACKTRACE ---
+./build/X86/gem5.debug(+0x119e119)[0x55cddd3d3119]
+./build/X86/gem5.debug(+0x11c46b4)[0x55cddd3f96b4]
+/lib/x86_64-linux-gnu/libpthread.so.0(+0x14420)[0x7f889149f420]
+/lib/x86_64-linux-gnu/libc.so.6(gsignal+0xcb)[0x7f889094900b]
+/lib/x86_64-linux-gnu/libc.so.6(abort+0x12b)[0x7f8890928859]
+./build/X86/gem5.debug(+0x204f94)[0x55cddc439f94]
+./build/X86/gem5.debug(+0x277f59)[0x55cddc4acf59]
+./build/X86/gem5.debug(+0x137ade7)[0x55cddd5afde7]
+./build/X86/gem5.debug(+0x136bdae)[0x55cddd5a0dae]
+./build/X86/gem5.debug(+0x136a356)[0x55cddd59f356]
+./build/X86/gem5.debug(+0x1369a2e)[0x55cddd59ea2e]
+./build/X86/gem5.debug(+0x13680b1)[0x55cddd59d0b1]
+./build/X86/gem5.debug(+0x1378ee6)[0x55cddd5adee6]
+./build/X86/gem5.debug(+0x1375d15)[0x55cddd5aad15]
+./build/X86/gem5.debug(+0x137f52c)[0x55cddd5b452c]
+./build/X86/gem5.debug(+0x2972a0)[0x55cddc4cc2a0]
+./build/X86/gem5.debug(+0x294784)[0x55cddc4c9784]
+./build/X86/gem5.debug(+0x11b26c0)[0x55cddd3e76c0]
+./build/X86/gem5.debug(+0x11df305)[0x55cddd414305]
+./build/X86/gem5.debug(+0x11dedbb)[0x55cddd413dbb]
+./build/X86/gem5.debug(+0x197a3b0)[0x55cdddbaf3b0]
+./build/X86/gem5.debug(+0x1978a62)[0x55cdddbada62]
+./build/X86/gem5.debug(+0x1974c15)[0x55cdddba9c15]
+./build/X86/gem5.debug(+0x1974c80)[0x55cdddba9c80]
+./build/X86/gem5.debug(+0x218fe4)[0x55cddc44dfe4]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(+0x2a8748)[0x7f8891758748]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyEval_EvalFrameDefault+0x8dd8)[0x7f889152df48]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyEval_EvalCodeWithName+0x8fb)[0x7f889167ae4b]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyFunction_Vectorcall+0x94)[0x7f8891758124]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(+0x74d6d)[0x7f8891524d6d]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyEval_EvalFrameDefault+0x7d86)[0x7f889152cef6]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyEval_EvalCodeWithName+0x8fb)[0x7f889167ae4b]
+--- END LIBC BACKTRACE ---
+Command terminated by signal 6
+	Command being timed: "./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -c 32 -b RADIX -m Ruby"
+	User time (seconds): 5733.50
+	System time (seconds): 0.53
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 1:35:35
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1324640
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 1
+	Minor (reclaiming a frame) page faults: 325402
+	Voluntary context switches: 21
+	Involuntary context switches: 48464
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 33408
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+64
+Global frequency set at 1000000000000 ticks per second
+build/X86/mem/dram_interface.cc:690: warn: DRAM device capacity (8192 Mbytes) does not match the address range assigned (4096 Mbytes)
+build/X86/base/statistics.hh:280: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+0: board.remote_gdb: listening for remote gdb on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 22.1.0.0
+gem5 compiled Jun 16 2024 22:09:04
+gem5 started Jun 21 2024 04:19:58
+gem5 executing on gem5-VirtualBox, pid 12876
+command line: ./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -c 64 -b RADIX -m Ruby
+
+warn: The simulate package is still in a beta state. The gem5 project does not guarantee the APIs within this package will remain consistent across upcoming releases.
+warn: No dot file generated. Please install pydot to generate the dot file and pdf.
+build/X86/sim/simulate.cc:192: info: Entering event queue @ 0.  Starting simulation...
+build/X86/mem/ruby/system/Sequencer.cc:613: warn: Replacement policy updates recently became the responsibility of SLICC state machines. Make sure to setMRU() near callbacks in .sm files!
+build/X86/arch/x86/cpuid.cc:180: warn: x86 cpuid family 0x0000: unimplemented function 13
+build/X86/sim/mem_state.cc:443: info: Increasing stack size by one page.
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigaction(...)
+      (further warnings will be suppressed)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigprocmask(...)
+      (further warnings will be suppressed)
+
+Integer Radix Sort
+     262144 Keys
+     64 Processors
+     Radix = 1024
+     Max key = 524288
+
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/power_state.cc:105: warn: PowerState: Already in the requested power state, request ignored
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e6d000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e6d000 already mapped
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7fd6000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7fd6000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7fd6000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7149000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71b3000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff716b000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7231000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7211000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7155000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71bb000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71d8000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7188000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71d3000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71c3000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71c3000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71aa000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7236000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71cd000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7208000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71cd000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7202000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff71c8000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7195000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e1e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e1e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e1e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7e1e000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f2a000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7f18000 already mapped
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/arch/x86/faults.cc:166: panic: Tried to read unmapped address 0x7ffff70cbd78.
+PC: (0x7ffff7ea7ee8=>0x7ffff7ea7ee9).(0=>1), Instr:   RET_NEAR : ld   t1, SS:[t0 + rsp]
+Memory Usage: 6340584 KBytes
+Program aborted at tick 8960679000
+--- BEGIN LIBC BACKTRACE ---
+./build/X86/gem5.debug(+0x119e119)[0x56155d816119]
+./build/X86/gem5.debug(+0x11c46b4)[0x56155d83c6b4]
+/lib/x86_64-linux-gnu/libpthread.so.0(+0x14420)[0x7fa4a3c0a420]
+/lib/x86_64-linux-gnu/libc.so.6(gsignal+0xcb)[0x7fa4a30b400b]
+/lib/x86_64-linux-gnu/libc.so.6(abort+0x12b)[0x7fa4a3093859]
+./build/X86/gem5.debug(+0x204f94)[0x56155c87cf94]
+./build/X86/gem5.debug(+0x277f59)[0x56155c8eff59]
+./build/X86/gem5.debug(+0x137ade7)[0x56155d9f2de7]
+./build/X86/gem5.debug(+0x136bdae)[0x56155d9e3dae]
+./build/X86/gem5.debug(+0x136a356)[0x56155d9e2356]
+./build/X86/gem5.debug(+0x1369a2e)[0x56155d9e1a2e]
+./build/X86/gem5.debug(+0x13680b1)[0x56155d9e00b1]
+./build/X86/gem5.debug(+0x1378ee6)[0x56155d9f0ee6]
+./build/X86/gem5.debug(+0x1375d15)[0x56155d9edd15]
+./build/X86/gem5.debug(+0x137f52c)[0x56155d9f752c]
+./build/X86/gem5.debug(+0x2972a0)[0x56155c90f2a0]
+./build/X86/gem5.debug(+0x294784)[0x56155c90c784]
+./build/X86/gem5.debug(+0x11b26c0)[0x56155d82a6c0]
+./build/X86/gem5.debug(+0x11df305)[0x56155d857305]
+./build/X86/gem5.debug(+0x11dedbb)[0x56155d856dbb]
+./build/X86/gem5.debug(+0x197a3b0)[0x56155dff23b0]
+./build/X86/gem5.debug(+0x1978a62)[0x56155dff0a62]
+./build/X86/gem5.debug(+0x1974c15)[0x56155dfecc15]
+./build/X86/gem5.debug(+0x1974c80)[0x56155dfecc80]
+./build/X86/gem5.debug(+0x218fe4)[0x56155c890fe4]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(+0x2a8748)[0x7fa4a3ec3748]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyEval_EvalFrameDefault+0x8dd8)[0x7fa4a3c98f48]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyEval_EvalCodeWithName+0x8fb)[0x7fa4a3de5e4b]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyFunction_Vectorcall+0x94)[0x7fa4a3ec3124]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(+0x74d6d)[0x7fa4a3c8fd6d]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyEval_EvalFrameDefault+0x7d86)[0x7fa4a3c97ef6]
+/lib/x86_64-linux-gnu/libpython3.8.so.1.0(_PyEval_EvalCodeWithName+0x8fb)[0x7fa4a3de5e4b]
+--- END LIBC BACKTRACE ---
+Command terminated by signal 6
+	Command being timed: "./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -c 64 -b RADIX -m Ruby"
+	User time (seconds): 3810.89
+	System time (seconds): 0.90
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 1:03:33
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 2116952
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 535647
+	Voluntary context switches: 28
+	Involuntary context switches: 38920
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 115552
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

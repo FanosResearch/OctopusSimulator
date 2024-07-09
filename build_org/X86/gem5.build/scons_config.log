@@ -1,0 +1,585 @@
+file /home/gem5/gem5_new/site_scons/gem5_scons/configure.py,line 171:
+	Configure(confdir = build/X86/gem5.build/scons_config)
+scons: Configure: Checking for linker -Wl,--as-needed support... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_0.cc" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_0.cc <-
+  |  |int main(int, char *[]) { return 0; }
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_0.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [     CXX] [33mX86/gem5.build/scons_config/conftest_0[33m[1m.cc[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_0" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [    LINK] [33m[33m[1m[34m[1m -> [33m[1mX86/gem5.build/scons_config/conftest_0(B[m
+  |
+scons: Configure: (cached) yes
+
+
+file /home/gem5/gem5_new/site_scons/gem5_scons/configure.py,line 171:
+	Configure(confdir = build/X86/gem5.build/scons_config)
+scons: Configure: Checking for compiler -Wno-free-nonheap-object support... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_1.cc" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_1.cc <-
+  |  |// CheckCxxFlag DO NOTHING
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_1.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [     CXX] [33mX86/gem5.build/scons_config/conftest_1[33m[1m.cc[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: (cached) yes
+
+
+file /home/gem5/gem5_new/site_scons/gem5_scons/configure.py,line 171:
+	Configure(confdir = build/X86/gem5.build/scons_config)
+scons: Configure: Checking for compiler -gz support... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_2.cc" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_2.cc <-
+  |  |// CheckCxxFlag DO NOTHING
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_2.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [     CXX] [33mX86/gem5.build/scons_config/conftest_2[33m[1m.cc[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: (cached) yes
+
+scons: Configure: Checking for linker -gz support... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_3.cc" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_3.cc <-
+  |  |int main(int, char *[]) { return 0; }
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_3.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [     CXX] [33mX86/gem5.build/scons_config/conftest_3[33m[1m.cc[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_3" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [    LINK] [33m[33m[1m[34m[1m -> [33m[1mX86/gem5.build/scons_config/conftest_3(B[m
+  |
+scons: Configure: (cached) yes
+
+
+file /home/gem5/gem5_new/site_scons/gem5_scons/configure.py,line 171:
+	Configure(confdir = build/X86/gem5.build/scons_config)
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_4" is up to date.
+scons: Configure: The original builder output was:
+  |
+
+file /home/gem5/gem5_new/site_scons/gem5_scons/configure.py,line 171:
+	Configure(confdir = build/X86/gem5.build/scons_config)
+scons: Configure: Checking for C header file Python.h... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_5.c" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_5.c <-
+  |  |
+  |  |#include <Python.h>
+  |  |
+  |  |
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_5.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [      CC] [33mX86/gem5.build/scons_config/conftest_5[33m[1m.c[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: (cached) yes
+
+scons: Configure: Checking Python version... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_6.cc" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_6.cc <-
+  |  |
+  |  |#include <pybind11/embed.h>
+  |  |
+  |  |int
+  |  |main(int argc, char **argv) {
+  |  |    pybind11::scoped_interpreter guard{};
+  |  |    pybind11::exec(
+  |  |        "import sys\n"
+  |  |        "vi = sys.version_info\n"
+  |  |        "sys.stdout.write('%i.%i.%i' % (vi.major, vi.minor, vi.micro));\n");
+  |  |    return 0;
+  |  |}
+  |  |    
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_6.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [     CXX] [33mX86/gem5.build/scons_config/conftest_6[33m[1m.cc[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_6" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [    LINK] [33m[33m[1m[34m[1m -> [33m[1mX86/gem5.build/scons_config/conftest_6(B[m
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_6.out" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_6 > build/X86/gem5.build/scons_config/conftest_6.out
+  |
+scons: Configure: (cached) 3.8.10
+
+
+file /home/gem5/gem5_new/site_scons/gem5_scons/configure.py,line 171:
+	Configure(confdir = build/X86/gem5.build/scons_config)
+scons: Configure: Checking for accept(0,0,0) in C++ library None... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_7.cpp" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_7.cpp <-
+  |  |
+  |  |
+  |  |#include "sys/socket.h"
+  |  |
+  |  |int
+  |  |main() {
+  |  |  accept(0,0,0);
+  |  |return 0;
+  |  |}
+  |  |
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_7.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [     CXX] [33mX86/gem5.build/scons_config/conftest_7[33m[1m.cpp[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_7" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [    LINK] [33m[33m[1m[34m[1m -> [33m[1mX86/gem5.build/scons_config/conftest_7(B[m
+  |
+scons: Configure: (cached) yes
+
+scons: Configure: Checking for zlibVersion() in C++ library z... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_8.cpp" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_8.cpp <-
+  |  |
+  |  |
+  |  |#include "zlib.h"
+  |  |
+  |  |int
+  |  |main() {
+  |  |  zlibVersion();
+  |  |return 0;
+  |  |}
+  |  |
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_8.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [     CXX] [33mX86/gem5.build/scons_config/conftest_8[33m[1m.cpp[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_8" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [    LINK] [33m[33m[1m[34m[1m -> [33m[1mX86/gem5.build/scons_config/conftest_8(B[m
+  |
+scons: Configure: (cached) yes
+
+
+file /home/gem5/gem5_new/site_scons/gem5_scons/configure.py,line 171:
+	Configure(confdir = build/X86/gem5.build/scons_config)
+scons: Configure: Checking for C library tcmalloc... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_9.c" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_9.c <-
+  |  |
+  |  |
+  |  |
+  |  |int
+  |  |main() {
+  |  |  
+  |  |return 0;
+  |  |}
+  |  |
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_9.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [      CC] [33mX86/gem5.build/scons_config/conftest_9[33m[1m.c[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_9" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [    LINK] [33m[33m[1m[34m[1m -> [33m[1mX86/gem5.build/scons_config/conftest_9(B[m
+  |
+scons: Configure: (cached) yes
+
+
+file /home/gem5/gem5_new/site_scons/gem5_scons/configure.py,line 171:
+	Configure(confdir = build/X86/gem5.build/scons_config)
+scons: Configure: Checking size of struct kvm_xsave ... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_10.c" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_10.c <-
+  |  |#include <linux/kvm.h>
+  |  |#include <stdlib.h>
+  |  |#include <stdio.h>
+  |  |int main(void) {
+  |  |    printf("%d", (int)sizeof(struct kvm_xsave));
+  |  |    return 0;
+  |  |}
+  |  |    
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_10.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [      CC] [33mX86/gem5.build/scons_config/conftest_10[33m[1m.c[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_10" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [    LINK] [33m[33m[1m[34m[1m -> [33m[1mX86/gem5.build/scons_config/conftest_10(B[m
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_10.out" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_10 > build/X86/gem5.build/scons_config/conftest_10.out
+  |
+scons: Configure: (cached) yes
+
+
+file /home/gem5/gem5_new/site_scons/gem5_scons/configure.py,line 171:
+	Configure(confdir = build/X86/gem5.build/scons_config)
+scons: Configure: Checking for shm_open("/test", 0, 0) in C library None... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_11.c" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_11.c <-
+  |  |
+  |  |
+  |  |#include "sys/mman.h"
+  |  |
+  |  |int
+  |  |main() {
+  |  |  shm_open("/test", 0, 0);
+  |  |return 0;
+  |  |}
+  |  |
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_11.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [      CC] [33mX86/gem5.build/scons_config/conftest_11[33m[1m.c[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: Building "build/X86/gem5.build/scons_config/conftest_11" failed in a previous run and all its sources are up to date.
+scons: Configure: The original builder output was:
+  |(B[m [    LINK] [33m[33m[1m[34m[1m -> [33m[1mX86/gem5.build/scons_config/conftest_11(B[m
+  |
+scons: Configure: (cached) no
+
+scons: Configure: Checking for shm_open("/test", 0, 0) in C library rt... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_12.c" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_12.c <-
+  |  |
+  |  |
+  |  |#include "sys/mman.h"
+  |  |
+  |  |int
+  |  |main() {
+  |  |  shm_open("/test", 0, 0);
+  |  |return 0;
+  |  |}
+  |  |
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_12.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [      CC] [33mX86/gem5.build/scons_config/conftest_12[33m[1m.c[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_12" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [    LINK] [33m[33m[1m[34m[1m -> [33m[1mX86/gem5.build/scons_config/conftest_12(B[m
+  |
+scons: Configure: (cached) yes
+
+
+file /home/gem5/gem5_new/site_scons/gem5_scons/configure.py,line 171:
+	Configure(confdir = build/X86/gem5.build/scons_config)
+scons: Configure: Checking for backtrace_symbols_fd((void *)1, 0, 0) in C library None... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_13.c" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_13.c <-
+  |  |
+  |  |
+  |  |#include "execinfo.h"
+  |  |
+  |  |int
+  |  |main() {
+  |  |  backtrace_symbols_fd((void *)1, 0, 0);
+  |  |return 0;
+  |  |}
+  |  |
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_13.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [      CC] [33mX86/gem5.build/scons_config/conftest_13[33m[1m.c[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_13" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [    LINK] [33m[33m[1m[34m[1m -> [33m[1mX86/gem5.build/scons_config/conftest_13(B[m
+  |
+scons: Configure: (cached) yes
+
+
+file /home/gem5/gem5_new/site_scons/gem5_scons/configure.py,line 171:
+	Configure(confdir = build/X86/gem5.build/scons_config)
+scons: Configure: Checking for C header file linux/kvm.h... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_14.c" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_14.c <-
+  |  |
+  |  |#include <linux/kvm.h>
+  |  |
+  |  |
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_14.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [      CC] [33mX86/gem5.build/scons_config/conftest_14[33m[1m.c[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: (cached) yes
+
+scons: Configure: Checking for timer_create(CLOCK_MONOTONIC, NULL, NULL) in C library None... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_15.c" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_15.c <-
+  |  |
+  |  |
+  |  |#include "time.h"
+  |  |#include "signal.h"
+  |  |
+  |  |int
+  |  |main() {
+  |  |  timer_create(CLOCK_MONOTONIC, NULL, NULL);
+  |  |return 0;
+  |  |}
+  |  |
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_15.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [      CC] [33mX86/gem5.build/scons_config/conftest_15[33m[1m.c[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_15" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [    LINK] [33m[33m[1m[34m[1m -> [33m[1mX86/gem5.build/scons_config/conftest_15(B[m
+  |
+scons: Configure: (cached) yes
+
+scons: Configure: Checking for member exclude_host in struct perf_event_attr...
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_16.cc" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_16.cc <-
+  |  |
+  |  |#include <linux/perf_event.h>
+  |  |int main(){
+  |  |  struct perf_event_attr test;
+  |  |  (void)test.exclude_host;
+  |  |  return 0;
+  |  |};
+  |  |
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_16.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [     CXX] [33mX86/gem5.build/scons_config/conftest_16[33m[1m.cc[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: (cached) yes
+
+
+file /home/gem5/gem5_new/site_scons/gem5_scons/configure.py,line 171:
+	Configure(confdir = build/X86/gem5.build/scons_config)
+scons: Configure: Checking for C header file fenv.h... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_17.c" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_17.c <-
+  |  |
+  |  |#include <fenv.h>
+  |  |
+  |  |
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_17.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [      CC] [33mX86/gem5.build/scons_config/conftest_17[33m[1m.c[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: (cached) yes
+
+scons: Configure: Checking for C header file png.h... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_18.c" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_18.c <-
+  |  |
+  |  |#include <png.h>
+  |  |
+  |  |
+  |
+scons: Configure: Building "build/X86/gem5.build/scons_config/conftest_18.o" failed in a previous run and all its sources are up to date.
+scons: Configure: The original builder output was:
+  |(B[m [      CC] [33mX86/gem5.build/scons_config/conftest_18[33m[1m.c[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: (cached) no
+
+scons: Configure: Checking for clock_nanosleep(0,0,NULL,NULL) in C library None... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_19.c" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_19.c <-
+  |  |
+  |  |
+  |  |#include "time.h"
+  |  |
+  |  |int
+  |  |main() {
+  |  |  clock_nanosleep(0,0,NULL,NULL);
+  |  |return 0;
+  |  |}
+  |  |
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_19.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [      CC] [33mX86/gem5.build/scons_config/conftest_19[33m[1m.c[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_19" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [    LINK] [33m[33m[1m[34m[1m -> [33m[1mX86/gem5.build/scons_config/conftest_19(B[m
+  |
+scons: Configure: (cached) yes
+
+scons: Configure: Checking for C header file valgrind/valgrind.h... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_20.c" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_20.c <-
+  |  |
+  |  |#include "valgrind/valgrind.h"
+  |  |
+  |  |
+  |
+scons: Configure: Building "build/X86/gem5.build/scons_config/conftest_20.o" failed in a previous run and all its sources are up to date.
+scons: Configure: The original builder output was:
+  |(B[m [      CC] [33mX86/gem5.build/scons_config/conftest_20[33m[1m.c[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: (cached) no
+
+
+file /home/gem5/gem5_new/site_scons/gem5_scons/configure.py,line 171:
+	Configure(confdir = build/X86/gem5.build/scons_config)
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_21.cc" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_21.cc <-
+  |  |
+  |  |        int main() {return 0;}
+  |  |        namespace [[gnu::deprecated("Test namespace deprecation")]]
+  |  |        test_deprecated_namespace {}
+  |  |    
+  |
+scons: Configure: Building "build/X86/gem5.build/scons_config/conftest_21.o" failed in a previous run and all its sources are up to date.
+scons: Configure: The original builder output was:
+  |(B[m [     CXX] [33mX86/gem5.build/scons_config/conftest_21[33m[1m.cc[34m[1m -> [33m[1m.o(B[m
+  |
+
+file /home/gem5/gem5_new/site_scons/gem5_scons/configure.py,line 171:
+	Configure(confdir = build/X86/gem5.build/scons_config)
+scons: Configure: Checking for pkg-config package hdf5-serial... 
+scons: Configure: Building "build/X86/gem5.build/scons_config/conftest_22" failed in a previous run and all its sources are up to date.
+scons: Configure: The original builder output was:
+  |pkg-config hdf5-serial
+  |
+scons: Configure: (cached) no
+
+scons: Configure: Checking for pkg-config package hdf5... 
+scons: Configure: Building "build/X86/gem5.build/scons_config/conftest_23" failed in a previous run and all its sources are up to date.
+scons: Configure: The original builder output was:
+  |pkg-config hdf5
+  |
+scons: Configure: (cached) no
+
+scons: Configure: Checking for H5Fcreate("", 0, 0, 0) in C library hdf5... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_24.c" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_24.c <-
+  |  |
+  |  |
+  |  |#include "hdf5.h"
+  |  |
+  |  |int
+  |  |main() {
+  |  |  H5Fcreate("", 0, 0, 0);
+  |  |return 0;
+  |  |}
+  |  |
+  |
+scons: Configure: Building "build/X86/gem5.build/scons_config/conftest_24.o" failed in a previous run and all its sources are up to date.
+scons: Configure: The original builder output was:
+  |(B[m [      CC] [33mX86/gem5.build/scons_config/conftest_24[33m[1m.c[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: (cached) no
+
+
+file /home/gem5/gem5_new/site_scons/gem5_scons/configure.py,line 171:
+	Configure(confdir = build/X86/gem5.build/scons_config)
+scons: Configure: Checking for C header file linux/if_tun.h... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_25.c" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_25.c <-
+  |  |
+  |  |#include <linux/if_tun.h>
+  |  |
+  |  |
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_25.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [      CC] [33mX86/gem5.build/scons_config/conftest_25[33m[1m.c[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: (cached) yes
+
+
+file /home/gem5/gem5_new/site_scons/gem5_scons/configure.py,line 171:
+	Configure(confdir = build/X86/gem5.build/scons_config)
+scons: Configure: Checking for pkg-config package protobuf... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_26" is up to date.
+scons: Configure: The original builder output was:
+  |pkg-config protobuf
+  |
+scons: Configure: (cached) yes
+
+scons: Configure: Checking for GOOGLE_PROTOBUF_VERIFY_VERSION in C++ library protobuf... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_27.cpp" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_27.cpp <-
+  |  |
+  |  |
+  |  |#include "google/protobuf/message.h"
+  |  |
+  |  |int
+  |  |main() {
+  |  |  GOOGLE_PROTOBUF_VERIFY_VERSION;
+  |  |return 0;
+  |  |}
+  |  |
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_27.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [     CXX] [33mX86/gem5.build/scons_config/conftest_27[33m[1m.cpp[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_27" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [    LINK] [33m[33m[1m[34m[1m -> [33m[1mX86/gem5.build/scons_config/conftest_27(B[m
+  |
+scons: Configure: (cached) yes
+
+
+file /home/gem5/gem5_new/site_scons/gem5_scons/configure.py,line 171:
+	Configure(confdir = build/X86/gem5.build/scons_config)
+scons: Configure: Checking for compiler -Wno-self-assign-overloaded support... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_30.cc" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_30.cc <-
+  |  |// CheckCxxFlag DO NOTHING
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_30.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [     CXX] [33mX86/gem5.build/scons_config/conftest_30[33m[1m.cc[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: (cached) yes
+
+
+file /home/gem5/gem5_new/site_scons/gem5_scons/configure.py,line 171:
+	Configure(confdir = build/X86/gem5.build/scons_config)
+scons: Configure: Checking for compiler -Wno-free-nonheap-object support... 
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_31.cc" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/gem5.build/scons_config/conftest_31.cc <-
+  |  |// CheckCxxFlag DO NOTHING
+  |
+scons: Configure: "build/X86/gem5.build/scons_config/conftest_31.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [     CXX] [33mX86/gem5.build/scons_config/conftest_31[33m[1m.cc[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: (cached) yes
+
+

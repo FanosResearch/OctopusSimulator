@@ -1,0 +1,45 @@
+file /home/gem5/gem5_new/build/X86/ext/systemc/SConscript,line 41:
+	Configure(confdir = build/X86/ext/systemc/.scons_config)
+scons: Configure: Checking whether __i386__ is declared... 
+scons: Configure: "build/X86/ext/systemc/.scons_config/conftest_28.c" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/ext/systemc/.scons_config/conftest_28.c <-
+  |  |
+  |  |int main(void)
+  |  |{
+  |  |#ifndef __i386__
+  |  |    (void) __i386__;
+  |  |#endif
+  |  |    ;
+  |  |    return 0;
+  |  |}
+  |  |
+  |
+scons: Configure: Building "build/X86/ext/systemc/.scons_config/conftest_28.o" failed in a previous run and all its sources are up to date.
+scons: Configure: The original builder output was:
+  |(B[m [      CC] [33mX86/ext/systemc/.scons_config/conftest_28[33m[1m.c[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: (cached) no
+
+scons: Configure: Checking whether __x86_64__ is declared... 
+scons: Configure: "build/X86/ext/systemc/.scons_config/conftest_29.c" is up to date.
+scons: Configure: The original builder output was:
+  |build/X86/ext/systemc/.scons_config/conftest_29.c <-
+  |  |
+  |  |int main(void)
+  |  |{
+  |  |#ifndef __x86_64__
+  |  |    (void) __x86_64__;
+  |  |#endif
+  |  |    ;
+  |  |    return 0;
+  |  |}
+  |  |
+  |
+scons: Configure: "build/X86/ext/systemc/.scons_config/conftest_29.o" is up to date.
+scons: Configure: The original builder output was:
+  |(B[m [      CC] [33mX86/ext/systemc/.scons_config/conftest_29[33m[1m.c[34m[1m -> [33m[1m.o(B[m
+  |
+scons: Configure: (cached) yes
+
+

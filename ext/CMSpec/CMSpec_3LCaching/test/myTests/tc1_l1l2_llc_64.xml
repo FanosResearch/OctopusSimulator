@@ -1,0 +1,1995 @@
+<!--Cache Simualtor Glable Configuration Parameters
+  Cache2Cache = [0, 1] use to set C2C date transfer between cores
+  CohProtocol = [MSI, MESI, MOESI, PMSI] 
+  nCores = Integer number 
+  RunTillEnd = [0, 1] use to configure the simulator to run benchmarks till the end
+  totalTimeInSeconds = number of seconds to run the simulator, configue this parameter if "RunTillEnd" = 0-->
+
+<MCoreSimProject 
+	numberOfRuns="1" 
+	totalTimeInSeconds="1" 
+	RunTillEnd="1" 
+	busClkNanoSec="100" 
+	nCores="64" 
+	cpuFIFOSize="500" 
+	busFIFOSize="500" 
+	Cache2Cache="0" 
+	CohProtocol="MSI"
+	OutOfOrderStages="8">
+  
+  <!--L1 Bus Configuration Parameters 
+       Notes:
+         1) if BusArch set to unified then "ReqBusArb" should be same as "RespBusArb"
+         2) if BusArb set to CUSTOM, then "ReqBusArb" and "RespBusArb" should be provided
+         3) if BusArb set to PISCOT or PMSI, then there is no need to configure Req/Resp BusArb
+         4) WrkConserv is used with "TDM" to utilize the idle slots, set this to zero utilize the empty slots
+       BusArch    = [unified, split] 
+       BusArb     = [PMSI, PISCOT, CUSTOM] 
+       ReqBusArb  = [TDM, FCFS, RR, WRR] 
+       RespBusArb = [TDM, FCFS, RR, WRR] 
+       WrkConserv = [0, 1] -->
+  <InterConnect>
+    <L1BusCnfg
+    	busClkNanoSec="100"
+    	busClkSkew="0" 
+    	BusArch="split"
+    	BusArb="FCFS" 
+    	ReqBusArb="FCFS"
+    	RespBusArb="FCFS"
+    	ReqBusLat="2"
+    	RespBusLat="10"
+    	WrkConserv="1">
+    </L1BusCnfg>
+  </InterConnect>
+  
+  <!--Core Configuration Parameters nCores Fields -->
+  <L1Caches>
+    <L1Cache 
+    	cacheId="0" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="1" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="2" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="3" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="4" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="5" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="6" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="7" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="8" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="9" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="10" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="11" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="12" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="13" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="14" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="15" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="16" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="17" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="18" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="19" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="20" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="21" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="22" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="23" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="24" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="25" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="26" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="27" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="28" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="29" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="30" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="31" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="32" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="33" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="34" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="35" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="36" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="37" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="38" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="39" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="40" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="41" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="42" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="43" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="44" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="45" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="46" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="47" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="48" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="49" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="50" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="51" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="52" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="53" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="54" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="55" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="56" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="57" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="58" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="59" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="60" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="61" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="62" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="63" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+ </L1Caches>
+  <L2Caches>
+    <L2Cache 
+    	cacheId="64" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="65" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="66" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="67" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="68" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="69" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="70" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="71" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="72" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="73" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="74" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="75" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="76" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="77" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="78" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="79" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache><L2Cache 
+    	cacheId="80" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="81" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="82" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="83" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="84" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="85" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="86" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="87" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="88" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="89" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="90" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="91" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="92" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="93" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="94" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="95" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="96" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="97" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="98" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="99" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="100" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="101" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="102" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="103" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="104" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="105" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="106" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="107" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="108" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="109" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="110" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="111" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="112" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="113" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="114" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="115" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="116" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="117" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="118" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="119" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="120" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="121" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="122" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="123" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="124" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="125" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="126" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="127" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+  </L2Caches>
+  <sharedCaches>
+    <sharedCache 
+    	cacheId="200" 
+    	cpuClkMHz="100" 
+    	cpuClkSkew="60" 
+    	ctrlClkMHz="100" 
+    	ctrlClkSkew="50" 
+    	NPendReq="1600"
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="1048576" 
+    	mapping="1" 
+    	nways="64"
+    	CachePreLoad="1"
+		dataAccessLatency="0">
+    </sharedCache>
+  </sharedCaches>
+  <DRAMCnfg
+       DRAMId="1000"
+       ctrlClkMHz="100" 
+       ctrlClkSkew="0" 
+       DRAMSIMEnable="1"
+       MEMMODLE="FIXEDLat"
+       MEMLATENCY="25"
+       MEMOutsandingReqs="16">
+  </DRAMCnfg>
+</MCoreSimProject>

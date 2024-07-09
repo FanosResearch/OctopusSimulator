@@ -1,0 +1,704 @@
+Global frequency set at 1000000000000 ticks per second
+build/X86/mem/dram_interface.cc:690: warn: DRAM device capacity (8192 Mbytes) does not match the address range assigned (4096 Mbytes)
+simpleCache
+DEBUG COH Protocol Name in XML header: MSI
+FSM path: /home/gem5/gem5_new/ext/CMSpec/CMSpec/Protocols_FSM/
+simpleCache
+simpleCache
+simpleCache
+build/X86/mem/coherent_xbar.cc:140: warn: CoherentXBar board.cache_hierarchy.membus has no snooping ports attached!
+0: board.remote_gdb: listening for remote gdb on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 22.1.0.0
+gem5 compiled Jul  4 2024 11:39:06
+gem5 started Jul  5 2024 16:22:10
+gem5 executing on gem5-VirtualBox, pid 74039
+command line: ./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -f /home/gem5/gem5_new/ext/CMSpec/CMSpec/test/myTests/tc1_4.xml -c 4 -b RADIX -m Octopus
+
+warn: The simulate package is still in a beta state. The gem5 project does not guarantee the APIs within this package will remain consistent across upcoming releases.
+warn: No dot file generated. Please install pydot to generate the dot file and pdf.
+build/X86/sim/simulate.cc:192: info: Entering event queue @ 0.  Starting simulation...
+build/X86/arch/x86/cpuid.cc:180: warn: x86 cpuid family 0x0000: unimplemented function 13
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigaction(...)
+      (further warnings will be suppressed)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigprocmask(...)
+      (further warnings will be suppressed)
+build/X86/sim/mem_state.cc:443: info: Increasing stack size by one page.
+build/X86/sim/syscall_emul.hh:1016: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/home/gem5/splash/splash2/codes/kernels/radix/RADIX'
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+
+Integer Radix Sort
+     262144 Keys
+     4 Processors
+     Radix = 1024
+     Max key = 524288
+
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/power_state.cc:105: warn: PowerState: Already in the requested power state, request ignored
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7385000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff7548000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff73ac000 already mapped
+build/X86/sim/process.cc:333: warn: Process::allocateMem: addr 0x7ffff74e5000 already mapped
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+
+                 PROCESS STATISTICS
+               Total            Rank            Sort
+ Proc          Time             Time            Time
+    0          12471            2850            9252
+
+                 TIMING INFORMATION
+Start time                        : 1000000000000100
+Initialization finish time        : 1000000000008335
+Overall finish time               : 1000000000020806
+Total time with initialization    :            20706
+Total time without initialization :            12471
+
+simInsts                                     45703623                       # Number of instructions simulated (Count)
+*********************************** Core 0 ***********************************
+Num of Requests = 2175468
+Num of Hits = 2034526
+Num of Misses = 140941
+Num of Replacments = 109910
+Num of Interference = 17338
+*********************************** Core 1 ***********************************
+Num of Requests = 2141809
+Num of Hits = 2005435
+Num of Misses = 136373
+Num of Replacments = 108816
+Num of Interference = 15792
+*********************************** Core 2 ***********************************
+Num of Requests = 2165410
+Num of Hits = 2025677
+Num of Misses = 139732
+Num of Replacments = 112187
+Num of Interference = 15469
+*********************************** Core 3 ***********************************
+Num of Requests = 2167773
+Num of Hits = 2026301
+Num of Misses = 141471
+Num of Replacments = 110564
+Num of Interference = 17302
+Global frequency set at 1000000000000 ticks per second
+build/X86/mem/dram_interface.cc:690: warn: DRAM device capacity (8192 Mbytes) does not match the address range assigned (4096 Mbytes)
+simpleCache
+DEBUG COH Protocol Name in XML header: MSI
+FSM path: /home/gem5/gem5_new/ext/CMSpec/CMSpec/Protocols_FSM/
+simpleCache
+simpleCache
+simpleCache
+build/X86/mem/coherent_xbar.cc:140: warn: CoherentXBar board.cache_hierarchy.membus has no snooping ports attached!
+0: board.remote_gdb: listening for remote gdb on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 22.1.0.0
+gem5 compiled Jul  4 2024 11:39:06
+gem5 started Jul  5 2024 16:56:55
+gem5 executing on gem5-VirtualBox, pid 74148
+command line: ./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -f /home/gem5/gem5_new/ext/CMSpec/CMSpec/test/myTests/tc1_4.xml -c 4 -b LU -m Octopus
+
+warn: The simulate package is still in a beta state. The gem5 project does not guarantee the APIs within this package will remain consistent across upcoming releases.
+warn: No dot file generated. Please install pydot to generate the dot file and pdf.
+build/X86/sim/simulate.cc:192: info: Entering event queue @ 0.  Starting simulation...
+build/X86/arch/x86/cpuid.cc:180: warn: x86 cpuid family 0x0000: unimplemented function 13
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigaction(...)
+      (further warnings will be suppressed)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigprocmask(...)
+      (further warnings will be suppressed)
+build/X86/sim/mem_state.cc:443: info: Increasing stack size by one page.
+build/X86/sim/syscall_emul.hh:1016: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/home/gem5/splash/splash2/codes/kernels/lu/non_contiguous_blocks/LU'
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+
+Blocked Dense LU Factorization
+     400 by 400 Matrix
+     4 Processors
+     16 by 16 Element Blocks
+
+
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/power_state.cc:105: warn: PowerState: Already in the requested power state, request ignored
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+                            PROCESS STATISTICS
+              Total      Diagonal     Perimeter      Interior       Barrier
+ Proc         Time         Time         Time           Time          Time
+    0         32416           151          2276         29337           631
+
+                            TIMING INFORMATION
+Start time                        : 1000000000000104
+Initialization finish time        : 1000000000012639
+Overall finish time               : 1000000000045056
+Total time with initialization    :            44952
+Total time without initialization :            32417
+
+simInsts                                    130935749                       # Number of instructions simulated (Count)
+*********************************** Core 0 ***********************************
+Num of Requests = 26830777
+Num of Hits = 26555597
+Num of Misses = 275179
+Num of Replacments = 172786
+Num of Interference = 45567
+*********************************** Core 1 ***********************************
+Num of Requests = 21836134
+Num of Hits = 21603402
+Num of Misses = 232731
+Num of Replacments = 131795
+Num of Interference = 44659
+*********************************** Core 2 ***********************************
+Num of Requests = 21679822
+Num of Hits = 21449323
+Num of Misses = 230498
+Num of Replacments = 131273
+Num of Interference = 43040
+*********************************** Core 3 ***********************************
+Num of Requests = 21877846
+Num of Hits = 21645067
+Num of Misses = 232778
+Num of Replacments = 132182
+Num of Interference = 44138
+Global frequency set at 1000000000000 ticks per second
+build/X86/mem/dram_interface.cc:690: warn: DRAM device capacity (8192 Mbytes) does not match the address range assigned (4096 Mbytes)
+simpleCache
+DEBUG COH Protocol Name in XML header: MSI
+FSM path: /home/gem5/gem5_new/ext/CMSpec/CMSpec/Protocols_FSM/
+simpleCache
+simpleCache
+simpleCache
+build/X86/mem/coherent_xbar.cc:140: warn: CoherentXBar board.cache_hierarchy.membus has no snooping ports attached!
+0: board.remote_gdb: listening for remote gdb on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 22.1.0.0
+gem5 compiled Jul  4 2024 11:39:06
+gem5 started Jul  5 2024 19:28:11
+gem5 executing on gem5-VirtualBox, pid 74283
+command line: ./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -f /home/gem5/gem5_new/ext/CMSpec/CMSpec/test/myTests/tc1_4.xml -c 4 -b FFT -m Octopus
+
+warn: The simulate package is still in a beta state. The gem5 project does not guarantee the APIs within this package will remain consistent across upcoming releases.
+warn: No dot file generated. Please install pydot to generate the dot file and pdf.
+build/X86/sim/simulate.cc:192: info: Entering event queue @ 0.  Starting simulation...
+build/X86/arch/x86/cpuid.cc:180: warn: x86 cpuid family 0x0000: unimplemented function 13
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigaction(...)
+      (further warnings will be suppressed)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigprocmask(...)
+      (further warnings will be suppressed)
+build/X86/sim/mem_state.cc:443: info: Increasing stack size by one page.
+build/X86/sim/syscall_emul.hh:1016: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/home/gem5/splash/splash2/codes/kernels/fft/FFT'
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+
+FFT with Blocking Transpose
+   65536 Complex Doubles
+   4 Processors
+   65536 Cache lines
+   16 Byte line size
+   4096 Bytes per page
+
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/power_state.cc:105: warn: PowerState: Already in the requested power state, request ignored
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+
+                 PROCESS STATISTICS
+            Computation      Transpose     Transpose
+ Proc          Time            Time        Fraction
+    0              9309           3928       0.42196
+
+                 TIMING INFORMATION
+Start time                        : 1000000000000102
+Initialization finish time        : 1000000000015959
+Overall finish time               : 1000000000025268
+Total time with initialization    :            25166
+Total time without initialization :             9309
+Overall transpose time            :             3928
+Overall transpose fraction        :          0.42196
+
+simInsts                                     45222366                       # Number of instructions simulated (Count)
+*********************************** Core 0 ***********************************
+Num of Requests = 9863064
+Num of Hits = 9779369
+Num of Misses = 83693
+Num of Replacments = 66600
+Num of Interference = 8297
+*********************************** Core 1 ***********************************
+Num of Requests = 2515803
+Num of Hits = 2467430
+Num of Misses = 48372
+Num of Replacments = 33057
+Num of Interference = 6639
+*********************************** Core 2 ***********************************
+Num of Requests = 2514986
+Num of Hits = 2466612
+Num of Misses = 48373
+Num of Replacments = 32164
+Num of Interference = 7557
+*********************************** Core 3 ***********************************
+Num of Requests = 2514033
+Num of Hits = 2465260
+Num of Misses = 48772
+Num of Replacments = 32041
+Num of Interference = 8077
+Global frequency set at 1000000000000 ticks per second
+build/X86/mem/dram_interface.cc:690: warn: DRAM device capacity (8192 Mbytes) does not match the address range assigned (4096 Mbytes)
+simpleCache
+DEBUG COH Protocol Name in XML header: MSI
+FSM path: /home/gem5/gem5_new/ext/CMSpec/CMSpec/Protocols_FSM/
+simpleCache
+simpleCache
+simpleCache
+build/X86/mem/coherent_xbar.cc:140: warn: CoherentXBar board.cache_hierarchy.membus has no snooping ports attached!
+0: board.remote_gdb: listening for remote gdb on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 22.1.0.0
+gem5 compiled Jul  4 2024 11:39:06
+gem5 started Jul  5 2024 20:07:03
+gem5 executing on gem5-VirtualBox, pid 74377
+command line: ./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -f /home/gem5/gem5_new/ext/CMSpec/CMSpec/test/myTests/tc1_4.xml -c 4 -b BARNS -m Octopus
+
+warn: The simulate package is still in a beta state. The gem5 project does not guarantee the APIs within this package will remain consistent across upcoming releases.
+warn: No dot file generated. Please install pydot to generate the dot file and pdf.
+build/X86/sim/simulate.cc:192: info: Entering event queue @ 0.  Starting simulation...
+build/X86/arch/x86/cpuid.cc:180: warn: x86 cpuid family 0x0000: unimplemented function 13
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigaction(...)
+      (further warnings will be suppressed)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigprocmask(...)
+      (further warnings will be suppressed)
+build/X86/sim/mem_state.cc:443: info: Increasing stack size by one page.
+build/X86/sim/syscall_emul.hh:1016: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/home/gem5/splash/splash2/codes/apps/barnes/BARNES'
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+
+		Hack code: Plummer model
+
+     nbody     dtime       eps       tol     dtout     tstop    fcells     NPROC
+       512   0.02500    0.0500      1.00     0.250     0.075      2.00         4
+
+COMPUTESTART  = 1000000000001058
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/power_state.cc:105: warn: PowerState: Already in the requested power state, request ignored
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+COMPUTEEND    = 1000000000006868
+COMPUTETIME   =         5810
+TRACKTIME     =         2775
+PARTITIONTIME =           16	 0.01
+TREEBUILDTIME =          281	 0.10
+FORCECALCTIME =         2445	 0.88
+RESTTIME      =           33	 0.01
+simInsts                                     27072574                       # Number of instructions simulated (Count)
+*********************************** Core 0 ***********************************
+Num of Requests = 4222290
+Num of Hits = 4165285
+Num of Misses = 57001
+Num of Replacments = 50053
+Num of Interference = 3756
+*********************************** Core 1 ***********************************
+Num of Requests = 3785596
+Num of Hits = 3746855
+Num of Misses = 38740
+Num of Replacments = 32795
+Num of Interference = 3730
+*********************************** Core 2 ***********************************
+Num of Requests = 3941352
+Num of Hits = 3894204
+Num of Misses = 47147
+Num of Replacments = 41262
+Num of Interference = 3467
+*********************************** Core 3 ***********************************
+Num of Requests = 3948555
+Num of Hits = 3902352
+Num of Misses = 46202
+Num of Replacments = 40288
+Num of Interference = 3499
+Global frequency set at 1000000000000 ticks per second
+build/X86/mem/dram_interface.cc:690: warn: DRAM device capacity (8192 Mbytes) does not match the address range assigned (4096 Mbytes)
+simpleCache
+DEBUG COH Protocol Name in XML header: MSI
+FSM path: /home/gem5/gem5_new/ext/CMSpec/CMSpec/Protocols_FSM/
+simpleCache
+simpleCache
+simpleCache
+build/X86/mem/coherent_xbar.cc:140: warn: CoherentXBar board.cache_hierarchy.membus has no snooping ports attached!
+0: board.remote_gdb: listening for remote gdb on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 22.1.0.0
+gem5 compiled Jul  4 2024 11:39:06
+gem5 started Jul  5 2024 20:32:10
+gem5 executing on gem5-VirtualBox, pid 74453
+command line: ./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -f /home/gem5/gem5_new/ext/CMSpec/CMSpec/test/myTests/tc1_4.xml -c 4 -b FMM -m Octopus
+
+warn: The simulate package is still in a beta state. The gem5 project does not guarantee the APIs within this package will remain consistent across upcoming releases.
+warn: No dot file generated. Please install pydot to generate the dot file and pdf.
+build/X86/sim/simulate.cc:192: info: Entering event queue @ 0.  Starting simulation...
+build/X86/arch/x86/cpuid.cc:180: warn: x86 cpuid family 0x0000: unimplemented function 13
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigaction(...)
+      (further warnings will be suppressed)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigprocmask(...)
+      (further warnings will be suppressed)
+build/X86/sim/mem_state.cc:443: info: Increasing stack size by one page.
+build/X86/sim/syscall_emul.hh:1016: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/home/gem5/splash/splash2/codes/apps/fmm/FMM'
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+Creating a two cluster, non uniform distribution for 256 particles
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/power_state.cc:105: warn: PowerState: Already in the requested power state, request ignored
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+Starting FMM with 4 processors
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+Finished FMM
+                                   PROCESS STATISTICS
+build/X86/arch/x86/generated/exec-ns.cc.inc:27: warn: instruction 'palignr_Vdq_Wdq_Ib' unimplemented
+build/X86/arch/x86/generated/exec-ns.cc.inc:27: warn: instruction 'palignr_Vdq_Wdq_Ib' unimplemented
+build/X86/arch/x86/generated/exec-ns.cc.inc:27: warn: instruction 'palignr_Vdq_Wdq_Ib' unimplemented
+build/X86/arch/x86/generated/exec-ns.cc.inc:27: warn: instruction 'palignr_Vdq_Wdq_Ib' unimplemented
+             Tra  Tree        List        Part        Pass       Inter        Ba      Bar        Intra       Other
+ Proc        Time         Time        Time        Time        Time       Time         Time       Time        Time
+    0         1924          59          51          43         472        1179          90           7          20
+
+                                   TIMING INFORMATION
+Start time                        : 1000000000000101
+Initialization finish time        : 1000000000002703
+Overall finish time               : 1000000000004628
+Total time with initialization    :             4527
+Total time without initialization :             1924
+
+Total time for steps 3 to 5 :         1924
+
+simInsts                                     21035405                       # Number of instructions simulated (Count)
+*********************************** Core 0 ***********************************
+Num of Requests = 1806361
+Num of Hits = 1782864
+Num of Misses = 23496
+Num of Replacments = 17814
+Num of Interference = 3679
+*********************************** Core 1 ***********************************
+Num of Requests = 1451161
+Num of Hits = 1436043
+Num of Misses = 15117
+Num of Replacments = 10285
+Num of Interference = 3206
+*********************************** Core 2 ***********************************
+Num of Requests = 1555367
+Num of Hits = 1537799
+Num of Misses = 17567
+Num of Replacments = 11380
+Num of Interference = 4591
+*********************************** Core 3 ***********************************
+Num of Requests = 1817657
+Num of Hits = 1796197
+Num of Misses = 21459
+Num of Replacments = 15224
+Num of Interference = 3887
+Global frequency set at 1000000000000 ticks per second
+build/X86/mem/dram_interface.cc:690: warn: DRAM device capacity (8192 Mbytes) does not match the address range assigned (4096 Mbytes)
+simpleCache
+DEBUG COH Protocol Name in XML header: MSI
+FSM path: /home/gem5/gem5_new/ext/CMSpec/CMSpec/Protocols_FSM/
+simpleCache
+simpleCache
+simpleCache
+build/X86/mem/coherent_xbar.cc:140: warn: CoherentXBar board.cache_hierarchy.membus has no snooping ports attached!
+0: board.remote_gdb: listening for remote gdb on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 22.1.0.0
+gem5 compiled Jul  4 2024 11:39:06
+gem5 started Jul  5 2024 20:45:27
+gem5 executing on gem5-VirtualBox, pid 74542
+command line: ./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -f /home/gem5/gem5_new/ext/CMSpec/CMSpec/test/myTests/tc1_4.xml -c 4 -b RADIOSITY -m Octopus
+
+warn: The simulate package is still in a beta state. The gem5 project does not guarantee the APIs within this package will remain consistent across upcoming releases.
+warn: No dot file generated. Please install pydot to generate the dot file and pdf.
+build/X86/sim/simulate.cc:192: info: Entering event queue @ 0.  Starting simulation...
+build/X86/arch/x86/cpuid.cc:180: warn: x86 cpuid family 0x0000: unimplemented function 13
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigaction(...)
+      (further warnings will be suppressed)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigprocmask(...)
+      (further warnings will be suppressed)
+build/X86/sim/mem_state.cc:443: info: Increasing stack size by one page.
+build/X86/sim/syscall_emul.hh:1016: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/home/gem5/splash/splash2/codes/apps/radiosity/RADIOSITY'
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/power_state.cc:105: warn: PowerState: Already in the requested power state, request ignored
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+TIMING STATISTICS MEASURED BY MAIN PROCESS:
+	Overall start time	    1000000000113940
+	Overall end time	    1000000000206705
+	Total time with initialization	               92765
+	Total time without initialization	               92746
+Rasiosity Statistics
+
+    Histogram of interactions/elem
+	 Interactions  Occurrence
+	 -------------------------------
+	    50          1 (210000.000000)
+	    40          1 (118500.000000)
+	    39          1 (118500.000000)
+	    38          1 (5000.000000)
+	    36          1 (210000.000000)
+	    35          1 (245000.000000)
+	    34          1 (245000.000000)
+	    32          2 (107500.000000)
+	    29          2 (227500.000000)
+	    28          1 (61250.000000)
+	    27          1 (3281.250000)
+	    26          2 (131250.000000)
+	    25          2 (61164.062500)
+	    24          2 (426562.500000)
+	    23          1 (3281.250000)
+	    22          2 (131250.000000)
+	    21          10 (47734.375000)
+	    20          10 (15558.593750)
+	    19          13 (99194.710938)
+	    18          10 (138040.625000)
+	    17          22 (30846.767578)
+	    16          46 (13263.333008)
+	    15          19 (22693.050781)
+	    14          57 (12068.873047)
+	    13          79 (13667.867188)
+	    12          95 (16157.765625)
+	    11          44 (35564.539062)
+	    10          83 (13279.835938)
+	    9          114 (19402.085938)
+	    8          1158 (3437.692139)
+	    7          149 (11943.471680)
+	    6          152 (10394.579102)
+	    5          242 (6705.159180)
+	    4          205 (9516.223633)
+	    3          396 (3963.430664)
+	    2          515 (4704.451172)
+	    1          382 (2418.264404)
+	    0          531 (10211.212891)
+    Configurations
+	Patch assignment: Static equal number
+	Always inserting at top of list for visibility testing (not sorted)
+	Recursive pruning enabled for BSP tree traversal
+	Patch cache:      Enabled
+	Always check all other queues when task stealing (not neighbor scheme)
+    Parameters
+	Number of processors:    4
+	Number of task queues:   4
+	Number of tasks / queue: 200
+	Area epsilon:            2000.000000
+	#inter parallel refine:  5
+	#visibility comp / task: 4
+	BF epsilon:              0.015000
+	Energy convergence:      0.005000
+    Iterations to converge:   8 times
+    Resource Usage
+	Number of patches:            14
+	Total number of elements:     4354
+	Total number of interactions: 24052
+	          completely visible: 20363
+	        completely invisible: 1649
+	           partially visible: 2040
+	Interaction coherence (root interaction not counted)
+	       Common for 4 siblings: 15332
+	       Common for 3 siblings: 4350
+	       Common for 2 siblings: 2554
+	       Common for no sibling: 1517
+	Avg. elements per patch:      311.0
+	Avg. interactions per patch:  1718.0
+	Avg. interactions per element:5.5
+	Number of elements in equivalent uniform mesh: 8456
+	Elem(hierarchical)/Elem(uniform): 51.49%
+simInsts                                    409882195                       # Number of instructions simulated (Count)
+*********************************** Core 0 ***********************************
+Num of Requests = 60831143
+Num of Hits = 60006717
+Num of Misses = 824424
+Num of Replacments = 721424
+Num of Interference = 66614
+*********************************** Core 1 ***********************************
+Num of Requests = 53421855
+Num of Hits = 53161948
+Num of Misses = 259906
+Num of Replacments = 165835
+Num of Interference = 53057
+*********************************** Core 2 ***********************************
+Num of Requests = 57530515
+Num of Hits = 57291018
+Num of Misses = 239496
+Num of Replacments = 141200
+Num of Interference = 67487
+*********************************** Core 3 ***********************************
+Num of Requests = 56116089
+Num of Hits = 55853438
+Num of Misses = 262650
+Num of Replacments = 159993
+Num of Interference = 67272
+Global frequency set at 1000000000000 ticks per second
+build/X86/mem/dram_interface.cc:690: warn: DRAM device capacity (8192 Mbytes) does not match the address range assigned (4096 Mbytes)
+simpleCache
+DEBUG COH Protocol Name in XML header: MSI
+FSM path: /home/gem5/gem5_new/ext/CMSpec/CMSpec/Protocols_FSM/
+simpleCache
+simpleCache
+simpleCache
+build/X86/mem/coherent_xbar.cc:140: warn: CoherentXBar board.cache_hierarchy.membus has no snooping ports attached!
+0: board.remote_gdb: listening for remote gdb on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 22.1.0.0
+gem5 compiled Jul  4 2024 11:39:06
+gem5 started Jul  6 2024 03:27:51
+gem5 executing on gem5-VirtualBox, pid 76627
+command line: ./build/X86/gem5.debug /home/gem5/gem5_new/configs/mytest2/hello.py -f /home/gem5/gem5_new/ext/CMSpec/CMSpec/test/myTests/tc1_4.xml -c 4 -b WATER -m Octopus
+
+warn: The simulate package is still in a beta state. The gem5 project does not guarantee the APIs within this package will remain consistent across upcoming releases.
+warn: No dot file generated. Please install pydot to generate the dot file and pdf.
+build/X86/sim/simulate.cc:192: info: Entering event queue @ 0.  Starting simulation...
+build/X86/arch/x86/cpuid.cc:180: warn: x86 cpuid family 0x0000: unimplemented function 13
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigaction(...)
+      (further warnings will be suppressed)
+build/X86/sim/syscall_emul.cc:85: warn: ignoring syscall rt_sigprocmask(...)
+      (further warnings will be suppressed)
+build/X86/sim/mem_state.cc:443: info: Increasing stack size by one page.
+build/X86/sim/syscall_emul.hh:1016: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/home/gem5/splash/splash2/codes/apps/water-nsquared/WATER-NSQUARED'
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+Using 4 procs on 3 steps of 512 mols
+Other parameters:
+	TSTEP = 1.50e-16
+	NORDER = 6
+	NSAVE = -1
+	NRST = 3000
+	NPRINT = 3
+	NFMC = 0
+	CUTOFF = 6.212752
+
+
+TEMPERATURE                =   298.00 K
+DENSITY                    =  0.99800 G/C.C.
+NUMBER OF MOLECULES        =      512
+NUMBER OF PROCESSORS       =        4
+TIME STEP                  = 1.50e-01 SEC
+ORDER USED TO SOLVE F=MA   =        6 
+NO. OF TIME STEPS          =        3 
+FREQUENCY OF DATA SAVING   =       -1 
+FREQUENCY TO WRITE RST FILE=     3000 
+SPHERICAL CUTOFF RADIUS    =   6.2128 ANGSTROM
+
+NS = 7.9999899999999995
+BOXL =  24.851010
+CUTOFF =   6.212752
+XS =   3.106380
+ZERO = 1.55319
+WCOS = 0.585882
+WSIN = 0.756950
+***** NEW RUN STARTING FROM REGULAR LATTICE *****
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/power_state.cc:105: warn: PowerState: Already in the requested power state, request ignored
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall mprotect(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall set_robust_list(...)
+         3        1.57495      0.05127     10.55761                      -2.15831
+           10.026        305.74022        -19.57198
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+build/X86/sim/syscall_emul.cc:74: warn: ignoring syscall madvise(...)
+COMPUTESTART (after initialization) = 1000000000011197
+COMPUTEEND = 1000000000093938
+COMPUTETIME (after initialization) = 82741
+Measured Time (2nd timestep onward) = 49422
+Intramolecular time only (2nd timestep onward) = 919
+Intermolecular time only (2nd timestep onward) = 48433
+Other time (2nd timestep onward) = 70
+
+Exited Happily with XTT = 10.0255 (note: XTT value is garbage if NPRINT > NSTEP)
+simInsts                                    452327987                       # Number of instructions simulated (Count)
+*********************************** Core 0 ***********************************
+Num of Requests = 66195729
+Num of Hits = 65743697
+Num of Misses = 452031
+Num of Replacments = 404811
+Num of Interference = 5729
+*********************************** Core 1 ***********************************
+Num of Requests = 57039448
+Num of Hits = 56531608
+Num of Misses = 507839
+Num of Replacments = 461912
+Num of Interference = 6042
+*********************************** Core 2 ***********************************
+Num of Requests = 57685029
+Num of Hits = 57220647
+Num of Misses = 464381
+Num of Replacments = 423746
+Num of Interference = 5521
+*********************************** Core 3 ***********************************
+Num of Requests = 56994633
+Num of Hits = 56506264
+Num of Misses = 488368
+Num of Replacments = 447917
+Num of Interference = 4907

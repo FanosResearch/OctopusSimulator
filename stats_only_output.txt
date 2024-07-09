@@ -1,0 +1,9 @@
+******************************** WATER ********************************
+board.processor.cores0.core.numCycles        93853413                       # Number of cpu cycles simulated (Cycle)
+board.processor.cores1.core.numCycles        77684522                       # Number of cpu cycles simulated (Cycle)
+board.processor.cores2.core.numCycles        78671591                       # Number of cpu cycles simulated (Cycle)
+board.processor.cores3.core.numCycles        77736681                       # Number of cpu cycles simulated (Cycle)
+board.processor.cores0.core.idleCycles         613839                       # Total number of cycles that the CPU has spent unscheduled due to idling (Cycle)
+board.processor.cores1.core.idleCycles         306457                       # Total number of cycles that the CPU has spent unscheduled due to idling (Cycle)
+board.processor.cores2.core.idleCycles         276507                       # Total number of cycles that the CPU has spent unscheduled due to idling (Cycle)
+board.processor.cores3.core.idleCycles         255357                       # Total number of cycles that the CPU has spent unscheduled due to idling (Cycle)

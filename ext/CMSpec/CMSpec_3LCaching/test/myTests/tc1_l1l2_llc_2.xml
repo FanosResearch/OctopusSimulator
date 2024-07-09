@@ -1,0 +1,136 @@
+<!--Cache Simualtor Glable Configuration Parameters
+  Cache2Cache = [0, 1] use to set C2C date transfer between cores
+  CohProtocol = [MSI, MESI, MOESI, PMSI] 
+  nCores = Integer number 
+  RunTillEnd = [0, 1] use to configure the simulator to run benchmarks till the end
+  totalTimeInSeconds = number of seconds to run the simulator, configue this parameter if "RunTillEnd" = 0-->
+
+<MCoreSimProject 
+	numberOfRuns="1" 
+	totalTimeInSeconds="1" 
+	RunTillEnd="1" 
+	busClkNanoSec="100" 
+	nCores="2" 
+	cpuFIFOSize="50" 
+	busFIFOSize="50" 
+	Cache2Cache="0" 
+	CohProtocol="MSI"
+	OutOfOrderStages="8">
+  
+  <!--L1 Bus Configuration Parameters 
+       Notes:
+         1) if BusArch set to unified then "ReqBusArb" should be same as "RespBusArb"
+         2) if BusArb set to CUSTOM, then "ReqBusArb" and "RespBusArb" should be provided
+         3) if BusArb set to PISCOT or PMSI, then there is no need to configure Req/Resp BusArb
+         4) WrkConserv is used with "TDM" to utilize the idle slots, set this to zero utilize the empty slots
+       BusArch    = [unified, split] 
+       BusArb     = [PMSI, PISCOT, CUSTOM] 
+       ReqBusArb  = [TDM, FCFS, RR, WRR] 
+       RespBusArb = [TDM, FCFS, RR, WRR] 
+       WrkConserv = [0, 1] -->
+  <InterConnect>
+    <L1BusCnfg
+    	busClkNanoSec="100"
+    	busClkSkew="0" 
+    	BusArch="split"
+    	BusArb="FCFS" 
+    	ReqBusArb="FCFS"
+    	RespBusArb="FCFS"
+    	ReqBusLat="2"
+    	RespBusLat="10"
+    	WrkConserv="1">
+    </L1BusCnfg>
+  </InterConnect>
+  
+  <!--Core Configuration Parameters nCores Fields -->
+  <L1Caches>
+    <L1Cache 
+    	cacheId="0" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+    <L1Cache 
+    	cacheId="1" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="32768" 
+    	mapping="0" 
+    	nways="4"
+		dataAccessLatency="0">
+    </L1Cache>
+ </L1Caches>
+  <L2Caches>
+    <L2Cache 
+    	cacheId="10" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="40"  
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+    <L2Cache 
+    	cacheId="11" 
+    	cpuClkNanoSec="100" 
+    	cpuClkSkew="0" 
+    	ctrlClkNanoSec="100" 
+    	ctrlClkSkew="20" 
+    	NPendReq="8"
+    	reqWbRatio= "1" 
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="262144" 
+    	mapping="0" 
+    	nways="32"
+		dataAccessLatency="0">
+    </L2Cache>
+  </L2Caches>
+  <sharedCaches>
+    <sharedCache 
+    	cacheId="100" 
+    	cpuClkMHz="100" 
+    	cpuClkSkew="60" 
+    	ctrlClkMHz="100" 
+    	ctrlClkSkew="50" 
+    	NPendReq="1600"
+    	ReplcPolc= "LRU"
+    	blockSize="64" 
+    	cacheSize="1048576" 
+    	mapping="1" 
+    	nways="64"
+    	CachePreLoad="1"
+		dataAccessLatency="0">
+    </sharedCache>
+  </sharedCaches>
+  <DRAMCnfg
+       DRAMId="1000"
+       ctrlClkMHz="100" 
+       ctrlClkSkew="0" 
+       DRAMSIMEnable="1"
+       MEMMODLE="FIXEDLat"
+       MEMLATENCY="25"
+       MEMOutsandingReqs="16">
+  </DRAMCnfg>
+</MCoreSimProject>
