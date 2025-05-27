@@ -1,0 +1,5 @@
+Import('*')
+
+SimObject('Octopus.py', sim_objects=['Octopus'])
+Source('octopus.cc')
+DebugFlag('Octopus', "Octopus Intergration")

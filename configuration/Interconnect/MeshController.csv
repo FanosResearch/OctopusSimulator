@@ -1,3 +1,0 @@
-m_request_latency(i),2,,
-m_data_latency(i),5,,
-arbiter_type(s),FCFSArbiter,,#Type should match the name of the arbiter class
