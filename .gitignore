@@ -5,6 +5,7 @@ build/
 .waf*/
 
 .lock*
+.~lock*
 
 __pycache__
 
@@ -12,3 +13,8 @@ BMs/
 
 Rename_results.sh
 Run_testcases.sh
+
+log/
+
+*.o
+*.so

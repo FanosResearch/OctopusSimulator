@@ -86,7 +86,7 @@ void Octopus::cacheSimCallback(uint64_t address, uint64_t cycle, ns3::RequestTyp
     int connection_id = itr->second.first;
     int port_id = itr->second.second;
 
-    bool swapCompleted = type == ns3::RequestType::READ;
+    bool swapCompleted = type == ns3::RequestType::WRITE;
     bool isSwap = pkt->cmd == MemCmd::SwapReq;
     if (isSwap && !swapCompleted){
         ns3::ExternalCPU::getExtCPUs()->at(connection_id)->addRequest(pkt->req->getPaddr(), ns3::RequestType::WRITE, NULL /*Do not attenpt to get ptr to avoid masked write assertion*/, pkt->getSize());

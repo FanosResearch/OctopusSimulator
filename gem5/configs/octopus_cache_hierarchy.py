@@ -2,6 +2,9 @@ from m5.objects import *
 from m5.objects import (
     Port,
     SystemXBar,
+    AddrRange,
+    ProfileGen,
+    Octopus,
 )
 
 from gem5.components.boards.abstract_board import AbstractBoard
@@ -11,32 +14,18 @@ from gem5.components.cachehierarchies.classic.abstract_classic_cache_hierarchy i
 from gem5.components.cachehierarchies.classic.caches.mmu_cache import MMUCache
 from gem5.isas import ISA
 
-# from .l1cache import L1Cache
-
-useATP = False
-xmlPath = ""
-outputPath = ""
-class UniqueCacheHierarchy(AbstractClassicCacheHierarchy):
-    """
-    A unique classic cache hierarchy. This cache can only be used in SE mode
-    (so use with the SimpleBoard).
-
-    This is a simple L1 Cache Hierarchy. It's about as basic a Cache Hierarchy
-    you can get!
-    """
-    
-
+class OctopusCacheHierarchy(AbstractClassicCacheHierarchy):
     def __init__(self,xml_path,output_path, atp_files = None) -> None:
-        global useATP
-        global xmlPath
-        global outputPath
         AbstractClassicCacheHierarchy.__init__(self=self)
-        xmlPath = xml_path
-        outputPath = output_path
+
+        self._useATP = False
+        self._xmlPath = xml_path
+        self._outputPath = output_path
+        
         self.membus = SystemXBar(width=64)
         if atp_files is not None:
-            useATP = True
-            self.atp_adaptor = ProfileGen(config_files=atp_files, exit_when_done=False, trace_atp=True)
+            self._useATP = True
+            self.atp_adaptor = ProfileGen(config_files=atp_files, exit_when_done=False, trace_atp=False, init_only=True)
 
     def get_mem_side_port(self) -> Port:
         return self.membus.mem_side_ports
@@ -45,9 +34,6 @@ class UniqueCacheHierarchy(AbstractClassicCacheHierarchy):
         return self.membus.cpu_side_ports
 
     def incorporate_cache(self, board: AbstractBoard) -> None:
-        global useATP
-        global xmlPath
-        global outputPath
         # Set up the system port for functional access from the simulator.
         board.connect_system_port(self.membus.cpu_side_ports)
 
@@ -55,49 +41,36 @@ class UniqueCacheHierarchy(AbstractClassicCacheHierarchy):
             cntr.port = self.membus.mem_side_ports
 
         tmp = 0
-        self.l1icaches = [
+        self.l1i_caches = [
             Octopus(
                 req_fifo_size=256,
                 cache_id=tmp+i,
-                config_file_path=xmlPath,
-                output_logs_path=outputPath,
+                config_file_path=self._xmlPath,
+                output_logs_path=self._outputPath,
             )
             for i in range(board.get_processor().get_num_cores())
         ]
-
 
         tmp = board.get_processor().get_num_cores()
-        self.l1dcaches = [
+        self.l1d_caches = [
             Octopus(
                 req_fifo_size=256,
                 cache_id=tmp+i,
-                config_file_path=xmlPath,
-                output_logs_path=outputPath,
+                config_file_path=self._xmlPath,
+                output_logs_path=self._outputPath,
             )
             for i in range(board.get_processor().get_num_cores())
         ]
-
-        # # ITLB Page walk caches
-        # self.iptw_caches = [
-        #     MMUCache(size="8KiB")
-        #     for _ in range(board.get_processor().get_num_cores())
-        # ]
-        # # DTLB Page walk caches
-        # self.dptw_caches = [
-        #     MMUCache(size="8KiB")
-        #     for _ in range(board.get_processor().get_num_cores())
-        # ]
 
         if board.has_coherent_io():
             self._setup_io_cache(board)
 
         for i, cpu in enumerate(board.get_processor().get_cores()):
-            cpu.connect_icache(self.l1icaches[i].cpu_side)
-            cpu.connect_dcache(self.l1dcaches[i].cpu_side)
-            # cpu.connect_dcache(self.l1icaches[i].cpu_side)
+            cpu.connect_icache(self.l1i_caches[i].cpu_side)
+            cpu.connect_dcache(self.l1d_caches[i].cpu_side)
 
-            self.l1icaches[i].mem_side = self.membus.cpu_side_ports
-            self.l1dcaches[i].mem_side = self.membus.cpu_side_ports
+            self.l1i_caches[i].mem_side = self.membus.cpu_side_ports
+            self.l1d_caches[i].mem_side = self.membus.cpu_side_ports
 
             cpu.connect_walker_ports(
                 self.membus.cpu_side_ports, self.membus.cpu_side_ports
@@ -110,20 +83,20 @@ class UniqueCacheHierarchy(AbstractClassicCacheHierarchy):
             else:
                 cpu.connect_interrupt()
 
-        if useATP:
-            tmp = board.get_processor().get_num_cores() *2
-            self.atpcaches = [
+        if self._useATP:
+            tmp = board.get_processor().get_num_cores() * 2
+            self.atp_caches = [
                 Octopus(
                     req_fifo_size=256,
                     cache_id=tmp+i,
-                    config_file_path=xmlPath,
-                    output_logs_path=outputPath,
+                    config_file_path=self._xmlPath,
+                    output_logs_path=self._outputPath,
                 )
-                for i in range(len(self.atp_adaptor.config_files))
+                for _ in range(len(self.atp_adaptor.config_files))
             ]
             for i in range(len(self.atp_adaptor.config_files)):
-                self.atpcaches[i].mem_side = self.membus.cpu_side_ports
-                self.atp_adaptor.port = self.atpcaches[i].cpu_side
+                self.atp_adaptor.port = self.atp_caches[i].cpu_side
+                self.atp_caches[i].mem_side = self.membus.cpu_side_ports
                 i+=1
 
     def _setup_io_cache(self, board: AbstractBoard) -> None:
@@ -142,4 +115,4 @@ class UniqueCacheHierarchy(AbstractClassicCacheHierarchy):
         self.iocache.cpu_side = board.get_mem_side_coherent_io_port()
 
     def setLogEn(self, flag):
-        self.l1dcaches[0].setOctLoggerEn(flag)
+        self.l1d_caches[0].setOctLoggerEn(flag)
