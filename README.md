@@ -1,4 +1,4 @@
-## Set Up
+## Intergrating Octopus with Gem5
 
 ### File structures
 Ideally, we will have three folder under root /workspaces:
@@ -42,14 +42,14 @@ Build Gem5 + Octopus + ATP:
 cd ${root}
 git clone https://github.com/gem5/gem5.git # if you did not have this yet
 cd ${root}/gem5
-scons EXTRAS=../ATP-Engine:../CMSpec -j $(nproc) build/ARM/gem5.fast
+scons EXTRAS=../ATP-Engine:../OctopusSimulator -j $(nproc) build/ARM/gem5.fast
 ```
 
 
 ## How to run
 Sample Arch config: 
 1. configs/fs_arm.py
-2. configs/unique_cache_hierarchy_complete.py
+2. configs/octopus_cache_hierarchy.py
 
 Sample run command:
 ```shell
