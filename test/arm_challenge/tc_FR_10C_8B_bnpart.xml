@@ -17,7 +17,7 @@
 	busFIFOSize="1000" 
 	Cache2Cache="1" 
 	CohProtocol="MSI"
-	loggerPath ="/workspaces/OctopusSimulator/log/bnpart"
+	loggerPath ="/workspaces/OctopusSimulator/log/bank_part/"
 	logFileGenEnable="0"
 	globalQueues_en="0"  
 	llcPartition="BankPartition"

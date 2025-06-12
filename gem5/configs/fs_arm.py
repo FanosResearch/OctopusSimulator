@@ -111,8 +111,8 @@ board.set_kernel_disk_workload(
     kernel=KernelResource("/workspaces/gem5/resource/vmlinux"),
     disk_image=DiskImageResource("/workspaces/gem5/resource/ubuntu-18.04.img"),
     bootloader=BootloaderResource("/workspaces/gem5/system/arm/bootloader/arm64/boot.arm64"),
-    readfile="/workspaces/gem5/resource/ov2slam_octopus.rcS",
-    # readfile="/workspaces/gem5/resource/testarm.rcS",
+    # readfile="/workspaces/gem5/resource/ov2slam_octopus.rcS",
+    readfile="/workspaces/gem5/resource/testarm.rcS",
     kernel_args=kernel_cmd,
     # checkpoint=checkpoint_path,
 )

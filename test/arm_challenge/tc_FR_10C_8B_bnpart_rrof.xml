@@ -17,7 +17,7 @@
 	busFIFOSize="1000" 
 	Cache2Cache="1" 
 	CohProtocol="MSI"
-	loggerPath ="/workspaces/scratch/atp/oct2/bms"
+	loggerPath ="/workspaces/OctopusSimulator/log/oct/"
 	logFileGenEnable="0"
 	globalQueues_en="1"  
 	llcPartition="BankPartition"
@@ -65,7 +65,7 @@
     	cacheSize="65536" 
     	mapping="0" 
     	nways="4"
-		dataAccessLatency="0"
+		dataAccessLatency="1"
 		>
     </privateCache>
     <privateCache 
@@ -83,7 +83,7 @@
     	cacheSize="65536" 
     	mapping="0" 
     	nways="4"
-		dataAccessLatency="0"
+		dataAccessLatency="1"
 		>
     </privateCache>
     <privateCache 
@@ -101,7 +101,7 @@
     	cacheSize="65536" 
     	mapping="0" 
     	nways="4"
-		dataAccessLatency="0"
+		dataAccessLatency="1"
 		>
     </privateCache>
     <privateCache 
@@ -119,7 +119,7 @@
     	cacheSize="65536" 
     	mapping="0" 
     	nways="4"
-		dataAccessLatency="0"
+		dataAccessLatency="1"
 		>
     </privateCache>
     <privateCache 
@@ -137,7 +137,7 @@
     	cacheSize="65536" 
     	mapping="0" 
     	nways="4"
-		dataAccessLatency="0"
+		dataAccessLatency="1"
 		>
     </privateCache>
     <privateCache 
@@ -155,7 +155,7 @@
     	cacheSize="65536" 
     	mapping="0" 
     	nways="4"
-		dataAccessLatency="0"
+		dataAccessLatency="1"
 		>
     </privateCache>
     <privateCache 
@@ -173,7 +173,7 @@
     	cacheSize="65536" 
     	mapping="0" 
     	nways="4"
-		dataAccessLatency="0"
+		dataAccessLatency="1"
 		>
     </privateCache>
     <privateCache 
@@ -191,7 +191,7 @@
     	cacheSize="65536" 
     	mapping="0" 
     	nways="4"
-		dataAccessLatency="0"
+		dataAccessLatency="1"
 		>
     </privateCache>
     <privateCache 
@@ -209,7 +209,7 @@
     	cacheSize="65536" 
     	mapping="0" 
     	nways="4"
-		dataAccessLatency="0"
+		dataAccessLatency="1"
 		>
     </privateCache>
     <privateCache 
@@ -227,7 +227,7 @@
     	cacheSize="65536" 
     	mapping="0" 
     	nways="4"
-		dataAccessLatency="0"
+		dataAccessLatency="1"
 		>
     </privateCache>
   </privateCaches>
@@ -280,6 +280,7 @@
     	mapping="1" 
     	nways="16"
     	CachePreLoad="1"
+		dataAccessLatency="25"
 		>
     </sharedCache>
 	<sharedCache 

@@ -1,2 +1,2 @@
 export LD_LIBRARY_PATH=/workspaces/OctopusSimulator/build:/workspaces/OctopusSimulator/MCsim/src:$LD_LIBRARY_PATH
-/workspaces/gem5/build/ARM/gem5.opt -re -d /workspaces/OctopusSimulator/log/bnkpart /workspaces/OctopusSimulator/gem5/configs/fs_arm.py --octopus-xml /workspaces/OctopusSimulator/test/arm_challenge/tc_FR_10C_8B_bnpart.xml
+/workspaces/gem5/build/ARM/gem5.opt -re -d /workspaces/OctopusSimulator/log/bank_part /workspaces/OctopusSimulator/gem5/configs/fs_arm.py --octopus-xml /workspaces/OctopusSimulator/test/arm_challenge/tc_FR_10C_8B_bnpart.xml
