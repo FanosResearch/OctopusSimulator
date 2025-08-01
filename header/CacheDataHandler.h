@@ -43,9 +43,9 @@ namespace ns3
 
         int  m_cacheId;
 
-        uint32_t m_cycle;
+        uint64_t m_cycle;
         uint32_t m_data_access_latency;
-        uint32_t m_ready_cycle;
+        uint64_t m_ready_cycle;
 
         virtual inline void *getLine(uint64_t set, int way)
         {

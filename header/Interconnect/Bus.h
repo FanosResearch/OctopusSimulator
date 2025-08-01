@@ -35,8 +35,8 @@ namespace ns3
 
         BusController* interconnect_controller;
 
-        int m_bus_cycle;
-        int m_bus_cycle_edges;
+        uint64_t m_bus_cycle;
+        uint64_t m_bus_cycle_edges;
 
     public:
         Bus();

@@ -42,7 +42,7 @@ namespace ns3
         uint64_t m_clk_cycle;
         uint32_t m_number_of_OoO_requests;
         uint32_t m_sent_requests;
-        uint32_t m_last_received_msg_cycle;
+        uint64_t m_last_received_msg_cycle;
         bool m_simulation_done; 
         uint64_t m_mem_req;
         uint64_t m_instr;

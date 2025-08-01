@@ -29,8 +29,8 @@ namespace ns3
 
         DirectController* interconnect_controller;
 
-        int m_interconnect_cycle;
-        int m_interconnect_cycle_edges;
+        uint64_t m_interconnect_cycle;
+        uint64_t m_interconnect_cycle_edges;
 
     public:
         DirectInterconnect(int lower_id, int upper_id, int buffers_max_size);
