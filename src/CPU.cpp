@@ -10,30 +10,48 @@
 
 using namespace std;
 
-namespace octopus
+namespace ns3
 {
     // private controller constructor
-    CPU::CPU(ParametersMap map, int id, CommunicationInterface *upper_interface, string workload_file_name, string pname, string config_path, string name)
-        : ClockedObj(0), Configurable(map, config_path, name, pname) 
+    //CPU::CPU(CacheXml &xml, uint32_t max_OoO_requests, CommunicationInterface *upper_interface) : ClockedObj(xml.GetCpuClkNanoSec())
+    CPU::CPU(CacheXml &xml, uint32_t max_OoO_requests, CommunicationInterface *upper_interface) : ClockedObj(1)
     {
-        //Parameters initialization
-        m_clk_period = std::get<int>(parameters.at(STRINGIFY(m_clk_period)).value);
-        m_number_of_OoO_requests = std::get<int>(parameters.at(STRINGIFY(m_number_of_OoO_requests)).value);
-
-        //Constructor
-        m_id = id;
+        m_id = xml.GetCacheId();
         m_clk_cycle = 1;
+        m_number_of_OoO_requests = max_OoO_requests;
         m_sent_requests = 0;
         m_sample_in_progess = NULL;
         m_last_received_msg_cycle = 0;
         m_simulation_done = false;
+        m_mem_req = 0;
+        m_instr = 0;
+
+        oldest_done = true;
 
         m_upper_interface = upper_interface;
         ClockManager::getClockManager()->registerCLKTrigger(this);
-        
-        dprint = new DebugPrint(getSubMap(STRINGIFY(dprint)), name + std::to_string(m_id), parent_name + "." + name);
+    }
 
+    CPU::CPU(CacheXml &xml, uint32_t max_OoO_requests, CommunicationInterface *upper_interface, string workload_file_name)
+            : CPU(xml, max_OoO_requests, upper_interface)
+    {
         m_workload_file.open(workload_file_name);
+        cout << "SA: workload: " << workload_file_name << "\n";
+
+        m_id = xml.GetCacheId();
+        m_clk_cycle = 1;
+        m_number_of_OoO_requests = max_OoO_requests;
+        m_sent_requests = 0;
+        m_sample_in_progess = NULL;
+        m_last_received_msg_cycle = 0;
+        m_simulation_done = false;
+        m_mem_req = 0;
+        m_instr = 0;
+
+        oldest_done = true;
+
+        m_upper_interface = upper_interface;
+
     }
     
     CPU::~CPU()
@@ -76,6 +94,7 @@ namespace octopus
                 if(m_sent_requests == 0)
                 {    
                     m_simulation_done = true;
+                    cout <<"Simulation End: Core:"<< this->m_id << " Cycles:" << this->m_clk_cycle<<" Mem_requests: "<<this->m_mem_req<<" Instr: "<<this->m_instr <<endl;
                     Logger::getLogger()->traceEnd(this->m_id);
                 }
                 return;
@@ -88,7 +107,7 @@ namespace octopus
 
             if (m_clk_cycle >= issue_cycle)
             {
-                if(m_upper_interface->pushMessage(m_sample_in_progess->msg))
+                if(m_upper_interface->pushMessage(m_sample_in_progess->msg, m_clk_cycle))
                 {
                     Logger::getLogger()->addRequest(this->m_id, m_sample_in_progess->msg);
                     delete m_sample_in_progess;
@@ -102,20 +121,20 @@ namespace octopus
     void CPU::checkReceiveBuffer()
     {
         Message msg;
-
         if (m_upper_interface->peekMessage(&msg))
-        {            
+        {         
             m_upper_interface->popFrontMessage();
             Logger::getLogger()->updateRequest(msg.msg_id, Logger::EntryId::CPU_RX_CHECKPOINT);
-            
             m_sent_requests--;
             if (m_sent_requests < 0)
-            {    
-                std::cout << "error" << std::endl;
-                exit(0);
-            }
+                std::cout << "error "<< pending_msg.size()<< std::endl;
             
             m_last_received_msg_cycle = m_clk_cycle;
+            if(pending_msg.size() > 0 && msg.msg_id == pending_msg[0])
+            {
+                oldest_done = true;
+            }
+                
         }
     }
 
@@ -138,12 +157,12 @@ namespace octopus
         
         char sample_type = 'R';
 
-        sscanf(sample_line.c_str(), "%llx %*d %c %lld", &out_msg->addr, &sample_type, &out_msg->cycle);
-
+        sscanf(sample_line.c_str(), "%lx %*d %c %ld", &out_msg->addr, &sample_type, &out_msg->cycle);
+        m_mem_req++;
+        m_instr += out_msg->cycle;
         out_msg->complementary_value = (sample_type == 'R') ? RequestType::READ : RequestType::WRITE;
         out_msg->msg_id = IdGenerator::nextReqId();
         out_msg->owner = m_id;
-        out_msg->to.push_back(m_id);
 
         return true;
     }
@@ -158,7 +177,7 @@ namespace octopus
         getline(m_workload_file, sample_line1); //read line1
         line2_position = m_workload_file.tellg();
 
-        sscanf(sample_line1.c_str(), "%*x %*d %*c %lld", &sample1_cycle);
+        sscanf(sample_line1.c_str(), "%*x %*d %*c %ld", &sample1_cycle);
 
         ret = readSampleFromWorkload(&out_sample->msg);
         out_sample->compute_time = out_sample->msg.cycle - sample1_cycle;

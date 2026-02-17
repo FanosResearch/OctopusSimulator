@@ -13,7 +13,7 @@
 
 using namespace std;
 
-namespace octopus
+namespace ns3
 {
     class Point2PointController : public BusController //it supports one2one or many2one
     {
@@ -34,10 +34,7 @@ namespace octopus
         virtual void upperBusStep(uint64_t cycle_number);
 
     public:
-        Point2PointController(ParametersMap map, vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids,
-                              string pname = "",
-                              string config_path = string(CONFIGURATION_PATH) + string(INTERCONNECT),
-                              string name = STRINGIFY(Point2PointController));
+        Point2PointController(vector<CommunicationInterface *> *interfaces , vector<int> *lower_level_ids , string memArb, vector<int>* candidates_id = NULL );
         ~Point2PointController();
 
         virtual void busStep(uint64_t cycle_number) override;

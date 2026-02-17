@@ -8,27 +8,25 @@
 
 #include "../header/MainMemoryController.h"
 
-namespace octopus
+namespace ns3
 {
     // private controller constructor
-    MainMemoryController::MainMemoryController(ParametersMap map, CommunicationInterface *lower_interface,
-        string pname, string config_path, string name) : ClockedObj(0), Configurable(map, config_path, name, pname)
+    MainMemoryController::MainMemoryController(MCoreSimProjectXml &projectXml, CommunicationInterface *lower_interface, int llc_id) : ClockedObj(projectXml.GetDRAMCtrlClkNanoSec())
     {
-        //Parameters initialization
-        m_clk_period = std::get<int>(parameters.at(STRINGIFY(m_clk_period)).value);
-        m_id = std::get<int>(parameters.at(STRINGIFY(m_id)).value);
-        m_llc_id = std::get<int>(parameters.at(STRINGIFY(m_llc_id)).value);
-        m_memory_latency = std::get<int>(parameters.at(STRINGIFY(m_memory_latency)).value);
-        
-        //Constructor
+        m_id = projectXml.GetDRAMId()[0];
+        m_llc_id = llc_id;
+
+        m_dt = projectXml.GetDRAMCtrlClkNanoSec();
+        m_clk_skew = projectXml.GetDRAMCtrlClkSkew();
         m_clk_cycle = 1;
 
+        m_memory_latency = projectXml.GetDRAMFixedLatcy();
+        
         m_read_count = 0;
         m_write_count = 0;
 
-        m_lower_interface = lower_interface;
-        
-        dprint = new DebugPrint(getSubMap(STRINGIFY(dprint)), name + std::to_string(m_id), parent_name + "." + name);
+        m_lower_interface = lower_interface;    
+
         
         m_processing_queue = new FRFCFS_Buffer<Message, MainMemoryController>(&MainMemoryController::getRequestState, this);
     }
@@ -58,7 +56,7 @@ namespace octopus
         if (ready_msg.data == NULL) //Read message 
         {
             m_read_count++;
-            uint8_t return_data[64] = {0};
+            uint64_t data = m_read_count;
 
             Message msg = Message(ready_msg.msg_id,    // Id
                                   ready_msg.addr,      // Addr
@@ -66,7 +64,7 @@ namespace octopus
                                   0,                   // Complementary_value
                                   ready_msg.owner);    // Owner
             msg.to.push_back((uint16_t) m_llc_id);     // To
-            msg.copy(return_data);
+            msg.copy((uint8_t*)&data);
                     
             if (!m_lower_interface->pushMessage(msg, m_clk_cycle, MessageType::DATA_RESPONSE))
             {

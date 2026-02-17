@@ -11,7 +11,7 @@
 
 #include "MESIProtocol.h"
 
-namespace octopus
+namespace ns3
 {
     class MOESIProtocol : public MESIProtocol
     {
@@ -19,7 +19,7 @@ namespace octopus
         std::vector<int> statesRequireWriteBack() override;
 
     public:
-        MOESIProtocol(CacheDataHandler *cache, const std::string &fsm_path, int id, int sharedMemId);
+        MOESIProtocol(CacheDataHandler *cache, const std::string &fsm_path, int coreId, vector<int> sharedMemId);
         ~MOESIProtocol();
     };
 }

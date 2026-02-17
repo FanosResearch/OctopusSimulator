@@ -8,12 +8,15 @@
 
 #include "../header/ExternalCPU.h"
 
-namespace octopus
+namespace ns3
 {
     // private controller constructor
     ExternalCPU::ExternalCPU(CacheXml &xml, CommunicationInterface *upper_interface) : ClockedObj(xml.GetCpuClkNanoSec())
     {
         m_id = xml.GetCacheId();
+
+        m_dt = xml.GetCpuClkNanoSec();
+        m_clk_skew = xml.GetCpuClkSkew();
         m_clk_cycle = 1;
 
         m_upper_interface = upper_interface;
@@ -21,6 +24,7 @@ namespace octopus
         m_processing_queue = new FRFCFS_Buffer<Message, ExternalCPU>(&ExternalCPU::getRequestState, this);
         
         m_cpu_callback = NULL;
+
         m_memory_component = NULL;
     }
 
@@ -61,7 +65,7 @@ namespace octopus
             else if(ready_msg.source == Message::Source::UPPER_INTERCONNECT)
             {
                 if(m_cpu_callback != NULL)
-                    (*m_cpu_callback)(ready_msg.addr, this->m_clk_cycle, (RequestType)ready_msg.complementary_value, ready_msg.data);
+                    (*m_cpu_callback)(ready_msg.addr, this->m_clk_cycle, (RequestType)ready_msg.complementary_value,this->m_id);
                 else
                 {
                     cout << "ExternalCPU(id = " << this->m_id << "): ";
@@ -90,17 +94,17 @@ namespace octopus
         return FRFCFS_State::Ready;
     }
 
-    void ExternalCPU::registerCPUCallback(CallbackGeneral<uint64_t, uint64_t, RequestType, uint8_t*>* cpu_callback)
+    void ExternalCPU::registerCPUCallback(CallbackGeneral<uint64_t, uint64_t, RequestType, uint64_t>* cpu_callback)
     {
         this->m_cpu_callback = cpu_callback;
     }
 
-    void ExternalCPU::registerInitializableMemory(Initializable *component)
+    void ExternalCPU::registerMemoryComponent(Initializable *component)
     {
         m_memory_component = component;
     }
 
-    void ExternalCPU::addRequest(uint64_t address, RequestType type, uint8_t* data, int size)
+    void ExternalCPU::addRequest(uint64_t address, RequestType type, uint8_t* data = NULL)
     {
         if(type == RequestType::SETUP_WRITE)
         {
@@ -117,12 +121,7 @@ namespace octopus
                 exit(0);
             }
 
-            m_memory_component->initialize(address, data, size);
-        }
-        else if(type == RequestType::SETUP_READ)
-        {
-            // cout << "Warning this path should be restructured to get most updated data from different cache levels" << endl;
-            m_memory_component->read(address, data);
+            m_memory_component->initialize(address, data);
         }
         else
         {
@@ -132,12 +131,6 @@ namespace octopus
                                 (uint64_t)type,           // Complementary_value
                                 this->m_id);              // Owner
             request_msg.source = Message::Source::LOWER_INTERCONNECT;
-            
-            if(type == RequestType::WRITE)
-            {
-                request_msg.copy(data, size);
-            }
-            
             m_processing_queue->pushBack(request_msg);
         }
     }

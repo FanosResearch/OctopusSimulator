@@ -1,0 +1,2 @@
+/usr/bin/ar qc libCMSpec.a CMakeFiles/CMSpec.dir/CMSpec_Simulator.cpp.o
+/usr/bin/ranlib libCMSpec.a

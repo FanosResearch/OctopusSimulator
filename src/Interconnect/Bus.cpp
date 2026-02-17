@@ -8,30 +8,32 @@
 
 #include "../../header/Interconnect/Bus.h"
 
-namespace octopus
+namespace ns3
 {
-    Bus::Bus(ParametersMap map, vector<int>* candidates_id, string pname, string config_path, string name) 
-            : ClockedObj(0), Configurable(map, config_path, name, pname)
+    Bus::Bus() : ClockedObj(1)
     {
         m_bus_cycle = 1;
         m_bus_cycle_edges = 1;
+    }
 
-        //Parameters initialization
-        m_lower_level_ids = std::get<vector<int>>(parameters.at(STRINGIFY(m_lower_level_ids)).value);
-        vector<int> upper_level_cache_ids = std::get<vector<int>>(parameters.at(STRINGIFY(upper_level_cache_ids)).value);
-        string controller_type = std::get<string>(parameters.at(STRINGIFY(controller_type)).value);
-        int buffers_max_size = std::get<int>(parameters.at(STRINGIFY(buffers_max_size)).value);
-        m_clk_period = std::get<int>(parameters.at(STRINGIFY(m_clk_period)).value);
+    Bus::Bus(list<CacheXml> &lower_level_caches, list<CacheXml> &upper_level_caches, int buffers_max_size): ClockedObj(1)
+    {
+        m_bus_cycle = 1;
+        m_bus_cycle_edges = 1;
+        m_busArb = lower_level_caches.begin()->GetmemArb();
 
-        //Constructor
+        for (list<CacheXml>::iterator iter = upper_level_caches.begin(); iter != upper_level_caches.end(); iter++)
+        {
+            CacheXml cache_info = *iter;
+            m_interfaces.push_back(new BusInterface(cache_info.GetCacheId(), buffers_max_size));
+        }
 
-        dprint = new DebugPrint(getSubMap(STRINGIFY(dprint)), name, parent_name + "." + name);
-
-        for (auto id : upper_level_cache_ids)
-            m_interfaces.push_back(new BusInterface(id, buffers_max_size));
-
-        for (auto id : m_lower_level_ids)
-            m_interfaces.push_back(new BusInterface(id, buffers_max_size));
+        for (list<CacheXml>::iterator iter = lower_level_caches.begin(); iter != lower_level_caches.end(); iter++)
+        {
+            CacheXml cache_info = *iter;
+            m_interfaces.push_back(new BusInterface(cache_info.GetCacheId(), buffers_max_size));
+            m_lower_level_ids.push_back(cache_info.GetCacheId());
+        }
 
         for (int i = 0; i < (int)m_interfaces.size(); i++)
         {
@@ -44,17 +46,42 @@ namespace octopus
             }
         }
         
-        if(controller_type == "Point2Point")
-            interconnect_controller = new Point2PointController(getSubMap(STRINGIFY(interconnect_controller)), 
-                                                                &m_interfaces, &m_lower_level_ids, parent_name + "." + name);
-        else if(controller_type == "Split")
-            interconnect_controller = new SplitBusController(getSubMap(STRINGIFY(interconnect_controller)), 
-                                                             &m_interfaces, &m_lower_level_ids, parent_name + "." + name);
-        else if(controller_type == "Unified")
-            interconnect_controller = new UnifiedBusController(getSubMap(STRINGIFY(interconnect_controller)), 
-                                                               &m_interfaces, &m_lower_level_ids, parent_name + "." + name);
+        // interconnect_controller = new TripleBusController(&m_interfaces, &m_lower_level_ids);
+        interconnect_controller = new SplitBusController(&m_interfaces, &m_lower_level_ids, m_busArb);
+        // interconnect_controller = new UnifiedBusController(&m_interfaces, &m_lower_level_ids);
     }
     
+    Bus::Bus(list<CacheXml> &lower_level_caches, int upper_level_id, int buffers_max_size, vector<int>* candidates_id): ClockedObj(1)
+    {
+        m_bus_cycle = 1;
+        m_bus_cycle_edges = 1;
+        m_busArb = lower_level_caches.begin()->GetmemArb();
+
+        m_interfaces.push_back(new BusInterface(upper_level_id, buffers_max_size));
+
+        for (list<CacheXml>::iterator iter = lower_level_caches.begin(); iter != lower_level_caches.end(); iter++)
+        {
+            CacheXml cache_info = *iter;
+            m_interfaces.push_back(new BusInterface(cache_info.GetCacheId(), buffers_max_size));
+            m_lower_level_ids.push_back(cache_info.GetCacheId());
+        }
+
+        for (int i = 0; i < (int)m_interfaces.size(); i++)
+        {
+            m_topology[m_interfaces[i]->m_interface_id] = vector<int>();
+            for (int j = 0; j < (int)m_interfaces.size(); j++)
+            {
+                if (j == i)
+                    continue;
+                m_topology[m_interfaces[i]->m_interface_id].push_back(m_interfaces[j]->m_interface_id);
+            }
+        }
+        
+        // interconnect_controller = new SplitBusController(&m_interfaces, &m_lower_level_ids);
+        // interconnect_controller = new UnifiedBusController(&m_interfaces, &m_lower_level_ids);
+        interconnect_controller = new Point2PointController(&m_interfaces, &m_lower_level_ids, m_busArb, candidates_id);
+    }
+
     Bus::~Bus()
     {
         for (int i = 0; i < (int)m_interfaces.size(); i++)
@@ -81,7 +108,7 @@ namespace octopus
     
     void Bus::cycleProcess()
     {
-        if(m_bus_cycle_edges % 2 == 1)    //Falling edge
+        //if(m_bus_cycle_edges % 2 == 1)    //Falling edge
             interconnect_controller->busStep(m_bus_cycle++);
         
         m_bus_cycle_edges++;

@@ -9,18 +9,30 @@
 #ifndef _CacheDataHandler_H
 #define _CacheDataHandler_H
 
-#include "Configurable.h"
-#include "DebugPrint.h"
 #include "CacheXml.h"
 #include "GenericCacheLine.h"
-#include "Policy.h"
-#include "ReplacementPolicy.h"
+#include "ReplacementPolicies/ReplacementPolicy.h"
+#include "CommunicationInterface.h"
 
 #include <math.h>
+#include <bitset>
 
-namespace octopus
+using namespace std;
+namespace ns3
 {
-    class CacheDataHandler : public Configurable
+    class CoherenceProtocolHandler;
+    // enum class ReplcPolicy
+    // {
+    //     RANDOM = 0,
+    //     LRU,
+    //     MRU,
+    //     LFU,
+    //     MFU,
+    //     FIFO,
+    //     LIFO
+    // };
+
+    class CacheDataHandler
     {
     protected:
         GenericCacheLine *m_cache;
@@ -30,7 +42,8 @@ namespace octopus
 
         // ReplcPolicy m_replacement_policy;
         ReplacementPolicy *m_replacement_policy;
-        DebugPrint *dprint;
+
+        int  m_cacheId;
 
         uint32_t m_cycle;
         uint32_t m_data_access_latency;
@@ -60,25 +73,18 @@ namespace octopus
         virtual bool findline(uint64_t address, uint64_t *set, int *way);
 
     public:
-        CacheDataHandler(ParametersMap map,
-                         string pname = "",
-                         string config_path = string(CONFIGURATION_PATH),
-                         string name = STRINGIFY(CacheDataHandler));
+        CacheDataHandler(CacheXml &cacheXml, ReplacementPolicy* policy);
         virtual ~CacheDataHandler();
 
         virtual void initializeCacheStates(int initialState);
         virtual void initializeCacheLine(GenericCacheLine *line);
 
-        virtual uint32_t getBlockSize();
-        virtual uint32_t getDataAccessLatency();
-
-        virtual bool writeCacheLine_bypassLatency(uint64_t address, GenericCacheLine *line, bool soft_write = false);
+        virtual bool writeCacheLine_bypassLatency(uint64_t address, GenericCacheLine *line);
         virtual bool writeCacheLine(uint64_t address, GenericCacheLine *line);
         virtual bool updateLineBits(uint64_t address, GenericCacheLine *line);
         virtual bool updateLineData(uint64_t address, const uint8_t *data);
-        virtual bool modifyData(uint64_t address, const uint8_t *data, uint16_t size, bool soft_write = false);
 
-        virtual bool readCacheLine(uint64_t address, GenericCacheLine *out_line = NULL, bool soft_read = false);
+        virtual bool readCacheLine(uint64_t address, GenericCacheLine *out_line = NULL);
         virtual bool readLineBits(uint64_t address, GenericCacheLine *out_line = NULL);
 
         int findEmptyWay(uint64_t address);

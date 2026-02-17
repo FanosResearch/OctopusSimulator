@@ -922,6 +922,7 @@ TiXmlDocument::TiXmlDocument( const char * documentName ) : TiXmlNode( TiXmlNode
 	tabsize = 4;
 	useMicrosoftBOM = false;
 	value = documentName;
+        std::cout<<"VALUE="<<value<<std::endl;
 	ClearError();
 }
 
@@ -1657,9 +1658,12 @@ TiXmlHandle TiXmlHandle::FirstChildElement() const
 {
 	if ( node )
 	{
+                std::cout<<"NODE="<<node<<std::endl;
 		TiXmlElement* child = node->FirstChildElement();
-		if ( child )
+		if ( child ) {
+                        std::cout<<"CHILD="<<child<<std::endl;
 			return TiXmlHandle( child );
+                }
 	}
 	return TiXmlHandle( 0 );
 }

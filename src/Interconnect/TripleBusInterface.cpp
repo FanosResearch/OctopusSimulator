@@ -8,7 +8,7 @@
 
 #include "../../header/Interconnect/TripleBusInterface.h"
 
-namespace octopus
+namespace ns3
 {
     TripleBusInterface::TripleBusInterface(int id, int buffer_max_size) : BusInterface(id, buffer_max_size)
     {
@@ -39,7 +39,6 @@ namespace octopus
 
         if (cycle != 0)
             msg.cycle = cycle;
-        msg.from = m_interface_id;
 
         if ((int)m_tx_service_buffer.size() < m_buffer_max_size)
         {

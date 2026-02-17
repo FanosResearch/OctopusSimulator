@@ -12,7 +12,7 @@
 #include "CoherenceProtocolHandler.h"
 #include "MSIProtocol.h"
 
-namespace octopus
+namespace ns3
 {
     class LLCMSIProtocol : public CoherenceProtocolHandler
     {
@@ -42,16 +42,18 @@ namespace octopus
             Fault
         };
 
+        std::vector<ControllerAction> controller_actions; //used only for returning data
+
         virtual void readEvent(Message &msg, GenericCacheLine &cache_line, EventId *out_id);
 
-        virtual std::vector<ControllerAction> handleAction(std::vector<int> &actions, Message &msg,
+        virtual std::vector<ControllerAction> &handleAction(std::vector<int> &actions, Message &msg,
                                                             GenericCacheLine &cache_line, int next_state);
 
     public:
-        LLCMSIProtocol(CacheDataHandler *cache, const std::string &fsm_path, int id, int sharedMemId);
+        LLCMSIProtocol(CacheDataHandler *cache, const std::string &fsm_path, int coreId, vector<int> sharedMemId);
         ~LLCMSIProtocol();
 
-        virtual std::vector<ControllerAction> processRequest(Message &request_msg, DebugPrint* dprint = NULL) override;
+        virtual const std::vector<ControllerAction> &processRequest(Message &request_msg) override;
         virtual FRFCFS_State getRequestState(const Message &, FRFCFS_State) override;
         virtual void createDefaultCacheLine(uint64_t address, GenericCacheLine *cache_line) override;
     };

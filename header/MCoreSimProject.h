@@ -8,22 +8,22 @@
 
 #ifndef _MCoreSimProject_H
 #define _MCoreSimProject_H
-
+#include "limits.h"
+#include <limits>
 #include "MCoreSimProjectXml.h"
 // #include "CpuCoreGenerator.h"
 #include "ExternalCPU.h"
 #include "CacheController.h"
 #include "CacheControllerExclusive.h"
 #include "CacheController_End2End.h"
-#include "CacheControllerDirectory.h"
 #include "Logger.h"
 #include "Bus.h"
 #include "TripleBus.h"
 #include "DirectInterconnect.h"
 #include "CommunicationInterface.h"
-#include "MainMemoryController.h"
+//#include "MainMemoryController.h"
 #include "CPU.h"
-// #include "MCsimInterface.h"
+ #include "MCsimInterface.h"
 
 #include <string>
 #include <unistd.h>
@@ -31,10 +31,16 @@
 #define APP_NAME    "cachesim"
 
 using namespace std;
-using namespace octopus;
+using namespace ns3;
 
 class MCoreSimProject {
 private:
+    // Shared Bus Max Clk Frequency 
+    // int m_busClkMHz;
+
+    // The Simulation Time Step
+    double m_dt;
+
     // Simulation Time in seconds
     double m_totalTimeInSeconds;
 
@@ -48,8 +54,8 @@ private:
     uint64_t m_busCycle;
     
     // coherence protocol type
-    // ProtocolTypee m_cohrProt;
-    // ProtocolTypee m_llcCohrProt;
+    CohProtType m_cohrProt;
+    CohProtType m_llcCohrProt;
     string m_fsm_protocol_path;
     string m_fsm_llc_protocol_path;
     
@@ -60,19 +66,20 @@ private:
     std::list<ExternalCPU*> m_ext_cpu;
     
     // A list of Cpu buffers
-    // std::list<ns3::CpuFIFO*> m_cpuFIFO;
+    //std::list<ns3::CpuFIFO*> m_cpuFIFO;
 
     // A list of Cache Ctrl engines
-    std::list<BaseController*> m_cpuCacheCtrl;
+    std::list<CacheController*> m_cpuCacheCtrl;
 
     // A list of Cache Ctrl Bus interface buffers
     // std::list<ns3::BusIfFIFO*> m_busIfFIFO;
 
     // A pointer to shared cache controller engine
-    CacheController* m_SharedCacheCtrl;
+    //CacheController* m_SharedCacheCtrl;
+    std::list<CacheController*> m_SharedCacheCtrl;
 
-    MainMemoryController* m_main_memory;
-    // MCsimInterface* m_mcsim_interface;
+    // MainMemoryController* m_main_memory;
+    MCsimInterface* m_mcsim_interface;
     // // A pointer to shared cache Bus IF buffers
     // BusIfFIFO* m_sharedCacheBusIfFIFO;
 
@@ -118,7 +125,7 @@ public:
 
     void setup1(MCoreSimProjectXml projectXmlCfg);
     void setup2(MCoreSimProjectXml projectXmlCfg);
-    void setup3(MCoreSimProjectXml projectXmlCfg);
+
 };
 
 #endif /* _MCoreSimProject_H */

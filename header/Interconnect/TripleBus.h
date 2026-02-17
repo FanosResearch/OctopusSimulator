@@ -15,16 +15,14 @@
 
 using namespace std;
 
-namespace octopus
+namespace ns3
 {
     class TripleBus : public Bus
     {
     protected:
 
     public:
-        TripleBus(ParametersMap map, string pname = "",
-                  string config_path = string(CONFIGURATION_PATH) + string(INTERCONNECT),
-                  string name = STRINGIFY(TripleBus));
+        TripleBus(list<CacheXml>& lower_level_caches, list<CacheXml>& upper_level_caches, int buffers_max_size);
         ~TripleBus();
     };
 }

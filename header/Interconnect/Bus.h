@@ -10,7 +10,6 @@
 #define _BUS_H
 
 #include "ClockManager.h"
-#include "Configurable.h"
 #include "CacheXml.h"
 #include "CommunicationInterface.h"
 #include "BusController.h"
@@ -24,27 +23,25 @@
 
 using namespace std;
 
-namespace octopus
+namespace ns3
 {
-    class Bus : public ClockedObj, public Configurable
+    class Bus : public ClockedObj
     {
     protected:
         vector<CommunicationInterface *> m_interfaces;
         vector<int> m_lower_level_ids;
         map<int, vector<int>> m_topology;
+        string m_busArb;
 
         BusController* interconnect_controller;
-        DebugPrint* dprint;
 
         int m_bus_cycle;
         int m_bus_cycle_edges;
 
     public:
-        Bus(ParametersMap map, 
-            vector<int>* candidates_id = NULL,
-            string pname = "",
-            string config_path = string(CONFIGURATION_PATH) + string(INTERCONNECT),
-            string name = STRINGIFY(Bus));
+        Bus();
+        Bus(list<CacheXml>& lower_level_caches, list<CacheXml>& upper_level_caches, int buffers_max_size);
+        Bus(list<CacheXml> &lower_level_caches, int upper_level_id, int buffers_max_size, vector<int>* candidates_id = NULL);
         ~Bus();
 
         void cycleProcess();

@@ -9,9 +9,9 @@
 #include "../../header/Protocols/LLCPMSIProtocol.h"
 using namespace std;
 
-namespace octopus
+namespace ns3
 {
-    LLCPMSIProtocol::LLCPMSIProtocol(CacheDataHandler *cache, const string &fsm_path, int id, int sharedMemId) : LLCMSIProtocol(cache, fsm_path, id, sharedMemId)
+    LLCPMSIProtocol::LLCPMSIProtocol(CacheDataHandler *cache, const string &fsm_path, int coreId, vector<int> sharedMemId) : LLCMSIProtocol(cache, fsm_path, coreId, sharedMemId)
     {
     }
 
@@ -19,11 +19,10 @@ namespace octopus
     {
     }
     
-    vector<ControllerAction> LLCPMSIProtocol::handleAction(vector<int> &actions, Message &msg,
+    vector<ControllerAction> &LLCPMSIProtocol::handleAction(vector<int> &actions, Message &msg,
                                                            GenericCacheLine &cache_line_info, int next_state)
     {
         bool wait_data = false;
-
         for (int i = 0; i < (int)actions.size(); i++)
         {
             if (actions[i] == (int)ActionId::WaitData)
@@ -33,7 +32,7 @@ namespace octopus
                 break;
             }
         }
-        std::vector<ControllerAction> controller_actions = LLCMSIProtocol::handleAction(actions, msg, cache_line_info, next_state);
+        LLCMSIProtocol::handleAction(actions, msg, cache_line_info, next_state);
 
         if (wait_data == true)
         {
@@ -42,8 +41,8 @@ namespace octopus
             controller_action.data = (void *)new Message;
             ((Message*)controller_action.data)->copy(msg);
 
-            controller_actions.push_back(controller_action);
+            this->controller_actions.push_back(controller_action);
         }
-        return controller_actions;
+        return this->controller_actions;
     }
 }

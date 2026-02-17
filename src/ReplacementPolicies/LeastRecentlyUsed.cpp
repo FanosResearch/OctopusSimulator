@@ -8,7 +8,7 @@
 
 #include "../../header/ReplacementPolicies/LeastRecentlyUsed.h"
 
-namespace octopus
+namespace ns3
 {
     LeastRecentlyUsed::LeastRecentlyUsed(uint32_t ways_count) : ReplacementPolicy(ways_count)
     {
@@ -20,9 +20,9 @@ namespace octopus
 
     void LeastRecentlyUsed::update(uint64_t set, int way, uint64_t cycle)
     {
-        if (way < 0)
+        if(way <0)
             return;
-        if(last_access_cycle[set].size() > way)
+        if((int)last_access_cycle[set].size() > way)
             last_access_cycle[set][way] = cycle;
         else
             last_access_cycle[set].push_back(cycle);
@@ -31,7 +31,7 @@ namespace octopus
     void LeastRecentlyUsed::getReplacementCandidate(uint64_t set, int* way)
     {
         if(last_access_cycle.find(set) == last_access_cycle.end() &&
-           (int)last_access_cycle[set].size() == m_ways_count)
+           (uint32_t)last_access_cycle[set].size() == m_ways_count)
         {
             std::cout << "LeastRecentlyUsed: No record for set: " << set; 
             std::cout<< " or it's not full." << std::endl;

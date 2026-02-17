@@ -11,9 +11,8 @@
 
 #include <cstdint>
 #include <cstring>
-#include <iostream>
 
-namespace octopus
+namespace ns3
 {
     class GenericCacheLine
     {
@@ -27,6 +26,8 @@ namespace octopus
         int64_t tag;
         int state;
         int owner_id;
+
+        bool dirty = false;
 
         uint32_t m_block_size;
         uint8_t *m_data;
@@ -43,7 +44,8 @@ namespace octopus
         void copy(const GenericCacheLine &line);
         void copyBits(const GenericCacheLine &line);
         void copyData(const uint8_t *data);
-        void modifyData(const uint8_t *data, uint16_t offset, uint16_t size);
+        void setDirty();
+        bool isDirty();
     };
 }
 

@@ -12,8 +12,6 @@
 #include "ClockManager.h"
 #include "CommunicationInterface.h"
 #include "DirectController.h"
-#include "Configurable.h"
-#include "DebugPrint.h"
 
 #include <list>
 #include <vector>
@@ -21,25 +19,21 @@
 
 using namespace std;
 
-namespace octopus
+namespace ns3
 {
-    class DirectInterconnect : public ClockedObj, public Configurable
+    class DirectInterconnect : public ClockedObj
     {
     protected:
         vector<CommunicationInterface *> m_interfaces;
         map<int, vector<int>> m_topology;
 
         DirectController* interconnect_controller;
-        DebugPrint* dprint;
 
         int m_interconnect_cycle;
         int m_interconnect_cycle_edges;
 
     public:
-        DirectInterconnect(ParametersMap map, int upper_id, int lower_id = -1,
-                           string pname = "",
-                           string config_path = string(CONFIGURATION_PATH) + string(INTERCONNECT),
-                           string name = STRINGIFY(DirectInterconnect));
+        DirectInterconnect(int lower_id, int upper_id, int buffers_max_size);
         ~DirectInterconnect();
 
         void cycleProcess();

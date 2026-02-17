@@ -1,0 +1,17 @@
+/home/mohamed/E2E/macsim_with_MCsim/src/CacheSim/CMakeFiles/CMSpec_Simulator.dir
+/home/mohamed/E2E/macsim_with_MCsim/src/CacheSim/CMakeFiles/CMSpec.dir
+/home/mohamed/E2E/macsim_with_MCsim/src/CacheSim/CMakeFiles/edit_cache.dir
+/home/mohamed/E2E/macsim_with_MCsim/src/CacheSim/CMakeFiles/rebuild_cache.dir
+/home/mohamed/E2E/macsim_with_MCsim/src/CacheSim/src/CMakeFiles/CMSpec_core.dir
+/home/mohamed/E2E/macsim_with_MCsim/src/CacheSim/src/CMakeFiles/edit_cache.dir
+/home/mohamed/E2E/macsim_with_MCsim/src/CacheSim/src/CMakeFiles/rebuild_cache.dir
+/home/mohamed/E2E/macsim_with_MCsim/src/CacheSim/src/Arbiters/CMakeFiles/edit_cache.dir
+/home/mohamed/E2E/macsim_with_MCsim/src/CacheSim/src/Arbiters/CMakeFiles/rebuild_cache.dir
+/home/mohamed/E2E/macsim_with_MCsim/src/CacheSim/src/Interconnect/CMakeFiles/edit_cache.dir
+/home/mohamed/E2E/macsim_with_MCsim/src/CacheSim/src/Interconnect/CMakeFiles/rebuild_cache.dir
+/home/mohamed/E2E/macsim_with_MCsim/src/CacheSim/src/Protocols/CMakeFiles/edit_cache.dir
+/home/mohamed/E2E/macsim_with_MCsim/src/CacheSim/src/Protocols/CMakeFiles/rebuild_cache.dir
+/home/mohamed/E2E/macsim_with_MCsim/src/CacheSim/src/ReplacementPolicies/CMakeFiles/edit_cache.dir
+/home/mohamed/E2E/macsim_with_MCsim/src/CacheSim/src/ReplacementPolicies/CMakeFiles/rebuild_cache.dir
+/home/mohamed/E2E/macsim_with_MCsim/src/CacheSim/header/CMakeFiles/edit_cache.dir
+/home/mohamed/E2E/macsim_with_MCsim/src/CacheSim/header/CMakeFiles/rebuild_cache.dir

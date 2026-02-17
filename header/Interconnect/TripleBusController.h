@@ -15,7 +15,7 @@
 using namespace std;
 
 //It is a split bus plus a service bus between LCC and private caches
-namespace octopus
+namespace ns3
 {
     class TripleBusController : public SplitBusController
     {
@@ -23,10 +23,7 @@ namespace octopus
         void serviceBusStep(uint64_t cycle_number);
 
     public:
-        TripleBusController(ParametersMap map, vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids,
-                            string pname = "",
-                            string config_path = string(CONFIGURATION_PATH) + string(INTERCONNECT),
-                            string name = STRINGIFY(TripleBusController));
+        TripleBusController(vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids, string memArb);
         ~TripleBusController();
 
         virtual void busStep(uint64_t cycle_number) override;

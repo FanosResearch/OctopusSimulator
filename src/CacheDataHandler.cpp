@@ -1,5 +1,5 @@
 /*
- * File  :      CacheDataHandler.cpp
+ * File  :      CacheDataArray.cpp
  * Author:      Mohammed Ismail
  * Email :      ismaim22@mcmaster.ca
  *
@@ -7,27 +7,22 @@
  */
 #include "../header/CacheDataHandler.h"
 
-namespace octopus
+namespace ns3
 {
-    CacheDataHandler::CacheDataHandler(ParametersMap map, string pname, string config_path, string name) : 
-        Configurable(map, config_path, name, pname)
+    //CacheDataHandler::CacheDataHandler(CacheXml &cacheXml, ReplcPolicy replcPolicy)
+    CacheDataHandler::CacheDataHandler(CacheXml &cacheXml, ReplacementPolicy* policy)
     {
-        //Parameters initialization
-        int cache_size = std::get<int>(parameters.at(STRINGIFY(cache_size)).value);
-        m_block_size = std::get<int>(parameters.at(STRINGIFY(m_block_size)).value);
-        m_ways_count = std::get<int>(parameters.at(STRINGIFY(m_ways_count)).value);
-        m_data_access_latency = std::get<int>(parameters.at(STRINGIFY(m_data_access_latency)).value);
-
-        string replacement_policy_name = std::get<string>(parameters.at(STRINGIFY(replacement_policy_name)).value);
-
-        //Constructor
-        int lines_count = cache_size / m_block_size;
-        m_sets_count = lines_count / m_ways_count;
+        int lines_count = cacheXml.GetCacheSize() / cacheXml.GetBlockSize();
 
         m_cache = new GenericCacheLine[lines_count];
-        m_replacement_policy = Policy::getReplacementPolicy(replacement_policy_name, m_ways_count);
+        m_block_size = cacheXml.GetBlockSize();
+        m_ways_count = cacheXml.GetNWays();
+        m_sets_count = lines_count / cacheXml.GetNWays();
 
-        dprint = new DebugPrint(getSubMap(STRINGIFY(dprint)), name, parent_name + "." + name);
+        //m_replacement_policy = replcPolicy;
+        m_replacement_policy = policy;
+
+        m_data_access_latency = cacheXml.GetDataAccessLatency();
 
         m_cycle = 0;
         m_ready_cycle = 0;
@@ -36,7 +31,6 @@ namespace octopus
     CacheDataHandler::~CacheDataHandler()
     {
         delete[] m_cache;
-        delete m_replacement_policy;
     }
 
     void CacheDataHandler::initializeCacheStates(int initialState)
@@ -56,19 +50,7 @@ namespace octopus
     {
         *line = GenericCacheLine();
         line->m_block_size = this->m_block_size;
-        line->m_data = new uint8_t[line->m_block_size];
-        
-        memset(line->m_data, 0, line->m_block_size);
-    }
- 
-    uint32_t CacheDataHandler::getBlockSize()
-    {
-        return m_block_size;
-    }
-
-    uint32_t CacheDataHandler::getDataAccessLatency()
-    {
-        return m_data_access_latency;
+        line->m_data = new uint8_t[line->m_block_size / 8];
     }
 
     bool CacheDataHandler::findline(uint64_t address, uint64_t *set, int *way)
@@ -88,7 +70,7 @@ namespace octopus
         return false;
     }
 
-    bool CacheDataHandler::writeCacheLine_bypassLatency(uint64_t address, GenericCacheLine *line, bool soft_write)
+    bool CacheDataHandler::writeCacheLine_bypassLatency(uint64_t address, GenericCacheLine *line)
     {
         uint64_t set = calculate_set(address);
         int way = findEmptyWay(address);
@@ -98,8 +80,7 @@ namespace octopus
         *((GenericCacheLine *)getLine(set, way)) = *line;
         ((GenericCacheLine *)getLine(set, way))->tag = calculate_tag(address);
         
-        if(!soft_write)
-            m_replacement_policy->update(set, way, m_cycle); //ToDo: this should change to support allocation on miss
+        m_replacement_policy->update(set, way, m_cycle); //ToDo: this should change to support allocation on miss
 
         return true;
     }
@@ -144,25 +125,7 @@ namespace octopus
             return false;
     }
 
-    bool CacheDataHandler::modifyData(uint64_t address, const uint8_t *data, uint16_t size, bool soft_write)
-    {
-        uint64_t set;
-        int way;
-        if (findline(address, &set, &way) && (isReady(address) || soft_write))
-        {
-            uint16_t offset = address & (m_block_size - 1);
-            ((GenericCacheLine *)getLine(set, way))->modifyData(data, offset, size);
-
-            m_ready_cycle = m_cycle + m_data_access_latency;
-            if(!soft_write)
-                m_replacement_policy->update(set, way, m_cycle); //ToDo: this should change to support allocation on miss
-            return true;
-        }
-        else
-            return false;
-    }
-
-    bool CacheDataHandler::readCacheLine(uint64_t address, GenericCacheLine *out_line, bool soft_read)
+    bool CacheDataHandler::readCacheLine(uint64_t address, GenericCacheLine *out_line)
     {
         uint64_t set;
         int way;
@@ -173,8 +136,7 @@ namespace octopus
                 *out_line = *((GenericCacheLine *)getLine(set, way));
                 m_ready_cycle = m_cycle + m_data_access_latency;
             }
-            if(!soft_read)
-                m_replacement_policy->update(set, way, m_cycle); //ToDo: this should change to support allocation on miss
+            m_replacement_policy->update(set, way, m_cycle); //ToDo: this should change to support allocation on miss
             return true;
         }
         else

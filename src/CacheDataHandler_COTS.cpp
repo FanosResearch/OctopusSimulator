@@ -7,10 +7,10 @@
  */
 #include "../header/CacheDataHandler_COTS.h"
 
-namespace octopus
+namespace ns3
 {
-    CacheDataHandler_COTS::CacheDataHandler_COTS(ParametersMap map, string pname, string config_path, string name)
-        : CacheDataHandler(map, pname, config_path, name)
+    CacheDataHandler_COTS::CacheDataHandler_COTS(CacheXml &cacheXml, ReplacementPolicy* policy)
+        : CacheDataHandler(cacheXml, policy)
     {
         line_added2PWB = false;
         address_of_recently_added2PWB = 0;
@@ -82,7 +82,8 @@ namespace octopus
         if (checkMSHR(mask_offset(address)))
         {
             m_miss_status_holding_regs[mask_offset(address)].copyData(data);
-            if (findEmptyWay(address) == -1) //ToDo: add clean flag
+            set = calculate_set(address);
+            if (findEmptyWay(address) == -1)
                 moveLine2WB(set, chooseEvictionWay(set));
 
             if (writeCacheLine(address, &m_miss_status_holding_regs[mask_offset(address)]))
@@ -123,7 +124,10 @@ namespace octopus
 
     int CacheDataHandler_COTS::chooseEvictionWay(uint64_t set)
     {
-        int way;
+        // if (m_replacement_policy == ReplcPolicy::RANDOM)
+        //     return rand() % m_ways_count;
+        // return 0;
+         int way;
         
         m_replacement_policy->getReplacementCandidate(set, &way);
         return way;

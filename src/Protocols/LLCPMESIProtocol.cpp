@@ -9,9 +9,9 @@
 #include "../../header/Protocols/LLCPMESIProtocol.h"
 using namespace std;
 
-namespace octopus
+namespace ns3
 {
-    LLCPMESIProtocol::LLCPMESIProtocol(CacheDataHandler *cache, const string &fsm_path, int id, int sharedMemId) : LLCMESIProtocol(cache, fsm_path, id, sharedMemId)
+    LLCPMESIProtocol::LLCPMESIProtocol(CacheDataHandler *cache, const string &fsm_path, int coreId, vector<int> sharedMemId) : LLCMESIProtocol(cache, fsm_path, coreId, sharedMemId)
     {
     }
 
@@ -19,7 +19,7 @@ namespace octopus
     {
     }
 
-    vector<ControllerAction> LLCPMESIProtocol::handleAction(vector<int> &actions, Message &msg,
+    vector<ControllerAction> &LLCPMESIProtocol::handleAction(vector<int> &actions, Message &msg,
                                                              GenericCacheLine &cache_line_info, int next_state)
     {
         bool wait_data = false;
@@ -45,7 +45,7 @@ namespace octopus
             }
         }
 
-        std::vector<ControllerAction> controller_actions = LLCMSIProtocol::handleAction(actions, msg, cache_line_info, next_state);
+        LLCMSIProtocol::handleAction(actions, msg, cache_line_info, next_state);
 
         if (wait_data == true)
         {
@@ -54,7 +54,7 @@ namespace octopus
             controller_action.data = (void *)new Message;
             ((Message *)controller_action.data)->copy(msg);
 
-            controller_actions.push_back(controller_action);
+            this->controller_actions.push_back(controller_action);
         }
 
         if (execlusiveData == true)
@@ -64,11 +64,13 @@ namespace octopus
             controller_action.type = ControllerAction::Type::REMOVE_PENDING;
             controller_action.data = (void *)new Message;
             ((Message *)controller_action.data)->copy(msg);
+            ((Message *)controller_action.data)->to.clear();
+            ((Message *)controller_action.data)->to.push_back(msg.owner);
             ((Message *)controller_action.data)->complementary_value = 2; //execlusive Data
 
-            controller_actions.push_back(controller_action);
+            this->controller_actions.push_back(controller_action);
         }
 
-        return controller_actions;
+        return this->controller_actions;
     }
 }

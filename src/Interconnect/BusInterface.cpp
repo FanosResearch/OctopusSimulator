@@ -7,8 +7,10 @@
  */
 
 #include "../../header/Interconnect/BusInterface.h"
+#include <iostream>
+using namespace std;
 
-namespace octopus
+namespace ns3
 {
     BusInterface::BusInterface(int id, int buffer_max_size) : CommunicationInterface(id)
     {
@@ -51,7 +53,6 @@ namespace octopus
     {
         if (cycle != 0)
             msg.cycle = cycle;
-        msg.from = m_interface_id;
 
         if (type == MessageType::REQUEST && (int)m_tx_request_buffer.size() < m_buffer_max_size)
         {

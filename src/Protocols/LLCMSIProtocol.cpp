@@ -7,11 +7,15 @@
  */
 
 #include "../../header/Protocols/LLCMSIProtocol.h"
+#include "../../header/RequestorsQueues.h"
+#include <iostream>
+#include <string>
+
 using namespace std;
 
-namespace octopus
+namespace ns3
 {
-    LLCMSIProtocol::LLCMSIProtocol(CacheDataHandler *cache, const string &fsm_path, int id, int sharedMemId) : CoherenceProtocolHandler(cache, fsm_path, id, sharedMemId)
+    LLCMSIProtocol::LLCMSIProtocol(CacheDataHandler *cache, const string &fsm_path, int coreId, vector<int> sharedMemId) : CoherenceProtocolHandler(cache, fsm_path, coreId, sharedMemId)
     {
     }
 
@@ -42,12 +46,14 @@ namespace octopus
         if (msg.data != NULL)
             return FRFCFS_State::Ready;
         else if (this->m_fsm->isStall(cache_line.state, (int)event_id))
+        {
+            RequestorsQueues::getReqQObj()->getRequestorsQueues()->ifOldest_promote(msg.owner,msg.msg_id);
             return FRFCFS_State::NonReady;
-
+        }
         return FRFCFS_State::Ready;
     }
 
-    vector<ControllerAction> LLCMSIProtocol::processRequest(Message &request_msg, DebugPrint* dprint)
+    const vector<ControllerAction> &LLCMSIProtocol::processRequest(Message &request_msg)
     {
         GenericCacheLine cache_line;
         EventId event_id;
@@ -59,13 +65,24 @@ namespace octopus
         this->readEvent(request_msg, cache_line, &event_id);
         this->m_fsm->getTransition(cache_line.state, (int)event_id, next_state, actions);
 
+        int m_state = (fsm_type.find("MESI") != std::string::npos)
+                        ? this->m_fsm->getState(string("EorM"))
+                        : this->m_fsm->getState(string("M"));
+        if ( cache_line.state == m_state
+        && event_id == ns3::LLCMSIProtocol::EventId::GetS //CL in M state and msg is getS
+        && cache_line.owner_id != -1) // SA: Only set count to 2 if there is an external owner (expecting WB)
+        {
+            RequestorsQueues::getReqQObj()->getRequestorsQueues()->setRemovalCount(request_msg.owner, request_msg.msg_id,2);
+            
+            //cout <<"processRequest: set: " << request_msg.msg_id << " core: " << request_msg.owner << " count: "<< RequestorsQueues::getReqQObj()->getRequestorsQueues()->getRemovalCount (request_msg.owner, request_msg.msg_id) <<endl;
+        }
         return handleAction(actions, request_msg, cache_line, next_state);
     }
 
-    vector<ControllerAction> LLCMSIProtocol::handleAction(std::vector<int> &actions, Message &msg,
+    vector<ControllerAction> &LLCMSIProtocol::handleAction(std::vector<int> &actions, Message &msg,
                                                            GenericCacheLine &cache_line, int next_state)
     {
-        std::vector<ControllerAction> controller_actions;
+        this->controller_actions.clear();
 
         for (int action : actions)
         {
@@ -78,10 +95,7 @@ namespace octopus
                 break;
 
             case ActionId::SendData: // remove request from pending and respond to request
-                controller_action.type = (msg.source == Message::Source::LOWER_INTERCONNECT)
-                                             ? ControllerAction::Type::HIT_Action
-                                             : ControllerAction::Type::REMOVE_PENDING;
-                
+                controller_action.type = ControllerAction::Type::REMOVE_PENDING;
                 controller_action.data = (void *)new Message();
                 ((Message *)controller_action.data)->copy(msg);
                 ((Message *)controller_action.data)->to.clear();
@@ -93,7 +107,7 @@ namespace octopus
                 controller_action.type = ControllerAction::Type::ADD_PENDING;
                 controller_action.data = (void *)new Message();
                 ((Message *)controller_action.data)->copy(msg);
-                controller_actions.push_back(controller_action);
+                this->controller_actions.push_back(controller_action);
 
                 // send Bus request, update cache line
                 controller_action.type = ControllerAction::Type::SEND_BUS_MSG;
@@ -102,11 +116,12 @@ namespace octopus
                                                              0,                // Cycle
                                                              (uint16_t)action, // Complementary_value
                                                              msg.owner);       // Owner
-                ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+                ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id[0]);
                 break;
 
             case ActionId::SetOwner:
                 cache_line.owner_id = msg.owner;
+                cache_line.setDirty();  // set Dirty flag, if goes to M state anytime
                 controller_action.type = ControllerAction::Type::NO_ACTION;
                 break;
             case ActionId::ClearOwner:
@@ -125,8 +140,8 @@ namespace octopus
                                                              msg.addr,                                // Addr
                                                              0,                                       // Cycle
                                                              (uint16_t)MSIProtocol::REQUEST_TYPE_INV, // Complementary_value
-                                                             (uint16_t)this->m_id);              // Owner
-                ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_id);
+                                                             (uint16_t)this->m_core_id);              // Owner
+                ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_core_id);
                 break;
 
             case ActionId::WriteBack:
@@ -140,14 +155,14 @@ namespace octopus
                 break;
 
             case ActionId::Fault:
-                std::cout << " LLCMSIProtocol: Fault Transaction is detected" << std::endl;
+                std::cout << " LLCMSIProtocol: Fault Transaction is detected"<< " msg_id "<< msg.msg_id <<" core "<< this->m_core_id<< " owner "<<msg.owner<<" source "<< (int)msg.source<< std::endl;
                 exit(0);
                 break;
             }
 
-            controller_actions.push_back(controller_action);
+            this->controller_actions.push_back(controller_action);
         }
-
+        
         // update cache line
         ControllerAction controller_action;
 
@@ -160,9 +175,9 @@ namespace octopus
         new (controller_action.data) Message(msg);
         new ((uint8_t *)controller_action.data + sizeof(Message)) GenericCacheLine(cache_line);
 
-        controller_actions.push_back(controller_action);
+        this->controller_actions.push_back(controller_action);
 
-        return controller_actions;
+        return this->controller_actions;
     }
 
     void LLCMSIProtocol::readEvent(Message &msg, GenericCacheLine &cache_line, EventId *out_id)
@@ -171,7 +186,10 @@ namespace octopus
         {
         case Message::Source::UPPER_INTERCONNECT:
             if (msg.data != NULL)
+            {
                 *out_id = EventId::Data_fromUpperInterface;
+                msg.complementary_value = 10;
+            }
             break;
 
         case Message::Source::LOWER_INTERCONNECT:
@@ -189,13 +207,13 @@ namespace octopus
                     *out_id = EventId::GetM;
                     break;
                 case MSIProtocol::REQUEST_TYPE_PUTM:
-                    if (msg.owner == m_id)
+                    if (msg.owner == m_core_id)
                         *out_id = EventId::Replacement;
                     else
                         *out_id = (msg.owner == cache_line.owner_id) ? EventId::PutM_fromOwner : EventId::PutM_fromNonOwner;
                     break;
                 case MSIProtocol::REQUEST_TYPE_INV:
-                    if(msg.owner == m_id)
+                    if(msg.owner == m_core_id)
                         *out_id = EventId::Own_Invalidation;
                     else
                         std::cout << " LLCMSIProtocol: Invalid Transaction detected on the Bus" << std::endl;

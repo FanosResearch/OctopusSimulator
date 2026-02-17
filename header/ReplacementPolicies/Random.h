@@ -13,7 +13,7 @@
 
 #include <math.h>
 
-namespace octopus
+namespace ns3
 {
     class Random : public ReplacementPolicy
     {

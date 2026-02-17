@@ -8,7 +8,7 @@
 
 #include "../../header/Arbiters/RRArbiter.h"
 
-namespace octopus
+namespace ns3
 {
     RRArbiter::RRArbiter(vector<int> *candidates_ids, int arbiter_period) : Arbiter(candidates_ids, arbiter_period)
     {

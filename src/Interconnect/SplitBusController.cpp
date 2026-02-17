@@ -7,33 +7,29 @@
  */
 
 #include "../../header/Interconnect/SplitBusController.h"
+#include "../../header/RequestorsQueues.h"
 
 using namespace std;
-namespace octopus
+namespace ns3
 {
-    SplitBusController::SplitBusController(ParametersMap map, vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids,
-            string pname, string config_path, string name) : BusController(map, interfaces, lower_level_ids, pname, config_path, name)
+    SplitBusController::SplitBusController(vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids, string memArb) : BusController(interfaces, lower_level_ids, memArb)
     {
-        string arbiter_type = std::get<string>(parameters.at(STRINGIFY(arbiter_type)).value);
-        if(arbiter_type == STRINGIFY(TDMArbiter))
+        if (memArb == "TDM")
         {
             m_arbiters.push_back(new TDMArbiter(m_lower_level_ids, m_request_latency));
             m_arbiters.push_back(new TDMArbiter(m_lower_level_ids, m_response_latency));
-        }
-        else if(arbiter_type == STRINGIFY(FCFSArbiter))
+        } else if (memArb == "FCFS" || memArb == "FRFCFS")
         {
             m_arbiters.push_back(new FCFSArbiter(m_lower_level_ids, m_request_latency));
             m_arbiters.push_back(new FCFSArbiter(m_lower_level_ids, m_response_latency));
-        }
-        else if(arbiter_type == STRINGIFY(RRArbiter))
+        } else if (memArb == "RROF")
+        {
+            m_arbiters.push_back(new RROFArbiter(m_lower_level_ids, m_request_latency));
+            m_arbiters.push_back(new RROFArbiter(m_lower_level_ids, m_response_latency));
+        }else if (memArb == "RR")
         {
             m_arbiters.push_back(new RRArbiter(m_lower_level_ids, m_request_latency));
             m_arbiters.push_back(new RRArbiter(m_lower_level_ids, m_response_latency));
-        }
-        else
-        {
-            cout << "Error: there is no matching arbiter" << endl;
-            exit(0);
         }
 
         clk_in_slot_req = 0;
@@ -58,12 +54,16 @@ namespace octopus
     void SplitBusController::requestBusStep(uint64_t cycle_number)
     {
         if (clk_in_slot_req == 0)
+        {
             message_available_req = m_arbiters[(int)BusType::RequestBus]->elect(cycle_number, buffers_req, &elected_msg_req);
+        }
         else if (clk_in_slot_req == (m_request_latency - 1))
         {
             if (message_available_req)
             {
                 broadcast(elected_msg_req);
+                // add Request to Unified queue by their appearance order on Request bus
+                RequestorsQueues::getReqQObj()->getRequestorsQueues()->add2UnifiedQueue(elected_msg_req.owner, elected_msg_req.msg_id, elected_msg_req.addr);
                 message_available_req = false;
             }
         }

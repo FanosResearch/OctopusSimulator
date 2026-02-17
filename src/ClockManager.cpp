@@ -9,9 +9,8 @@
 #include "../header/ClockManager.h"
 
 using namespace std;
-namespace octopus
+namespace ns3
 {
-
     ClockedObj::ClockedObj(uint64_t clk_period)
     {
         m_clk_period = clk_period;
@@ -26,16 +25,11 @@ namespace octopus
         clk_run = false;
     }
 
-    uint64_t ClockManager::obj_id = 0;
     void ClockManager::registerCLKObj(uint64_t clk_period, ClockedObj *obj)
     {
-        // EventKey key = {.time_stamp = clk_period,
-        //                 .obj_id = (uint64_t)obj};
         EventKey key = {.time_stamp = clk_period,
-                        .obj_id = ClockManager::obj_id};
+                        .obj_id = (uint64_t)obj};
         events.insert(pair<EventKey, ClockedObj *>(key, obj));
-
-        ClockManager::obj_id++;
     }
 
     void ClockManager::registerCLKTrigger(ClockedObj *obj)
@@ -46,7 +40,6 @@ namespace octopus
     void ClockManager::init()
     {
         map<EventKey, ClockedObj *>::iterator itr;
-
         for (itr = events.begin(); itr != events.end(); itr++)
             itr->second->init();
     }
@@ -58,8 +51,8 @@ namespace octopus
         while (clk_run)
         {
             clkStep();
-            if(disp_delay == 0)
-                cout << "\rElapsed time: \t" << current_time;
+            //if(disp_delay == 0)
+            //    cout << "\rElapsed time: \t" << current_time;
 
             disp_delay = (disp_delay + 1) % 100;
         }

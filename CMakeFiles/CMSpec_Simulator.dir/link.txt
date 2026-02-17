@@ -1,0 +1,1 @@
+/usr/bin/c++ -rdynamic CMakeFiles/CMSpec_Simulator.dir/CMSpec_Simulator.cpp.o -o CMSpec_Simulator  src/libCMSpec_core.a 

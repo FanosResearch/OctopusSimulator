@@ -10,8 +10,6 @@
 #define _CPU_H
 
 #include "ClockManager.h"
-#include "Configurable.h"
-#include "DebugPrint.h"
 #include "CommunicationInterface.h"
 #include "CacheXml.h"
 #include "Logger.h"
@@ -21,17 +19,16 @@
 #include <string>
 #include <fstream>
 
-namespace octopus
+namespace ns3
 {
     enum RequestType
     {
         READ = 0,
         WRITE = 1,
-        SETUP_WRITE = 2,
-        SETUP_READ = 3,
+        SETUP_WRITE = 2
     };
 
-    class CPU : public ClockedObj, Configurable
+    class CPU : public ClockedObj
     {
         struct TraceSample
         {
@@ -43,15 +40,19 @@ namespace octopus
         int m_id;
         uint64_t m_clk_cycle;
         uint32_t m_number_of_OoO_requests;
+        uint32_t m_sent_requests;
         uint32_t m_last_received_msg_cycle;
-        int32_t m_sent_requests;
         bool m_simulation_done; 
+        uint64_t m_mem_req;
+        uint64_t m_instr;
 
         TraceSample* m_sample_in_progess;
         std::ifstream  m_workload_file;
 
+        vector <int> pending_msg;
+        bool oldest_done;
+
         CommunicationInterface *m_upper_interface; // A pointer to the upper Interface FIFO
-        DebugPrint* dprint;
         
         virtual void cycleProcess();
         virtual void processLogic();
@@ -60,11 +61,8 @@ namespace octopus
         virtual bool readSampleFromWorkload(TraceSample* out_sample);
 
     public:
-        CPU(ParametersMap map, int id, CommunicationInterface *upper_interface, 
-            string workload_file_name,
-            string pname = "",
-            string config_path = string(CONFIGURATION_PATH),
-            string name = STRINGIFY(CPU));
+        CPU(CacheXml &xml, uint32_t max_OoO_requests, CommunicationInterface *upper_interface);
+        CPU(CacheXml &xml, uint32_t max_OoO_requests, CommunicationInterface *upper_interface, std::string workload_file_name);
         ~CPU();
 
         virtual void init();

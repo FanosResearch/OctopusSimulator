@@ -8,7 +8,7 @@
 
 #include "../../header/Arbiters/TDMArbiter.h"
 
-namespace octopus
+namespace ns3
 {
     TDMArbiter::TDMArbiter(vector<int> *candidates_ids, int arbiter_period) : Arbiter(candidates_ids, arbiter_period)
     {

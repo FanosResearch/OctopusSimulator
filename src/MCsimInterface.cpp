@@ -7,17 +7,20 @@
  */
 
 #include "../header/MCsimInterface.h"
+#include "../header/RequestorsQueues.h"
 
-namespace octopus
+namespace ns3
 {
-    MCsimInterface::MCsimInterface(MCoreSimProjectXml &projectXml, CommunicationInterface *lower_interface, int llc_id)
+    MCsimInterface::MCsimInterface(MCoreSimProjectXml &projectXml, CommunicationInterface *lower_interface, vector<int> llc_id): ClockedObj(1)
     {
-        m_id = projectXml.GetDRAMId();
+        m_id = projectXml.GetDRAMId()[0];
         m_llc_id = llc_id;
 
+        m_dt = projectXml.GetDRAMCtrlClkNanoSec();
+        m_clk_skew = projectXml.GetDRAMCtrlClkSkew();
         m_clk_cycle = 1;
-
-        m_llc_line_size = projectXml.GetSharedCache().GetBlockSize();
+        m_log_enable = projectXml.GetLogFileGenEnable();
+        m_llc_line_size = projectXml.GetSharedCache().begin()->GetBlockSize();
 
         m_read_count = 0;
         m_write_count = 0;
@@ -28,20 +31,27 @@ namespace octopus
 
         /******************************************** Initialization of MCsim ********************************************/
         unsigned int num_cores = projectXml.GetNumPrivCore();
-
+        m_loggerPath = projectXml.GetLoggerPath();
+        string mem_system = projectXml.GetmemSystem();
+        string sys_path = projectXml.GetsysPath();
+        string sys_init_file = sys_path+"/src/MCsim/system/"+mem_system+"/"+mem_system+".ini";
         m_mcsim = MCsim::getMemorySystemInstance(
             num_cores,
-            "/Users/Mhossam/Documents/PhD_Work/MCsim/MCsim/system/FRFCFS/FRFCFS.ini", // this should be parameterized
-            "DDR3",
-            "1600H",
-            "2Gb_x8",
+            sys_init_file, // this should be parameterized
+            "DDR4",
+            "2400U",
+            "8Gb_x8",
             1,
             1); // 2048*4 = 4 ranks
-        m_mcsim->setCPUClockSpeed(1e9);
+        //m_mcsim->setCPUClockSpeed(0);
+        m_mcsim->setCPUClockSpeed(2.4*1e9);
 
+        m_requestors_queues = m_mcsim->getRequestorsQueues();
+        RequestorsQueues::getReqQObj()->setRequestorsQueues(m_requestors_queues);
+        RequestorsQueues::getReqQObj()->getRequestorsQueues()->setLoggerPath(m_loggerPath);
         MCsim::TransactionCompleteCB *read_cb = new MCsim::MCsimCallback<MCsimInterface, void, unsigned, uint64_t, uint64_t>(this, &MCsimInterface::read_callback);
         MCsim::TransactionCompleteCB *write_cb = new MCsim::MCsimCallback<MCsimInterface, void, unsigned, uint64_t, uint64_t>(this, &MCsimInterface::write_callback);
-        m_mcsim->RegisterCallbacks(read_cb, write_cb);
+        m_mcsim->RegisterCallbacks(read_cb, write_cb);       
     }
 
     MCsimInterface::~MCsimInterface()
@@ -68,14 +78,25 @@ namespace octopus
         Message ready_msg;
         if (m_processing_queue->getFirstReady(&ready_msg))
         {
-            if (m_mcsim->addRequest(ready_msg.owner, ready_msg.addr, ready_msg.data == NULL, m_llc_line_size)) // 1 -> Read, 0 -> Write
+            //if (m_mcsim->addRequest(ready_msg.owner, ready_msg.addr, ready_msg.data == NULL, m_llc_line_size)) // 0 -> Read, 1 -> Write
+            if (m_mcsim->addRequest(ready_msg.owner, ready_msg.addr, ready_msg.data == NULL, m_llc_line_size, ready_msg.msg_id)) // 0 -> Read, 1 -> Write
             {
-                if(ready_msg.data == NULL) //Add read requests only
+                //if(m_log_enable)
+                //    cout << "MCsimInterface msg_in "<<ready_msg.msg_id << " core "<< ready_msg.owner<< " clk "<<m_clk_cycle << endl;
+                if(ready_msg.data == NULL)
                     m_pending_requests.push_back(ready_msg);
+                else
+                {
+                    // Write request (dirty writeback from LLC): remove tracking now
+                    // that DRAM has accepted it. This was deferred from performWriteBack
+                    // so the RROF arbiter on the LLC-DRAM bus could find the message.
+                    RequestorsQueues::getReqQObj()->getRequestorsQueues()->removeRequest(ready_msg.owner, ready_msg.msg_id);
+                }
             }
             else
             {
-                cout << "MCsimInterface: Error failed to add request to MCsim" << endl;
+                if(m_log_enable)
+                    cout << "MCsimInterface: Error failed to add request to MCsim" << endl;
                 exit(0);
             }
         }
@@ -84,7 +105,8 @@ namespace octopus
         {
             if (!m_lower_interface->pushMessage(m_output_buffer[0], m_clk_cycle, MessageType::DATA_RESPONSE))
             {
-                cout << "MCsimInterface(id = " << this->m_id << "): Cannot insert the Msg into the lower interface FIFO, FIFO is Full" << endl;
+                if(m_log_enable)
+                    cout << "MCsimInterface(id = " << this->m_id << "): Cannot insert the Msg into the lower interface FIFO, FIFO is Full" << endl;
                 exit(0);
             }
             m_output_buffer.erase(m_output_buffer.begin());
@@ -124,9 +146,13 @@ namespace octopus
                                       m_clk_cycle,                  // Cycle
                                       0,                            // Complementary_value
                                       m_pending_requests[i].owner); // Owner
-                msg.to.push_back((uint16_t)m_llc_id);               // To
+                //msg.to.push_back((uint16_t)m_llc_id[0]);               // To
+                msg.to.push_back((uint16_t)m_llc_id[addrMapping(m_pending_requests[i].addr)]); 
                 msg.copy((uint8_t *)&data);
                 m_output_buffer.push_back(msg);
+
+                //if(m_log_enable)
+                //    cout <<"MCsimInterface msg_out " << msg.msg_id << " core " << msg.owner << " clk "<<m_clk_cycle << endl;
 
                 m_pending_requests.erase(m_pending_requests.begin() + i);
                 found = true;
@@ -136,13 +162,38 @@ namespace octopus
         
         if(!found)
         {
-            cout << "MCsimInterface: Error read_callback couldn't find the pending request" << endl;
+            if(m_log_enable)
+                cout << "MCsimInterface: Error read_callback couldn't find the pending request" << endl;
             exit(0);
         }
     }
 
     void MCsimInterface::write_callback(unsigned id, uint64_t address, uint64_t clock_cycle)
     {
-        m_write_count++;
+        // bool found = false;
+        // for (int i = 0; i < (int) m_pending_requests.size(); i++)
+        // {
+        //     if (m_pending_requests[i].addr == address)
+        //     {
+                m_write_count++;
+        //        cout << "Cachsim: write req: "<< m_write_count << " "<<address <<endl;
+        //         m_pending_requests.erase(m_pending_requests.begin() + i);
+        //         found = true;
+        //         break;
+        //     }
+        // }
+        
+        // if(!found)
+        // {
+        //     cout << "MCsimInterface: Error read_callback couldn't find the pending request" << endl;
+        //     exit(0);
+        // }
+    }
+
+    unsigned int MCsimInterface::addrMapping (uint64_t addr)
+    {
+        unsigned int pos = 17;
+        unsigned int numBits = 3;
+        return (((1 << numBits) - 1) & (addr >> (pos - 1)));
     }
 }

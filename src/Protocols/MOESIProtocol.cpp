@@ -9,9 +9,9 @@
 #include "../../header/Protocols/MOESIProtocol.h"
 using namespace std;
 
-namespace octopus
+namespace ns3
 {
-    MOESIProtocol::MOESIProtocol(CacheDataHandler *cache, const string &fsm_path, int id, int sharedMemId) : MESIProtocol(cache, fsm_path, id, sharedMemId)
+    MOESIProtocol::MOESIProtocol(CacheDataHandler *cache, const string &fsm_path, int coreId, vector<int> sharedMemId) : MESIProtocol(cache, fsm_path, coreId, sharedMemId)
     {
     }
 

@@ -27,8 +27,11 @@ private:
   int  m_nways;        // number of ways, should be 1 in direct map
   int m_nPendingReq;
   string m_replcPolicy;
+  string m_memArb;
   int m_cachePreload;
   int dataAccessLatency;
+  int EndToEnd;
+  int LogEnable;
   
 public:
 
@@ -101,6 +104,10 @@ public:
      return m_replcPolicy;
   }
 
+   string GetmemArb () {
+     return m_memArb;
+  }
+
   int GetNPendReq () {
      return m_nPendingReq;
   }
@@ -112,14 +119,22 @@ public:
   int GetDataAccessLatency () {
     return dataAccessLatency;
   }
+
+    int GetEndToEnd () {
+    return EndToEnd;
+  }
+
+   int GetLogEnable () {
+    return LogEnable;
+  }
   
   void LoadFromXml(TiXmlHandle root) {
 
      // default values
      m_cacheId         = 1;
-     m_cpuClkNanoSec   = 100;
+     m_cpuClkNanoSec   = 1;
      m_cpuClkSkew      = 0;
-     m_ctrlClkNanoSec  = 100;
+     m_ctrlClkNanoSec  = 1;
      m_ctrlClkSkew     = 0;
      m_reqWbRatio      = 50;
      m_blockSize       = 64;
@@ -127,25 +142,31 @@ public:
      m_mappingType     = 0; 
      m_nways           = 1;
      m_replcPolicy     = "RANDOM";
+     m_memArb          = "FCFS";
      m_nPendingReq     = 1;
      m_cachePreload    = 0;
      dataAccessLatency = 0;
+     EndToEnd          = 0;
+     LogEnable         = 0;
      
      TiXmlElement* CacheRootPtr = root.Element();
      CacheRootPtr->QueryIntAttribute   ("cacheId"          , &m_cacheId         );
-     CacheRootPtr->QueryIntAttribute   ("cpuClkNanoSec"    , &m_cpuClkNanoSec   );
+     //CacheRootPtr->QueryIntAttribute   ("cpuClkNanoSec"    , &m_cpuClkNanoSec   );
      CacheRootPtr->QueryIntAttribute   ("cpuClkSkew"       , &m_cpuClkSkew      );
-     CacheRootPtr->QueryIntAttribute   ("ctrlClkNanoSec"   , &m_ctrlClkNanoSec  );
+     //CacheRootPtr->QueryIntAttribute   ("ctrlClkNanoSec"   , &m_ctrlClkNanoSec  );
      CacheRootPtr->QueryIntAttribute   ("ctrlClkSkew"      , &m_ctrlClkSkew     );
      CacheRootPtr->QueryIntAttribute   ("NPendReq"         , &m_nPendingReq     );     
      CacheRootPtr->QueryIntAttribute   ("reqWbRatio"       , &m_reqWbRatio      );
      CacheRootPtr->QueryStringAttribute("ReplcPolc"        , &m_replcPolicy     );
+     CacheRootPtr->QueryStringAttribute("memArb"           , &m_memArb     );
      CacheRootPtr->QueryIntAttribute   ("blockSize"        , &m_blockSize       );
      CacheRootPtr->QueryIntAttribute   ("cacheSize"        , &m_cacheSize       );
      CacheRootPtr->QueryIntAttribute   ("mapping"          , &m_mappingType     );
      CacheRootPtr->QueryIntAttribute   ("nways"            , &m_nways           );
      CacheRootPtr->QueryIntAttribute   ("CachePreLoad"     , &m_cachePreload    );
      CacheRootPtr->QueryIntAttribute   ("dataAccessLatency", &dataAccessLatency );
+     CacheRootPtr->QueryIntAttribute   ("EndToEnd"         , &EndToEnd );
+     CacheRootPtr->QueryIntAttribute   ("LogEnable"         , &LogEnable );
   }
 
 };

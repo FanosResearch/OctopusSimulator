@@ -9,7 +9,7 @@
 #include "../header/Logger.h"
 
 using namespace std;
-namespace octopus
+namespace ns3
 {
 
     Logger *Logger::_logger = NULL;
@@ -32,6 +32,7 @@ namespace octopus
         initializeStats(cpu_id);
     }
 
+
     void Logger::updateRequest(uint64_t msg_id, EntryId entryId)
     {
         if (log_entries.find(msg_id) == log_entries.end())
@@ -40,6 +41,8 @@ namespace octopus
         uint64_t core_id = log_entries[msg_id][(int)EntryId::CPU_ID][0];
 
         log_entries[msg_id][(int)entryId].push_back(core_clk_count[core_id]);
+        //RequestorsQueues::getReqQObj()->getRequestorsQueues()->updateReqLogger(msg_id,(int)entryId);
+
 
         if (entryId == EntryId::CPU_RX_CHECKPOINT)
             calculateLatencies(msg_id);

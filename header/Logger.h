@@ -21,7 +21,7 @@
 
 #define NUM_OF_ELEMENTS_PER_ENTRY   9
 
-namespace octopus
+namespace ns3
 {
     class Logger
     {

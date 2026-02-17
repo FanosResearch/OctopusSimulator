@@ -12,7 +12,7 @@
 #include "GenericCache.h"
 #include "IdGenerator.h"
 
-namespace octopus
+namespace ns3
 {
     class TimerCacheFrmt : public GenericCacheLine
     {

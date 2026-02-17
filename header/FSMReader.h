@@ -21,7 +21,7 @@
 #define STATE_CSV_ID "StateNum"
 #define STATE_CSV_TABLE "State"
 
-namespace octopus
+namespace ns3
 {
     /**
  * brief FSMReader parses the CSV files that contain finite state machine, and

@@ -13,7 +13,7 @@
 
 using namespace std;
 
-namespace octopus
+namespace ns3
 {
     class SplitBusController : public BusController
     {
@@ -32,10 +32,7 @@ namespace octopus
         virtual void responseBusStep(uint64_t cycle_number);
 
     public:
-        SplitBusController(ParametersMap map, vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids,
-                           string pname = "",
-                           string config_path = string(CONFIGURATION_PATH) + string(INTERCONNECT),
-                           string name = STRINGIFY(SplitBusController));
+        SplitBusController(vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids, string memArb);
         ~SplitBusController();
 
         virtual void busStep(uint64_t cycle_number) override;

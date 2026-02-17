@@ -14,7 +14,7 @@
 #include <map>
 #include <algorithm>
 
-namespace octopus
+namespace ns3
 {
     class ClockedObj
     {
@@ -23,7 +23,7 @@ namespace octopus
 
         public:
             ClockedObj(uint64_t clk_period);
-            
+            ClockedObj();
             uint64_t getClkPeriod() {return m_clk_period;}
             virtual void cycleProcess() = 0;
             virtual void init() = 0;
@@ -31,9 +31,6 @@ namespace octopus
 
     class ClockManager
     {
-    private:
-        static uint64_t obj_id;
-        
     public:
         struct EventKey
         {

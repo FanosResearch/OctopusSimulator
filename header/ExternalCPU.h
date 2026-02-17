@@ -19,7 +19,7 @@
 
 #include <map>
 
-namespace octopus
+namespace ns3
 {
     template <typename Param1T, typename Param2T, typename Param3T, typename Param4T>
     class CallbackGeneral
@@ -51,6 +51,13 @@ namespace octopus
         }
     };
 
+    // enum RequestType
+    // {
+    //     READ = 0,
+    //     WRITE = 1,
+    //     SETUP_WRITE = 2
+    // };
+
     class ExternalCPU : public ClockedObj
     {
     private:
@@ -59,13 +66,15 @@ namespace octopus
     protected:
         int m_id;
 
+        double m_dt;
+        double m_clk_skew;
         uint64_t m_clk_cycle;
 
         CommunicationInterface *m_upper_interface; // A pointer to the upper Interface FIFO
 
         FRFCFS_Buffer<Message, ExternalCPU> *m_processing_queue;
         
-        CallbackGeneral<uint64_t, uint64_t, RequestType, uint8_t*>* m_cpu_callback; //Address, Clock Cycle, Type
+        CallbackGeneral<uint64_t, uint64_t, RequestType, uint64_t>* m_cpu_callback; //Address, Clock Cycle, Type
         
         Initializable *m_memory_component;
 
@@ -81,10 +90,10 @@ namespace octopus
 
         virtual FRFCFS_State getRequestState(const Message &, FRFCFS_State);
 
-        void registerCPUCallback(CallbackGeneral<uint64_t, uint64_t, RequestType, uint8_t*>* cpu_callback);
-        void registerInitializableMemory(Initializable *component);
+        void registerCPUCallback(CallbackGeneral<uint64_t, uint64_t, RequestType, uint64_t>* cpu_callback);
+        void registerMemoryComponent(Initializable *component);
 
-        void addRequest(uint64_t address, RequestType type, uint8_t* data = NULL, int size = 64);
+        void addRequest(uint64_t address, RequestType type, uint8_t* data);
 
         static map<int, ExternalCPU*>* getExtCPUs();
     };

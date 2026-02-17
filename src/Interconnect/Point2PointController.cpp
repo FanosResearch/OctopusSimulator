@@ -9,32 +9,37 @@
 #include "../../header/Interconnect/Point2PointController.h"
 
 using namespace std;
-namespace octopus
+namespace ns3
 {
-    Point2PointController::Point2PointController(ParametersMap map, vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids,
-            string pname, string config_path, string name) : BusController(map, interfaces, lower_level_ids, pname, config_path, name)
+    Point2PointController::Point2PointController(vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids, string memArb, vector<int>* candidates_id)
+        : BusController(interfaces, lower_level_ids, memArb)
     {
-        vector<int> *ids_ptr;
-        vector<int> *candidates_id = new vector<int>(std::get<vector<int>>(parameters.at(STRINGIFY(candidates_id)).value));
-        string arbiter_type = std::get<string>(parameters.at(STRINGIFY(arbiter_type)).value);
-
-        if(candidates_id->empty())
-            ids_ptr = m_lower_level_ids;
-        else
-            ids_ptr = candidates_id;
-        
-        if(arbiter_type == STRINGIFY(TDMArbiter))
-            m_arbiters.push_back(new TDMArbiter(ids_ptr, m_request_latency + m_response_latency));
-        else if(arbiter_type == STRINGIFY(FCFSArbiter))
-            m_arbiters.push_back(new FCFSArbiter(ids_ptr, m_request_latency + m_response_latency));
-        else if(arbiter_type == STRINGIFY(RRArbiter))
-            m_arbiters.push_back(new RRArbiter(ids_ptr, m_request_latency + m_response_latency));
+        m_request_latency = 2;
+        m_response_latency = 5;
+        if(candidates_id == NULL)
+        {
+            if (memArb == "RR")
+                m_arbiters.push_back(new RRArbiter(m_lower_level_ids, m_response_latency + m_request_latency));
+            else if (memArb == "RROF")
+                m_arbiters.push_back(new RROFArbiter(m_lower_level_ids, m_response_latency + m_request_latency));
+            else if (memArb == "FCFS" || memArb == "FRFCFS")
+                m_arbiters.push_back(new FCFSArbiter(m_lower_level_ids, m_response_latency + m_request_latency));
+            else if (memArb == "TDM")
+                m_arbiters.push_back(new TDMArbiter(m_lower_level_ids, m_response_latency + m_request_latency));
+        }
+            
         else
         {
-            cout << "Error: there is no matching arbiter" << endl;
-            exit(0);
+            if (memArb == "RR")
+                m_arbiters.push_back(new RRArbiter(candidates_id,  m_response_latency + m_request_latency));
+            else if (memArb == "RROF")
+                m_arbiters.push_back(new RROFArbiter(candidates_id,  m_response_latency + m_request_latency));
+            else if (memArb == "FCFS" || memArb == "FRFCFS")
+                m_arbiters.push_back(new FCFSArbiter(candidates_id,  m_response_latency + m_request_latency));
+            else if (memArb == "TDM")
+                m_arbiters.push_back(new TDMArbiter(candidates_id,  m_response_latency + m_request_latency));
         }
-        
+           
         clk_in_slot_lower = 0;
         message_available_lower = false;
         

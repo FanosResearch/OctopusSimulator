@@ -11,7 +11,7 @@
 
 #include "LLCMSIProtocol.h"
 
-namespace octopus
+namespace ns3
 {
     class LLCPendulum : public LLCMSIProtocol
     {
@@ -42,11 +42,11 @@ namespace octopus
         };
 
         virtual void readEvent(Message &msg, GenericCache::CacheLineInfo cache_line_info, LLCMSIProtocol::EventId *out_id) override;
-        virtual std::vector<ControllerAction> handleAction(std::vector<int> &actions, Message &msg,
+        virtual std::vector<ControllerAction> &handleAction(std::vector<int> &actions, Message &msg,
                                                             const GenericCache::CacheLineInfo &cache_line_info, int next_state) override;
 
     public:
-        LLCPendulum(GenericCache *cache, const std::string &fsm_path, int id);
+        LLCPendulum(GenericCache *cache, const std::string &fsm_path, int coreId);
         ~LLCPendulum();
 
     };

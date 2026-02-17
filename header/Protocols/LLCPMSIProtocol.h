@@ -11,7 +11,7 @@
 
 #include "LLCMSIProtocol.h"
 
-namespace octopus
+namespace ns3
 {
     class LLCPMSIProtocol : public LLCMSIProtocol
     {
@@ -31,11 +31,11 @@ namespace octopus
             WaitData
         };
 
-        virtual std::vector<ControllerAction> handleAction(std::vector<int> &actions, Message &msg,
+        virtual std::vector<ControllerAction> &handleAction(std::vector<int> &actions, Message &msg,
                                                             GenericCacheLine &cache_line_info, int next_state) override;
 
     public:
-        LLCPMSIProtocol(CacheDataHandler *cache, const std::string &fsm_path, int id, int sharedMemId);
+        LLCPMSIProtocol(CacheDataHandler *cache, const std::string &fsm_path, int coreId, vector<int> sharedMemId);
         ~LLCPMSIProtocol();
     };
 }

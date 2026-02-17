@@ -11,7 +11,7 @@
 
 #include "MSIProtocol.h"
 
-namespace octopus
+namespace ns3
 {
     class PMSIAsteriskProtocol : public MSIProtocol
     {
@@ -37,7 +37,7 @@ namespace octopus
         virtual void readEvent(Message &msg, MSIProtocol::EventId *out_id) override;
 
     public:
-        PMSIAsteriskProtocol(CacheDataHandler *cache, const std::string &fsm_path, int id, int sharedMemId);
+        PMSIAsteriskProtocol(CacheDataHandler *cache, const std::string &fsm_path, int coreId, vector<int> sharedMemId);
         ~PMSIAsteriskProtocol();
     };
 }

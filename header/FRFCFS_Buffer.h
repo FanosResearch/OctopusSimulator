@@ -12,7 +12,7 @@
 #include <vector>
 #include <string>
 
-namespace octopus
+namespace ns3
 {
     enum FRFCFS_State
     {
@@ -56,7 +56,8 @@ namespace octopus
                 (int)this->m_buffer.size() >= this->m_max_size)
                 return false;
 
-            Element element = {.state = state};
+            Element element;
+            element.state = state;
             element.item = item;
 
             this->m_buffer.push_back(element);
@@ -65,7 +66,8 @@ namespace octopus
 
         bool pushFront(const TItem &item)
         {
-            Element element = {.state = FRFCFS_State::Ready};
+            Element element;
+            element.state = FRFCFS_State::Ready;
             element.item = item;
             this->m_buffer.insert(this->m_buffer.begin(), element);
             return true;

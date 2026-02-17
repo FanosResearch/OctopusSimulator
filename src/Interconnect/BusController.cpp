@@ -9,18 +9,17 @@
 #include "../../header/Interconnect/BusController.h"
 
 using namespace std;
-namespace octopus
+namespace ns3
 {
-    BusController::BusController(ParametersMap map, vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids,
-                                 string pname, string config_path, string name) : Configurable(map, config_path, name, pname)
+    BusController::BusController(vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids, string mem_Arb)
     {
         m_interfaces = interfaces;
         m_lower_level_ids = lower_level_ids;
 
-        m_request_latency = std::get<int>(parameters.at(STRINGIFY(m_request_latency)).value);
-        m_response_latency = std::get<int>(parameters.at(STRINGIFY(m_response_latency)).value);
+        m_request_latency = 2;
+        m_response_latency = 5;
 
-        dprint = new DebugPrint(getSubMap(STRINGIFY(dprint)), name, parent_name + "." + name);
+        m_memArb = mem_Arb;
     }
 
     BusController::~BusController()

@@ -11,7 +11,7 @@
 
 #include "LLCMSIProtocol.h"
 
-namespace octopus
+namespace ns3
 {
     class LLCMESIProtocol : public LLCMSIProtocol
     {
@@ -30,11 +30,11 @@ namespace octopus
             SendExeclusiveData,
         };
 
-        virtual std::vector<ControllerAction> handleAction(std::vector<int> &actions, Message &msg,
+        virtual std::vector<ControllerAction> &handleAction(std::vector<int> &actions, Message &msg,
                                                             GenericCacheLine &cache_line_info, int next_state) override;
 
     public:
-        LLCMESIProtocol(CacheDataHandler *cache, const std::string &fsm_path, int id, int sharedMemId);
+        LLCMESIProtocol(CacheDataHandler *cache, const std::string &fsm_path, int coreId, vector<int> sharedMemId);
         ~LLCMESIProtocol();
 
         void createDefaultCacheLine(uint64_t address, GenericCacheLine *cache_line) override;

@@ -8,7 +8,7 @@
 
 #include "../../header/ReplacementPolicies/Random.h"
 
-namespace octopus
+namespace ns3
 {
     Random::Random(uint32_t ways_count) : ReplacementPolicy(ways_count)
     {

@@ -1,7 +1,8 @@
-add_library(Octopus_core
+add_library(CMSpec_core
    
             ClockManager.cpp
             tinyxmlparser.cpp
+            CacheController_End2End.cpp
             ExternalCPU.cpp
             Logger.cpp
             CPU.cpp
@@ -9,23 +10,23 @@ add_library(Octopus_core
             FSMReader.cpp
             MCoreSimProject.cc
             tinystr.cpp
+            CacheController.cpp
             CacheDataHandler_COTS.cpp
             GenericCacheLine.cpp
-        #     MCsimInterface.cpp
+            MCsimInterface.cpp
+            RequestorsQueues.cpp
             tinyxml.cpp
+            CacheControllerExclusive.cpp
             CacheSim.cpp
             IdGenerator.cc
             MainMemoryController.cpp
             tinyxmlerror.cpp
             CommandLine.cpp
-            Configurable.cpp
-            CLParser.cpp
-            DebugPrint.cpp
     )
 
     add_subdirectory(Arbiters)
-    add_subdirectory(CacheControllers)
     add_subdirectory(Interconnect)
     add_subdirectory(Protocols)
     add_subdirectory(ReplacementPolicies)
-    add_subdirectory(SystemConfigurations)
+    add_subdirectory(MCsim/src)
+    add_subdirectory(MCsim/dram)

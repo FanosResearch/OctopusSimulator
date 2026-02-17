@@ -9,9 +9,9 @@
 #include "../../header/Protocols/PMESIProtocol.h"
 using namespace std;
 
-namespace octopus
+namespace ns3
 {
-    PMESIProtocol::PMESIProtocol(CacheDataHandler *cache, const string &fsm_path, int id, int sharedMemId) : MESIProtocol(cache, fsm_path, id, sharedMemId)
+    PMESIProtocol::PMESIProtocol(CacheDataHandler *cache, const string &fsm_path, int coreId, vector<int> sharedMemId) : MESIProtocol(cache, fsm_path, coreId, sharedMemId)
     {
     }
 
@@ -19,7 +19,7 @@ namespace octopus
     {
     }
 
-    vector<ControllerAction> PMESIProtocol::handleAction(vector<int> &actions, Message &msg,
+    vector<ControllerAction> &PMESIProtocol::handleAction(vector<int> &actions, Message &msg,
                                                           GenericCacheLine &cache_line_info, int next_state)
     {
         bool putm_non_demanding = false;
@@ -32,7 +32,7 @@ namespace octopus
                 break;
             }
         }
-        std::vector<ControllerAction> controller_actions = MSIProtocol::handleAction(actions, msg, cache_line_info, next_state);
+        MSIProtocol::handleAction(actions, msg, cache_line_info, next_state);
 
         if (putm_non_demanding == true)
         {
@@ -43,11 +43,11 @@ namespace octopus
                                                          msg.addr,                          //Addr
                                                          0,                                 //Cycle
                                                          (uint16_t)ActionId::PutM_nonDem,   //Complementary_value
-                                                         (uint16_t)this->m_id);        //Owner
-            ((Message*)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+                                                         (uint16_t)this->m_core_id);        //Owner
+            ((Message*)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id[0]);
 
-            controller_actions.push_back(controller_action);
+            this->controller_actions.push_back(controller_action);
         }
-        return controller_actions;
+        return this->controller_actions;
     }
 }

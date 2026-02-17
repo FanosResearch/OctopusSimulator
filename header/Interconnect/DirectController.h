@@ -18,7 +18,7 @@
 
 using namespace std;
 
-namespace octopus
+namespace ns3
 {
     class DirectController
     {

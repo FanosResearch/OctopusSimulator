@@ -8,7 +8,7 @@
 
 #include "../../header/Arbiters/FCFSArbiter.h"
 
-namespace octopus
+namespace ns3
 {
     FCFSArbiter::FCFSArbiter(vector<int> *candidates_ids, int arbiter_period) : Arbiter(candidates_ids, arbiter_period)
     {

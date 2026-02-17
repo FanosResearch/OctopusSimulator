@@ -15,7 +15,7 @@
 
 #include <string>
 
-namespace octopus
+namespace ns3
 {
     class Policy
     {    

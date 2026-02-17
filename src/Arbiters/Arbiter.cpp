@@ -8,7 +8,7 @@
 
 #include "../../header/Arbiters/Arbiter.h"
 
-namespace octopus
+namespace ns3
 {
     Arbiter::Arbiter(vector<int> *candidates_ids, int arbiter_period)
     {

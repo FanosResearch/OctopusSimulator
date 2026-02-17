@@ -1,9 +1,7 @@
-target_include_directories(Octopus_core PUBLIC 
+target_include_directories(CMSpec_core PUBLIC 
                             .
                             Arbiters/
-                            CacheControllers/
                             Interconnect/
                             MCsim/
                             Protocols/
-                            ReplacementPolicies/
-                            SystemConfigurations/)
+                            ReplacementPolicies/)

@@ -9,7 +9,7 @@
 #include "../header/FSMReader.h"
 
 using namespace std;
-namespace octopus
+namespace ns3
 {
     FSMReader::FSMReader(const string &fsmPath)
     {
@@ -18,7 +18,7 @@ namespace octopus
 
         if (!fsmFile.is_open())
         {
-            cout << "ERROR: Can't open FSM CSV file" << endl;
+            cout << "ERROR: Can't open FSM CSV file "<< fsmPath<< endl;
             exit(0);
         }
 

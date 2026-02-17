@@ -7,11 +7,12 @@
  */
 
 #include "../../header/Protocols/MSIProtocol.h"
+#include "../../header/RequestorsQueues.h"
 using namespace std;
 
-namespace octopus
+namespace ns3
 {
-    MSIProtocol::MSIProtocol(CacheDataHandler *cache, const string &fsm_path, int id, int sharedMemId) : CoherenceProtocolHandler(cache, fsm_path, id, sharedMemId)
+    MSIProtocol::MSIProtocol(CacheDataHandler *cache, const string &fsm_path, int coreId, vector<int> sharedMemId) : CoherenceProtocolHandler(cache, fsm_path, coreId, sharedMemId)
     {
     }
 
@@ -24,7 +25,11 @@ namespace octopus
         GenericCacheLine cache_line;
         m_data_handler->readLineBits(msg.addr, &cache_line);
 
-        if (this->m_fsm->isStall(cache_line.state, msg.complementary_value))
+        Message msg_copy = msg;
+        EventId event_id;
+        this->readEvent(msg_copy, &event_id);
+
+        if (this->m_fsm->isStall(cache_line.state, (int)event_id))
             return FRFCFS_State::NonReady;
 
         return FRFCFS_State::Ready;
@@ -37,7 +42,7 @@ namespace octopus
         return states;
     }
 
-    vector<ControllerAction> MSIProtocol::processRequest(Message &request_msg, DebugPrint* dprint)
+    const vector<ControllerAction> &MSIProtocol::processRequest(Message &request_msg)
     {
         EventId event_id;
         int next_state;
@@ -52,29 +57,10 @@ namespace octopus
         return handleAction(actions, request_msg, cache_line, next_state);
     }
 
-    vector<ControllerAction> MSIProtocol::handleAction(std::vector<int> &actions, Message &msg,
+    vector<ControllerAction> &MSIProtocol::handleAction(std::vector<int> &actions, Message &msg,
                                                         GenericCacheLine &cache_line, int next_state)
     {
-        std::vector<ControllerAction> controller_actions;
-
-        if (!((actions.size() > 0) && (actions[0] == (int)ActionId::Stall))) //Skip cache line update if the action is stall
-        {
-            // update cache line
-            ControllerAction controller_action;
-
-            cache_line.valid = this->m_fsm->isValidState(next_state);
-            cache_line.state = next_state;
-
-            controller_action.type = ControllerAction::Type::UPDATE_CACHE_LINE;
-            controller_action.data = (void *)new uint8_t[sizeof(Message) + sizeof(cache_line)];
-
-            new (controller_action.data) Message(msg);
-            new ((uint8_t *)controller_action.data + sizeof(Message)) GenericCacheLine(cache_line);
-
-            controller_actions.push_back(controller_action);
-        }
-
-
+        this->controller_actions.clear();
         for (int action : actions)
         {
             ControllerAction controller_action;
@@ -84,19 +70,16 @@ namespace octopus
                 controller_action.type = ControllerAction::Type::STALL;
                 controller_action.data = (void *)new Message();
                 ((Message *)controller_action.data)->copy(msg);
-                // std::cout << " MSIProtocol: Stall Transaction is detected" << std::endl;
-                // exit(0);
+                 std::cout << " MSIProtocol: Stall Transaction is detected" << std::endl;
+                 exit(0);
                 break;
 
             case ActionId::Hit: // remove request from pending and respond to cpu, update cache line
                 controller_action.type = (msg.source == Message::Source::LOWER_INTERCONNECT)
                                              ? ControllerAction::Type::HIT_Action
                                              : ControllerAction::Type::REMOVE_PENDING;
-                controller_action.data = (void *)new Message(msg);
-                controller_actions.push_back(controller_action);
-
-                controller_action.type = ControllerAction::Type::MODIFY_DATA;
-                controller_action.data = (void *)new Message(msg);
+                controller_action.data = (void *)new Message();
+                ((Message *)controller_action.data)->copy(msg);
                 break;
 
             case ActionId::GetS:
@@ -105,7 +88,7 @@ namespace octopus
                 controller_action.type = ControllerAction::Type::ADD_PENDING;
                 controller_action.data = (void *)new Message();
                 ((Message *)controller_action.data)->copy(msg);
-                controller_actions.push_back(controller_action);
+                this->controller_actions.push_back(controller_action);
 
                 // send Bus request, update cache line
                 controller_action.type = ControllerAction::Type::SEND_BUS_MSG;
@@ -114,9 +97,9 @@ namespace octopus
                                                              0,          // Cycle
                                                              (action == (int)ActionId::GetS) ? MSIProtocol::REQUEST_TYPE_GETS
                                                                                              : MSIProtocol::REQUEST_TYPE_GETM, // Complementary_value
-                                                             (uint16_t)this->m_id);                                       // Owner
+                                                             (uint16_t)this->m_core_id);                                       // Owner
 
-                ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+                ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id[addrMapping(msg.addr)]);
                 break;
             case ActionId::PutM:
                 // send Bus request, update cache line
@@ -125,8 +108,8 @@ namespace octopus
                                                              msg.addr,                       // Addr
                                                              0,                              // Cycle
                                                              MSIProtocol::REQUEST_TYPE_PUTM, // Complementary_value
-                                                             (uint16_t)this->m_id);     // Owner
-                ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+                                                             (uint16_t)this->m_core_id);     // Owner
+                ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id[addrMapping(msg.addr)]);
                 break;
 
             case ActionId::Data2Req:
@@ -136,11 +119,9 @@ namespace octopus
                 controller_action.data = (void *)new Message(msg);
 
                 ((Message *)controller_action.data)->to.clear();
-                if (action == (int)ActionId::Data2Both)
-                    ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
-                
-                controller_actions.insert(controller_actions.begin(), controller_action);
-                continue;
+                if (action == (int)ActionId::Data2Both){
+                    ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id[addrMapping(msg.addr)]);
+                }
                 break;
 
             case ActionId::SaveReq:
@@ -154,15 +135,32 @@ namespace octopus
                 break;
 
             case ActionId::Fault:
-                std::cout << " MSIProtocol: Fault Transaction is detected" << std::endl;
+                std::cout << " MSIProtocol: Fault Transaction is detected"<< " msg_id "<< msg.msg_id <<" core "<< this->m_core_id<< " owner "<<msg.owner<<" source "<< (int)msg.source<< std::endl;
                 exit(0);
                 break;
             }
 
-            controller_actions.push_back(controller_action);
+            this->controller_actions.push_back(controller_action);
         }
 
-        return controller_actions;
+        if ((actions.size() > 0) && (actions[0] == (int)ActionId::Stall))
+            return this->controller_actions;
+
+        // update cache line
+        ControllerAction controller_action;
+
+        cache_line.valid = this->m_fsm->isValidState(next_state);
+        cache_line.state = next_state;
+
+        controller_action.type = ControllerAction::Type::UPDATE_CACHE_LINE;
+        controller_action.data = (void *)new uint8_t[sizeof(Message) + sizeof(cache_line)];
+
+        new (controller_action.data) Message(msg);
+        new ((uint8_t *)controller_action.data + sizeof(Message)) GenericCacheLine(cache_line);
+
+        this->controller_actions.push_back(controller_action);
+
+        return this->controller_actions;
     }
 
     void MSIProtocol::readEvent(Message &msg, EventId *out_id)
@@ -170,20 +168,8 @@ namespace octopus
         switch (msg.source)
         {
         case Message::Source::LOWER_INTERCONNECT:
-            *out_id = (msg.complementary_value == 0) ? EventId::Load : EventId::Store;
+            *out_id = (msg.complementary_value == 0) ? EventId::Load : (msg.complementary_value == 1) ? EventId::Store : EventId::Replacement;
             return;
-        
-        case Message::Source::SELF:
-            if (msg.owner == m_id)
-            {
-                *out_id = EventId::Replacement;
-                return;
-            }
-            else
-            {
-                std::cout << " LLCMSIDirectory: Invalid Transaction" << std::endl;
-                exit(0);
-            }   
 
         case Message::Source::UPPER_INTERCONNECT:
             if (msg.data != NULL)
@@ -194,13 +180,13 @@ namespace octopus
                 switch (msg.complementary_value)
                 {
                 case MSIProtocol::REQUEST_TYPE_GETS:
-                    *out_id = (msg.owner == m_id) ? EventId::Own_GetS : EventId::Other_GetS;
+                    *out_id = (msg.owner == m_core_id) ? EventId::Own_GetS : EventId::Other_GetS;
                     return;
                 case MSIProtocol::REQUEST_TYPE_GETM:
-                    *out_id = (msg.owner == m_id) ? EventId::Own_GetM : EventId::Other_GetM;
+                    *out_id = (msg.owner == m_core_id) ? EventId::Own_GetM : EventId::Other_GetM;
                     return;
                 case MSIProtocol::REQUEST_TYPE_PUTM:
-                    *out_id = (msg.owner == m_id) ? EventId::Own_PutM : EventId::Other_PutM;
+                    *out_id = (msg.owner == m_core_id) ? EventId::Own_PutM : EventId::Other_PutM;
                     return;
                 case MSIProtocol::REQUEST_TYPE_INV:
                     *out_id = EventId::Invalidation;

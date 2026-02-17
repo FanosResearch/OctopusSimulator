@@ -14,6 +14,7 @@
 #include <string.h>
 #include "tinyxml.h"
 #include "CacheXml.h"
+#include <vector>
 
 using namespace std;
 
@@ -27,19 +28,21 @@ private:
     int  m_cpuFIFOSize;
     int  m_busFIFOSize;
     int  m_cach2Cache;
+    string m_memSystem;
     string m_cohProtocol;
+    string m_sysPath;
+    string m_loggerPath;
     int m_outOfOrderStages;
 
     list<CacheXml> m_privateCaches;
-    CacheXml m_sharedCache;
-    // L1BusCnfgXml m_L1BusCnfg;
+    list<CacheXml> m_sharedCaches;
     
     int m_dramSimEnable;
-    int m_dramId;
+    vector <int> m_dramId;
     string m_dramModle;
     int m_dramLatcy;
     int m_dramOutstandReq;
-    int m_dramctrlClkNanoSec;
+    double m_dramctrlClkNanoSec;
     int m_dramctrlClkSkew; 
     
      
@@ -63,12 +66,12 @@ public:
         m_privateCaches = privateCaches;
     }
 
-    CacheXml GetSharedCache() {
-       return m_sharedCache;
+    list <CacheXml> GetSharedCache() {
+       return m_sharedCaches;
     }
 
-    void SetSharedCache(CacheXml sharedCache) {
-      m_sharedCache = sharedCache;
+    void SetSharedCache(list<CacheXml> sharedCache) {
+      m_sharedCaches = sharedCache;
     }
   
     void SetBMsPath (string fileName) {
@@ -110,14 +113,6 @@ public:
     int GetBusFIFOSize () {
       return m_busFIFOSize;
     }
- 
-    // L1BusCnfgXml GetL1BusCnfg() {
-    //    return m_L1BusCnfg;
-    // }
-
-    // void SetL1BusCnfg(L1BusCnfgXml l1BusCnfg) {
-    //    m_L1BusCnfg = l1BusCnfg;
-    // }
 
     int GetNumberOfRuns() {
       return m_numberOfRuns;
@@ -171,11 +166,11 @@ public:
       return m_dramOutstandReq;
     }
   
-    int GetDRAMId () {
+    vector <int> GetDRAMId () {
       return m_dramId;
     }
     
-    int GetDRAMCtrlClkNanoSec () {
+    double GetDRAMCtrlClkNanoSec () {
       return m_dramctrlClkNanoSec;
     }
 
@@ -184,8 +179,21 @@ public:
     }
     
     string GetCohrProtType () {
+      cout<<"m_cohProtocol= "<<m_cohProtocol<<endl;
       return m_cohProtocol;
     }  
+
+    string GetsysPath () {
+      return m_sysPath;
+    }
+
+    string GetmemSystem () {
+      return m_memSystem;
+    }  
+    
+    string GetLoggerPath () {
+      return m_loggerPath;
+    } 
 
     int GetOutOfOrderStages () {
       return m_outOfOrderStages;
@@ -196,20 +204,19 @@ public:
        m_numberOfRuns       = 1;
        m_totalTimeInSeconds = 5;
        m_runTillSimEnd      = 0;
-       m_busClkNanoSec      = 100;
+       m_busClkNanoSec      = 1;
        m_nCores             = 4;
        m_cpuFIFOSize        = 6;
        m_busFIFOSize        = 6;
        m_cach2Cache         = true;
        m_privateCaches      = list<CacheXml> ();
-       m_sharedCache        = CacheXml ();
-      //  m_L1BusCnfg          = L1BusCnfgXml ();
+       m_sharedCaches       = list<CacheXml> ();
        m_dramSimEnable      = 0;
        m_dramOutstandReq    = 4;
        m_dramModle          = "FIXEDLat";
        m_dramLatcy          = 100;
-       m_dramId             = 200;
-       m_dramctrlClkNanoSec = 100;
+       m_dramId.push_back( 200);
+       m_dramctrlClkNanoSec = 1;
        m_dramctrlClkSkew    = 0;
        
        // read configuration parameters from xml file
@@ -227,6 +234,9 @@ public:
           rootPtr->QueryIntAttribute("busFIFOSize", &m_busFIFOSize);
           rootPtr->QueryIntAttribute("Cache2Cache", &m_cach2Cache );     
           rootPtr->QueryStringAttribute("CohProtocol", &m_cohProtocol); 
+          rootPtr->QueryStringAttribute("sysPath", &m_sysPath);
+          rootPtr->QueryStringAttribute("memSystem", &m_memSystem); 
+          rootPtr->QueryStringAttribute("loggerPath", &m_loggerPath); 
           std::cout << "DEBUG COH Protocol Name in XML header: "<< m_cohProtocol << std::endl;
           rootPtr->QueryIntAttribute("OutOfOrderStages", &m_outOfOrderStages);
           
@@ -236,7 +246,6 @@ public:
           if (interConnectRootPtr) {
              TiXmlElement* L1BusCnfgPtr = interConnectRootPtr->FirstChildElement("L1BusCnfg");
              TiXmlHandle L1BusCnfgHandle = TiXmlHandle(L1BusCnfgPtr);
-            //  m_L1BusCnfg.LoadFromXml(L1BusCnfgHandle);
           }
           
           // get L1 Cache Configuration parameters
@@ -257,24 +266,34 @@ public:
           TiXmlElement* sharedCachesRootPtr = sharedCachesRoot.Element();
 
           if (sharedCachesRootPtr) {
-             TiXmlElement* sharedCachePtr = sharedCachesRootPtr->FirstChildElement("sharedCache");
-             TiXmlHandle sharedCacheHandle = TiXmlHandle(sharedCachePtr);
-             m_sharedCache.LoadFromXml(sharedCacheHandle);
+             //TiXmlElement* sharedCachePtr = sharedCachesRootPtr->FirstChildElement("sharedCache");
+             //TiXmlHandle sharedCacheHandle = TiXmlHandle(sharedCachePtr);
+             //m_sharedCache.LoadFromXml(sharedCacheHandle);
+
+            TiXmlElement* sharedCachePtr = sharedCachesRootPtr->FirstChildElement("sharedCache");
+            for (; sharedCachePtr; sharedCachePtr = sharedCachePtr->NextSiblingElement()) {
+              CacheXml newSharedCache;
+              TiXmlHandle sharedCacheHandle = TiXmlHandle(sharedCachePtr);
+              newSharedCache.LoadFromXml(sharedCacheHandle);
+              m_sharedCaches.push_back(newSharedCache);
+            }
           }           
        
           TiXmlHandle DRAMCnfgRoot = root.FirstChildElement("DRAMCnfg");
           TiXmlElement* DRAMCnfgRootPtr = DRAMCnfgRoot.Element();
           if (DRAMCnfgRootPtr) {
-            DRAMCnfgRootPtr->QueryIntAttribute   ("DRAMId", &m_dramId                       );
+            DRAMCnfgRootPtr->QueryIntAttribute   ("DRAMId", &m_dramId[0]                       );
             DRAMCnfgRootPtr->QueryIntAttribute   ("DRAMSIMEnable", &m_dramSimEnable         );
             DRAMCnfgRootPtr->QueryStringAttribute("MEMMODLE", &m_dramModle                  );
             DRAMCnfgRootPtr->QueryIntAttribute   ("MEMLATENCY", &m_dramLatcy                );
             DRAMCnfgRootPtr->QueryIntAttribute   ("MEMOutsandingReqs", &m_dramOutstandReq   );
-            DRAMCnfgRootPtr->QueryIntAttribute   ("ctrlClkNanoSec" , &m_dramctrlClkNanoSec  );
+            //DRAMCnfgRootPtr->QueryIntAttribute   ("ctrlClkNanoSec" , &m_dramctrlClkNanoSec  );
             DRAMCnfgRootPtr->QueryIntAttribute   ("ctrlClkSkew"    , &m_dramctrlClkSkew     );
           }
                           
        }
+       else 
+           cout<<"TiXmlElement* rootPtr is NULL\n";
     } // void LoadFromXml
 
 };

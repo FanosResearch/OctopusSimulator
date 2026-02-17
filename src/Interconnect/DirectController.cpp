@@ -9,7 +9,7 @@
 #include "../../header/Interconnect/DirectController.h"
 
 using namespace std;
-namespace octopus
+namespace ns3
 {
     DirectController::DirectController(vector<CommunicationInterface *> *interfaces)
     {

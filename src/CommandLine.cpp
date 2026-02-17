@@ -36,7 +36,7 @@
  * ns3::CommandLine implementation.
  */
 
-namespace octopus {
+namespace ns3 {
 
 CommandLine::CommandLine ()
   : m_NNonOptions (0),
@@ -684,4 +684,4 @@ operator << (std::ostream & os, const CommandLine & cmd)
   return os;
 }
 
-} // namespace octopus
+} // namespace ns3

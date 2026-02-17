@@ -11,7 +11,7 @@
 
 #include <stdint.h>
 
-namespace octopus
+namespace ns3
 {
     class ReplacementPolicy
     {    
@@ -20,7 +20,7 @@ namespace octopus
 
     public:
         ReplacementPolicy(uint32_t ways_count) { m_ways_count = ways_count; }
-        virtual ~ReplacementPolicy(){}
+        ~ReplacementPolicy(){}
 
         virtual void update(uint64_t set, int way, uint64_t cycle) = 0;
         virtual void getReplacementCandidate(uint64_t set, int* way) = 0;

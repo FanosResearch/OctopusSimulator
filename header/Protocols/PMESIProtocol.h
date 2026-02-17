@@ -11,7 +11,7 @@
 
 #include "MESIProtocol.h"
 
-namespace octopus
+namespace ns3
 {
     class PMESIProtocol : public MESIProtocol
     {
@@ -29,11 +29,11 @@ namespace octopus
             PutM_nonDem,
         };
 
-        virtual std::vector<ControllerAction> handleAction(std::vector<int> &actions, Message &msg,
+        virtual std::vector<ControllerAction> &handleAction(std::vector<int> &actions, Message &msg,
                                                             GenericCacheLine &cache_line_info, int next_state) override;
 
     public:
-        PMESIProtocol(CacheDataHandler *cache, const std::string &fsm_path, int id, int sharedMemId);
+        PMESIProtocol(CacheDataHandler *cache, const std::string &fsm_path, int coreId, vector<int> sharedMemId);
         ~PMESIProtocol();
     };
 }

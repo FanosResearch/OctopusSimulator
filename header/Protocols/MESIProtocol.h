@@ -11,7 +11,7 @@
 
 #include "MSIProtocol.h"
 
-namespace octopus
+namespace ns3
 {
     class MESIProtocol : public MSIProtocol
     {
@@ -31,6 +31,7 @@ namespace octopus
             Other_PutM,
 
             OwnData,
+            Invalidation,
             OwnData_Execlusive,
         };
 
@@ -51,11 +52,11 @@ namespace octopus
         virtual std::vector<int> statesRequireWriteBack() override;
         virtual void readEvent(Message &msg, MSIProtocol::EventId *out_id) override;
         
-        virtual std::vector<ControllerAction> handleAction(std::vector<int> &actions, Message &msg,
+        virtual std::vector<ControllerAction> &handleAction(std::vector<int> &actions, Message &msg,
                                                             GenericCacheLine &cache_line_info, int next_state) override;
 
     public:
-        MESIProtocol(CacheDataHandler *cache, const std::string &fsm_path, int id, int sharedMemId);
+        MESIProtocol(CacheDataHandler *cache, const std::string &fsm_path, int coreId, vector<int> sharedMemId);
         ~MESIProtocol();
     };
 }

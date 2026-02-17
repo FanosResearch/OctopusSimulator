@@ -11,7 +11,7 @@
 
 #include "GenericCache.h"
 
-namespace octopus
+namespace ns3
 {
     class LLCTimerCacheFrmt : public GenericCacheLine
     {

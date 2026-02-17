@@ -11,7 +11,7 @@
 
 #include "CoherenceProtocolHandler.h"
 
-namespace octopus
+namespace ns3
 {
     class MSIProtocol : public CoherenceProtocolHandler
     {
@@ -53,18 +53,20 @@ namespace octopus
             Fault
         };
 
+        std::vector<ControllerAction> controller_actions; //used only for returning data
+
         virtual std::vector<int> statesRequireWriteBack();
 
         virtual void readEvent(Message &msg, EventId *out_id);
 
-        virtual std::vector<ControllerAction> handleAction(std::vector<int> &actions, Message &msg,
+        virtual std::vector<ControllerAction> &handleAction(std::vector<int> &actions, Message &msg,
                                                             GenericCacheLine &cache_line, int next_state);
 
     public:
-        MSIProtocol(CacheDataHandler *cache, const std::string &fsm_path, int id, int sharedMemId);
+        MSIProtocol(CacheDataHandler *cache, const std::string &fsm_path, int coreId, vector<int> sharedMemId);
         ~MSIProtocol();
 
-        virtual std::vector<ControllerAction> processRequest(Message &request_msg, DebugPrint* dprint = NULL) override;
+        virtual const std::vector<ControllerAction> &processRequest(Message &request_msg) override;
         virtual FRFCFS_State getRequestState(const Message &, FRFCFS_State) override;
     };
 }

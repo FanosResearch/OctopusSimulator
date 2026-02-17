@@ -14,20 +14,25 @@
 #include "MCoreSimProjectXml.h"
 #include "FRFCFS_Buffer.h"
 
-#include "MCsim.h"
+#include "MCsim/MCsim.h"
 
-namespace octopus
+namespace ns3
 {
     class MCsimInterface : public ClockedObj
     {
     protected:
         int m_id;
-        int m_llc_id;
+        vector <int> m_llc_id;
         int m_llc_line_size;
+
+        double m_dt;
+        double m_clk_skew;
         
         uint64_t m_clk_cycle;
         uint64_t m_read_count;
         uint64_t m_write_count;
+        bool m_log_enable;
+        string m_loggerPath;
 
         vector<Message> m_pending_requests;
         vector<Message> m_output_buffer;
@@ -45,13 +50,20 @@ namespace octopus
         virtual void read_callback(unsigned, uint64_t, uint64_t);
         virtual void write_callback(unsigned, uint64_t, uint64_t);
 
+        unsigned int addrMapping (uint64_t addr);
+
+
     public:
-        MCsimInterface(MCoreSimProjectXml &projectXml, CommunicationInterface *lower_interface, int llc_id);
+
+        MCsimInterface(MCoreSimProjectXml &projectXml, CommunicationInterface *lower_interface, vector<int> llc_id);
         ~MCsimInterface();
 
         virtual void init();
 
         virtual FRFCFS_State getRequestState(const Message &, FRFCFS_State);
+
+        MCsim::RequestorsQueues *m_requestors_queues;
+
     };
 }
 

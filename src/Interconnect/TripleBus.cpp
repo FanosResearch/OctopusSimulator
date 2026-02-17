@@ -8,23 +8,22 @@
 
 #include "../../header/Interconnect/TripleBus.h"
 
-namespace octopus 
+namespace ns3
 {
-    TripleBus::TripleBus(ParametersMap map, string pname, string config_path, string name) : Bus(map, NULL, pname, config_path, name)
+    TripleBus::TripleBus(list<CacheXml> &lower_level_caches, list<CacheXml> &upper_level_caches, int buffers_max_size) : Bus()
     {
-        //Parameters initialization
-        vector<int> upper_level_cache_ids = std::get<vector<int>>(parameters.at(STRINGIFY(upper_level_cache_ids)).value);
-        int buffers_max_size = std::get<int>(parameters.at(STRINGIFY(buffers_max_size)).value);
-       
-       //Constructor
-       m_interfaces.clear();
-       m_topology.clear();
+        for (list<CacheXml>::iterator iter = upper_level_caches.begin(); iter != upper_level_caches.end(); iter++)
+        {
+            CacheXml cache_info = *iter;
+            m_interfaces.push_back(new TripleBusInterface(cache_info.GetCacheId(), buffers_max_size));
+        }
 
-        for (auto id : upper_level_cache_ids)
-            m_interfaces.push_back(new TripleBusInterface(id, buffers_max_size));
-
-        for (auto id : m_lower_level_ids)
-            m_interfaces.push_back(new TripleBusInterface(id, buffers_max_size));
+        for (list<CacheXml>::iterator iter = lower_level_caches.begin(); iter != lower_level_caches.end(); iter++)
+        {
+            CacheXml cache_info = *iter;
+            m_interfaces.push_back(new TripleBusInterface(cache_info.GetCacheId(), buffers_max_size));
+            m_lower_level_ids.push_back(cache_info.GetCacheId());
+        }
 
         for (int i = 0; i < (int)m_interfaces.size(); i++)
         {
@@ -37,8 +36,7 @@ namespace octopus
             }
         }
 
-        interconnect_controller = new TripleBusController(getSubMap(STRINGIFY(interconnect_controller)), 
-                                                          &m_interfaces, &m_lower_level_ids, parent_name + "." + name);
+        interconnect_controller = new TripleBusController(&m_interfaces, &m_lower_level_ids, lower_level_caches.begin()->GetmemArb());
     }
 
     TripleBus::~TripleBus()

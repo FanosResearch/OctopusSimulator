@@ -31,7 +31,7 @@
  * ns3::CommandLine declaration.
  */
 
-namespace octopus {
+namespace ns3 {
 
 class CommandLine
 {
@@ -372,14 +372,14 @@ namespace CommandLineHelper {
     
   
   
-} // namespace octopus
+} // namespace ns3
 
 
 /********************************************************************
  *  Implementation of the templates declared above.
  ********************************************************************/
 
-namespace octopus {
+namespace ns3 {
 
 template <typename T>
 void 
@@ -480,6 +480,6 @@ CommandLineHelper::UserItemParse (const std::string value, T & val)
  */
 std::ostream & operator << (std::ostream & os, const CommandLine & cmd);
 
-} // namespace octopus
+} // namespace ns3
 
 #endif /* COMMAND_LINE_H */

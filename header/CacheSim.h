@@ -9,28 +9,30 @@
 #ifndef _CacheSim_H
 #define _CacheSim_H
 
-#include "Configurable.h"
-#include "MultiCoreSystem.h"
-#include "MultiCoreSystem_Mesh.h"
+#include "tinyxml.h"
+#include "MCoreSimProjectXml.h"
+#include "MCoreSimProject.h"
 #include "ClockManager.h"
 
-#include <string>
-#include <vector>
+// #include <thread>
 
-namespace octopus
+namespace ns3
 {
     class CacheSim
     {
     private:
-        Configurable* system_config;
+        // std::thread* simulator_thread;
+        MCoreSimProject* project;
 
     public:
-        CacheSim(std::string system_name, std::vector<std::string> cl_params, bool print_config = false);
+        CacheSim(const char *config_file_path, const char *output_logs_path);
         ~CacheSim();
-
-        void run();
         void step();
+        void run();
+        void join();
     };
+
+
 }
 
 #endif /* _CacheSim_H */

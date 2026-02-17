@@ -9,10 +9,9 @@
 #include "../../header/Interconnect/TripleBusController.h"
 
 using namespace std;
-namespace octopus
+namespace ns3
 {
-    TripleBusController::TripleBusController(ParametersMap map, vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids,
-        string pname, string config_path, string name) : SplitBusController(map, interfaces, lower_level_ids, pname, config_path, name)
+    TripleBusController::TripleBusController(vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids, string memArb) : SplitBusController(interfaces, lower_level_ids, memArb)
     {
     }
 

@@ -8,20 +8,12 @@
 
 #include "../../header/Interconnect/DirectInterconnect.h"
 
-namespace octopus
+namespace ns3
 {
-    DirectInterconnect::DirectInterconnect(ParametersMap map, int upper_id, int lower_id, string pname, string config_path, string name) : 
-        ClockedObj(0), Configurable(map, config_path, name, pname) 
+    DirectInterconnect::DirectInterconnect(int lower_id, int upper_id, int buffers_max_size) : ClockedObj(1)
     {
         m_interconnect_cycle = 1;
         m_interconnect_cycle_edges = 1;
-
-        //Parameters initialization
-        int buffers_max_size = std::get<int>(parameters.at(STRINGIFY(buffers_max_size)).value);
-        m_clk_period = std::get<int>(parameters.at(STRINGIFY(m_clk_period)).value);
-
-        //Constructor
-        dprint = new DebugPrint(getSubMap(STRINGIFY(dprint)), name, parent_name + "." + name);
 
         m_interfaces.push_back(new BusInterface(lower_id, buffers_max_size));
         m_interfaces.push_back(new BusInterface(upper_id, buffers_max_size));

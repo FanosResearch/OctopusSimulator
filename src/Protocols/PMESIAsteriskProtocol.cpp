@@ -9,9 +9,9 @@
 #include "../../header/Protocols/PMESIAsteriskProtocol.h"
 using namespace std;
 
-namespace octopus
+namespace ns3
 {
-    PMESIAsteriskProtocol::PMESIAsteriskProtocol(CacheDataHandler *cache, const string &fsm_path, int id, int sharedMemId) : MESIProtocol(cache, fsm_path, id, sharedMemId)
+    PMESIAsteriskProtocol::PMESIAsteriskProtocol(CacheDataHandler *cache, const string &fsm_path, int coreId, vector<int> sharedMemId) : MESIProtocol(cache, fsm_path, coreId, sharedMemId)
     {
     }
 
@@ -24,7 +24,7 @@ namespace octopus
         MESIProtocol::readEvent(msg, out_id);
 
         if ((MESIProtocol::EventId)*out_id == MESIProtocol::EventId::OwnData)
-            *out_id = (MSIProtocol::EventId)((msg.to[0] == this->m_shared_memory_id) ? EventId::RDM : EventId::RDC);
+            *out_id = (MSIProtocol::EventId)((msg.to[0] == this->m_shared_memory_id[0]) ? EventId::RDM : EventId::RDC);
         else if ((MESIProtocol::EventId)*out_id == MESIProtocol::EventId::OwnData_Execlusive)
             *out_id = (MSIProtocol::EventId) EventId::RDM_Execlusive;
     }

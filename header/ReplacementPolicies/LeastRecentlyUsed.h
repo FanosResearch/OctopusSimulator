@@ -15,7 +15,7 @@
 #include <vector>
 #include <map>
 
-namespace octopus
+namespace ns3
 {
     class LeastRecentlyUsed : public ReplacementPolicy
     {

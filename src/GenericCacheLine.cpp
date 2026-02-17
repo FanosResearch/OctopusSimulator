@@ -8,7 +8,7 @@
 
 #include "../header/GenericCacheLine.h"
 
-namespace octopus
+namespace ns3
 {
     GenericCacheLine::GenericCacheLine()
     {
@@ -22,8 +22,8 @@ namespace octopus
         state = 0;
         owner_id = -1;
 
-        m_block_size = 0;
-        m_data = NULL;
+        m_block_size = 64;
+        m_data = new uint8_t[m_block_size / 8];
     }
 
     GenericCacheLine::GenericCacheLine(int state, bool valid, uint64_t tag,
@@ -83,6 +83,7 @@ namespace octopus
         // this->tag = line.tag;
         this->state = line.state;
         this->owner_id = line.owner_id;
+        this->dirty = line.dirty;
 
         this->m_block_size = line.m_block_size;
     }
@@ -90,24 +91,17 @@ namespace octopus
     void GenericCacheLine::copyData(const uint8_t *data)
     {
         if (m_data == NULL)
-            m_data = new uint8_t[m_block_size];
+            m_data = new uint8_t[m_block_size / 8];   // Convert block_size from bits to bytes
 
-        memcpy(m_data, data, m_block_size);
+        memcpy(m_data, data, m_block_size / 8);       // Convert block_size from bits to bytes
     }
 
-    void GenericCacheLine::modifyData(const uint8_t *data, uint16_t offset, uint16_t size)
+    bool GenericCacheLine::isDirty()
     {
-        if (m_data == NULL)
-        {
-            std::cout << "GenericCacheLine: Error modifying unallocated line" << std::endl;
-            exit(0); 
-        }
-        if(offset > m_block_size)
-        {
-            std::cout << "GenericCacheLine: Error out of boundary access" << std::endl;
-            exit(0); 
-        }
-
-        memcpy(&m_data[offset], data, size);
+        return dirty;
+    }
+    void GenericCacheLine::setDirty()
+    {
+        dirty = true;
     }
 }

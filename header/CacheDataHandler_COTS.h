@@ -13,7 +13,7 @@
 
 #include <map>
 
-namespace octopus
+namespace ns3
 {
     class CacheDataHandler_COTS : public CacheDataHandler
     {
@@ -48,9 +48,7 @@ namespace octopus
         }
 
     public:
-        CacheDataHandler_COTS(ParametersMap map, string pname = "",
-                              string config_path = string(CONFIGURATION_PATH),
-                              string name = STRINGIFY(CacheDataHandler_COTS));
+        CacheDataHandler_COTS(CacheXml &cacheXml, ReplacementPolicy* policy);
         virtual ~CacheDataHandler_COTS();
 
         virtual void writeLine2MSHR(uint64_t address, GenericCacheLine *line);

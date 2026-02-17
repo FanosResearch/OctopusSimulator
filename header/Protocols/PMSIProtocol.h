@@ -11,7 +11,7 @@
 
 #include "MSIProtocol.h"
 
-namespace octopus
+namespace ns3
 {
     class PMSIProtocol : public MSIProtocol
     {
@@ -29,11 +29,11 @@ namespace octopus
             PutM_nonDem,
         };
 
-        virtual std::vector<ControllerAction> handleAction(std::vector<int> &actions, Message &msg,
+        virtual std::vector<ControllerAction> &handleAction(std::vector<int> &actions, Message &msg,
                                                             GenericCacheLine &cache_line_info, int next_state) override;
 
     public:
-        PMSIProtocol(CacheDataHandler *cache, const std::string &fsm_path, int id, int sharedMemId);
+        PMSIProtocol(CacheDataHandler *cache, const std::string &fsm_path, int coreId, vector<int> sharedMemId);
         ~PMSIProtocol();
     };
 }

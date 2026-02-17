@@ -13,7 +13,7 @@
 
 using namespace std;
 
-namespace octopus
+namespace ns3
 {
     class UnifiedBusController : public BusController
     {
@@ -25,10 +25,7 @@ namespace octopus
         virtual void requestBusStep(uint64_t cycle_number);
 
     public:
-        UnifiedBusController(ParametersMap map, vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids,
-                             string pname = "",
-                             string config_path = string(CONFIGURATION_PATH) + string(INTERCONNECT),
-                             string name = STRINGIFY(UnifiedBusController));
+        UnifiedBusController(vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids, string memArb);
         ~UnifiedBusController();
 
         virtual void busStep(uint64_t cycle_number) override;

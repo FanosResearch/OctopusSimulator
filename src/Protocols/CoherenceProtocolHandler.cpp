@@ -9,14 +9,14 @@
 #include "../../header/Protocols/CoherenceProtocolHandler.h"
 using namespace std;
 
-namespace octopus
+namespace ns3
 {
-    CoherenceProtocolHandler::CoherenceProtocolHandler(CacheDataHandler *cache, const string &fsm_path, int id, int sharedMemId)
+    CoherenceProtocolHandler::CoherenceProtocolHandler(CacheDataHandler *cache, const string &fsm_path, int coreId, vector<int> sharedMemId)
     {
         this->m_data_handler = cache;
         this->m_fsm = new FSMReader(fsm_path);
-
-        this->m_id = id;
+        fsm_type = fsm_path;
+        this->m_core_id = coreId;
         this->m_shared_memory_id = sharedMemId;
     }
 
@@ -30,5 +30,12 @@ namespace octopus
         //of the invalid state is different than "I"
         int initState = this->m_fsm->getState(string("I"));
         m_data_handler->initializeCacheStates(initState);
+    }
+
+    unsigned int CoherenceProtocolHandler::addrMapping (uint64_t addr)
+    {
+        unsigned int pos = 17; //bit number+1
+        unsigned int numBits = 3;
+        return (((1 << numBits) - 1) & (addr >> (pos - 1)));
     }
 }

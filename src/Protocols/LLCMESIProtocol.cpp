@@ -9,9 +9,9 @@
 #include "../../header/Protocols/LLCMESIProtocol.h"
 using namespace std;
 
-namespace octopus
+namespace ns3
 {
-    LLCMESIProtocol::LLCMESIProtocol(CacheDataHandler *cache, const string &fsm_path, int id, int sharedMemId) : LLCMSIProtocol(cache, fsm_path, id, sharedMemId)
+    LLCMESIProtocol::LLCMESIProtocol(CacheDataHandler *cache, const string &fsm_path, int coreId, vector<int> sharedMemId) : LLCMSIProtocol(cache, fsm_path, coreId, sharedMemId)
     {
     }
 
@@ -19,11 +19,10 @@ namespace octopus
     {
     }
 
-    vector<ControllerAction> LLCMESIProtocol::handleAction(vector<int> &actions, Message &msg,
+    vector<ControllerAction> &LLCMESIProtocol::handleAction(vector<int> &actions, Message &msg,
                                                             GenericCacheLine &cache_line_info, int next_state)
     {
         bool execlusiveData = false;
-        
         for (int i = 0; i < (int)actions.size(); i++)
         {
             if (actions[i] == (int)ActionId::SendExeclusiveData)
@@ -33,7 +32,7 @@ namespace octopus
                 break;
             }
         }
-        std::vector<ControllerAction> controller_actions = LLCMSIProtocol::handleAction(actions, msg, cache_line_info, next_state);
+        LLCMSIProtocol::handleAction(actions, msg, cache_line_info, next_state);
 
         if (execlusiveData == true)
         {
@@ -41,13 +40,16 @@ namespace octopus
 
             controller_action.type = ControllerAction::Type::REMOVE_PENDING;
             controller_action.data = (void *)new Message;
+            // SA: fix for MESI, set the msg destination to the msg owner
             ((Message *)controller_action.data)->copy(msg);
+            ((Message *)controller_action.data)->to.clear();
+            ((Message *)controller_action.data)->to.push_back(msg.owner);
             ((Message *)controller_action.data)->complementary_value = 2; //execlusive Data
             
-            controller_actions.push_back(controller_action);
+            this->controller_actions.push_back(controller_action);
         }
 
-        return controller_actions;
+        return this->controller_actions;
     }
 
     void LLCMESIProtocol::createDefaultCacheLine(uint64_t address, GenericCacheLine *cache_line)

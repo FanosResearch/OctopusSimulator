@@ -9,24 +9,20 @@
 #include "../../header/Interconnect/UnifiedBusController.h"
 
 using namespace std;
-namespace octopus
+namespace ns3
 {
-    UnifiedBusController::UnifiedBusController(ParametersMap map, vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids, 
-        string pname, string config_path, string name) : BusController(map, interfaces, lower_level_ids, pname, config_path, name)
+    UnifiedBusController::UnifiedBusController(vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids, string memArb)
+        : BusController(interfaces, lower_level_ids, memArb)
     {
-        string arbiter_type = std::get<string>(parameters.at(STRINGIFY(arbiter_type)).value);
-        
-        if(arbiter_type == STRINGIFY(TDMArbiter))
+        if (memArb == "TDM")
             m_arbiters.push_back(new TDMArbiter(m_lower_level_ids, m_request_latency + m_response_latency));
-        else if(arbiter_type == STRINGIFY(FCFSArbiter))
-            m_arbiters.push_back(new FCFSArbiter(m_lower_level_ids, m_request_latency + m_response_latency));
-        else if(arbiter_type == STRINGIFY(RRArbiter))
+        else if (memArb == "RR")
             m_arbiters.push_back(new RRArbiter(m_lower_level_ids, m_request_latency + m_response_latency));
-        else
-        {
-            cout << "Error: there is no matching arbiter" << endl;
-            exit(0);
-        }
+        else if (memArb == "RROF")
+            m_arbiters.push_back(new RROFArbiter(m_lower_level_ids, m_request_latency + m_response_latency));
+        else if (memArb == "FCFS" || memArb == "FRFCFS")
+            m_arbiters.push_back(new FCFSArbiter(m_lower_level_ids, m_request_latency + m_response_latency));
+
 
         clk_in_slot = 0;
         message_available = false;
