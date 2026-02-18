@@ -56,10 +56,12 @@ bool RequestorsQueues::addRequest(unsigned int coreID, unsigned int requestID,un
 	if (oldest_requestorsQueues[coreID].size() > 0)
 	{
 		younger_requestorsQueues[coreID].push_back(make_pair(requestID,phase));
+		requestIndex[requestID] = make_pair(coreID, true); // isYounger=true
 	}
 	else
 	{
 		oldest_requestorsQueues[coreID].push_back(make_pair(requestID,phase));
+		requestIndex[requestID] = make_pair(coreID, false); // isYounger=false
 		WCL_logger[requestID][0] = clock;
 	}
 	return true;
@@ -70,6 +72,7 @@ bool RequestorsQueues::add2UnifiedQueue(unsigned int coreID, unsigned int reques
 	if(pr_promote)
 	{
 		unifyQueue.push_back(make_pair(requestID, make_pair(reqAddr, coreID)));
+		unifyMap[requestID] = make_pair(reqAddr, coreID);
 		return true;
 	}
 	return false;
@@ -91,15 +94,13 @@ unsigned int RequestorsQueues::getRequest(unsigned int coreID, unsigned int slot
 			DEBUG("Error RequestorsQueues: getRequest: oldest queue is empty for core " << coreID);
 			return 0;
 		}
-		for (auto x : unifyQueue)
+		unsigned int reqID = oldest_requestorsQueues[coreID].begin()->first;
+		auto it = unifyMap.find(reqID);
+		if (it != unifyMap.end())
 		{
-			if (x.first == oldest_requestorsQueues[coreID].begin()->first)
-			{
-				*orig_coreID = x.second.second;
-				break;
-			}
+			*orig_coreID = it->second.second;
 		}
-		return oldest_requestorsQueues[coreID].begin()->first;
+		return reqID;
 	}
 	else
 	{
@@ -127,22 +128,38 @@ bool RequestorsQueues::isCoreExist(unsigned int coreID)
 
 int RequestorsQueues::isRequestExist(unsigned int coreID, unsigned int requestID, unsigned int *core, bool *vector) //returns the request slot
 {
-	for (unsigned int x =0 ; x<younger_requestorsQueues[coreID].size(); x++)
+	// Use requestIndex for O(1) lookup, but preserve original search semantics:
+	// Original searches younger[coreID] first, then ALL oldest queues.
+	auto idxIt = requestIndex.find(requestID);
+	if (idxIt == requestIndex.end())
+		return -1;
+
+	unsigned int foundCore = idxIt->second.first;
+	bool isYounger = idxIt->second.second;
+
+	// Original only searched younger queue of the GIVEN coreID (not foundCore)
+	if (isYounger && foundCore == coreID)
 	{
-		if (younger_requestorsQueues[coreID][x].first == requestID)
+		auto &q = younger_requestorsQueues[coreID];
+		for (unsigned int x = 0; x < q.size(); x++)
 		{
-			if (core) *core = coreID;
-			if (vector) *vector = 1; // if in oldests requests vectors->0, in younger requests vectors->1
-			return x; // absolute index of request, whether it is oldest or younger
+			if (q[x].first == requestID)
+			{
+				if (core) *core = coreID;
+				if (vector) *vector = 1;
+				return x;
+			}
 		}
 	}
-	for(auto it = oldest_requestorsQueues.begin(); it != oldest_requestorsQueues.end(); ++it)
+	// Original searched ALL oldest queues regardless of coreID
+	if (!isYounger)
 	{
-		for (unsigned int x = 0; x < it->second.size(); x++)
+		auto &q = oldest_requestorsQueues[foundCore];
+		for (unsigned int x = 0; x < q.size(); x++)
 		{
-			if (it->second[x].first == requestID)
+			if (q[x].first == requestID)
 			{
-				if (core) *core = it->first;
+				if (core) *core = foundCore;
 				if (vector) *vector = 0;
 				return x;
 			}
@@ -164,6 +181,8 @@ void RequestorsQueues::clearRequests()
 	}
 	younger_requestorsQueues.clear();
 	oldest_requestorsQueues.clear();
+	unifyMap.clear();
+	requestIndex.clear();
 }
 
 // Remove the served request, completed request, access with core ID
@@ -179,8 +198,10 @@ void RequestorsQueues::removeRequest(unsigned int coreID, unsigned int requestID
 		if (younger_requestorsQueues[core][index].second == 0)
 		{
 			younger_requestorsQueues[core].erase(younger_requestorsQueues[core].begin()+index);
+			requestIndex.erase(requestID);
 			if(pr_promote)
 			{
+				unifyMap.erase(requestID);
 				for (auto x=unifyQueue.begin(); x!= unifyQueue.end();x++)
 				{
 					if (x->first == requestID)
@@ -198,8 +219,10 @@ void RequestorsQueues::removeRequest(unsigned int coreID, unsigned int requestID
 		if (oldest_requestorsQueues[core][index].second == 0)
 		{
 			oldest_requestorsQueues[core].erase(oldest_requestorsQueues[core].begin()+index);
+			requestIndex.erase(requestID);
 			if(pr_promote)
 			{
+				unifyMap.erase(requestID);
 				for(auto x=unifyQueue.begin() ; x!= unifyQueue.end(); x++)
 				{
 					if(x->first == requestID)
@@ -211,11 +234,13 @@ void RequestorsQueues::removeRequest(unsigned int coreID, unsigned int requestID
 			}
 			if (oldest_requestorsQueues[core].size() == 0)
 			{
-				RROrder.erase(remove(RROrder.begin(), RROrder.end(), core), RROrder.end()); 
+				RROrder.erase(remove(RROrder.begin(), RROrder.end(), core), RROrder.end());
 				if (younger_requestorsQueues[core].size() > 0)
 				{
 					RROrder.push_back(core); //re-add in RR Queue if there are more standing requests
 					oldest_requestorsQueues[core].push_back(younger_requestorsQueues[core][0]);
+					// Update requestIndex: promoted request is now oldest
+					requestIndex[younger_requestorsQueues[core][0].first] = make_pair(core, false);
 					younger_requestorsQueues[core].erase(younger_requestorsQueues[core].begin());
 					if (WCL_logger.find(requestID) != WCL_logger.end())
 					{
@@ -311,13 +336,11 @@ void RequestorsQueues::ifOldest_promote(unsigned int coreID, unsigned int reques
 
 		if (oldest_requestorsQueues[coreID].size()==1 && oldest_requestorsQueues[coreID][0].first == requestID) // oldest request is stalled
 		{
-			for(auto x:unifyQueue)
+			// O(1) lookup for stalled request's cache line address
+			auto mapIt = unifyMap.find(requestID);
+			if (mapIt != unifyMap.end())
 			{
-				if(x.first == requestID)
-				{
-					Request_cl = x.second.first;
-					break;
-				}
+				Request_cl = mapIt->second.first;
 			}
 
 			for (auto it = unifyQueue.begin(); it != unifyQueue.end();it++) //get first request with the same CL but not the same reqID
@@ -336,6 +359,8 @@ void RequestorsQueues::ifOldest_promote(unsigned int coreID, unsigned int reques
 						unsigned int younger_req_removal = younger_requestorsQueues[younger_req_core][younger_req_indx].second;
 						oldest_requestorsQueues[coreID].insert(oldest_requestorsQueues[coreID].end()-1,make_pair(younger_req_id,younger_req_removal));
 						younger_requestorsQueues[younger_req_core].erase(younger_requestorsQueues[younger_req_core].begin()+younger_req_indx);
+						// Update requestIndex: promoted from younger to oldest (in coreID's queue)
+						requestIndex[younger_req_id] = make_pair(coreID, false);
 					}
 				}
 			}

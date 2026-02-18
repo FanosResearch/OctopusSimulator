@@ -12,6 +12,7 @@
 #include "Arbiter.h"
 #include "../RequestorsQueues.h"
 #include <iostream>
+#include <unordered_map>
 
 using namespace std;
 

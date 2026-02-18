@@ -10,7 +10,7 @@
 
 namespace ns3
 {
-   RROFArbiter::RROFArbiter(vector<int> *candidates_ids, int arbiter_period) : Arbiter(candidates_ids, arbiter_period) 
+   RROFArbiter::RROFArbiter(vector<int> *candidates_ids, int arbiter_period) : Arbiter(candidates_ids, arbiter_period)
     {
 		RR_order =0;
 		Requestors_num=0;
@@ -26,6 +26,20 @@ namespace ns3
 
     bool RROFArbiter::elect(uint64_t cycle_number, vector<vector<Message>*>& buffers, Message *out_msg)
     {
+		// Early exit: if all buffers are empty, nothing to elect
+		size_t totalBufMsgs = 0;
+		for (int i = 0; i < (int)buffers.size(); i++)
+			totalBufMsgs += buffers[i]->size();
+		if (totalBufMsgs == 0)
+			return false;
+
+		// Build buffer index for O(1) candidate lookup: msg_id -> (buffer_idx, position)
+		std::unordered_map<uint64_t, std::pair<int,int>> bufferIndex;
+		bufferIndex.reserve(totalBufMsgs);
+		for (int i = 0; i < (int)buffers.size(); i++)
+			for (int j = 0; j < (int)buffers[i]->size(); j++)
+				bufferIndex[(*buffers[i])[j].msg_id] = {i, j};
+
 		exitVector.clear();
 		exitFlag = false;
 		msg_index =-1;
@@ -49,16 +63,14 @@ namespace ns3
 					{
 						candidate_id = RequestorsQueues::getReqQObj()->getRequestorsQueues()->getRequest(RR_order, slot, &orig_core);
 
-						for(int i = 0; i < (int)buffers.size(); i++)
+						auto it = bufferIndex.find((uint64_t)candidate_id);
+						if (it != bufferIndex.end())
 						{
-							msg_index = findRequest(*buffers[i], candidate_id);
-							if(msg_index != -1)
-							{
-								out_msg->copy(buffers[i]->at(msg_index));
-								buffers[i]->erase(buffers[i]->begin() + msg_index);
-								//std::cout <<"RROF: msgindex: " << msg_index << std::endl;
-								return true;
-							}
+							int buf_idx = it->second.first;
+							int pos = it->second.second;
+							out_msg->copy(buffers[buf_idx]->at(pos));
+							buffers[buf_idx]->erase(buffers[buf_idx]->begin() + pos);
+							return true;
 						}
 					}
 					else
@@ -78,10 +90,9 @@ namespace ns3
 				}
 			}
 		}
-		//cout<< "TERMINATING "<<endl;
 		return false;
     }
-	
+
 	int RROFArbiter::findRequest(vector<Message>& buffer, int id) //request id
     {
         for(int i = 0; i < (int)buffer.size(); i++)

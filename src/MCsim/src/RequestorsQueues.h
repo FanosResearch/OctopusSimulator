@@ -4,6 +4,7 @@
 #include <vector>
 #include <utility>
 #include <map>
+#include <unordered_map>
 #include <iostream>
 #include <algorithm>
 
@@ -25,7 +26,9 @@ namespace MCsim
 		vector <unsigned int> RROrder; // RR order <cores ID>
 
 		vector<pair<unsigned int, pair<unsigned int,unsigned int>> > unifyQueue; // unified queue for all the cores <reqID, <CL address. CoreID>>
-		
+		unordered_map<unsigned int, pair<unsigned int,unsigned int>> unifyMap; // reqID → (addr, coreID) — O(1) lookup mirror of unifyQueue
+		unordered_map<unsigned int, pair<unsigned int, bool>> requestIndex; // reqID → (coreID, isYounger) — O(1) existence check
+
 		//static int n = 9;// 0arrival_time, 1req_bus, 2resp_bus1, 3LLC_access1, 4LLC_DRAM_bus, 5DRAM_access, 6LLC_access2, 7resp_bus2, 8smax
 		typedef map <unsigned int, uint64_t> latencies; 
 
