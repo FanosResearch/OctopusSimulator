@@ -103,6 +103,19 @@ namespace ns3
             if(returned_msg.data != NULL)
             {
                 msg->copy(returned_msg.data);
+                // Track rollback as a "DRAM response" equivalent
+                if (m_shared_memory_id[0] == 100)
+                {
+                    m_dram_resp_all_ids.insert((uint64_t)msg->msg_id);
+                    m_dram_req_sent[(uint64_t)msg->msg_id] = msg->addr; // mark as "sent" (via rollback)
+                }
+                // Fix: Update msg.to to this LLC bank's own ID before pushing to RX.
+                // The message was created with to=[DRAM_ID] (100) for the GetData action.
+                // The destination filter in addRequests2ProcessingQueue checks msg.to
+                // against m_core_id — without this fix, the rollback response is discarded
+                // because 100 != LLC bank ID, causing a permanent deadlock.
+                msg->to.clear();
+                msg->to.push_back((uint16_t)this->m_core_id);
                 m_upper_interface->pushMessage2RX(*msg, MessageType::DATA_RESPONSE);
 
                 if (end_to_end)

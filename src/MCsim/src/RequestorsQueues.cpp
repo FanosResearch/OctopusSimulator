@@ -72,6 +72,7 @@ bool RequestorsQueues::add2UnifiedQueue(unsigned int coreID, unsigned int reques
 	if(pr_promote)
 	{
 		unifyQueue.push_back(make_pair(requestID, make_pair(reqAddr, coreID)));
+		unifyIterMap[requestID] = std::prev(unifyQueue.end());
 		unifyMap[requestID] = make_pair(reqAddr, coreID);
 		return true;
 	}
@@ -181,6 +182,8 @@ void RequestorsQueues::clearRequests()
 	}
 	younger_requestorsQueues.clear();
 	oldest_requestorsQueues.clear();
+	unifyQueue.clear();
+	unifyIterMap.clear();
 	unifyMap.clear();
 	requestIndex.clear();
 }
@@ -202,13 +205,11 @@ void RequestorsQueues::removeRequest(unsigned int coreID, unsigned int requestID
 			if(pr_promote)
 			{
 				unifyMap.erase(requestID);
-				for (auto x=unifyQueue.begin(); x!= unifyQueue.end();x++)
+				auto uit = unifyIterMap.find(requestID);
+				if (uit != unifyIterMap.end())
 				{
-					if (x->first == requestID)
-					{
-						unifyQueue.erase(x);
-						break;
-					}
+					unifyQueue.erase(uit->second);
+					unifyIterMap.erase(uit);
 				}
 			}
 		}
@@ -223,17 +224,21 @@ void RequestorsQueues::removeRequest(unsigned int coreID, unsigned int requestID
 			if(pr_promote)
 			{
 				unifyMap.erase(requestID);
-				for(auto x=unifyQueue.begin() ; x!= unifyQueue.end(); x++)
+				auto uit = unifyIterMap.find(requestID);
+				if (uit != unifyIterMap.end())
 				{
-					if(x->first == requestID)
-					{
-						unifyQueue.erase(x);
-						break;
-					}
+					unifyQueue.erase(uit->second);
+					unifyIterMap.erase(uit);
 				}
 			}
 			if (oldest_requestorsQueues[core].size() == 0)
 			{
+				// Always log and erase WCL_logger for the completed request
+				if (WCL_logger.find(requestID) != WCL_logger.end())
+				{
+					printLogger (core, requestID);
+					WCL_logger.erase(requestID);
+				}
 				RROrder.erase(remove(RROrder.begin(), RROrder.end(), core), RROrder.end());
 				if (younger_requestorsQueues[core].size() > 0)
 				{
@@ -242,12 +247,7 @@ void RequestorsQueues::removeRequest(unsigned int coreID, unsigned int requestID
 					// Update requestIndex: promoted request is now oldest
 					requestIndex[younger_requestorsQueues[core][0].first] = make_pair(core, false);
 					younger_requestorsQueues[core].erase(younger_requestorsQueues[core].begin());
-					if (WCL_logger.find(requestID) != WCL_logger.end())
-					{
-						printLogger (core, requestID);
-						WCL_logger.erase(requestID);						
-						WCL_logger [oldest_requestorsQueues[core][0].first][0] = clock;						
-					}
+					WCL_logger [oldest_requestorsQueues[core][0].first][0] = clock;
 				}
 			}
 		}
@@ -349,7 +349,7 @@ void RequestorsQueues::ifOldest_promote(unsigned int coreID, unsigned int reques
 				unsigned int younger_req_id = it->first;
 				unsigned int younger_req_cl = it->second.first;
 				if (younger_req_id==requestID) break;
-				if (younger_req_cl == Request_cl)  
+				if (younger_req_cl == Request_cl)
 				{	bool vector;
 					unsigned int core;
 					int younger_req_indx = isRequestExist(younger_req_core, younger_req_id, &core, &vector);

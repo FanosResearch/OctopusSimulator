@@ -13,6 +13,7 @@
 #include "CommunicationInterface.h"
 #include "MCoreSimProjectXml.h"
 #include "FRFCFS_Buffer.h"
+#include "CacheController.h"
 
 #include "MCsim/MCsim.h"
 
@@ -35,6 +36,7 @@ namespace ns3
         string m_loggerPath;
 
         vector<Message> m_pending_requests;
+        vector<Message> m_pending_writes;
         vector<Message> m_output_buffer;
         
         CommunicationInterface *m_lower_interface; // A pointer to the lower Interface FIFO
@@ -64,6 +66,8 @@ namespace ns3
 
         MCsim::RequestorsQueues *m_requestors_queues;
 
+        void dumpDiagnostics();
+        bool m_dump_done;
     };
 }
 

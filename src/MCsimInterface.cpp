@@ -8,6 +8,7 @@
 
 #include "../header/MCsimInterface.h"
 #include "../header/RequestorsQueues.h"
+#include "../header/Interconnect/BusInterface.h"
 
 namespace ns3
 {
@@ -24,6 +25,7 @@ namespace ns3
 
         m_read_count = 0;
         m_write_count = 0;
+        m_dump_done = false;
 
         m_lower_interface = lower_interface;
 
@@ -64,6 +66,12 @@ namespace ns3
         processLogic();
         m_mcsim->update();
 
+        if (CacheController::s_global_dump_triggered && !m_dump_done)
+        {
+            m_dump_done = true;
+            dumpDiagnostics();
+        }
+
         m_clk_cycle++;
     }
 
@@ -87,10 +95,11 @@ namespace ns3
                     m_pending_requests.push_back(ready_msg);
                 else
                 {
-                    // Write request (dirty writeback from LLC): remove tracking now
-                    // that DRAM has accepted it. This was deferred from performWriteBack
-                    // so the RROF arbiter on the LLC-DRAM bus could find the message.
-                    RequestorsQueues::getReqQObj()->getRequestorsQueues()->removeRequest(ready_msg.owner, ready_msg.msg_id);
+                    // Track pending writes so write_callback can remove from RequestorsQueues.
+                    // For RROF, CommandScheduler_RROF also removes after WR CAS (harmless double-remove).
+                    // For FRFCFS, this is the only removal path — without it, dirty writebacks
+                    // leak in RequestorsQueues, causing unbounded queue growth.
+                    m_pending_writes.push_back(ready_msg);
                 }
             }
             else
@@ -170,24 +179,19 @@ namespace ns3
 
     void MCsimInterface::write_callback(unsigned id, uint64_t address, uint64_t clock_cycle)
     {
-        // bool found = false;
-        // for (int i = 0; i < (int) m_pending_requests.size(); i++)
-        // {
-        //     if (m_pending_requests[i].addr == address)
-        //     {
-                m_write_count++;
-        //        cout << "Cachsim: write req: "<< m_write_count << " "<<address <<endl;
-        //         m_pending_requests.erase(m_pending_requests.begin() + i);
-        //         found = true;
-        //         break;
-        //     }
-        // }
-        
-        // if(!found)
-        // {
-        //     cout << "MCsimInterface: Error read_callback couldn't find the pending request" << endl;
-        //     exit(0);
-        // }
+        m_write_count++;
+
+        for (int i = 0; i < (int)m_pending_writes.size(); i++)
+        {
+            if (m_pending_writes[i].addr == address)
+            {
+                // Guard: RROF's CommandScheduler may have already removed this write
+                if (m_requestors_queues->isRequestExist(m_pending_writes[i].owner, m_pending_writes[i].msg_id, NULL, NULL) >= 0)
+                    m_requestors_queues->removeRequest(m_pending_writes[i].owner, m_pending_writes[i].msg_id);
+                m_pending_writes.erase(m_pending_writes.begin() + i);
+                return;
+            }
+        }
     }
 
     unsigned int MCsimInterface::addrMapping (uint64_t addr)
@@ -195,5 +199,48 @@ namespace ns3
         unsigned int pos = 17;
         unsigned int numBits = 3;
         return (((1 << numBits) - 1) & (addr >> (pos - 1)));
+    }
+
+    void MCsimInterface::dumpDiagnostics()
+    {
+        cout << "\n=== MCsimInterface (id=" << m_id << " cycle=" << m_clk_cycle << ") ===" << endl;
+        cout << "  ProcessingQueue: size=" << m_processing_queue->getSize() << endl;
+        cout << "  PendingDRAMReads: " << m_pending_requests.size() << endl;
+        for (int i = 0; i < min((int)m_pending_requests.size(), 20); i++)
+        {
+            cout << "    [" << i << "] msg_id=" << m_pending_requests[i].msg_id
+                 << " addr=0x" << hex << m_pending_requests[i].addr << dec
+                 << " owner=" << m_pending_requests[i].owner
+                 << " LLC_bank=" << m_llc_id[addrMapping(m_pending_requests[i].addr)]
+                 << endl;
+        }
+        cout << "  OutputBuffer: " << m_output_buffer.size() << endl;
+        for (int i = 0; i < min((int)m_output_buffer.size(), 10); i++)
+        {
+            cout << "    [" << i << "] msg_id=" << m_output_buffer[i].msg_id
+                 << " addr=0x" << hex << m_output_buffer[i].addr << dec
+                 << " owner=" << m_output_buffer[i].owner
+                 << " to=[";
+            for (int k = 0; k < (int)m_output_buffer[i].to.size(); k++)
+            {
+                if (k > 0) cout << ",";
+                cout << m_output_buffer[i].to[k];
+            }
+            cout << "]" << endl;
+        }
+
+        // Dump lower interface (Point2Point bus side)
+        BusInterface *bi = static_cast<BusInterface*>(m_lower_interface);
+        if (bi)
+        {
+            cout << "  LowerInterface(id=" << bi->m_interface_id << "):" << endl;
+            cout << "    TX_req=" << bi->getTxReqSize()
+                 << " TX_resp=" << bi->getTxRespSize()
+                 << " RX_req=" << bi->getRxReqSize()
+                 << " RX_resp=" << bi->getRxRespSize() << endl;
+        }
+
+        cout << "  Total reads completed: " << m_read_count << endl;
+        cout << "  Total writes completed: " << m_write_count << endl;
     }
 }

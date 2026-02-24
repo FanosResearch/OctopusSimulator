@@ -17,6 +17,7 @@ namespace MCsim
 			bool add2UnifiedQueue(unsigned int coreID, unsigned int requestID, unsigned int reqAddr);
 			unsigned int getRequest(unsigned int coreID, unsigned int slot, unsigned int *orig_coreID);
 			void removeRequest(unsigned int coreID, unsigned int requestID);
+			int isRequestExist(unsigned int coreID, unsigned int requestID, unsigned int *core, bool *vector);
 			void setRemovalCount(unsigned int coreID, unsigned int requestID, unsigned int requestPhase);
 			unsigned int getRemovalCount(unsigned int coreID, unsigned int requestID);
 			unsigned int getRequestorSize(unsigned int coreID);
