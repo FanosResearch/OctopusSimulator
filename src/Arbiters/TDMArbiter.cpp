@@ -18,7 +18,7 @@ namespace ns3
     {
     }
 
-    bool TDMArbiter::coreElect(uint64_t cycle_number, vector<vector<Message> *> &buffers, Message *out_msg)
+    bool TDMArbiter::coreElect(uint64_t cycle_number, vector<deque<Message> *> &buffers, Message *out_msg)
     {
         uint64_t candidate_id = selectCandidate(cycle_number);
         for (int i = 0; i < (int)buffers.size(); i++)
@@ -35,7 +35,7 @@ namespace ns3
         return false;
     }
 
-    bool TDMArbiter::elect(uint64_t cycle_number, vector<vector<Message> *> &buffers, Message *out_msg)
+    bool TDMArbiter::elect(uint64_t cycle_number, vector<deque<Message> *> &buffers, Message *out_msg)
     {
         if ((cycle_number % m_arbiter_period) != 0)
             return false;
@@ -43,7 +43,7 @@ namespace ns3
         return coreElect(cycle_number, buffers, out_msg);
     }
 
-    bool TDMArbiter::forceElect(uint64_t cycle_number, vector<vector<Message> *> &buffers, Message *out_msg)
+    bool TDMArbiter::forceElect(uint64_t cycle_number, vector<deque<Message> *> &buffers, Message *out_msg)
     {
         return coreElect(cycle_number, buffers, out_msg);
     }

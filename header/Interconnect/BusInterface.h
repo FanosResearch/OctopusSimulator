@@ -12,6 +12,7 @@
 #include "CommunicationInterface.h"
 
 #include <vector>
+#include <deque>
 
 using namespace std;
 
@@ -23,10 +24,10 @@ namespace ns3
         int m_buffer_selector;
         int m_buffer_max_size;
 
-        vector<Message> m_tx_request_buffer;
-        vector<Message> m_tx_response_buffer;
-        vector<Message> m_rx_request_buffer;
-        vector<Message> m_rx_response_buffer;
+        deque<Message> m_tx_request_buffer;
+        deque<Message> m_tx_response_buffer;
+        deque<Message> m_rx_request_buffer;
+        deque<Message> m_rx_response_buffer;
 
     public:
         BusInterface(int id, int buffer_max_size);
@@ -36,7 +37,7 @@ namespace ns3
         virtual bool pushMessage(Message &msg, uint64_t cycle, MessageType type = MessageType::REQUEST) override;
         virtual bool pushMessage2RX(Message &msg, MessageType type = MessageType::REQUEST) override;
 
-        static void getCongregatedBuffers(vector<CommunicationInterface *>& interfaces, bool request_buffer, vector<vector<Message>*>* buffers);
+        static void getCongregatedBuffers(vector<CommunicationInterface *>& interfaces, bool request_buffer, vector<deque<Message>*>* buffers);
         
         virtual bool rollback(uint64_t address, uint64_t mask, Message *out_msg) override;
     };

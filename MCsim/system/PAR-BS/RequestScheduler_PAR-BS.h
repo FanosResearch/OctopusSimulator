@@ -15,8 +15,8 @@ namespace MCsim
 		unsigned int MarkingCap;
 		unsigned int bmax;
 		unsigned int rmax;
-		unsigned int markedMaxLoadPerProc[10];
-		unsigned int markedTotalLoadPerProc[10];
+		unsigned int markedMaxLoadPerProc[128];
+		unsigned int markedTotalLoadPerProc[128];
 		unsigned int localBcount;
 		unsigned int markedCnt;
 		Request *temp;

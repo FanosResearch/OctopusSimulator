@@ -55,7 +55,7 @@ namespace ns3
             if(disp_delay == 0)
                 cout << "\rElapsed time: \t" << current_time;
 
-            disp_delay = (disp_delay + 1) % 100;
+            disp_delay = (disp_delay + 1) % 10000;
         }
     }
 

@@ -18,7 +18,7 @@ namespace ns3
     {
     }
 
-    bool FCFSArbiter::elect(uint64_t cycle_number, vector<vector<Message> *> &buffers, Message *out_msg)
+    bool FCFSArbiter::elect(uint64_t cycle_number, vector<deque<Message> *> &buffers, Message *out_msg)
     {
         uint64_t min_cycle = 0xFFFFFFFFFFFFFFFF;
         int min_buffer_index = -1;
@@ -35,7 +35,7 @@ namespace ns3
         if (min_buffer_index != -1)
         {
             out_msg->copy(buffers[min_buffer_index]->at(0));
-            buffers[min_buffer_index]->erase(buffers[min_buffer_index]->begin());
+            buffers[min_buffer_index]->pop_front();
             return true;
         }
 

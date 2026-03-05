@@ -105,7 +105,7 @@ namespace ns3
                 {
                     message_available_upper = true;
                     elected_msg_upper = buffers_upper[i]->at(0);
-                    buffers_upper[i]->erase(buffers_upper[i]->begin());
+                    buffers_upper[i]->pop_front();
                     break;
                 }
                 message_available_upper = false;

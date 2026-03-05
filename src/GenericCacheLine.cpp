@@ -83,6 +83,7 @@ namespace ns3
         // this->tag = line.tag;
         this->state = line.state;
         this->owner_id = line.owner_id;
+        this->dirty = line.dirty;
 
         this->m_block_size = line.m_block_size;
     }
@@ -109,5 +110,15 @@ namespace ns3
         }
 
         memcpy(&m_data[offset], data, size);
+    }
+
+    bool GenericCacheLine::isDirty()
+    {
+        return dirty;
+    }
+
+    void GenericCacheLine::setDirty()
+    {
+        dirty = true;
     }
 }

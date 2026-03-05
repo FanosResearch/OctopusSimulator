@@ -17,6 +17,8 @@
 
 #include "MCsim.h"
 
+#include <deque>
+
 namespace ns3
 {
     class MCsimInterface : public ClockedObj
@@ -35,8 +37,9 @@ namespace ns3
         bool m_log_enable;
         string m_loggerPath;
 
-        vector<Message> m_pending_requests;
-        vector<Message> m_output_buffer;
+        deque<Message> m_pending_requests;
+        deque<Message> m_pending_writes;
+        deque<Message> m_output_buffer;
         
         CommunicationInterface *m_lower_interface; // A pointer to the lower Interface FIFO
 

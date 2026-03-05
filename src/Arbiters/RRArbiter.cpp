@@ -19,7 +19,7 @@ namespace ns3
     {
     }
 
-    bool RRArbiter::coreElect(vector<vector<Message> *> &buffers, Message *out_msg)
+    bool RRArbiter::coreElect(vector<deque<Message> *> &buffers, Message *out_msg)
     {
         for (int i = 0; i < (int)buffers.size(); i++)
         {
@@ -35,7 +35,7 @@ namespace ns3
         return false;
     }
 
-    bool RRArbiter::elect(uint64_t cycle_number, vector<vector<Message> *> &buffers, Message *out_msg)
+    bool RRArbiter::elect(uint64_t cycle_number, vector<deque<Message> *> &buffers, Message *out_msg)
     {
         for (int i = 0; i < (int)m_candidates_ids->size(); i++)
         {
@@ -46,7 +46,7 @@ namespace ns3
         return false;
     }
 
-    bool RRArbiter::forceElect(uint64_t cycle_number, vector<vector<Message> *> &buffers, Message *out_msg)
+    bool RRArbiter::forceElect(uint64_t cycle_number, vector<deque<Message> *> &buffers, Message *out_msg)
     {
         return coreElect(buffers, out_msg);
     }

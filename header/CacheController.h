@@ -31,7 +31,8 @@
 #include <string>
 #include <queue>
 #include <vector>
-#include <map>
+#include <deque>
+#include <unordered_map>
 
 namespace ns3
 {
@@ -52,6 +53,9 @@ namespace ns3
         int log_enable;
         int llc_nbnk;
 
+        MCsim::RequestorsQueues *m_rq_cached; // cached singleton
+        AddrMapping *m_addr_cached; // cached singleton
+
         CommunicationInterface *m_lower_interface; // A pointer to the lower Interface FIFO
         CommunicationInterface *m_upper_interface; // A pointer to the upper Interface FIFO
 
@@ -63,16 +67,16 @@ namespace ns3
 
         // key is the msg.addr & mask(nbits of CacheLineSize) and the value is queue of Messages
         // to ensure order of requests of the same cache line
-        std::map<uint64_t, std::queue<Message>> m_pending_cpu_requests;
+        std::unordered_map<uint64_t, std::queue<Message>> m_pending_cpu_requests;
 
         // key is the msg.addr & mask(nbits of CacheLineSize) and the value is request Message
-        std::map<uint64_t, Message> m_saved_requests_for_wb;
+        std::unordered_map<uint64_t, Message> m_saved_requests_for_wb;
 
         // key is the msg.m_id and the value is the Message that contains the data
-        std::map<uint64_t, Message> m_modifying_data_messages;
+        std::unordered_map<uint64_t, Message> m_modifying_data_messages;
 
-        std::vector<Message> m_data_access_buffer;
-        std::map<int, ControllerAction> m_data_access_action; // The map holds the action is required by the entry in m_data_array_queue (Key is the message id)
+        std::deque<Message> m_data_access_buffer;
+        std::unordered_map<int, ControllerAction> m_data_access_action; // The map holds the action is required by the entry in m_data_array_queue (Key is the message id)
         Arbiter *m_data_access_arbiter;
 
         std::map<uint64_t, std::ofstream> report_files; //core_id is the key, and the value is the report file handler
@@ -84,7 +88,7 @@ namespace ns3
 
         virtual uint64_t getAddressKey(uint64_t addr);
 
-        virtual void callActionFunction(ControllerAction);
+        virtual void callActionFunction(const ControllerAction &action);
 
         virtual void removePendingAndRespond(void *);
         virtual void hitAction(void *);

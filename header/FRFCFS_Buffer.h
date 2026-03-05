@@ -9,7 +9,7 @@
  #ifndef _FRFCFS_BUFFER_H
  #define _FRFCFS_BUFFER_H
  
- #include <vector>
+ #include <deque>
  #include <string>
  
  namespace ns3
@@ -34,7 +34,7 @@
              FRFCFS_State state;
          };
  
-         std::vector<Element> m_buffer;
+         std::deque<Element> m_buffer;
  
          TCallback *m_callback_owner;
          Callback_t m_check_state_callback; //called to determine the state of the elements
@@ -67,7 +67,7 @@
          {
              Element element = {.state = FRFCFS_State::Ready};
              element.item = item;
-             this->m_buffer.insert(this->m_buffer.begin(), element);
+             this->m_buffer.push_front(element);
              return true;
          }
  

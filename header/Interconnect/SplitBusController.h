@@ -21,12 +21,12 @@ namespace ns3
         int clk_in_slot_req;
         Message elected_msg_req;
         bool message_available_req;
-        vector<vector<Message> *> buffers_req;
-        
+        vector<deque<Message> *> buffers_req;
+
         int clk_in_slot_resp;
         Message elected_msg_resp;
         bool message_available_resp;
-        vector<vector<Message> *> buffers_resp;
+        vector<deque<Message> *> buffers_resp;
 
         virtual void requestBusStep(uint64_t cycle_number);
         virtual void responseBusStep(uint64_t cycle_number);

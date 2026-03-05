@@ -63,7 +63,7 @@ namespace MCsim
 		bool sw;
 		bool FR_open;
 		unsigned int id;
-		int blacklist[36];
+		int blacklist[128];
 		bool flag;
 	};
 } // namespace MCsim

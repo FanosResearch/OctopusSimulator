@@ -20,6 +20,7 @@
 #include <list>
 #include <vector>
 #include <map>
+#include <unordered_map>
 
 using namespace std;
 
@@ -29,6 +30,7 @@ namespace ns3
     {
     protected:
         vector<CommunicationInterface *> m_interfaces;
+        unordered_map<int, CommunicationInterface *> m_interface_map; // O(1) lookup by id
         vector<int> m_lower_level_ids;
         map<int, vector<int>> m_topology;
         string m_busArb;

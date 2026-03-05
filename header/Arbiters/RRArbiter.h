@@ -21,14 +21,14 @@ namespace ns3
         uint64_t candidate_id;
 
         virtual uint64_t selectCandidate(uint64_t cycle_number);
-        virtual bool coreElect(vector<vector<Message>*>& buffers, Message *out_msg);
-        
+        virtual bool coreElect(vector<deque<Message>*>& buffers, Message *out_msg);
+
     public:
         RRArbiter(vector<int>* candidates_ids, int arbiter_period);
         ~RRArbiter();
 
-        virtual bool elect(uint64_t cycle_number, vector<vector<Message>*>& buffers, Message *out_msg) override;
-        virtual bool forceElect(uint64_t cycle_number, vector<vector<Message>*>& buffers, Message *out_msg) override;
+        virtual bool elect(uint64_t cycle_number, vector<deque<Message>*>& buffers, Message *out_msg) override;
+        virtual bool forceElect(uint64_t cycle_number, vector<deque<Message>*>& buffers, Message *out_msg) override;
     };
 }
 

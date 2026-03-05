@@ -15,6 +15,7 @@ namespace ns3
     {
         this->m_data_handler = cache;
         this->m_fsm = new FSMReader(fsm_path);
+        this->fsm_type = fsm_path;
 
         this->m_core_id = coreId;
         this->m_shared_memory_id = sharedMemId;

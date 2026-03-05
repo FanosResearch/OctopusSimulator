@@ -18,8 +18,8 @@ namespace ns3
     class TripleBusInterface : public BusInterface
     {
     protected:
-        vector<Message> m_tx_service_buffer;
-        vector<Message> m_rx_service_buffer;
+        deque<Message> m_tx_service_buffer;
+        deque<Message> m_rx_service_buffer;
 
     public:
         TripleBusInterface(int id, int buffer_max_size);
@@ -30,7 +30,7 @@ namespace ns3
         virtual bool pushMessage(Message &msg, uint64_t cycle, MessageType type = MessageType::REQUEST) override;
         virtual bool pushMessage2RX(Message &msg, MessageType type = MessageType::REQUEST) override;
         
-        static void getCongregatedServiceBuffers(vector<CommunicationInterface *>& interfaces, vector<vector<Message>*>* buffers);
+        static void getCongregatedServiceBuffers(vector<CommunicationInterface *>& interfaces, vector<deque<Message>*>* buffers);
     };
 }
 

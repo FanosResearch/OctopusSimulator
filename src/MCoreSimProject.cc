@@ -8,6 +8,7 @@
 
 #include "../header/MCoreSimProject.h"
 #include "../header/AddrMapping.h"
+#include <sstream>
 // #include "simulator.h"
 
 using namespace std;
@@ -35,7 +36,10 @@ MCoreSimProject::MCoreSimProject(MCoreSimProjectXml projectXmlCfg)
     // Enable Log File Generation
     m_logFileGenEnable = projectXmlCfg.GetLogFileGenEnable();
 
-    setup1(projectXmlCfg);
+    if (!projectXmlCfg.GetBMsPath().empty())
+        setup2(projectXmlCfg); // Standalone mode: trace-driven CPUs
+    else
+        setup1(projectXmlCfg); // gem5 mode: ExternalCPUs
 }
 
 MCoreSimProject::~MCoreSimProject()
@@ -86,8 +90,8 @@ void MCoreSimProject::setup1(MCoreSimProjectXml projectXmlCfg)
     string path(path_array);
     int app_name_index = path.rfind(APP_NAME);
 
-    m_fsm_protocol_path = string("/workspaces/OctopusSimulator/Protocols_FSM/");
-    m_fsm_llc_protocol_path = string("/workspaces/OctopusSimulator/Protocols_FSM/");
+    m_fsm_protocol_path = path + string("/../Protocols_FSM/");
+    m_fsm_llc_protocol_path = path + string("/../Protocols_FSM/");
     cout <<"FSM path: " << m_fsm_protocol_path << endl;
 
     // Get Coherence protocol type
@@ -105,7 +109,7 @@ void MCoreSimProject::setup1(MCoreSimProjectXml projectXmlCfg)
         PrivateCacheXml.SetLLCBnk(m_llc_nbnks);
 
         DirectInterconnect *cpu_interconnect = new DirectInterconnect(-1, PrivateCacheXml.GetCacheId(), projectXmlCfg.GetCpuFIFOSize());
-        
+
         ExternalCPU* external_cpu = new ExternalCPU(PrivateCacheXml, cpu_interconnect->getInterfaceFor(-1));
         ExternalCPU::getExtCPUs()->emplace(PrivateCacheXml.GetCacheId(), external_cpu);
 
@@ -158,6 +162,108 @@ void MCoreSimProject::setup1(MCoreSimProjectXml projectXmlCfg)
 
     std::cout << " Set up Logger" << std::endl;
     Logger::getLogger()->registerReportPath(projectXmlCfg.GetLoggerPath()); 
+    Logger::getLogger()->setLogEnable(projectXmlCfg.GetLogFileGenEnable());
+}
+
+void MCoreSimProject::setup2(MCoreSimProjectXml projectXmlCfg)
+{
+    // Standalone mode: trace-driven CPUs reading from BMsPath
+
+    if(projectXmlCfg.GetmemSystem() == "RROF")
+        projectXmlCfg.SetglobalQueues_en(1);
+    if (projectXmlCfg.GetglobalQueues_en())
+        projectXmlCfg.Setmcsim_En(1);
+
+    m_globalQueues_en = projectXmlCfg.GetglobalQueues_en();
+    m_llc_nbnks = projectXmlCfg.GetLLCBnk();
+
+    AddrMapping::getAddrMapping()->set_partition_setup(projectXmlCfg.GetLLCPartition());
+    AddrMapping::getAddrMapping()->set_llc_nbnks(projectXmlCfg.GetLLCBnk());
+    AddrMapping::getAddrMapping()->set_ncores(projectXmlCfg.GetNumPrivCore());
+
+    m_cpuCacheCtrl = list<CacheController *>();
+
+    list<CacheXml> xmlPrivateCaches = projectXmlCfg.GetPrivateCaches();
+    list<CacheXml> xmlSharedCaches = projectXmlCfg.GetSharedCaches();
+
+    vector <int> xmlSharedCacheIDs;
+    for (auto SharedCacheXml : xmlSharedCaches)
+        xmlSharedCacheIDs.push_back(SharedCacheXml.GetCacheId());
+
+    AddrMapping::getAddrMapping()->set_cl_size(xmlSharedCaches.begin()->GetBlockSize());
+    AddrMapping::getAddrMapping()->set_bnk_size(xmlSharedCaches.begin()->GetCacheSize());
+    AddrMapping::getAddrMapping()->set_nway(xmlSharedCaches.begin()->GetNWays());
+
+    char path_array[256];
+    getcwd(path_array, sizeof(path_array));
+    string path(path_array);
+
+    m_fsm_protocol_path = path + string("/../Protocols_FSM/");
+    m_fsm_llc_protocol_path = path + string("/../Protocols_FSM/");
+    cout << "FSM path: " << m_fsm_protocol_path << endl;
+
+    GetCohrProtocolType();
+
+    bus = new TripleBus(xmlPrivateCaches, xmlSharedCaches, projectXmlCfg.GetBusFIFOSize());
+
+    int order = 0;
+    std::cout << " Set up Private Caches " << std::endl;
+    for (auto& PrivateCacheXml : xmlPrivateCaches)
+    {
+        PrivateCacheXml.SetglobalQueues_en(m_globalQueues_en);
+        PrivateCacheXml.SetLogEnable(m_logFileGenEnable);
+        PrivateCacheXml.SetLLCBnk(m_llc_nbnks);
+
+        DirectInterconnect *cpu_interconnect = new DirectInterconnect(-1, PrivateCacheXml.GetCacheId(), projectXmlCfg.GetCpuFIFOSize());
+
+        stringstream bmTraceFile;
+        bmTraceFile << projectXmlCfg.GetBMsPath() << "/trace_C" << PrivateCacheXml.GetCacheId() << ".trc.shared";
+        new CPU(PrivateCacheXml, projectXmlCfg.GetOutOfOrderStages(), cpu_interconnect->getInterfaceFor(-1), bmTraceFile.str());
+
+        CommunicationInterface* bus_interface = bus->getInterfaceFor(PrivateCacheXml.GetCacheId());
+
+        CacheController *newCacheCtrl;
+        if (m_cohrProt == CohProtType::SNOOP_MESI || m_cohrProt == CohProtType::SNOOP_MOESI)
+            newCacheCtrl = new CacheControllerExclusive(PrivateCacheXml, m_fsm_protocol_path, bus_interface,
+                                                        cpu_interconnect->getInterfaceFor(PrivateCacheXml.GetCacheId()),
+                                                        projectXmlCfg.GetCache2Cache(), xmlSharedCacheIDs, m_cohrProt, -1);
+        else
+            newCacheCtrl = new CacheController(PrivateCacheXml, m_fsm_protocol_path, bus_interface,
+                                                cpu_interconnect->getInterfaceFor(PrivateCacheXml.GetCacheId()),
+                                                projectXmlCfg.GetCache2Cache(), xmlSharedCacheIDs, m_cohrProt, -1);
+
+        m_cpuCacheCtrl.push_back(newCacheCtrl);
+    }
+
+    bus2 = new Bus(xmlSharedCaches, projectXmlCfg.GetDRAMId()[0], projectXmlCfg.GetBusFIFOSize(), bus->getLowerLevelIds());
+
+    std::cout << " Set up Shared Caches " << std::endl;
+    for (auto& SharedCacheXml : xmlSharedCaches)
+    {
+        CommunicationInterface* LLC_bus_interface = bus->getInterfaceFor(SharedCacheXml.GetCacheId());
+        CommunicationInterface* LLC_DRAM_interface = bus2->getInterfaceFor(SharedCacheXml.GetCacheId());
+        CacheController *newCacheCtrl;
+        SharedCacheXml.SetglobalQueues_en(m_globalQueues_en);
+        SharedCacheXml.SetLogEnable(projectXmlCfg.GetLogFileGenEnable());
+        SharedCacheXml.SetLLCBnk(m_llc_nbnks);
+        newCacheCtrl = new CacheController_End2End(SharedCacheXml, m_fsm_llc_protocol_path, LLC_DRAM_interface, LLC_bus_interface,
+                                            projectXmlCfg.GetCache2Cache(), projectXmlCfg.GetDRAMId(), m_llcCohrProt, order, bus->getLowerLevelIds());
+        order++;
+        m_SharedCacheCtrl.push_back(newCacheCtrl);
+    }
+
+    std::cout << " Set up Memory " << std::endl;
+    CommunicationInterface* DRAM_LLC_interface = bus2->getInterfaceFor(projectXmlCfg.GetDRAMId()[0]);
+    if(m_projectXmlCfg.Getmcsim_En()) {
+        std::cout << " Set up MCsim " << std::endl;
+        m_mcsim_interface = new MCsimInterface(projectXmlCfg, DRAM_LLC_interface, xmlSharedCacheIDs);
+    } else {
+        std::cout << " Set up Main Memory " << std::endl;
+        m_main_memory = new MainMemoryController(projectXmlCfg, DRAM_LLC_interface, xmlSharedCacheIDs);
+    }
+
+    std::cout << " Set up Logger" << std::endl;
+    Logger::getLogger()->registerReportPath(projectXmlCfg.GetLoggerPath());
     Logger::getLogger()->setLogEnable(projectXmlCfg.GetLogFileGenEnable());
 }
 

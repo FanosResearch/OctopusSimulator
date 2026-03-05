@@ -21,7 +21,7 @@ namespace ns3
         FCFSArbiter(vector<int>* candidates_ids, int arbiter_period);
         ~FCFSArbiter();
 
-        virtual bool elect(uint64_t cycle_number, vector<vector<Message>*>& buffers, Message *out_msg) override;
+        virtual bool elect(uint64_t cycle_number, vector<deque<Message>*>& buffers, Message *out_msg) override;
     };
 }
 

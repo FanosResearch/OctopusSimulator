@@ -42,7 +42,7 @@ $(EXE_NAME): $(OBJ)
 	$(CXX) $(CXXFLAGS) -o $@ $^ 
 	@echo "Built $@ successfully"
 
-$(LIB_NAME): $(OBJ)
+$(LIB_NAME): $(LIB_OBJ)
 	g++ -fPIC -g -std=c++11 -shared -Wl,-soname,$@ $(CXXFLAGS) -o $@ $^
 	@echo "Built lib $@ successfully"
 

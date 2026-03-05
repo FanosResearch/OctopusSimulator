@@ -27,7 +27,7 @@ namespace ns3
 
     void TripleBusController::serviceBusStep(uint64_t cycle_number)
     {
-        vector<vector<Message>*> service_buffers;
+        vector<deque<Message>*> service_buffers;
         bool message_available = false;
         Message msg;
 
@@ -38,7 +38,7 @@ namespace ns3
             {
                 message_available = true;
                 msg = service_buffers[i]->at(0);
-                service_buffers[i]->erase(service_buffers[i]->begin());
+                service_buffers[i]->pop_front();
             }
         }
 

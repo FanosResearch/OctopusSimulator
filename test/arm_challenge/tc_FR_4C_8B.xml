@@ -19,7 +19,7 @@
 	Cache2Cache="1" 
 	CohProtocol="MSI"
 	llcPartition="BankPartition"
-	loggerPath ="/workspaces/scratch/atp/oct1/bms"
+	loggerPath ="../log/oct/"
 	logFileGenEnable  = "0"
 	globalQueues_en="0" 
 	OutOfOrderStages="16">
@@ -381,7 +381,7 @@
 	   MCSIM_RANK="1"
 	   MCSIM_CPUFREQ="2.4"
 	   MCSIM_ARBITER  ="FRFCFS"
-	   MCSIM_PATH    ="/workspaces/CMSpec/CMSpec"
+	   MCSIM_PATH    =".."
        MEMOutsandingReqs="16"
 	   >
   </DRAMCnfg>

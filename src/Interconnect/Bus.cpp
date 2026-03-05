@@ -25,13 +25,17 @@ namespace ns3
         for (list<CacheXml>::iterator iter = upper_level_caches.begin(); iter != upper_level_caches.end(); iter++)
         {
             CacheXml cache_info = *iter;
-            m_interfaces.push_back(new BusInterface(cache_info.GetCacheId(), buffers_max_size));
+            BusInterface *iface = new BusInterface(cache_info.GetCacheId(), buffers_max_size);
+            m_interfaces.push_back(iface);
+            m_interface_map[cache_info.GetCacheId()] = iface;
         }
 
         for (list<CacheXml>::iterator iter = lower_level_caches.begin(); iter != lower_level_caches.end(); iter++)
         {
             CacheXml cache_info = *iter;
-            m_interfaces.push_back(new BusInterface(cache_info.GetCacheId(), buffers_max_size));
+            BusInterface *iface = new BusInterface(cache_info.GetCacheId(), buffers_max_size);
+            m_interfaces.push_back(iface);
+            m_interface_map[cache_info.GetCacheId()] = iface;
             m_lower_level_ids.push_back(cache_info.GetCacheId());
         }
 
@@ -57,12 +61,18 @@ namespace ns3
         m_bus_cycle_edges = 1;
         m_busArb = lower_level_caches.begin()->GetmemArb();
 
-        m_interfaces.push_back(new BusInterface(upper_level_id, buffers_max_size));
+        {
+            BusInterface *iface = new BusInterface(upper_level_id, buffers_max_size);
+            m_interfaces.push_back(iface);
+            m_interface_map[upper_level_id] = iface;
+        }
 
         for (list<CacheXml>::iterator iter = lower_level_caches.begin(); iter != lower_level_caches.end(); iter++)
         {
             CacheXml cache_info = *iter;
-            m_interfaces.push_back(new BusInterface(cache_info.GetCacheId(), buffers_max_size));
+            BusInterface *iface = new BusInterface(cache_info.GetCacheId(), buffers_max_size);
+            m_interfaces.push_back(iface);
+            m_interface_map[cache_info.GetCacheId()] = iface;
             m_lower_level_ids.push_back(cache_info.GetCacheId());
         }
 
@@ -93,12 +103,8 @@ namespace ns3
     
     CommunicationInterface* Bus::getInterfaceFor(int id)
     {
-        for(int i = 0; i < (int)m_interfaces.size(); i++)
-        {
-            if(m_interfaces[i]->m_interface_id == id)
-                return m_interfaces[i];
-        }
-        return NULL;
+        auto it = m_interface_map.find(id);
+        return (it != m_interface_map.end()) ? it->second : NULL;
     }
     
     vector<int>* Bus::getLowerLevelIds()

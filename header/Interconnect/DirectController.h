@@ -25,8 +25,8 @@ namespace ns3
     protected:
         vector<CommunicationInterface *> *m_interfaces;
         
-        vector<vector<Message>*> m_request_buffers;
-        vector<vector<Message>*> m_response_buffers;
+        vector<deque<Message>*> m_request_buffers;
+        vector<deque<Message>*> m_response_buffers;
 
         virtual bool send(Message &msg, int destination, MessageType type = MessageType::DATA_RESPONSE);
 

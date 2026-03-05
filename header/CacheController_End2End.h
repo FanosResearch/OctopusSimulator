@@ -18,12 +18,13 @@ namespace ns3
     {
     protected:
         int m_owner_of_latest_data;
+        int m_pending_eviction_owner;
         map <uint64_t, uint16_t> m_wb_cores;
         map <uint64_t, uint64_t> m_wb_address;
 
         virtual void addRequests2ProcessingQueue(FRFCFS_Buffer<Message, CoherenceProtocolHandler> &buf) override;
         
-        virtual void callActionFunction(ControllerAction) override;
+        virtual void callActionFunction(const ControllerAction &action) override;
 
         virtual void sendBusRequest(void *) override;
         virtual void performWriteBack(void *) override;

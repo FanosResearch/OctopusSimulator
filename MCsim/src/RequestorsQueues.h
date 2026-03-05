@@ -2,8 +2,10 @@
 #define REQUESTORSQueues_H
 
 #include <vector>
+#include <list>
 #include <utility>
 #include <map>
+#include <unordered_map>
 #include <iostream>
 #include <algorithm>
 #include <cstdint>
@@ -25,7 +27,11 @@ namespace MCsim
 		map< unsigned int, requestorQueue > oldest_requestorsQueues;
 		vector <unsigned int> RROrder; // RR order <cores ID>
 
-		vector<pair<unsigned int, pair<unsigned int,unsigned int>> > unifyQueue; // unified queue for all the cores <reqID, <CL address. CoreID>>
+		typedef pair<unsigned int, pair<unsigned int,unsigned int>> unifyEntry; // <reqID, <CL address, CoreID>>
+		list<unifyEntry> unifyQueue; // unified queue for all the cores - ordered by bus appearance
+		unordered_map<unsigned int, list<unifyEntry>::iterator> unifyIterMap; // reqID -> list iterator for O(1) removal
+		unordered_map<unsigned int, pair<unsigned int,unsigned int>> unifyMap; // reqID -> (addr, coreID) for O(1) lookup
+		unordered_map<unsigned int, pair<unsigned int, bool>> requestIndex; // reqID -> (coreID, isYounger) for O(1) existence check
 		
 		//static int n = 9;// 0arrival_time, 1req_bus, 2resp_bus1, 3LLC_access1, 4LLC_DRAM_bus, 5DRAM_access, 6LLC_access2, 7resp_bus2, 8smax
 		typedef map <unsigned int, uint64_t> latencies; 
@@ -39,12 +45,11 @@ namespace MCsim
 		// check for a core in the buffers
 		bool isCoreExist(unsigned int coreID);	
 
+		void printLogger (unsigned int coreID, unsigned int requestID);
+
+	public:
 		// check for a request in the buffer
 		int isRequestExist(unsigned int coreID, unsigned int requestID, unsigned int *core, bool *vector);
-
-		void printLogger (unsigned int coreID, unsigned int requestID);
-		
-	public:
 		RequestorsQueues();
 		
 		virtual ~RequestorsQueues();

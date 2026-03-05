@@ -76,6 +76,7 @@ namespace ns3
 
         FSMReader *m_fsm;
         CacheDataHandler *m_data_handler;
+        string fsm_type;
         
 
     public:

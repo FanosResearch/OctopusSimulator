@@ -11,15 +11,15 @@
 
 #include "CacheDataHandler.h"
 
-#include <map>
+#include <unordered_map>
 
 namespace ns3
 {
     class CacheDataHandler_COTS : public CacheDataHandler
     {
     protected:
-        std::map<uint64_t, GenericCacheLine> m_miss_status_holding_regs; //MSHR
-        std::map<uint64_t, GenericCacheLine> m_pending_write_back_regs; //PWB
+        std::unordered_map<uint64_t, GenericCacheLine> m_miss_status_holding_regs; //MSHR
+        std::unordered_map<uint64_t, GenericCacheLine> m_pending_write_back_regs; //PWB
 
         bool line_added2PWB;
         uint64_t address_of_recently_added2PWB;

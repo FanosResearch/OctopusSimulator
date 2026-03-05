@@ -19,14 +19,14 @@ namespace ns3
     {
     protected:
         virtual uint64_t selectCandidate(uint64_t cycle_number);
-        virtual bool coreElect(uint64_t cycle_number, vector<vector<Message>*>& buffers, Message *out_msg);
-        
+        virtual bool coreElect(uint64_t cycle_number, vector<deque<Message>*>& buffers, Message *out_msg);
+
     public:
         TDMArbiter(vector<int>* candidates_ids, int arbiter_period);
         ~TDMArbiter();
 
-        virtual bool elect(uint64_t cycle_number, vector<vector<Message>*>& buffers, Message *out_msg) override;
-        virtual bool forceElect(uint64_t cycle_number, vector<vector<Message>*>& buffers, Message *out_msg) override;
+        virtual bool elect(uint64_t cycle_number, vector<deque<Message>*>& buffers, Message *out_msg) override;
+        virtual bool forceElect(uint64_t cycle_number, vector<deque<Message>*>& buffers, Message *out_msg) override;
     };
 }
 

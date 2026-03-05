@@ -37,7 +37,7 @@ namespace ns3
             {
                 if (send(m_request_buffers.at(i)->at(0), i ^ 1, MessageType::REQUEST))
                 {
-                    m_request_buffers.at(i)->erase(m_request_buffers.at(i)->begin());
+                    m_request_buffers.at(i)->pop_front();
                     break;
                 }
             }
@@ -49,7 +49,7 @@ namespace ns3
             {
                 if (send(m_response_buffers.at(i)->at(0), i ^ 1, MessageType::DATA_RESPONSE))
                 {
-                    m_response_buffers.at(i)->erase(m_response_buffers.at(i)->begin());
+                    m_response_buffers.at(i)->pop_front();
                     break;
                 }
             }

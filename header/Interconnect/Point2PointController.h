@@ -27,8 +27,8 @@ namespace ns3
         bool message_available_lower;
         bool message_available_upper;
 
-        vector<vector<Message> *> buffers_lower;
-        vector<vector<Message> *> buffers_upper;
+        vector<deque<Message> *> buffers_lower;
+        vector<deque<Message> *> buffers_upper;
 
         virtual void lowerBusStep(uint64_t cycle_number);
         virtual void upperBusStep(uint64_t cycle_number);

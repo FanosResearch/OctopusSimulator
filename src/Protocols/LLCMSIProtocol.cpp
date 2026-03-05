@@ -8,6 +8,8 @@
 
 #include "../../header/Protocols/LLCMSIProtocol.h"
 #include "../../header/RequestorsQueues.h"
+#include <iostream>
+#include <string>
 
 using namespace std;
 
@@ -45,8 +47,7 @@ namespace ns3
             return FRFCFS_State::Ready;
         else if (this->m_fsm->isStall(cache_line.state, (int)event_id))
         {
-            if (this->m_globalQueues_en)
-                RequestorsQueues::getReqQObj()->getRequestorsQueues()->ifOldest_promote(msg.owner,msg.msg_id);
+            RequestorsQueues::getReqQObj()->getRequestorsQueues()->ifOldest_promote(msg.owner,msg.msg_id);
             return FRFCFS_State::NonReady;
         }
         return FRFCFS_State::Ready;
@@ -63,12 +64,14 @@ namespace ns3
 
         this->readEvent(request_msg, cache_line, &event_id);
         this->m_fsm->getTransition(cache_line.state, (int)event_id, next_state, actions);
-        //printf("LLCMSIProtocol %d:%d %lx %d, %d, %d\n",this->m_core_id,request_msg.msg_id,request_msg.addr, cache_line.state, (int)event_id, next_state);
-        if (cache_line.state == 4 && event_id == ns3::LLCMSIProtocol::EventId::GetS) //CL in M state and msg is getS
+        int m_state = (fsm_type.find("MESI") != std::string::npos)
+                        ? this->m_fsm->getState(string("EorM"))
+                        : this->m_fsm->getState(string("M"));
+        if ( cache_line.state == m_state
+        && event_id == ns3::LLCMSIProtocol::EventId::GetS //CL in M state and msg is getS
+        && cache_line.owner_id != -1) // Only set count to 2 if there is an external owner (expecting WB)
         {
-            if(this->m_globalQueues_en)
-                RequestorsQueues::getReqQObj()->getRequestorsQueues()->setRemovalCount(request_msg.owner, request_msg.msg_id,2);
-            //cout <<"processRequest: set: " << request_msg.msg_id << " core: " << request_msg.owner << " count: "<< RequestorsQueues::getReqQObj()->getRequestorsQueues()->getRemovalCount (request_msg.owner, request_msg.msg_id) <<endl;
+            RequestorsQueues::getReqQObj()->getRequestorsQueues()->setRemovalCount(request_msg.owner, request_msg.msg_id,2);
         }
         return handleAction(actions, request_msg, cache_line, next_state);
     }
@@ -115,6 +118,7 @@ namespace ns3
 
             case ActionId::SetOwner:
                 cache_line.owner_id = msg.owner;
+                cache_line.setDirty();  // set Dirty flag, if goes to M state anytime
                 controller_action.type = ControllerAction::Type::NO_ACTION;
                 break;
             case ActionId::ClearOwner:
@@ -148,7 +152,7 @@ namespace ns3
                 break;
 
             case ActionId::Fault:
-                std::cout << " LLCMSIProtocol: Fault Transaction is detected" << std::endl;
+                std::cout << " LLCMSIProtocol: Fault Transaction is detected"<< " msg_id "<< msg.msg_id <<" core "<< this->m_core_id<< " owner "<<msg.owner<<" source "<< (int)msg.source<< std::endl;
                 exit(0);
                 break;
             }
@@ -179,7 +183,10 @@ namespace ns3
         {
         case Message::Source::UPPER_INTERCONNECT:
             if (msg.data != NULL)
+            {
                 *out_id = EventId::Data_fromUpperInterface;
+                msg.complementary_value = 10;
+            }
             break;
 
         case Message::Source::LOWER_INTERCONNECT:
@@ -205,12 +212,6 @@ namespace ns3
                 case MSIProtocol::REQUEST_TYPE_INV:
                     if(msg.owner == m_core_id)
                         *out_id = EventId::Own_Invalidation;
-                    else
-                        std::cout << " LLCMSIProtocol: Invalid Transaction detected on the Bus" << std::endl;
-                    break;
-                case MSIProtocol::REQUEST_TYPE_SILENT_INV:
-                    if(msg.owner == m_core_id)
-                        *out_id = EventId::Own_Silent_Inv;
                     else
                         std::cout << " LLCMSIProtocol: Invalid Transaction detected on the Bus" << std::endl;
                     break;

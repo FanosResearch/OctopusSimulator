@@ -76,7 +76,7 @@ namespace ns3
                 cout << "MCsimInterface(id = " << this->m_id << "): Cannot insert the Msg into the lower interface FIFO, FIFO is Full" << endl;
                 exit(0);
             }
-            m_output_buffer.erase(m_output_buffer.begin());
+            m_output_buffer.pop_front();
         }
     }
 

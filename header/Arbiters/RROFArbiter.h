@@ -12,6 +12,7 @@
 #include "Arbiter.h"
 #include "../RequestorsQueues.h"
 #include <iostream>
+#include <unordered_map>
 
 using namespace std;
 
@@ -20,6 +21,7 @@ namespace ns3
     class RROFArbiter: public Arbiter
     {
     private:
+		MCsim::RequestorsQueues *m_rq_cached; // cached singleton pointer
 		unsigned int RR_order;
 		unsigned int Requestors_num;
 		unsigned int Requestor_size;
@@ -36,9 +38,9 @@ namespace ns3
         RROFArbiter(vector<int>* candidates_ids, int arbiter_period);
         ~RROFArbiter();
 
-        virtual bool elect(uint64_t cycle_number, vector<vector<Message>*>& buffers, Message *out_msg) override;
+        virtual bool elect(uint64_t cycle_number, vector<deque<Message>*>& buffers, Message *out_msg) override;
 
-        int findRequest(vector<Message> &buffer, int id);
+        int findRequest(deque<Message> &buffer, int id);
     };
 }
 

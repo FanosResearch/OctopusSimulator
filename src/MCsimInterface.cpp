@@ -30,7 +30,7 @@ namespace ns3
         m_processing_queue = new FRFCFS_Buffer<Message, MCsimInterface>(&MCsimInterface::getRequestState, this);
 
         /******************************************** Initialization of MCsim ********************************************/
-        unsigned int num_cores = 90;//projectXmlCfg.GetNumPrivCore() //hardcode to 60 so all cache (include L1 and L2) are using high priority
+        unsigned int num_cores = projectXml.GetNumPrivCore();
         m_loggerPath = projectXml.GetLoggerPath();
         string mem_system = projectXml.GetmemSystem();
         string sys_path = projectXml.GetsysPath();
@@ -92,6 +92,14 @@ namespace ns3
                 //     cout << "MCsimInterface msg_in "<<ready_msg.msg_id << " core "<< ready_msg.owner<< " clk "<<m_clk_cycle << endl; 
                 if(ready_msg.data == NULL)
                     m_pending_requests.push_back(ready_msg);
+                else
+                {
+                    // Track pending writes so write_callback can remove from RequestorsQueues.
+                    // For RROF, CommandScheduler_RROF also removes after WR CAS (harmless double-remove guarded below).
+                    // For FRFCFS, this is the only removal path - without it, dirty writebacks
+                    // leak in RequestorsQueues, causing unbounded queue growth.
+                    m_pending_writes.push_back(ready_msg);
+                }
             }
             else
             {
@@ -107,7 +115,7 @@ namespace ns3
                 cout << "MCsimInterface(id = " << this->m_id << "): Cannot insert the Msg into the lower interface FIFO, FIFO is Full" << endl;
                 exit(0);
             }
-            m_output_buffer.erase(m_output_buffer.begin());
+            m_output_buffer.pop_front();
         }
     }
 
@@ -172,5 +180,17 @@ namespace ns3
     void MCsimInterface::write_callback(unsigned id, uint64_t address, uint64_t clock_cycle)
     {
         m_write_count++;
+
+        for (int i = 0; i < (int)m_pending_writes.size(); i++)
+        {
+            if (m_pending_writes[i].addr == address)
+            {
+                // Guard: RROF's CommandScheduler may have already removed this write
+                if (m_requestors_queues->isRequestExist(m_pending_writes[i].owner, m_pending_writes[i].msg_id, NULL, NULL) >= 0)
+                    m_requestors_queues->removeRequest(m_pending_writes[i].owner, m_pending_writes[i].msg_id);
+                m_pending_writes.erase(m_pending_writes.begin() + i);
+                return;
+            }
+        }
     }
 }

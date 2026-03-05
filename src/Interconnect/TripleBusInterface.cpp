@@ -27,7 +27,7 @@ namespace ns3
     void TripleBusInterface::popFrontMessage()
     {
         if (!m_rx_service_buffer.empty())
-            m_rx_service_buffer.erase(m_rx_service_buffer.begin());
+            m_rx_service_buffer.pop_front();
         else
             BusInterface::popFrontMessage();
     }
@@ -63,7 +63,7 @@ namespace ns3
         return false;
     }
 
-    void TripleBusInterface::getCongregatedServiceBuffers(vector<CommunicationInterface *>& interfaces, vector<vector<Message>*>* buffers)
+    void TripleBusInterface::getCongregatedServiceBuffers(vector<CommunicationInterface *>& interfaces, vector<deque<Message>*>* buffers)
     {
         for(int i = 0; i < (int)interfaces.size(); i++)
             buffers->push_back(&((TripleBusInterface*)interfaces[i])->m_tx_service_buffer);

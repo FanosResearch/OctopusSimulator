@@ -16,6 +16,8 @@ namespace ns3
                                      CommunicationInterface *lower_interface, bool cach2Cache,
                                      vector <int> sharedMemId, CohProtType pType, vector<int>* private_caches_id) :ClockedObj(cacheXml.GetCpuClkNanoSec())
     {
+        m_rq_cached = nullptr;
+        m_addr_cached = nullptr;
         m_core_order = -1;
         m_cache_cycle = 1;
 
@@ -58,6 +60,8 @@ namespace ns3
                                      CommunicationInterface *lower_interface, bool cach2Cache,
                                      vector <int> sharedMemId, CohProtType pType, int order, vector<int>* private_caches_id): ClockedObj(cacheXml.GetCpuClkNanoSec())
     {
+    m_rq_cached = nullptr;
+    m_addr_cached = nullptr;
     m_core_order = order;
     m_cache_cycle = 1;
 
@@ -106,6 +110,12 @@ namespace ns3
 
     void CacheController::cycleProcess()
     {
+        // Lazy-init cached singleton pointers (once)
+        if (!m_addr_cached)
+            m_addr_cached = AddrMapping::getAddrMapping();
+        if (globalQueues_en && !m_rq_cached)
+            m_rq_cached = RequestorsQueues::getReqQObj()->getRequestorsQueues();
+
         m_data_handler->updateCycle(m_cache_cycle);
         this->processDataArrayBuffer();
         this->processLogic(); // Call cache controller
@@ -113,7 +123,7 @@ namespace ns3
         m_cache_cycle++;
         if (m_core_id == 0 && globalQueues_en)
         {
-            RequestorsQueues::getReqQObj()->getRequestorsQueues()->updateClk(m_cache_cycle);
+            m_rq_cached->updateClk(m_cache_cycle);
         }
     }
 
@@ -122,7 +132,7 @@ namespace ns3
         m_protocol->initializeCacheStates(); // Initialized Cache Coherence Protocol
     }
 
-    void CacheController::callActionFunction(ControllerAction action)
+    void CacheController::callActionFunction(const ControllerAction &action)
     {
         switch (action.type)
         {
@@ -155,9 +165,9 @@ namespace ns3
             if(ready_msg.source == Message::Source::LOWER_INTERCONNECT)
                 Logger::getLogger()->updateRequest(ready_msg.msg_id, Logger::EntryId::CACHE_CHECKPOINT);
 
-            vector<ControllerAction> actions = m_protocol->processRequest(ready_msg);
+            const vector<ControllerAction> &actions = m_protocol->processRequest(ready_msg);
 
-            for (ControllerAction action : actions)
+            for (const ControllerAction &action : actions)
                 callActionFunction(action);
         }
     }
@@ -167,7 +177,7 @@ namespace ns3
         if(m_data_handler->isReady() && m_data_access_arbiter != NULL)
         {
             Message selected_msg;
-            vector<vector<Message>*> messages_pending_data_access; //wrapper vector to use the arbiter
+            vector<deque<Message>*> messages_pending_data_access; //wrapper vector to use the arbiter
             messages_pending_data_access.push_back(&m_data_access_buffer);
 
             bool msg_available = m_data_access_arbiter->elect(m_cache_cycle, 
@@ -187,9 +197,29 @@ namespace ns3
 
         if (m_upper_interface->peekMessage(&msg))
         {
+            // Fix: Filter out data messages not destined for this core.
+            // This prevents L1s from processing LLC WriteBacks (destined for Memory) as OwnData.
+            if (msg.data != NULL)
+            {
+                bool is_dest = false;
+                for (uint16_t dest : msg.to)
+                {
+                    if (dest == m_core_id)
+                    {
+                        is_dest = true;
+                        break;
+                    }
+                }
+                if (!is_dest)
+                {
+                    m_upper_interface->popFrontMessage();
+                    goto check_replacements;
+                }
+            }
+
             if (m_shared_memory_id[0] == 100 && llc_nbnk )
             {
-                AddrMapping::getAddrMapping()->addr_map(&msg);
+                m_addr_cached->addr_map(&msg);
             }
             msg.source = Message::Source::UPPER_INTERCONNECT;
             if (buf.pushFront(msg))
@@ -198,12 +228,14 @@ namespace ns3
             {
                 if (m_shared_memory_id[0] == 100)
                 {
-                    RequestorsQueues::getReqQObj()->getRequestorsQueues()->setRemovalCount(msg.owner, msg.msg_id,2);
+                    m_rq_cached->setRemovalCount(msg.owner, msg.msg_id,2);
                     if(log_enable)
-                        cout <<"addRequests2ProcessingQueue: set: " << msg.msg_id << " core: " << msg.owner << " count: "<< RequestorsQueues::getReqQObj()->getRequestorsQueues()->getRemovalCount (msg.owner, msg.msg_id) <<endl;
+                        cout <<"addRequests2ProcessingQueue: set: " << msg.msg_id << " core: " << msg.owner << " count: "<< m_rq_cached->getRemovalCount (msg.owner, msg.msg_id) <<endl;
                 }
             }
         }
+
+	check_replacements:
 	this->checkReplacements(buf);
 
         if (m_lower_interface->peekMessage(&msg))
@@ -213,7 +245,7 @@ namespace ns3
             //    m_lower_interface->popFrontMessage();
                 if (m_shared_memory_id[0] == 100 && llc_nbnk )
                 {
-                    AddrMapping::getAddrMapping()->addr_map(&msg);
+                    m_addr_cached->addr_map(&msg);
                      if ((unsigned int)this->m_core_order == msg.bank_id )
                      {
                         msg.source = Message::Source::LOWER_INTERCONNECT;
@@ -257,9 +289,10 @@ namespace ns3
     {
         Message *msg = (Message *)data_ptr;
 
-        if (m_pending_cpu_requests.find(getAddressKey(msg->addr)) != m_pending_cpu_requests.end())
+        auto pending_it = m_pending_cpu_requests.find(getAddressKey(msg->addr));
+        if (pending_it != m_pending_cpu_requests.end())
         {
-            queue<Message> pending_messages = this->m_pending_cpu_requests[this->getAddressKey(msg->addr)];
+            queue<Message> pending_messages = pending_it->second;
             if (pending_messages.size() > 1)
                 cout << "How !!!!!1" << endl;
             while (!pending_messages.empty())
@@ -276,7 +309,7 @@ namespace ns3
                 // restore addr before sending out from shared cache
                 if (m_shared_memory_id[0] == 100 && llc_nbnk )
                 {
-                    AddrMapping::getAddrMapping()->addr_map_restore(&pending_messages.front(), this->m_core_order);
+                    m_addr_cached->addr_map_restore(&pending_messages.front(), this->m_core_order);
                 }
                 if (!m_lower_interface->pushMessage(pending_messages.front(), this->m_cache_cycle, MessageType::DATA_RESPONSE))
                 {
@@ -285,7 +318,7 @@ namespace ns3
                 }
                 pending_messages.pop();
             }
-            this->m_pending_cpu_requests.erase(this->getAddressKey(msg->addr));
+            this->m_pending_cpu_requests.erase(pending_it);
         }
         else
         { // For the LLC
@@ -301,7 +334,7 @@ namespace ns3
             // restore addr before sending out from shared cache
             if (m_shared_memory_id[0] == 100 && llc_nbnk )
             {
-                AddrMapping::getAddrMapping()->addr_map_restore(msg, this->m_core_order);
+                m_addr_cached->addr_map_restore(msg, this->m_core_order);
             }
             if (!m_lower_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::DATA_RESPONSE))
             {
@@ -328,7 +361,7 @@ namespace ns3
         // restore addr before sending out from shared cache
         if (m_shared_memory_id[0] == 100 && llc_nbnk )
         {
-            AddrMapping::getAddrMapping()->addr_map_restore(msg, this->m_core_order);
+            m_addr_cached->addr_map_restore(msg, this->m_core_order);
         }
 
         if (!m_lower_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::DATA_RESPONSE))
@@ -348,7 +381,7 @@ namespace ns3
         // restore addr before sending out from shared cache
         if (m_shared_memory_id[0] == 100 && llc_nbnk )
         {
-            AddrMapping::getAddrMapping()->addr_map_restore(msg, this->m_core_order);
+            m_addr_cached->addr_map_restore(msg, this->m_core_order);
         }
 
         if (!m_upper_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::REQUEST))
@@ -361,11 +394,10 @@ namespace ns3
             {
                 if (m_shared_memory_id[0] != 100) //in L1
                 {
-                    RequestorsQueues::getReqQObj()->getRequestorsQueues()->addRequest(msg->owner, msg->msg_id,1, msg->addr);
-                    //RequestorsQueues::getReqQObj()->getRequestorsQueues()->addRequest(msg->owner, msg->msg_id,1);
+                    m_rq_cached->addRequest(msg->owner, msg->msg_id,1, msg->addr);
                     unsigned int orig_core;
                     if(log_enable)
-                        cout << "sendBusRequest: add: " << msg->msg_id << " core: " << msg->owner << " size: " << RequestorsQueues::getReqQObj()->getRequestorsQueues()->getRequestorSize(msg->owner) << " type: "<< msg->complementary_value << " 1st: "<< RequestorsQueues::getReqQObj()->getRequestorsQueues()->getRequest(msg->owner,0, &orig_core) << " clk: "<<this->m_cache_cycle << " data "<<(msg->data == NULL)<<" CL "<< msg->addr<<endl;
+                        cout << "sendBusRequest: add: " << msg->msg_id << " core: " << msg->owner << " size: " << m_rq_cached->getRequestorSize(msg->owner) << " type: "<< msg->complementary_value << " 1st: "<< m_rq_cached->getRequest(msg->owner,0, &orig_core) << " clk: "<<this->m_cache_cycle << " data "<<(msg->data == NULL)<<" CL "<< msg->addr<<endl;
                 }
             }
         }
@@ -376,12 +408,12 @@ namespace ns3
     void CacheController::performWriteBack(void *data_ptr)
     {
         Message *msg = (Message *)data_ptr;
-        if (this->m_saved_requests_for_wb.find(this->getAddressKey(msg->addr)) !=
-            this->m_saved_requests_for_wb.end())
+        auto wb_it = this->m_saved_requests_for_wb.find(this->getAddressKey(msg->addr));
+        if (wb_it != this->m_saved_requests_for_wb.end())
         {
-            msg->owner = this->m_saved_requests_for_wb[this->getAddressKey(msg->addr)].owner;
-            msg->msg_id = this->m_saved_requests_for_wb[this->getAddressKey(msg->addr)].msg_id;
-            this->m_saved_requests_for_wb.erase(this->getAddressKey(msg->addr));
+            msg->owner = wb_it->second.owner;
+            msg->msg_id = wb_it->second.msg_id;
+            this->m_saved_requests_for_wb.erase(wb_it);
         }
 
         if(msg->data == NULL)
@@ -394,14 +426,14 @@ namespace ns3
         }
 
         if (msg->owner == this->m_core_id)
-            msg->to.push_back(this->m_shared_memory_id[AddrMapping::getAddrMapping()->get_bnk_bits(msg->addr,this->m_core_id)]); //address map
+            msg->to.push_back(this->m_shared_memory_id[m_addr_cached->get_bnk_bits(msg->addr,this->m_core_id)]); //address map
         else
             msg->to.push_back(msg->owner);
 
         // restore addr before sending out from shared cache
         if (m_shared_memory_id[0] == 100 && llc_nbnk )
         {
-            AddrMapping::getAddrMapping()->addr_map_restore(msg, this->m_core_order);
+            m_addr_cached->addr_map_restore(msg, this->m_core_order);
         }
 
         if (!m_upper_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::DATA_RESPONSE))
@@ -426,9 +458,9 @@ namespace ns3
             {
                 if (globalQueues_en && m_shared_memory_id[0] != 100)
                 {
-                    RequestorsQueues::getReqQObj()->getRequestorsQueues()->removeRequest(msg->owner, msg->msg_id);
+                    m_rq_cached->removeRequest(msg->owner, msg->msg_id);
                     if(log_enable)
-                        cout << "updateCacheLine: remove: " << msg->msg_id << " core: " << msg->owner << " size: " << RequestorsQueues::getReqQObj()->getRequestorsQueues()->getRequestorSize(msg->owner) << " id: "<< this->m_core_id << " to: "<< msg->to.size()<< endl;
+                        cout << "updateCacheLine: remove: " << msg->msg_id << " core: " << msg->owner << " size: " << m_rq_cached->getRequestorSize(msg->owner) << " id: "<< this->m_core_id << " to: "<< msg->to.size()<< endl;
 
                 }
             }
@@ -462,9 +494,9 @@ namespace ns3
         {
             if (globalQueues_en)
             {
-                RequestorsQueues::getReqQObj()->getRequestorsQueues()->removeRequest(msg->owner, msg->msg_id);
+                m_rq_cached->removeRequest(msg->owner, msg->msg_id);
                 if(log_enable)
-                    cout << "writeCacheLineData: remove: " << msg->msg_id << " core: " << msg->owner << " size: " << RequestorsQueues::getReqQObj()->getRequestorsQueues()->getRequestorSize(msg->owner) << " id: "<< this->m_core_id << " to: "<< msg->to.size()<< endl;
+                    cout << "writeCacheLineData: remove: " << msg->msg_id << " core: " << msg->owner << " size: " << m_rq_cached->getRequestorSize(msg->owner) << " id: "<< this->m_core_id << " to: "<< msg->to.size()<< endl;
 
             }
         }
@@ -480,8 +512,9 @@ namespace ns3
         Message *msg = (Message *)data_ptr;
         Message data_msg;
 
-        if(m_modifying_data_messages.find(msg->msg_id) != m_modifying_data_messages.end())
-            data_msg = m_modifying_data_messages[msg->msg_id];
+        auto mod_it = m_modifying_data_messages.find(msg->msg_id);
+        if(mod_it != m_modifying_data_messages.end())
+            data_msg = mod_it->second;
         else if ((msg->source == Message::Source::LOWER_INTERCONNECT) && (msg->data != NULL))
             data_msg = *msg;
         else
@@ -581,7 +614,7 @@ namespace ns3
                           m_cache_cycle,                       // Cycle
                         2,//   (uint64_t)CpuFIFO::REQTYPE::REPLACE, // Complementary_value //TODO: add enum for Request type
                           (uint16_t)this->m_core_id);          // Owner
-            msg.to.push_back((uint16_t)this->m_shared_memory_id[AddrMapping::getAddrMapping()->get_bnk_bits(evicted_address,this->m_core_id)]);
+            msg.to.push_back((uint16_t)this->m_shared_memory_id[m_addr_cached->get_bnk_bits(evicted_address,this->m_core_id)]);
             if (buf.pushBack(msg, FRFCFS_State::NonReady))
                 ((CacheDataHandler_COTS*)m_data_handler)->addressOfLinePendingWB(true, &evicted_address);
 

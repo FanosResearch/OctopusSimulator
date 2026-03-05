@@ -22,7 +22,7 @@ namespace ns3
     {
     }
 
-    int Arbiter::findMessage(vector<Message>& buffer, int id)
+    int Arbiter::findMessage(deque<Message>& buffer, int id)
     {
         for(int i = 0; i < (int)buffer.size(); i++)
         {
@@ -33,7 +33,7 @@ namespace ns3
         return -1;
     }
 
-    bool Arbiter::forceElect(uint64_t cycle_number, vector<vector<Message> *> &buffers, Message *out_msg)
+    bool Arbiter::forceElect(uint64_t cycle_number, vector<deque<Message> *> &buffers, Message *out_msg)
     {
         return elect(cycle_number, buffers, out_msg);
     }

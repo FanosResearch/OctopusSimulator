@@ -15,13 +15,17 @@ namespace ns3
         for (list<CacheXml>::iterator iter = upper_level_caches.begin(); iter != upper_level_caches.end(); iter++)
         {
             CacheXml cache_info = *iter;
-            m_interfaces.push_back(new TripleBusInterface(cache_info.GetCacheId(), buffers_max_size));
+            TripleBusInterface *iface = new TripleBusInterface(cache_info.GetCacheId(), buffers_max_size);
+            m_interfaces.push_back(iface);
+            m_interface_map[cache_info.GetCacheId()] = iface;
         }
 
         for (list<CacheXml>::iterator iter = lower_level_caches.begin(); iter != lower_level_caches.end(); iter++)
         {
             CacheXml cache_info = *iter;
-            m_interfaces.push_back(new TripleBusInterface(cache_info.GetCacheId(), buffers_max_size));
+            TripleBusInterface *iface = new TripleBusInterface(cache_info.GetCacheId(), buffers_max_size);
+            m_interfaces.push_back(iface);
+            m_interface_map[cache_info.GetCacheId()] = iface;
             m_lower_level_ids.push_back(cache_info.GetCacheId());
         }
 

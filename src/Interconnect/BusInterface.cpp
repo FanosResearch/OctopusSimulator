@@ -42,9 +42,9 @@ namespace ns3
     void BusInterface::popFrontMessage()
     {
         if (m_buffer_selector == 0)
-            m_rx_request_buffer.erase(m_rx_request_buffer.begin());
+            m_rx_request_buffer.pop_front();
         else if (m_buffer_selector == 1)
-            m_rx_response_buffer.erase(m_rx_response_buffer.begin());
+            m_rx_response_buffer.pop_front();
     }
 
     bool BusInterface::pushMessage(Message &msg, uint64_t cycle = 0, MessageType type)
@@ -80,7 +80,7 @@ namespace ns3
         return false;
     }
 
-    void BusInterface::getCongregatedBuffers(vector<CommunicationInterface *>& interfaces, bool request_buffer, vector<vector<Message>*>* buffers)
+    void BusInterface::getCongregatedBuffers(vector<CommunicationInterface *>& interfaces, bool request_buffer, vector<deque<Message>*>* buffers)
     {
         for(int i = 0; i < (int)interfaces.size(); i++)
         {

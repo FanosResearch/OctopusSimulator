@@ -41,7 +41,7 @@ namespace ns3
     {
         if (clk_in_slot == 0)
         {
-            vector<vector<Message> *> buffers;
+            vector<deque<Message> *> buffers;
 
             BusInterface::getCongregatedBuffers(*m_interfaces, true, &buffers);
             message_available = m_arbiters[(int)BusType::RequestBus]->elect(cycle_number, buffers, &elected_msg);
@@ -53,7 +53,7 @@ namespace ns3
         }
         else if (clk_in_slot == m_request_latency)
         {
-            vector<vector<Message> *> buffers;
+            vector<deque<Message> *> buffers;
 
             BusInterface::getCongregatedBuffers(*m_interfaces, false, &buffers);
             message_available = m_arbiters[(int)BusType::RequestBus]->forceElect(cycle_number, buffers, &elected_msg);

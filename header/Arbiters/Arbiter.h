@@ -12,6 +12,7 @@
 #include "CommunicationInterface.h"
 
 #include <vector>
+#include <deque>
 #include <map>
 
 using namespace std;
@@ -27,14 +28,14 @@ namespace ns3
         
         int candidate_index = 0;
 
-        virtual int findMessage(vector<Message> &buffer, int id);
+        virtual int findMessage(deque<Message> &buffer, int id);
 
     public:
         Arbiter(vector<int> *candidates_ids, int arbiter_period);
         virtual ~Arbiter();
 
-        virtual bool elect(uint64_t cycle_number, vector<vector<Message> *> &buffers, Message *out_msg) = 0;
-        virtual bool forceElect(uint64_t cycle_number, vector<vector<Message> *> &buffers, Message *out_msg);
+        virtual bool elect(uint64_t cycle_number, vector<deque<Message> *> &buffers, Message *out_msg) = 0;
+        virtual bool forceElect(uint64_t cycle_number, vector<deque<Message> *> &buffers, Message *out_msg);
     };
 }
 

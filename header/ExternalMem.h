@@ -21,6 +21,7 @@
 #include "AddrMapping.h"
 
 #include <map>
+#include <deque>
 
 namespace ns3
 {
@@ -67,8 +68,8 @@ namespace ns3
 
         FRFCFS_Buffer<Message, ExternalMem> *m_processing_queue;
 
-        vector<Message> m_pending_requests;
-        vector<Message> m_output_buffer;
+        deque<Message> m_pending_requests;
+        deque<Message> m_output_buffer;
         
         map<int,CallbackGeneral<uint64_t, uint64_t, RequestType, uint8_t*>*> m_mem_callback; //Address, Clock Cycle, Type
         
