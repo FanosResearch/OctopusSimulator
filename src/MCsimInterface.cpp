@@ -8,7 +8,6 @@
 
 #include "../header/MCsimInterface.h"
 #include "../header/RequestorsQueues.h"
-#include "../header/Interconnect/BusInterface.h"
 
 namespace ns3
 {
@@ -65,12 +64,6 @@ namespace ns3
     {
         processLogic();
         m_mcsim->update();
-
-        if (CacheController::s_global_dump_triggered && !m_dump_done)
-        {
-            m_dump_done = true;
-            dumpDiagnostics();
-        }
 
         m_clk_cycle++;
     }
@@ -204,42 +197,8 @@ namespace ns3
     void MCsimInterface::dumpDiagnostics()
     {
         cout << "\n=== MCsimInterface (id=" << m_id << " cycle=" << m_clk_cycle << ") ===" << endl;
-        cout << "  ProcessingQueue: size=" << m_processing_queue->getSize() << endl;
         cout << "  PendingDRAMReads: " << m_pending_requests.size() << endl;
-        for (int i = 0; i < min((int)m_pending_requests.size(), 20); i++)
-        {
-            cout << "    [" << i << "] msg_id=" << m_pending_requests[i].msg_id
-                 << " addr=0x" << hex << m_pending_requests[i].addr << dec
-                 << " owner=" << m_pending_requests[i].owner
-                 << " LLC_bank=" << m_llc_id[addrMapping(m_pending_requests[i].addr)]
-                 << endl;
-        }
         cout << "  OutputBuffer: " << m_output_buffer.size() << endl;
-        for (int i = 0; i < min((int)m_output_buffer.size(), 10); i++)
-        {
-            cout << "    [" << i << "] msg_id=" << m_output_buffer[i].msg_id
-                 << " addr=0x" << hex << m_output_buffer[i].addr << dec
-                 << " owner=" << m_output_buffer[i].owner
-                 << " to=[";
-            for (int k = 0; k < (int)m_output_buffer[i].to.size(); k++)
-            {
-                if (k > 0) cout << ",";
-                cout << m_output_buffer[i].to[k];
-            }
-            cout << "]" << endl;
-        }
-
-        // Dump lower interface (Point2Point bus side)
-        BusInterface *bi = static_cast<BusInterface*>(m_lower_interface);
-        if (bi)
-        {
-            cout << "  LowerInterface(id=" << bi->m_interface_id << "):" << endl;
-            cout << "    TX_req=" << bi->getTxReqSize()
-                 << " TX_resp=" << bi->getTxRespSize()
-                 << " RX_req=" << bi->getRxReqSize()
-                 << " RX_resp=" << bi->getRxRespSize() << endl;
-        }
-
         cout << "  Total reads completed: " << m_read_count << endl;
         cout << "  Total writes completed: " << m_write_count << endl;
     }
