@@ -10,8 +10,10 @@
 #define _CONFIGURABLE_H
 
 #include <stdio.h>
+#include <cstdint>
 #include <iostream>
 #include <string>
+#include <vector>
 #include <map>
 #include <variant>
 
