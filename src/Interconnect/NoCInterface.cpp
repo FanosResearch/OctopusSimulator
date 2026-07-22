@@ -8,6 +8,8 @@
 
 #include "../../header/Interconnect/NoCInterface.h"
 
+#include <algorithm>
+
 namespace octopus
 {
     NoCInterface::NoCInterface(int id, int buffer_max_size, vector<int>& link_ids, vector<vector<int>>& connection_mat, vector<int>& switch_ids) 

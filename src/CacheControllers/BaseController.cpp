@@ -41,7 +41,7 @@ namespace octopus
         
         dprint = new DebugPrint(getSubMap(STRINGIFY(dprint)), name + std::to_string(m_id), parent_name + "." + name);
 
-        action_functions.reserve(ControllerAction::Type::MAX_ACTIONS_NUM);
+        action_functions.resize(ControllerAction::Type::MAX_ACTIONS_NUM);
         action_functions[ControllerAction::Type::REMOVE_PENDING] = [&](void* ptr) {this->removePendingAndRespond(ptr);};
         action_functions[ControllerAction::Type::HIT_Action] = [&](void* ptr) {hitAction(ptr);};
         action_functions[ControllerAction::Type::ADD_PENDING] = [&](void* ptr) {addtoPendingRequests(ptr);};

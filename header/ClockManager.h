@@ -9,6 +9,7 @@
 #ifndef CLOCKMANAGER_H
 #define CLOCKMANAGER_H
 
+#include <cstdint>
 #include <iostream>
 #include <vector>
 #include <map>
