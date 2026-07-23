@@ -12,9 +12,6 @@ namespace octopus
     CacheDataHandler_COTS::CacheDataHandler_COTS(ParametersMap map, string pname, string config_path, string name)
         : CacheDataHandler(map, pname, config_path, name)
     {
-        line_added2PWB = false;
-        address_of_recently_added2PWB = 0;
-
         // Optional write-back-buffer depth. Read from config when present,
         // otherwise a finite realistic default. -1 = unbounded (legacy).
         m_pwb_size = DEFAULT_PWB_SIZE;
@@ -70,11 +67,12 @@ namespace octopus
     void CacheDataHandler_COTS::moveLine2WB(uint64_t set, int way)
     {
         GenericCacheLine *line = (GenericCacheLine *)getLine(set, way);
-        m_pending_write_back_regs[calculate_address(line->tag, set)] = *line;
+        uint64_t wb_address = calculate_address(line->tag, set);
+        m_pending_write_back_regs[wb_address] = *line;
         line->valid = false;
 
-        address_of_recently_added2PWB = calculate_address(line->tag, set);
-        line_added2PWB = true;
+        // Queue this eviction so its write-back is always issued (see header).
+        m_pwb_pending_issue.push_back(wb_address);
     }
 
     bool CacheDataHandler_COTS::updateLineData(uint64_t address, const uint8_t *data)
@@ -137,14 +135,16 @@ namespace octopus
 
     bool CacheDataHandler_COTS::addressOfLinePendingWB(bool clear_flag, uint64_t *address)
     {
-        if (line_added2PWB)
-        {
-            *address = address_of_recently_added2PWB;
-            line_added2PWB = clear_flag ? false : line_added2PWB;
-            return true;
-        }
+        // Peek (clear_flag == false) or pop (clear_flag == true) the oldest
+        // not-yet-issued write-back address. Backed by a queue so no eviction
+        // is dropped when several happen before checkReplacements runs.
+        if (m_pwb_pending_issue.empty())
+            return false;
 
-        return false;
+        *address = m_pwb_pending_issue.front();
+        if (clear_flag)
+            m_pwb_pending_issue.erase(m_pwb_pending_issue.begin());
+        return true;
     }
 
     bool CacheDataHandler_COTS::isReady(uint64_t address)
