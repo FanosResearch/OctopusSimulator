@@ -2,3 +2,4 @@ m_clk_period(i),100,,
 m_id(i),100,,
 m_llc_id(i),10,,
 m_memory_latency(i),250,,#Latency in cycles
+processing_queue_size(i),32,,#Request buffer depth. -1 = unbounded (legacy behavior)

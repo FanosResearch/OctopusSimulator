@@ -41,6 +41,19 @@ namespace octopus
 
         int m_max_size; //maximum size of the buffer, if it is -1 the buffer will be unbounded
 
+        // Boundedness note: m_max_size bounds only NEW work admitted as NonReady
+        // via pushBack (e.g., demand requests from a lower interface). Two paths
+        // deliberately bypass the bound and are always admitted:
+        //   * pushFront  -- used for responses/higher-priority messages. A full
+        //                   buffer of stalled NonReady requests is drained only
+        //                   by the responses that complete them; rejecting a
+        //                   response here would deadlock the owner. Responses
+        //                   are instead bounded upstream (e.g., by the MSHR
+        //                   depth, which limits concurrent outstanding misses).
+        //   * pushBack(Ready) -- an already-serviceable item; treated like a
+        //                   response for admission.
+        // Do not "tighten" these to honor m_max_size without an explicit
+        // response reservation, or the owning controller can deadlock.
     public:
         FRFCFS_Buffer(Callback_t check_state_callback, TCallback *callback_owner, int max_size = -1)
         {

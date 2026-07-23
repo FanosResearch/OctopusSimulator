@@ -1,3 +1,4 @@
 Extends,BaseController,,,
 arbiter_type(s),NULL,,"#Arbiters are Null, RR, FCFS, and TDM",
 arbiter_candidates_ids(vi),0,1,2,3
+num_mshr(i),16,,#Max concurrent outstanding misses (MSHR depth). -1 = unbounded
