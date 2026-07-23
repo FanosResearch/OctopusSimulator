@@ -276,6 +276,17 @@ namespace octopus
 
         CacheDataHandler_COTS *cots = (CacheDataHandler_COTS *)m_data_handler;
 
+        // A returning data fill (response from above) must not install a line
+        // that evicts a victim into a full write-back buffer. Stalling it here,
+        // before any action runs, gives PWB a strict (hard) bound with no
+        // mid-response rollback; it retries once a write-back frees a PWB slot.
+        if (msg.source != Message::Source::LOWER_INTERCONNECT)
+        {
+            if (msg.data != NULL && cots->fillWouldOverflowPwb(msg.addr))
+                return false;
+            return true;
+        }
+
         // Already resident, or already tracked in MSHR/PWB -> a hit or a
         // coalesced access; no new MSHR entry is needed.
         if (cots->isAddressTracked(msg.addr))
@@ -286,11 +297,9 @@ namespace octopus
             return true;
 
         // Brand-new miss: require a free MSHR slot (bound on the number of
-        // concurrent outstanding misses) and, conservatively, write-back-buffer
-        // headroom for a potential dirty eviction.
+        // concurrent outstanding misses). The PWB is now enforced strictly at
+        // fill time (above), so misses are no longer throttled on PWB here.
         if (m_num_mshr >= 0 && (int)m_pending_requests.size() >= m_num_mshr)
-            return false;
-        if (!cots->pwbHasSpace())
             return false;
 
         return true;
@@ -322,7 +331,10 @@ namespace octopus
                           (uint16_t)this->m_id);               // Owner
             msg.to.push_back((uint16_t)this->m_shared_memory_id);
             msg.source = Message::Source::SELF;
-            if (buf.pushBack(msg, FRFCFS_State::NonReady))
+            // force=true: a write-back must be admitted to drain the PWB. It is
+            // maintenance traffic, not new demand, so it bypasses the queue cap
+            // (which bounds demand admission only). Bounded upstream by pwb_size.
+            if (buf.pushBack(msg, FRFCFS_State::NonReady, /*force=*/true))
                 ((CacheDataHandler_COTS*)m_data_handler)->addressOfLinePendingWB(true, &evicted_address);
 
             for(int i = 0; i < (int)m_data_access_buffer.size(); )

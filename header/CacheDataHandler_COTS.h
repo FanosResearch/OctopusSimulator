@@ -87,6 +87,27 @@ namespace octopus
             return m_pwb_size < 0 ||
                    (int)m_pending_write_back_regs.size() < m_pwb_size;
         }
+
+        // True iff installing a returning fill for `address` would evict a
+        // victim into an already-full write-back buffer. This mirrors the
+        // eviction condition in updateLineData: the line is being filled from
+        // the MSHR (not yet resident) into a set with no free way, while the
+        // PWB has no headroom. Read-only -- safe to evaluate before the fill is
+        // processed, so the response can be stalled without any rollback.
+        inline bool fillWouldOverflowPwb(uint64_t address)
+        {
+            if (pwbHasSpace())
+                return false;
+            if (!checkMSHR(mask_offset(address)))
+                return false;
+            uint64_t set;
+            int way;
+            if (CacheDataHandler::findline(address, &set, &way))
+                return false;
+            if (findEmptyWay(address) != -1)
+                return false;
+            return true;
+        }
     };
 }
 

@@ -42,8 +42,8 @@ namespace octopus
         int m_max_size; //maximum size of the buffer, if it is -1 the buffer will be unbounded
 
         // Boundedness note: m_max_size bounds only NEW work admitted as NonReady
-        // via pushBack (e.g., demand requests from a lower interface). Two paths
-        // deliberately bypass the bound and are always admitted:
+        // via pushBack (e.g., demand requests from a lower interface). Several
+        // paths deliberately bypass the bound and are always admitted:
         //   * pushFront  -- used for responses/higher-priority messages. A full
         //                   buffer of stalled NonReady requests is drained only
         //                   by the responses that complete them; rejecting a
@@ -52,8 +52,12 @@ namespace octopus
         //                   depth, which limits concurrent outstanding misses).
         //   * pushBack(Ready) -- an already-serviceable item; treated like a
         //                   response for admission.
+        //   * pushBack(..., force=true) -- self-generated maintenance traffic
+        //                   that MUST be admitted to make forward progress
+        //                   (e.g., write-back requests that drain the PWB).
+        //                   Bounded upstream by the PWB depth.
         // Do not "tighten" these to honor m_max_size without an explicit
-        // response reservation, or the owning controller can deadlock.
+        // reservation, or the owning controller can deadlock.
     public:
         FRFCFS_Buffer(Callback_t check_state_callback, TCallback *callback_owner, int max_size = -1)
         {
@@ -62,9 +66,10 @@ namespace octopus
             this->m_max_size = max_size;
         }
 
-        bool pushBack(const TItem &item, FRFCFS_State state = FRFCFS_State::Ready)
+        bool pushBack(const TItem &item, FRFCFS_State state = FRFCFS_State::Ready, bool force = false)
         {
-            if (state != FRFCFS_State::Ready &&
+            if (!force &&
+                state != FRFCFS_State::Ready &&
                 this->m_max_size != -1 &&
                 (int)this->m_buffer.size() >= this->m_max_size)
                 return false;
