@@ -59,6 +59,11 @@ namespace octopus
         virtual void processLogic();
         virtual void addRequests2ProcessingQueue(FRFCFS_Buffer<Message, CoherenceProtocolHandler> &);
 
+        // Structural admission gate. Returns false when a ready request must be
+        // held back (e.g., the derived controller has no free MSHR/PWB entry for
+        // a new miss). Default: always admit. Overridden by CacheController.
+        virtual bool canAdmitRequest(Message &msg) { return true; }
+
         virtual uint64_t getAddressKey(uint64_t addr);
 
         virtual void hitAction(void *);

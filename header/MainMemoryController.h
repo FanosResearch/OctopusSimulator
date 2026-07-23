@@ -18,6 +18,11 @@
 
 namespace octopus
 {
+    // Finite realistic default for the memory-controller request buffer when
+    // no `processing_queue_size` is given in config. Set to -1 in config to
+    // restore the previous unbounded behavior.
+    #define DEFAULT_MEM_PROCESSING_QUEUE_SIZE 32
+
     class MainMemoryController : public ClockedObj, public Configurable
     {
     protected:

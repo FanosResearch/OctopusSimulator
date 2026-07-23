@@ -23,6 +23,12 @@ namespace octopus
         string fsm_filename = std::get<string>(parameters.at(STRINGIFY(fsm_filename)).value);
         string fsm_path = string(FSM_PATH) + fsm_filename + ".csv";
 
+        // Optional MSHR depth (max concurrent outstanding misses). Read from
+        // config when present, otherwise a finite realistic default. -1 = off.
+        m_num_mshr = DEFAULT_NUM_MSHR;
+        if (parameters.find(STRINGIFY(num_mshr)) != parameters.end())
+            m_num_mshr = std::get<int>(parameters.at(STRINGIFY(num_mshr)).value);
+
         if(arbiter_type != STRINGIFY(NULL))
             arbiter_candidates_ids = new vector<int>(std::get<vector<int>>(parameters.at(STRINGIFY(arbiter_candidates_ids)).value));
         
@@ -258,6 +264,36 @@ namespace octopus
             }
             file.close();
         }
+    }
+
+    bool CacheController::canAdmitRequest(Message &msg)
+    {
+        // Only a new demand request arriving from below can open a fresh
+        // outstanding miss (and thus consume an MSHR / possibly a PWB entry).
+        // Responses, snoops, and self-generated replacement messages proceed.
+        if (msg.source != Message::Source::LOWER_INTERCONNECT)
+            return true;
+
+        CacheDataHandler_COTS *cots = (CacheDataHandler_COTS *)m_data_handler;
+
+        // Already resident, or already tracked in MSHR/PWB -> a hit or a
+        // coalesced access; no new MSHR entry is needed.
+        if (cots->isAddressTracked(msg.addr))
+            return true;
+
+        // Coalesces with an already-outstanding miss to the same block.
+        if (m_pending_requests.find(getAddressKey(msg.addr)) != m_pending_requests.end())
+            return true;
+
+        // Brand-new miss: require a free MSHR slot (bound on the number of
+        // concurrent outstanding misses) and, conservatively, write-back-buffer
+        // headroom for a potential dirty eviction.
+        if (m_num_mshr >= 0 && (int)m_pending_requests.size() >= m_num_mshr)
+            return false;
+        if (!cots->pwbHasSpace())
+            return false;
+
+        return true;
     }
 
     bool CacheController::checkReadinessOfCache(Message &msg, ControllerAction::Type type, void *data_ptr)

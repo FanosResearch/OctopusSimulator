@@ -19,7 +19,14 @@ namespace octopus
         m_id = std::get<int>(parameters.at(STRINGIFY(m_id)).value);
         m_llc_id = std::get<int>(parameters.at(STRINGIFY(m_llc_id)).value);
         m_memory_latency = std::get<int>(parameters.at(STRINGIFY(m_memory_latency)).value);
-        
+
+        // Optional bound on the request buffer. Read from config when present,
+        // otherwise fall back to a finite realistic default. A value of -1
+        // restores the previous unbounded behavior.
+        int processing_queue_size = DEFAULT_MEM_PROCESSING_QUEUE_SIZE;
+        if (parameters.find(STRINGIFY(processing_queue_size)) != parameters.end())
+            processing_queue_size = std::get<int>(parameters.at(STRINGIFY(processing_queue_size)).value);
+
         //Constructor
         m_clk_cycle = 1;
 
@@ -27,10 +34,10 @@ namespace octopus
         m_write_count = 0;
 
         m_lower_interface = lower_interface;
-        
+
         dprint = new DebugPrint(getSubMap(STRINGIFY(dprint)), name + std::to_string(m_id), parent_name + "." + name);
-        
-        m_processing_queue = new FRFCFS_Buffer<Message, MainMemoryController>(&MainMemoryController::getRequestState, this);
+
+        m_processing_queue = new FRFCFS_Buffer<Message, MainMemoryController>(&MainMemoryController::getRequestState, this, processing_queue_size);
     }
 
     MainMemoryController::~MainMemoryController()

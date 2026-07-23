@@ -79,6 +79,15 @@ namespace octopus
             if (m_processing_queue->getFirstReady(&ready_msg) == false)
                 return;
 
+            if (!canAdmitRequest(ready_msg))
+            {
+                // Structural stall (e.g., MSHR/PWB full): put the request back
+                // and retry next cycle. A slot is guaranteed to be free because
+                // getFirstReady just removed this element.
+                m_processing_queue->pushBack(ready_msg, FRFCFS_State::NonReady);
+                return;
+            }
+
             if(ready_msg.source == Message::Source::LOWER_INTERCONNECT)
                 Logger::getLogger()->updateRequest(ready_msg.msg_id, Logger::EntryId::CACHE_CHECKPOINT);
 

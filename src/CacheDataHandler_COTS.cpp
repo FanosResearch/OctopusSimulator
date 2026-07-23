@@ -14,6 +14,12 @@ namespace octopus
     {
         line_added2PWB = false;
         address_of_recently_added2PWB = 0;
+
+        // Optional write-back-buffer depth. Read from config when present,
+        // otherwise a finite realistic default. -1 = unbounded (legacy).
+        m_pwb_size = DEFAULT_PWB_SIZE;
+        if (parameters.find(STRINGIFY(pwb_size)) != parameters.end())
+            m_pwb_size = std::get<int>(parameters.at(STRINGIFY(pwb_size)).value);
     }
 
     CacheDataHandler_COTS::~CacheDataHandler_COTS()

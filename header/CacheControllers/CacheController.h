@@ -18,9 +18,17 @@
 
 namespace octopus
 {
+    // Finite realistic default for the MSHR depth (max concurrent outstanding
+    // misses) when no `num_mshr` is given in config. Set to -1 in config to
+    // restore the previous unbounded behavior.
+    #define DEFAULT_NUM_MSHR 16
+
     class CacheController : public BaseController
     {
     protected:
+        // Max concurrent outstanding misses (MSHR depth). -1 = unbounded.
+        int m_num_mshr;
+
         // key is the msg.addr & mask(nbits of CacheLineSize) and the value is request Message
         std::map<uint64_t, Message> m_saved_requests_for_wb;
 
@@ -49,6 +57,10 @@ namespace octopus
 
         virtual bool checkReadinessOfCache(Message &msg, ControllerAction::Type type, void *data_ptr);
         virtual void checkReplacements(FRFCFS_Buffer<Message, CoherenceProtocolHandler> &);
+
+        // Stall a brand-new demand miss when the MSHR is full (outstanding-miss
+        // limit reached) or the write-back buffer (PWB) has no headroom.
+        virtual bool canAdmitRequest(Message &msg) override;
 
     public:
         CacheController(ParametersMap map, CommunicationInterface *upper_interface, 
