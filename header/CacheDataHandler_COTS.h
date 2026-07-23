@@ -12,6 +12,7 @@
 #include "CacheDataHandler.h"
 
 #include <map>
+#include <vector>
 
 namespace octopus
 {
@@ -27,8 +28,11 @@ namespace octopus
 
         int m_pwb_size; //max pending write-backs; -1 = unbounded
 
-        bool line_added2PWB;
-        uint64_t address_of_recently_added2PWB;
+        // Addresses evicted into the PWB whose write-back request has not yet
+        // been issued. A queue (not a single flag) so that multiple evictions
+        // in one cycle are all eventually written back -- a hard PWB bound would
+        // otherwise orphan entries and deadlock.
+        std::vector<uint64_t> m_pwb_pending_issue;
 
         virtual inline void * getLine(uint64_t set, int way) override;
         virtual bool findline(uint64_t address, uint64_t *set, int *way) override;
