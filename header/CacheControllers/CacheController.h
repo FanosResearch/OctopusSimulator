@@ -54,6 +54,11 @@ namespace octopus
         virtual void saveReqForWriteBack(void *);
         virtual void noAction(void *){}; // empty function
         virtual void stall(void *);
+        // Snoop LLC eviction back-invalidation. Routed via MessageType::SERVICE_REQUEST
+        // on the TripleBus service channel, which broadcasts it to every interface, so
+        // all L1 sharers see the INV (Invalidation) and the LLC receives its own copy
+        // back (Own_Invalidation) to complete the eviction (WriteBack/N).
+        virtual void sendInvalidationMessage(void *);
 
         virtual bool checkReadinessOfCache(Message &msg, ControllerAction::Type type, void *data_ptr);
         virtual void checkReplacements(FRFCFS_Buffer<Message, CoherenceProtocolHandler> &);

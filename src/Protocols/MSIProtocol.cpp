@@ -22,9 +22,15 @@ namespace octopus
     FRFCFS_State MSIProtocol::getRequestState(const Message &msg, FRFCFS_State req_state)
     {
         GenericCacheLine cache_line;
+        EventId event_id;
         m_data_handler->readLineBits(msg.addr, &cache_line);
+        // Use the real coherence event (readEvent), not msg.complementary_value:
+        // complementary_value is the CPU req type (Load/Store); for self-generated
+        // Replacement / snoop messages it mis-maps to the wrong FSM column, making a
+        // stalling request look Ready -> infinite processLogic loop (clock freeze).
+        this->readEvent((Message &)msg, &event_id);
 
-        if (this->m_fsm->isStall(cache_line.state, msg.complementary_value))
+        if (this->m_fsm->isStall(cache_line.state, (int)event_id))
             return FRFCFS_State::NonReady;
 
         return FRFCFS_State::Ready;
