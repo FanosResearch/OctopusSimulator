@@ -116,6 +116,7 @@ namespace octopus
         int event_index = 0;
 
         getline(str_stream, state_name, ','); //state name
+        this->m_own_state = stateIds.at(state_name); //default next-state for undefined/empty (trailing) event cells
 
         getline(str_stream, field, ','); //is the state stable or not
         this->stable = (atoi(field.c_str()) == 1);
@@ -157,7 +158,12 @@ namespace octopus
 
     int FSMReader::FSMState::getNextState(int event)
     {
-        return this->transitions[event];
+        // An event with no explicit transition (empty CSV cell, incl. a trailing
+        // one dropped by getline) means "stay in the current state", consistent
+        // with how read-empty cells are parsed. Do NOT use operator[] here: it
+        // would insert a default 0 (= state I) and silently mis-route.
+        auto it = this->transitions.find(event);
+        return (it != this->transitions.end()) ? it->second : this->m_own_state;
     }
     
     const std::vector<int>& FSMReader::FSMState::getActions(int event)
