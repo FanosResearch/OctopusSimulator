@@ -59,9 +59,15 @@ namespace octopus
             //the transitions map uses keys to represent the event number and 
             //value to represent the next state number
             std::map<int, int> transitions;
-            //the actions map uses keys to represent the event number, and 
+            //the actions map uses keys to represent the event number, and
             //value is a vector of integers that represents the action(s) number
-            std::map<int, std::vector<int>> actions; 
+            std::map<int, std::vector<int>> actions;
+            //this state's own index; used as the default next-state for any event
+            //that has no explicit transition (an empty CSV cell = "stay in current
+            //state"). Without this, a trailing empty cell -- dropped by getline --
+            //left the transition unset and getNextState returned std::map's default
+            //0 (= state I), silently mis-routing e.g. IM_dI + Invalidation to I.
+            int m_own_state = 0;
         };
 
         std::map<std::string, int> m_eventIds;
