@@ -1,2 +1,2 @@
 Extends,CacheDataHandler
-pwb_size(i),8,,#Write-back buffer depth (pending write-backs). -1 = unbounded
+pwb_size(i),-1,,#Write-back buffer depth (pending write-backs). -1 = unbounded
