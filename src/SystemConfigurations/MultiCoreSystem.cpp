@@ -21,6 +21,12 @@ namespace octopus
         int num_cores = std::get<int>(parameters.at(STRINGIFY(num_cores)).value);
         vector<string> bus_type = std::get<vector<string>>(parameters.at(STRINGIFY(bus_type)).value);
         string cache_controller_type = std::get<string>(parameters.at(STRINGIFY(cache_controller_type)).value);
+        // LLC may use a different controller than the L1s (e.g. CacheController_End2End,
+        // which drives the TripleBus service channel for back-invalidation on eviction).
+        // Falls back to cache_controller_type when not specified.
+        string llc_controller_type = cache_controller_type;
+        if (parameters.count(STRINGIFY(llc_controller_type)))
+            llc_controller_type = std::get<string>(parameters.at(STRINGIFY(llc_controller_type)).value);
 
         //Constructor
         Bus *bus[bus_type.size()];
@@ -56,8 +62,8 @@ namespace octopus
 
         BaseController *llc_controller;
         int llc_id = std::get<int>(getSubMap(STRINGIFY(llc_controller)).at("m_id").value);
-        llc_controller = createController(cache_controller_type, 
-                                          getSubMap(STRINGIFY(llc_controller)), 
+        llc_controller = createController(llc_controller_type,
+                                          getSubMap(STRINGIFY(llc_controller)),
                                           bus[1]->getInterfaceFor(llc_id), 
                                           bus[0]->getInterfaceFor(llc_id), name);
 

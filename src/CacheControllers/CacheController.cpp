@@ -43,7 +43,8 @@ namespace octopus
         m_processing_queue =
             new FRFCFS_Buffer<Message, CoherenceProtocolHandler>(&CoherenceProtocolHandler::getRequestState,
                                                                  m_protocol,
-                                                                 processing_queue_size);
+                                                                 processing_queue_size,
+                                                                 ~(uint64_t)(m_data_handler->getBlockSize() - 1));
 
         if(arbiter_type == STRINGIFY(NULL))
             m_data_access_arbiter = NULL;
@@ -57,6 +58,7 @@ namespace octopus
         action_functions[ControllerAction::Type::SAVE_REQ_FOR_WRITE_BACK] = [&](void* ptr) {saveReqForWriteBack(ptr);};
         action_functions[ControllerAction::Type::NO_ACTION] = [&](void* ptr) {noAction(ptr);};
         action_functions[ControllerAction::Type::STALL] = [&](void* ptr) {stall(ptr);};
+        action_functions[ControllerAction::Type::SEND_INV_MSG] = [&](void* ptr) {sendInvalidationMessage(ptr);};
     }
 
     CacheController::~CacheController()
@@ -120,6 +122,24 @@ namespace octopus
                 return;
         
         BaseController::hitAction(data_ptr);
+    }
+
+    void CacheController::sendInvalidationMessage(void *data_ptr)
+    {
+        Message *msg = (Message *)data_ptr;
+        msg->cycle = this->m_cache_cycle;
+
+        // Back-invalidation travels on the TripleBus service channel: pushMessage
+        // with SERVICE_REQUEST -> service bus broadcasts it to every interface, so
+        // all L1 sharers see the INV (Invalidation) and the LLC receives its own
+        // copy back (Own_Invalidation) to complete the eviction (WriteBack/N).
+        if (!m_lower_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::SERVICE_REQUEST))
+        {
+            cout << "CacheController(id = " << this->m_id << "): Cannot insert INV into lower interface FIFO" << endl;
+            exit(0);
+        }
+
+        delete msg;
     }
 
     void CacheController::performWriteBack(void *data_ptr)

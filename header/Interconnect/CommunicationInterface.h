@@ -111,6 +111,19 @@ public:
         this->copy(M2);
         return *this;
     }
+
+    // A demand coherence request from a core/L1: a CPU Load/Store at an L1, or a
+    // GetS/GetM at the LLC (complementary_value 0 = GetS/Load, 1 = GetM/Store). These
+    // arrive on the LOWER interface and carry no data. Service traffic -- data
+    // responses (data != NULL), writebacks (PUTM = 2) and back-invalidations
+    // (INV = 10) -- are NOT demand requests. Only demand requests are subject to
+    // per-cache-line FCFS ordering at the controller; service traffic must be free to
+    // advance transients (e.g. an eviction's Own_Invalidation) regardless of order.
+    bool isDemandRequest() const
+    {
+        return source == Source::LOWER_INTERCONNECT && data == NULL &&
+               (complementary_value == 0 || complementary_value == 1);
+    }
 };
 
 class CommunicationInterface

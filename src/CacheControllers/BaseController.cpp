@@ -37,8 +37,9 @@ namespace octopus
         m_processing_queue =
             new FRFCFS_Buffer<Message, CoherenceProtocolHandler>(&CoherenceProtocolHandler::getRequestState,
                                                                  m_protocol,
-                                                                 processing_queue_size);
-        
+                                                                 processing_queue_size,
+                                                                 ~(uint64_t)(m_data_handler->getBlockSize() - 1));
+
         dprint = new DebugPrint(getSubMap(STRINGIFY(dprint)), name + std::to_string(m_id), parent_name + "." + name);
 
         action_functions.resize(ControllerAction::Type::MAX_ACTIONS_NUM);

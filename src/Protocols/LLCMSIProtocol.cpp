@@ -81,7 +81,7 @@ namespace octopus
                 controller_action.type = (msg.source == Message::Source::LOWER_INTERCONNECT)
                                              ? ControllerAction::Type::HIT_Action
                                              : ControllerAction::Type::REMOVE_PENDING;
-                
+
                 controller_action.data = (void *)new Message();
                 ((Message *)controller_action.data)->copy(msg);
                 ((Message *)controller_action.data)->to.clear();
@@ -169,6 +169,13 @@ namespace octopus
     {
         switch (msg.source)
         {
+        case Message::Source::SELF: // LLC self-generated eviction/replacement
+            if (msg.owner == m_id)
+                *out_id = EventId::Replacement;
+            else
+                std::cout << " LLCMSIProtocol: Invalid SELF transaction" << std::endl;
+            break;
+
         case Message::Source::UPPER_INTERCONNECT:
             if (msg.data != NULL)
                 *out_id = EventId::Data_fromUpperInterface;
