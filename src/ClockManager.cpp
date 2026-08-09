@@ -81,13 +81,12 @@ namespace octopus
                 exit(0);
             }
 
-            EventKey key = itr->first;
-            ClockedObj *obj = itr->second;
-            events.erase(itr);
+            auto node = events.extract(itr); // reuse the tree node: no free/malloc per event
+            ClockedObj *obj = node.mapped();
 
             obj->cycleProcess(); // trigger the clock obj
-            key.time_stamp = current_time + obj->getClkPeriod();
-            events.insert(pair<EventKey, ClockedObj *>(key, obj));
+            node.key().time_stamp = current_time + obj->getClkPeriod();
+            events.insert(std::move(node));
         } while (true);
     }
 
