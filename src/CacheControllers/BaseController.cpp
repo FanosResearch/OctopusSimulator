@@ -119,7 +119,13 @@ namespace octopus
         if (m_lower_interface->peekMessage(&msg))
         {
             msg.source = Message::Source::LOWER_INTERCONNECT;
-            if (buf.pushBack(msg, FRFCFS_State::NonReady))
+            // Only demand requests are subject to the queue bound. Responses and
+            // service traffic (data fills, write-backs, invalidations) must always
+            // be admitted: a full queue of stalled demand requests would otherwise
+            // reject the very response that would drain them, deadlocking. (At the
+            // LLC, an L1 write-back is a response that arrives on the lower interface,
+            // so route by message kind, not by interface.)
+            if (buf.pushBack(msg, FRFCFS_State::NonReady, /*force=*/!msg.isDemandRequest()))
                 m_lower_interface->popFrontMessage();
         }
     }

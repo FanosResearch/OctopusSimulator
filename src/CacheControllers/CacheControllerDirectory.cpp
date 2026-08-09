@@ -54,7 +54,11 @@ namespace octopus
             else
             {
                 msg.source = Message::Source::LOWER_INTERCONNECT;
-                if (buf.pushBack(msg, FRFCFS_State::NonReady))
+                // Only demand requests are subject to the queue bound; responses and
+                // service traffic (e.g. an L1 write-back reaching the LLC on the lower
+                // interface) must always be admitted, else a full queue starves the
+                // response that would drain it. Route by message kind, not interface.
+                if (buf.pushBack(msg, FRFCFS_State::NonReady, /*force=*/!msg.isDemandRequest()))
                     m_lower_interface->popFrontMessage();
             }
         }
