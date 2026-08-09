@@ -53,8 +53,15 @@ namespace octopus
         }
         else
             file = NULL;
+
+        // A disabled DebugPrint has no per-cycle work (cycleProcess only bumps
+        // m_clk_cycle, which is read solely while printing). Drop it from the
+        // clock loop entirely -- otherwise dozens of idle DebugPrint objects
+        // dominate event dispatch (measured ~57% of all cycleProcess calls).
+        if(!enable)
+            ClockManager::getClockManager()->deregisterCLKObj(this);
     }
-    
+
     DebugPrint::~DebugPrint()
     {
     }
