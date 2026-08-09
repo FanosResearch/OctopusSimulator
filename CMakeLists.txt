@@ -4,6 +4,14 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+# Default to an optimized build. Without this the toolchain defaults to -O0,
+# which makes the simulator ~3-4x slower for no benefit. Configure with
+# -DCMAKE_BUILD_TYPE=Debug to override for debugging.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+
 project(Octopus_Simulator VERSION 1.0)
 
 add_definitions(-Wno-error=sign-compare)
