@@ -66,6 +66,7 @@ namespace octopus
 
     public:
         void registerCLKObj(uint64_t clk_period, ClockedObj* obj);
+        void deregisterCLKObj(ClockedObj* obj);
         void registerCLKTrigger(ClockedObj* obj);
         void init();
         void run();

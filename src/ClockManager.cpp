@@ -38,6 +38,22 @@ namespace octopus
         ClockManager::obj_id++;
     }
 
+    void ClockManager::deregisterCLKObj(ClockedObj *obj)
+    {
+        // Remove obj's scheduled event so it is no longer dispatched every cycle.
+        // Used by idle objects (e.g. a disabled DebugPrint) that register via the
+        // ClockedObj base ctor but have no per-cycle work to do. One-time linear
+        // scan at construction; obj appears at most once in the queue.
+        for (auto it = events.begin(); it != events.end(); ++it)
+        {
+            if (it->second == obj)
+            {
+                events.erase(it);
+                return;
+            }
+        }
+    }
+
     void ClockManager::registerCLKTrigger(ClockedObj *obj)
     {
         clock_triggers.push_back(obj);
