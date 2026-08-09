@@ -288,24 +288,16 @@ namespace octopus
 
     bool CacheController::canAdmitRequest(Message &msg)
     {
-        // Only a new demand request arriving from below can open a fresh
-        // outstanding miss (and thus consume an MSHR / possibly a PWB entry).
-        // Responses, snoops, and self-generated replacement messages proceed.
-        if (msg.source != Message::Source::LOWER_INTERCONNECT)
+        // Only a brand-new demand request can open a fresh outstanding miss (and
+        // thus consume an MSHR slot). Responses, snoops, write-backs and self-
+        // generated replacement messages must always proceed -- never back-pressure
+        // a response, or a full MSHR/queue starves the traffic that would drain it.
+        // Keyed on message kind, not interface: an L1 write-back is a response that
+        // reaches the LLC on the lower interface.
+        if (!msg.isDemandRequest())
             return true;
 
         CacheDataHandler_COTS *cots = (CacheDataHandler_COTS *)m_data_handler;
-
-        // A returning data fill (response from above) must not install a line
-        // that evicts a victim into a full write-back buffer. Stalling it here,
-        // before any action runs, gives PWB a strict (hard) bound with no
-        // mid-response rollback; it retries once a write-back frees a PWB slot.
-        if (msg.source != Message::Source::LOWER_INTERCONNECT)
-        {
-            if (msg.data != NULL && cots->fillWouldOverflowPwb(msg.addr))
-                return false;
-            return true;
-        }
 
         // Already resident, or already tracked in MSHR/PWB -> a hit or a
         // coalesced access; no new MSHR entry is needed.
