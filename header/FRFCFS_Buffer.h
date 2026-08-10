@@ -68,14 +68,29 @@ namespace octopus
         // other lines still flow on readiness. Zero => disabled (legacy FR-FCFS).
         uint64_t m_line_mask;
 
+        // Rescan-skip optimization. Only valid when item readiness is a pure
+        // function of state that this buffer's own push/pop mutate -- i.e. it
+        // NEVER changes just because cycles elapse. The coherence controller
+        // queues qualify (getRequestState = !isStall(cache_line.state, event)),
+        // so once a full scan finds nothing ready, nothing can become ready
+        // until the next push or successful pop. m_dirty tracks that: a fruitless
+        // scan clears it; any push or returned item sets it; a clear m_dirty lets
+        // getFirstReady return immediately without re-scanning. Do NOT enable for
+        // queues with time-dependent readiness (e.g. MainMemoryController, whose
+        // items ripen as m_clk_cycle passes) -- they would stall forever.
+        bool m_readiness_state_only;
+        bool m_dirty;
+
     public:
         FRFCFS_Buffer(Callback_t check_state_callback, TCallback *callback_owner, int max_size = -1,
-                      uint64_t line_mask = 0)
+                      uint64_t line_mask = 0, bool readiness_state_only = false)
         {
             this->m_callback_owner = callback_owner;
             this->m_check_state_callback = check_state_callback;
             this->m_max_size = max_size;
             this->m_line_mask = line_mask;
+            this->m_readiness_state_only = readiness_state_only;
+            this->m_dirty = true;
         }
 
         bool pushBack(const TItem &item, FRFCFS_State state = FRFCFS_State::Ready, bool force = false)
@@ -90,6 +105,7 @@ namespace octopus
             element.item = item;
 
             this->m_buffer.push_back(element);
+            this->m_dirty = true;   // new work may be ready or may unblock others
             return true;
         }
 
@@ -98,13 +114,23 @@ namespace octopus
             Element element = {.state = FRFCFS_State::Ready};
             element.item = item;
             this->m_buffer.insert(this->m_buffer.begin(), element);
+            this->m_dirty = true;   // new work may be ready or may unblock others
             return true;
         }
 
         bool getFirstReady(TItem *out_item)
         {
-            if (m_buffer.empty())
+            // Nothing has changed since the last scan came up empty: no queued
+            // item can have newly become ready (state-only readiness). Skip the
+            // O(n^2) rescan entirely. See m_dirty note above.
+            if (m_readiness_state_only && !m_dirty)
                 return false;
+
+            if (m_buffer.empty())
+            {
+                m_dirty = false;
+                return false;
+            }
 
             for (int i = 0; i < (int)m_buffer.size(); i++)
             {
@@ -149,6 +175,9 @@ namespace octopus
                 else
                     m_buffer[i].state = state;
             }
+            // Full scan, nothing ready: until the next push or successful pop
+            // mutates state, a re-scan cannot find anything new.
+            m_dirty = false;
             return false;
         }
 
