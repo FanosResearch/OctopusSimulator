@@ -38,7 +38,8 @@ namespace octopus
             new FRFCFS_Buffer<Message, CoherenceProtocolHandler>(&CoherenceProtocolHandler::getRequestState,
                                                                  m_protocol,
                                                                  processing_queue_size,
-                                                                 ~(uint64_t)(m_data_handler->getBlockSize() - 1));
+                                                                 ~(uint64_t)(m_data_handler->getBlockSize() - 1),
+                                                                 /*readiness_state_only=*/true);
 
         dprint = new DebugPrint(getSubMap(STRINGIFY(dprint)), name + std::to_string(m_id), parent_name + "." + name);
 

@@ -44,7 +44,8 @@ namespace octopus
             new FRFCFS_Buffer<Message, CoherenceProtocolHandler>(&CoherenceProtocolHandler::getRequestState,
                                                                  m_protocol,
                                                                  processing_queue_size,
-                                                                 ~(uint64_t)(m_data_handler->getBlockSize() - 1));
+                                                                 ~(uint64_t)(m_data_handler->getBlockSize() - 1),
+                                                                 /*readiness_state_only=*/true);
 
         if(arbiter_type == STRINGIFY(NULL))
             m_data_access_arbiter = NULL;
