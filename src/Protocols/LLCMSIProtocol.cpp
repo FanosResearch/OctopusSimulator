@@ -137,6 +137,15 @@ namespace octopus
                                                              0,          // Cycle
                                                              0,          // Complementary_value
                                                              msg.owner); // Owner
+                // When the write-back is triggered by data arriving (e.g. an L1
+                // writing back its dirty copy for a line the inclusive LLC evicted
+                // while awaiting it: MN_d + Data_fromLowerInterface), forward THAT
+                // data -- the LLC array never held this line's data. Without this
+                // the write-back reads the (absent) LLC copy and sends/derefs NULL.
+                // For an eviction of a line the LLC does hold (I/S + Replacement),
+                // msg.data is NULL and performWriteBack reads the resident copy.
+                if (msg.data != NULL)
+                    ((Message *)controller_action.data)->copy(msg.data);
                 break;
 
             case ActionId::Fault:

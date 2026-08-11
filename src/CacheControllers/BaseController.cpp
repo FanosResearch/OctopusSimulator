@@ -191,8 +191,8 @@ namespace octopus
         if (msg->data == NULL)
         {
             GenericCacheLine cache_line;
-            m_data_handler->readCacheLine(msg->addr, &cache_line);
-            msg->copy(cache_line.m_data);
+            if (m_data_handler->readCacheLine(msg->addr, &cache_line) && cache_line.m_data != NULL)
+                msg->copy(cache_line.m_data);
         }
 
         if (!m_lower_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::DATA_RESPONSE))
