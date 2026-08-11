@@ -31,6 +31,7 @@ namespace octopus
             Other_PutM,
 
             OwnData,
+            Invalidation,
             OwnData_Execlusive,
         };
 

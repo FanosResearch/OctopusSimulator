@@ -36,6 +36,16 @@ namespace octopus
         fsmFile.close();
     }
 
+    // Strip leading/trailing whitespace (spaces, tabs, CR/LF). Lets the FSM CSVs
+    // be column-aligned for readability without breaking name lookups, and makes
+    // a spaces-only cell read as empty ("stay in state") rather than a bogus name.
+    static inline string _trim(const string &s)
+    {
+        size_t a = s.find_first_not_of(" \t\r\n");
+        if (a == string::npos) return "";
+        return s.substr(a, s.find_last_not_of(" \t\r\n") - a + 1);
+    }
+
     void FSMReader::parseFile(ifstream &file, map<string, int> &ids)
     {
         string line;
@@ -47,6 +57,8 @@ namespace octopus
             getline(strStream, value, ','); //First field in the CSV line
             getline(strStream, index, ','); //Second field in the CSV line
 
+            value = _trim(value);
+            index = _trim(index);
             if (index.length() == 0)
                 break;
             ids[index] = atoi(value.c_str());
@@ -116,6 +128,7 @@ namespace octopus
         int event_index = 0;
 
         getline(str_stream, state_name, ','); //state name
+        state_name = _trim(state_name);
         this->m_own_state = stateIds.at(state_name); //default next-state for undefined/empty (trailing) event cells
 
         getline(str_stream, field, ','); //is the state stable or not
@@ -126,13 +139,13 @@ namespace octopus
 
         while (getline(str_stream, field, ','))
         {
-            field.erase(field.find('\r') != string::npos ? field.find('\r') : field.length());
+            field = _trim(field);
             if (field.length() != 0)
             {
                 auto last_delim_pos = string::npos;
                 if ((last_delim_pos = field.find_last_of('/')) != string::npos)
                 {
-                    string next_state = field.substr(last_delim_pos + 1);
+                    string next_state = _trim(field.substr(last_delim_pos + 1));
                     if (next_state.length() == 0) //if there is no next state, next state will be the current state
                         this->transitions[event_index] = stateIds.at(state_name);
                     else
@@ -143,7 +156,7 @@ namespace octopus
                     do
                     {
                         getline(field_stream, action_name, '/');
-                        this->actions[event_index].push_back(actionIds.at(action_name));
+                        this->actions[event_index].push_back(actionIds.at(_trim(action_name)));
                     } while (field_stream.tellg() < (long)last_delim_pos);
                 }
                 else //if there is no '/' in the field, the field will contain the next state only

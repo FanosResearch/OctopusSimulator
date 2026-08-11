@@ -74,7 +74,7 @@ namespace octopus
             m_data_handler->readCacheLine(msg->addr, &cache_line);
             msg->copy(cache_line.m_data);
         }
-        
+
         msg->owner = (m_owner_of_latest_data > -1) ? m_owner_of_latest_data : this->m_id;
         msg->to.push_back(this->m_shared_memory_id);
 

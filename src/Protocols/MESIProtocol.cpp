@@ -32,6 +32,11 @@ namespace octopus
 
         if (*out_id == MSIProtocol::EventId::OwnData)
             *out_id = (MSIProtocol::EventId)((msg.complementary_value == 2) ? EventId::OwnData_Execlusive : EventId::OwnData);
+
+        // Exclusive data was signalled via complementary_value==2; clear it now so a
+        // downstream re-read of this message does not re-trigger OwnData_Execlusive.
+        if ((int)*out_id == (int)EventId::OwnData_Execlusive)
+            msg.complementary_value = 0;
     }
 
     vector<ControllerAction> MESIProtocol::handleAction(vector<int> &actions, Message &msg,

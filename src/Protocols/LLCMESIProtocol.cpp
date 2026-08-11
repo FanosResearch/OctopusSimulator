@@ -39,11 +39,22 @@ namespace octopus
         {
             ControllerAction controller_action;
 
-            controller_action.type = ControllerAction::Type::REMOVE_PENDING;
+            // Match stable's SendData model: a request arriving on the lower interface
+            // (an L1 GetS the LLC can satisfy directly) is served inline via HIT_Action
+            // and never enters m_pending_requests; only a fill coming back (source !=
+            // LOWER) drains a parked request via REMOVE_PENDING.
+            controller_action.type = (msg.source == Message::Source::LOWER_INTERCONNECT)
+                                         ? ControllerAction::Type::HIT_Action
+                                         : ControllerAction::Type::REMOVE_PENDING;
             controller_action.data = (void *)new Message;
             ((Message *)controller_action.data)->copy(msg);
+            // Retarget to the L1 requestor. copy(msg) inherits msg.to, which for data
+            // triggered by a memory/write-back message is the memory id -- sending that
+            // onto the L1 bus trips "Wrong destination". (Mirrors the MSI SendData path.)
+            ((Message *)controller_action.data)->to.clear();
+            ((Message *)controller_action.data)->to.push_back(msg.owner);
             ((Message *)controller_action.data)->complementary_value = 2; //execlusive Data
-            
+
             controller_actions.push_back(controller_action);
         }
 

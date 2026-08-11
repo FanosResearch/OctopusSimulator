@@ -55,10 +55,11 @@ StateNum,State,,,,,,,,,,,,,,,,,,
 15,EI_a,,,,,,,,,,,,,,,,,,
 16,SI_a,,,,,,,,,,,,,,,,,,
 17,II_a,,,,,,,,,,,,,,,,,,
+18,IS_dInvM,,,,,,,,,,,,,,,,,,
 ,,,,,,,,,,,,,,,,,,,
 State,stable,isDataValid,Load,Store,Replacement,Fwd_GetS,Fwd_GetM,Inv,Put_Ack,Data_zeroAck,Data_nonZeroAck,DataFromOwner,InvAck,lastInvAck,Data_execlusive,AckCount,AckCount_zero,DataFromOwner_nonZeroAck,InvM
 I,1,0,GetS/IS_d,GetM/IM_ad,,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/
-IS_d,0,1,Stall/,Stall/,Stall/,Stall/,Stall/,InvAck2Req/IS_dI,Fault/,Hit/S,Fault/,Hit/S,Fault/,Fault/,Hit/E,Fault/,Fault/,Fault/,Fault/
+IS_d,0,1,Stall/,Stall/,Stall/,Stall/,Stall/,InvAck2Req/IS_dI,Fault/,Hit/S,Fault/,Hit/S,Fault/,Fault/,Hit/E,Fault/,Fault/,Fault/,IS_dInvM
 IS_dI,0,1,Stall/,Stall/,Stall/,Stall/,Stall/,Fault/,Fault/,Hit/I,Fault/,Hit/I,Fault/,Fault/,Hit/Data2Req/I,Fault/,Fault/,Fault/,Fault/
 IM_ad,0,1,Stall/,Stall/,Stall/,Stall/,Stall/,Stall/,Fault/,Hit/M,AckNum_set/IM_a,Hit/M,Ack_dec/,Fault/,Fault/,Fault/,Fault/,AckNum_set/IM_a,Stall/
 IM_a,0,1,Stall/,Stall/,Stall/,Stall/,Stall/,Stall/,Fault/,Fault/,Fault/,Fault/,Ack_dec/,Hit/Ack_dec/M,Fault/,Fault/,Fault/,Fault/,Stall/
@@ -75,3 +76,4 @@ MI_a,0,1,Stall/,Stall/,Stall/,Data2Req/OI_a,Data2Req/II_a,,I,Fault/,Fault/,Fault
 EI_a,0,1,Stall/,Stall/,Stall/,Data2Req/SI_a,Data2Req/II_a,,I,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,
 SI_a,0,1,Stall/,Stall/,Stall/,Fault/,Fault/,InvAck2Req/II_a,I,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/
 II_a,0,1,Stall/,Stall/,Stall/,Fault/,Fault/,Fault/,I,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/
+IS_dInvM,0,1,Stall/,Stall/,Stall/,Stall/,Stall/,Fault/,Fault/,Hit/Data2Req/I,Fault/,Hit/Data2Req/I,Fault/,Fault/,Hit/Data2Req/I,Fault/,Fault/,Fault/,Fault/

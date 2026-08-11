@@ -39,7 +39,7 @@ namespace octopus
         bool isStall(int state, int Event);
         bool isStable(int state);
 
-        void getTransition(int current_state, int event, 
+        void getTransition(int current_state, int event,
                             int& out_next_state, std::vector<int>& out_actions);
 
     private:
