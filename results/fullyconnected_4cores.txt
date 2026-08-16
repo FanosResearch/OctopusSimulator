@@ -1,0 +1,7 @@
+4-core 2x2 fullyconnected, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  rc=0  WCL min/max = 2513 / 2776  spread=1.10x  finish_max=1152430
+neighbor   rc=0  WCL min/max = 2513 / 2776  spread=1.10x  finish_max=1152430
+random     rc=0  WCL min/max = 2513 / 2776  spread=1.10x  finish_max=1152430
+./run_pingpong_strategies.sh: line 192: unexpected EOF while looking for matching `"'
+  (153 s elapsed for this config)

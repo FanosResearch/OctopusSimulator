@@ -1,0 +1,37 @@
+=== mesh2d 2 cores ===
+2-core 2x1 mesh2d, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  rc=0  WCL min/max = 1270 / 1527  spread=1.20x  finish_max=1451059
+neighbor   rc=0  WCL min/max = 1270 / 1527  spread=1.20x  finish_max=1451059
+random     rc=0  WCL min/max = 1270 / 1527  spread=1.20x  finish_max=1451059
+=== mesh2d 4 cores ===
+4-core 2x2 mesh2d, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  rc=0  WCL min/max = 1520 / 2783  spread=1.83x  finish_max=1488487
+neighbor   rc=0  WCL min/max = 1520 / 2782  spread=1.83x  finish_max=1472862
+random     rc=0  WCL min/max = 1520 / 2782  spread=1.83x  finish_max=1472862
+=== mesh2d 8 cores ===
+8-core 4x2 mesh2d, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  rc=0  WCL min/max = 1520 / 5292  spread=3.48x  finish_max=1560846
+neighbor   rc=0  WCL min/max = 1520 / 5292  spread=3.48x  finish_max=1807017
+random     rc=0  WCL min/max = 1520 / 5292  spread=3.48x  finish_max=1495286
+=== mesh2d 16 cores ===
+16-core 4x4 mesh2d, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  rc=0  WCL min/max = 1520 / 10302  spread=6.78x  finish_max=1608910
+neighbor   rc=0  WCL min/max = 1520 / 10305  spread=6.78x  finish_max=1618645
+random     rc=0  WCL min/max = 1520 / 10302  spread=6.78x  finish_max=1632602
+=== mesh2d 32 cores ===
+32-core 8x4 mesh2d, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  FAILED (rc=0): 
+neighbor   FAILED (rc=0): 
+random     FAILED (rc=0): 
+=== fullyconnected 32 cores ===
+32-core 8x4 fullyconnected, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  FAILED (rc=0): 
+neighbor   FAILED (rc=0): 
+random     FAILED (rc=0): 
+DONE

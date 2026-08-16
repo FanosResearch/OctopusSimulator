@@ -1,0 +1,13 @@
+=== mesh2d 32 cores ===
+32-core 8x4 mesh2d, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  rc=0  WCL min/max = 1520 / 20327  spread=13.37x  finish_max=1525754
+neighbor   rc=0  WCL min/max = 1520 / 20324  spread=13.37x  finish_max=1603671
+random     rc=0  WCL min/max = 1520 / 20326  spread=13.37x  finish_max=1616220
+=== fullyconnected 32 cores ===
+32-core 8x4 fullyconnected, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  rc=0  WCL min/max = 16513 / 20276  spread=1.23x  finish_max=1169930
+neighbor   rc=0  WCL min/max = 16513 / 20276  spread=1.23x  finish_max=1169930
+random     rc=0  WCL min/max = 16513 / 20276  spread=1.23x  finish_max=1169930
+DONE

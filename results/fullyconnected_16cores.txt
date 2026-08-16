@@ -1,0 +1,6 @@
+16-core 4x4 fullyconnected, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  rc=0  WCL min/max = 8513 / 10276  spread=1.21x  finish_max=1159930
+neighbor   rc=0  WCL min/max = 8513 / 10276  spread=1.21x  finish_max=1159930
+random     rc=0  WCL min/max = 8513 / 10276  spread=1.21x  finish_max=1159930
+  (644 s elapsed for this config)

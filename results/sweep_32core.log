@@ -1,0 +1,12 @@
+=== 32-core mesh2d ===
+32-core 8x4 mesh2d, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  FAILED (rc=0): 
+neighbor   FAILED (rc=0): 
+random     FAILED (rc=0): 
+=== 32-core fullyconnected ===
+32-core 8x4 fullyconnected, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  FAILED (rc=0): 
+neighbor   FAILED (rc=0): 
+random     FAILED (rc=0): 

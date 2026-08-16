@@ -1,0 +1,6 @@
+m_id(i),-1,,
+m_shared_memory_id(i),-1,,
+m_clk_period(i),100,,#Clock period in nano seconds
+processing_queue_size(i),8,,#If size is -1 the queue will grow indefinitely
+protocol_type(s),SNOOP_MSI,,#Type should be written similar to the names in ProtocolType enum in Protocols/Protocols.h
+fsm_filename(s),MSI_splitBus_snooping,,#Name should match the name of the file in Protocols_FSM directory

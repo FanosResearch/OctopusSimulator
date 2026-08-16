@@ -1,0 +1,8 @@
+component_ids(vi),0,1,2,3,10,
+buffers_max_size(i),16,,,,,
+m_clk_period(i),50,,,,,#Clk period in nano seconds
+connection_matrix[0](vi),0,1,2,3,10,#first entry is the node id and the other entries are what the node is connected to
+connection_matrix[1](vi),1,0,2,3,10,#first entry is the node id and the other entries are what the node is connected to
+connection_matrix[2](vi),2,0,1,3,10,#first entry is the node id and the other entries are what the node is connected to
+connection_matrix[3](vi),3,0,1,2,10,#first entry is the node id and the other entries are what the node is connected to
+connection_matrix[4](vi),10,0,1,2,3,#first entry is the node id and the other entries are what the node is connected to

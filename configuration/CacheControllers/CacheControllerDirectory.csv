@@ -1,0 +1,2 @@
+Extends,CacheController,,
+processing_queue_size(i),32,,#Diectory based protocols require larger sizes than snooping. A good practice is to set it to num_cores*max_mem_req

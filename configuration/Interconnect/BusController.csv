@@ -1,0 +1,3 @@
+m_request_latency(i),2,,
+m_response_latency(i),5,,
+arbiter_type(s),RRArbiter,,#Type should match the name of the arbiter class

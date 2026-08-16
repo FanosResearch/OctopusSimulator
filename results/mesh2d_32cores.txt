@@ -1,0 +1,6 @@
+32-core 8x4 mesh2d, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  FAILED (rc=0): 
+neighbor   FAILED (rc=0): 
+random     FAILED (rc=0): 
+  (11 s elapsed for this config)

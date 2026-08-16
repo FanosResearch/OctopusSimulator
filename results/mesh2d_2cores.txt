@@ -1,0 +1,6 @@
+2-core 2x1 mesh2d, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  rc=0  WCL min/max = 1270 / 1527  spread=1.20x  finish_max=1451059
+neighbor   rc=0  WCL min/max = 1270 / 1527  spread=1.20x  finish_max=1451059
+random     rc=0  WCL min/max = 1270 / 1527  spread=1.20x  finish_max=1451059
+  (78 s elapsed for this config)

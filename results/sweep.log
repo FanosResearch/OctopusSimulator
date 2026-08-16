@@ -1,0 +1,110 @@
+Paper sweep: 10000 iters per core, MESI protocol
+Topologies: mesh2d fullyconnected
+Core counts: 2 4 8 16 32 
+Results dir: /mnt/c/Users/moham/Downloads/DirectPred_RTAS_25/predictable-directory-based-memory-system-main/predictable-directory-based-memory-system-main/results
+
+==========================================================
+[10:12:06] topology=mesh2d cores=2 rows=2
+==========================================================
+2-core 2x1 mesh2d, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  rc=0  WCL min/max = 1270 / 1527  spread=1.20x  finish_max=1451059
+neighbor   rc=0  WCL min/max = 1270 / 1527  spread=1.20x  finish_max=1451059
+random     rc=0  WCL min/max = 1270 / 1527  spread=1.20x  finish_max=1451059
+  (78 s elapsed for this config)
+
+==========================================================
+[10:13:24] topology=mesh2d cores=4 rows=2
+==========================================================
+4-core 2x2 mesh2d, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  rc=0  WCL min/max = 1520 / 2783  spread=1.83x  finish_max=1488487
+neighbor   rc=0  WCL min/max = 1520 / 2782  spread=1.83x  finish_max=1472862
+random     rc=0  WCL min/max = 1520 / 2782  spread=1.83x  finish_max=1472862
+  (150 s elapsed for this config)
+
+==========================================================
+[10:15:54] topology=mesh2d cores=8 rows=4
+==========================================================
+8-core 4x2 mesh2d, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  rc=0  WCL min/max = 1520 / 5292  spread=3.48x  finish_max=1560846
+neighbor   rc=0  WCL min/max = 1520 / 5292  spread=3.48x  finish_max=1807017
+random     rc=0  WCL min/max = 1520 / 5292  spread=3.48x  finish_max=1495286
+  (318 s elapsed for this config)
+
+==========================================================
+[10:21:12] topology=mesh2d cores=16 rows=4
+==========================================================
+16-core 4x4 mesh2d, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  rc=0  WCL min/max = 1520 / 10302  spread=6.78x  finish_max=1608910
+neighbor   rc=0  WCL min/max = 1520 / 10305  spread=6.78x  finish_max=1618645
+random     rc=0  WCL min/max = 1520 / 10302  spread=6.78x  finish_max=1632602
+  (766 s elapsed for this config)
+
+==========================================================
+[10:33:58] topology=mesh2d cores=32 rows=8
+==========================================================
+32-core 8x4 mesh2d, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  FAILED (rc=0): 
+neighbor   FAILED (rc=0): 
+random     FAILED (rc=0): 
+  (11 s elapsed for this config)
+
+==========================================================
+[10:34:09] topology=fullyconnected cores=2 rows=2
+==========================================================
+2-core 2x1 fullyconnected, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  rc=0  WCL min/max = 1513 / 1526  spread=1.01x  finish_max=1151231
+neighbor   rc=0  WCL min/max = 1513 / 1526  spread=1.01x  finish_max=1151231
+random     rc=0  WCL min/max = 1513 / 1526  spread=1.01x  finish_max=1151231
+  (81 s elapsed for this config)
+
+==========================================================
+[10:35:30] topology=fullyconnected cores=4 rows=2
+==========================================================
+4-core 2x2 fullyconnected, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  rc=0  WCL min/max = 2513 / 2776  spread=1.10x  finish_max=1152430
+neighbor   rc=0  WCL min/max = 2513 / 2776  spread=1.10x  finish_max=1152430
+random     rc=0  WCL min/max = 2513 / 2776  spread=1.10x  finish_max=1152430
+./run_pingpong_strategies.sh: line 192: unexpected EOF while looking for matching `"'
+  (153 s elapsed for this config)
+
+==========================================================
+[10:38:03] topology=fullyconnected cores=8 rows=4
+==========================================================
+8-core 4x2 fullyconnected, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  rc=0  WCL min/max = 4513 / 5276  spread=1.17x  finish_max=1154930
+neighbor   rc=0  WCL min/max = 4513 / 5276  spread=1.17x  finish_max=1154930
+random     rc=0  WCL min/max = 4513 / 5276  spread=1.17x  finish_max=1154930
+  (295 s elapsed for this config)
+
+==========================================================
+[10:42:58] topology=fullyconnected cores=16 rows=4
+==========================================================
+16-core 4x4 fullyconnected, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  rc=0  WCL min/max = 8513 / 10276  spread=1.21x  finish_max=1159930
+neighbor   rc=0  WCL min/max = 8513 / 10276  spread=1.21x  finish_max=1159930
+random     rc=0  WCL min/max = 8513 / 10276  spread=1.21x  finish_max=1159930
+  (644 s elapsed for this config)
+
+==========================================================
+[10:53:42] topology=fullyconnected cores=32 rows=8
+==========================================================
+32-core 8x4 fullyconnected, 10000 iters per core, MESI protocol
+==================================================================
+antipodal  FAILED (rc=0): 
+neighbor   FAILED (rc=0): 
+random     FAILED (rc=0): 
+  (8 s elapsed for this config)
+
+==========================================================
+Sweep done. Total wall time: 2504 s (41 min)
+Per-config summaries in /mnt/c/Users/moham/Downloads/DirectPred_RTAS_25/predictable-directory-based-memory-system-main/predictable-directory-based-memory-system-main/results/
+Per-core Summary.csv files in BMs/Synthetic/<N>Cores/PingPong-<strat>/MESI_<topology>_logs/

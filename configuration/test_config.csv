@@ -1,0 +1,9 @@
+Extends,CacheControllers/BaseController,
+Param1(i),0,
+Param2(d),3.3,
+Param3(vi),1,2
+Param4(vd),4.4,5.5
+sub[0].Param1(vd),6.6,7.7
+sub[0].subsub.Param2(d),8.8,
+Param5(s),Hello World,
+Param6(vs),Hello Earth,Hello Mars
