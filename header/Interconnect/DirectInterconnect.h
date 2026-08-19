@@ -32,8 +32,11 @@ namespace octopus
         DirectController* interconnect_controller;
         DebugPrint* dprint;
 
-        int m_interconnect_cycle;
-        int m_interconnect_cycle_edges;
+        uint64_t m_interconnect_cycle;
+        uint64_t m_interconnect_cycle_edges; // MUST be unsigned: signed int wrapped negative
+                                             // at 2^31 edges (~1.07B cyc) and `edges % 2 == 1`
+                                             // went false forever -> interconnect stopped moving
+                                             // messages -> giant-trace deadlock.
 
     public:
         DirectInterconnect(ParametersMap map, int upper_id, int lower_id = -1,

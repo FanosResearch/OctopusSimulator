@@ -43,9 +43,9 @@ namespace octopus
         int m_id;
         uint64_t m_clk_cycle;
         uint32_t m_number_of_OoO_requests;
-        uint32_t m_last_received_msg_cycle;
+        uint64_t m_last_received_msg_cycle; // 64-bit: wraps past 2^32 on giant traces
         int32_t m_sent_requests;
-        bool m_simulation_done; 
+        bool m_simulation_done;
 
         TraceSample* m_sample_in_progess;
         std::ifstream  m_workload_file;

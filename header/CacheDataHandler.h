@@ -32,9 +32,9 @@ namespace octopus
         ReplacementPolicy *m_replacement_policy;
         DebugPrint *dprint;
 
-        uint32_t m_cycle;
+        uint64_t m_cycle;          // 64-bit: giant traces exceed 2^32 cycles; a
         uint32_t m_data_access_latency;
-        uint32_t m_ready_cycle;
+        uint64_t m_ready_cycle;    // uint32_t here wrapped -> isReady() stuck ~4.29B cyc
 
         virtual inline void *getLine(uint64_t set, int way)
         {
@@ -86,6 +86,7 @@ namespace octopus
         uint64_t getEvictionCandidate(uint64_t address, GenericCacheLine *line);
         
         void updateCycle(uint64_t cycle);
+        uint64_t getCycle() { return m_cycle; }
         virtual bool isReady();
         virtual bool isReady(uint64_t address);
     };
