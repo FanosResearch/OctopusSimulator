@@ -11,7 +11,7 @@ add_library(Octopus_core
             tinystr.cpp
             CacheDataHandler_COTS.cpp
             GenericCacheLine.cpp
-        #     MCsimInterface.cpp
+            MCsimInterface.cpp
             tinyxml.cpp
             CacheSim.cpp
             IdGenerator.cc
@@ -29,3 +29,11 @@ add_library(Octopus_core
     add_subdirectory(Protocols)
     add_subdirectory(ReplacementPolicies)
     add_subdirectory(SystemConfigurations)
+
+    # MCsim DRAM simulator (vendored from grrof). Header-only schedulers under
+    # MCsim/generalScheduler and MCsim/system are pulled via relative includes.
+    add_subdirectory(MCsim/src)
+    add_subdirectory(MCsim/dram)
+    target_include_directories(Octopus_core PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/MCsim/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/MCsim/dram)

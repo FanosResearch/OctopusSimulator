@@ -67,9 +67,25 @@ namespace octopus
                                           bus[1]->getInterfaceFor(llc_id), 
                                           bus[0]->getInterfaceFor(llc_id), name);
 
-        MainMemoryController *m_main_memory;
+        // Main memory: the basic MainMemoryController by default, or the MCsim DRAM
+        // simulator when `main_memory_type=MCsim` (configured for DDR4 in MCsimInterface).
         int main_memory_id = std::get<int>(getSubMap(STRINGIFY(m_main_memory)).at("m_id").value);
-        m_main_memory = new MainMemoryController(getSubMap(STRINGIFY(MainMemoryController)), bus[1]->getInterfaceFor(main_memory_id), name);
+        string main_memory_type = STRINGIFY(MainMemoryController);
+        if (parameters.count(STRINGIFY(main_memory_type)))
+            main_memory_type = std::get<string>(parameters.at(STRINGIFY(main_memory_type)).value);
+
+        if (main_memory_type == "MCsim")
+        {
+            string mem_system = "FRFCFS";
+            if (parameters.count(STRINGIFY(mcsim_scheduler)))
+                mem_system = std::get<string>(parameters.at(STRINGIFY(mcsim_scheduler)).value);
+            new MCsimInterface(bus[1]->getInterfaceFor(main_memory_id), main_memory_id, llc_id,
+                               num_cores, /*block_size=*/64, mem_system);
+        }
+        else
+        {
+            new MainMemoryController(getSubMap(STRINGIFY(MainMemoryController)), bus[1]->getInterfaceFor(main_memory_id), name);
+        }
 
         Logger::getLogger()->registerReportPath(workload_path + string("/newLogger"));
     }

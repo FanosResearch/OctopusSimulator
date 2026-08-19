@@ -24,6 +24,7 @@
 #include "CacheController_End2End.h"
 #include "CacheControllerDirectory.h"
 #include "MainMemoryController.h"
+#include "MCsimInterface.h"
 
 #include <vector>
 #include <string>
