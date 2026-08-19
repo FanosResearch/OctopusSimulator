@@ -30,8 +30,9 @@ namespace octopus
         MeshController* interconnect_controller;
         DebugPrint* dprint;
 
-        int m_cycle;
-        int m_cycle_edges;
+        uint64_t m_cycle;
+        uint64_t m_cycle_edges; // MUST be unsigned (see DirectInterconnect.h): signed
+                                // overflow of the edge counter froze the mesh on giant traces.
 
     public:
         Mesh(ParametersMap map, string pname = "",

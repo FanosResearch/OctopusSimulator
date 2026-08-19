@@ -36,8 +36,9 @@ namespace octopus
         BusController* interconnect_controller;
         DebugPrint* dprint;
 
-        int m_bus_cycle;
-        int m_bus_cycle_edges;
+        uint64_t m_bus_cycle;
+        uint64_t m_bus_cycle_edges; // MUST be unsigned (see DirectInterconnect.h): signed
+                                    // overflow of the edge counter froze the bus on giant traces.
 
     public:
         Bus(ParametersMap map, 
