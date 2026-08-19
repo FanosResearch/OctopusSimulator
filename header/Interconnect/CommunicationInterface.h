@@ -139,6 +139,12 @@ public:
     virtual bool pushMessage(Message &msg, uint64_t cycle = 0, MessageType type = MessageType::REQUEST) = 0;
     virtual bool pushMessage2RX(Message &msg, MessageType type = MessageType::REQUEST) { return false; }
 
+    // Whether an RX push of this type would succeed (space in the receive buffer)
+    // WITHOUT mutating anything. Used for atomic broadcast: a snoop must be
+    // deliverable to EVERY receiver before it is delivered to any. Default =
+    // always acceptable (unbounded interconnects have no receive bound).
+    virtual bool canAcceptRX(MessageType type = MessageType::REQUEST) { return true; }
+
     virtual bool rollback(uint64_t address, uint64_t mask, Message *out_msg) { return false; }
     
     virtual bool operator == (CommunicationInterface const& a) const

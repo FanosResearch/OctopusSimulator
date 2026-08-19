@@ -35,6 +35,7 @@ namespace octopus
         virtual void popFrontMessage() override;
         virtual bool pushMessage(Message &msg, uint64_t cycle, MessageType type = MessageType::REQUEST) override;
         virtual bool pushMessage2RX(Message &msg, MessageType type = MessageType::REQUEST) override;
+        virtual bool canAcceptRX(MessageType type = MessageType::REQUEST) override;
 
         static void getCongregatedBuffers(vector<CommunicationInterface *>& interfaces, bool request_buffer, vector<vector<Message>*>* buffers);
         

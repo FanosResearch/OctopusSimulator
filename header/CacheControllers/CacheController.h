@@ -29,8 +29,10 @@ namespace octopus
         // Max concurrent outstanding misses (MSHR depth). -1 = unbounded.
         int m_num_mshr;
 
-        // key is the msg.addr & mask(nbits of CacheLineSize) and the value is request Message
-        std::map<uint64_t, Message> m_saved_requests_for_wb;
+        // key is the msg.addr & mask(nbits of CacheLineSize); value is a QUEUE of pending
+        // requests to forward once data arrives. MOESI: a transient owner-to-be may see
+        // several sharers' GetS before it has data and must forward to ALL of them.
+        std::map<uint64_t, std::vector<Message>> m_saved_requests_for_wb;
 
         // key is the msg.m_id and the value is the Message that contains the data
         std::map<uint64_t, Message> m_modifying_data_messages;

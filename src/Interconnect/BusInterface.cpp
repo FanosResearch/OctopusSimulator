@@ -69,17 +69,35 @@ namespace octopus
 
     bool BusInterface::pushMessage2RX(Message &msg, MessageType type)
     {
-        if (type == MessageType::REQUEST && (int)m_rx_request_buffer.size() < m_buffer_max_size)
+        // The RX cap back-pressures ONLY demand requests (GetS/GetM). Service
+        // traffic -- writebacks (PutM), data responses -- is ALWAYS accepted
+        // (bounded upstream by MSHR/PWB); rejecting it would starve the queues it
+        // drains and deadlock.
+        if (type == MessageType::REQUEST)
         {
+            if (msg.isDemandRequest() && (int)m_rx_request_buffer.size() >= m_buffer_max_size)
+                return false;
             m_rx_request_buffer.push_back(msg);
             return true;
         }
-        else if (type == MessageType::DATA_RESPONSE && (int)m_rx_response_buffer.size() < m_buffer_max_size)
+        else if (type == MessageType::DATA_RESPONSE)
         {
             m_rx_response_buffer.push_back(msg);
             return true;
         }
 
+        return false;
+    }
+
+    bool BusInterface::canAcceptRX(MessageType type)
+    {
+        // Space check only -- no mutation. Only demand requests are bounded here
+        // (broadcast calls this solely for demand snoops); service traffic and
+        // data responses are always acceptable.
+        if (type == MessageType::REQUEST)
+            return (int)m_rx_request_buffer.size() < m_buffer_max_size;
+        else if (type == MessageType::DATA_RESPONSE)
+            return true;
         return false;
     }
 
