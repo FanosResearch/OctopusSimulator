@@ -19,6 +19,7 @@ add_definitions(-Wno-format)
 
 add_compile_definitions(CONFIGURATION_PATH=\"${PROJECT_SOURCE_DIR}/configuration/\")
 add_compile_definitions(FSM_PATH=\"${PROJECT_SOURCE_DIR}/Protocols_FSM/\")
+add_compile_definitions(MCSIM_PATH=\"${PROJECT_SOURCE_DIR}/src/MCsim/\")
 add_compile_definitions(INTERCONNECT=\"Interconnect\")
 add_compile_definitions(CACHECONTROLLERS=\"CacheControllers\")
 add_compile_definitions(SYSTEM_CONFIGURATIONS=\"SystemConfigurations\")

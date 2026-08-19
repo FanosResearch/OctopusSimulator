@@ -8,36 +8,37 @@
 
 #include "../header/MCsimInterface.h"
 
+using namespace std;
+
 namespace octopus
 {
-    MCsimInterface::MCsimInterface(MCoreSimProjectXml &projectXml, CommunicationInterface *lower_interface, int llc_id)
+    MCsimInterface::MCsimInterface(CommunicationInterface *lower_interface, int dram_id, int llc_id,
+                                   int num_cores, int block_size, const std::string &mem_system)
+        : ClockedObj(1) // period MUST be non-zero: ClockManager reschedules at current_time+period,
+                        // so period 0 self-reschedules at the same timestamp forever and starves the
+                        // whole clock (CPUs never advance). Period 1 = tick every cycle to drive update().
     {
-        m_id = projectXml.GetDRAMId();
+        m_id = dram_id;
         m_llc_id = llc_id;
-
         m_clk_cycle = 1;
-
-        m_llc_line_size = projectXml.GetSharedCache().GetBlockSize();
-
+        m_llc_line_size = block_size;
         m_read_count = 0;
         m_write_count = 0;
 
         m_lower_interface = lower_interface;
-
         m_processing_queue = new FRFCFS_Buffer<Message, MCsimInterface>(&MCsimInterface::getRequestState, this);
 
-        /******************************************** Initialization of MCsim ********************************************/
-        unsigned int num_cores = projectXml.GetNumPrivCore();
-
+        /******************** Initialization of MCsim (DDR4-2400U, 8Gb x8, 1 channel/1 rank) ********************/
+        std::string sys_init_file = std::string(MCSIM_PATH) + "system/" + mem_system + "/" + mem_system + ".ini";
         m_mcsim = MCsim::getMemorySystemInstance(
             num_cores,
-            "/Users/Mhossam/Documents/PhD_Work/MCsim/MCsim/system/FRFCFS/FRFCFS.ini", // this should be parameterized
-            "DDR3",
-            "1600H",
-            "2Gb_x8",
+            sys_init_file,
+            "DDR4",
+            "2400U",
+            "8Gb_x8",
             1,
-            1); // 2048*4 = 4 ranks
-        m_mcsim->setCPUClockSpeed(1e9);
+            1);
+        m_mcsim->setCPUClockSpeed(2.4 * 1e9);
 
         MCsim::TransactionCompleteCB *read_cb = new MCsim::MCsimCallback<MCsimInterface, void, unsigned, uint64_t, uint64_t>(this, &MCsimInterface::read_callback);
         MCsim::TransactionCompleteCB *write_cb = new MCsim::MCsimCallback<MCsimInterface, void, unsigned, uint64_t, uint64_t>(this, &MCsimInterface::write_callback);
@@ -70,7 +71,7 @@ namespace octopus
         {
             if (m_mcsim->addRequest(ready_msg.owner, ready_msg.addr, ready_msg.data == NULL, m_llc_line_size)) // 1 -> Read, 0 -> Write
             {
-                if(ready_msg.data == NULL) //Add read requests only
+                if (ready_msg.data == NULL) // Add read requests only (writes are fire-and-forget)
                     m_pending_requests.push_back(ready_msg);
             }
             else
@@ -80,7 +81,7 @@ namespace octopus
             }
         }
 
-        if(!m_output_buffer.empty())
+        if (!m_output_buffer.empty())
         {
             if (!m_lower_interface->pushMessage(m_output_buffer[0], m_clk_cycle, MessageType::DATA_RESPONSE))
             {
@@ -124,7 +125,7 @@ namespace octopus
                                       m_clk_cycle,                  // Cycle
                                       0,                            // Complementary_value
                                       m_pending_requests[i].owner); // Owner
-                msg.to.push_back((uint16_t)m_llc_id);               // To
+                msg.to.push_back((uint16_t)m_llc_id);               // To (back to the LLC)
                 msg.copy((uint8_t *)&data);
                 m_output_buffer.push_back(msg);
 
@@ -133,8 +134,8 @@ namespace octopus
                 break;
             }
         }
-        
-        if(!found)
+
+        if (!found)
         {
             cout << "MCsimInterface: Error read_callback couldn't find the pending request" << endl;
             exit(0);

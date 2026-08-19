@@ -1,0 +1,10 @@
+target_sources(Octopus_core PRIVATE
+
+		${CMAKE_CURRENT_SOURCE_DIR}/DDR3.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/DDR4.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/DSARP.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/StatType.cpp
+
+    )
+
+
