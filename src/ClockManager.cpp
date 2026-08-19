@@ -8,9 +8,17 @@
 
 #include "../header/ClockManager.h"
 
+#include <io.h>
+#include <cstdio>
+
 using namespace std;
 namespace octopus
 {
+    // The "\rElapsed time" progress line is a live terminal indicator. When stdout is
+    // redirected to a file (batch/sweep runs) it appends forever (hundreds of MB over
+    // billions of cycles) and, with many concurrent sims, saturates disk I/O -- which was
+    // the real throughput killer under concurrency. Emit it only to an interactive TTY.
+    static const bool s_stdout_is_tty = (_isatty(_fileno(stdout)) != 0);
 
     ClockedObj::ClockedObj(uint64_t clk_period)
     {
@@ -74,7 +82,7 @@ namespace octopus
         while (clk_run)
         {
             clkStep();
-            if(disp_delay == 0)
+            if(s_stdout_is_tty && disp_delay == 0)
                 cout << "\rElapsed time: \t" << current_time;
 
             disp_delay = (disp_delay + 1) % 100;

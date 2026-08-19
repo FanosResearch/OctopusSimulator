@@ -8,9 +8,15 @@
 
 #include "../header/Logger.h"
 
+#include <cstdlib>
+
 using namespace std;
 namespace octopus
 {
+    // Set OCTOPUS_NO_LOG=1 to skip per-request latency logging (the heap alloc + report
+    // write on every request). Completion is still recorded via traceEnd()/Summary.csv.
+    // Used for correctness sweeps where only successful termination matters, not latency.
+    static const bool g_no_log = (std::getenv("OCTOPUS_NO_LOG") != nullptr);
 
     Logger *Logger::_logger = NULL;
 
@@ -20,6 +26,13 @@ namespace octopus
 
     void Logger::addRequest(uint64_t cpu_id, Message &entry)
     {
+        if (g_no_log)
+        {
+            // still register the core so traceEnd() can emit its Summary.csv row
+            initializeStats(cpu_id);
+            return;
+        }
+
         log_entries[entry.msg_id] = new vector<uint64_t>[NUM_OF_ELEMENTS_PER_ENTRY];
         // memset(log_entries[entry.msgId], 0, NUM_OF_ELEMENTS_PER_ENTRY * sizeof(uint64_t));
 
@@ -34,6 +47,9 @@ namespace octopus
 
     void Logger::updateRequest(uint64_t msg_id, EntryId entryId)
     {
+        if (g_no_log)
+            return;
+
         if (log_entries.find(msg_id) == log_entries.end())
             return; // ignore updates with no ID (it happens in the case of replacement requests) and updates for unpresent messages (can be generated from Shared memory)
 
