@@ -146,12 +146,20 @@ namespace octopus
     void CacheController::performWriteBack(void *data_ptr)
     {
         Message *msg = (Message *)data_ptr;
-        if (this->m_saved_requests_for_wb.find(this->getAddressKey(msg->addr)) !=
-            this->m_saved_requests_for_wb.end())
+        auto saved_it = this->m_saved_requests_for_wb.find(this->getAddressKey(msg->addr));
+        if (saved_it != this->m_saved_requests_for_wb.end() && !saved_it->second.empty())
         {
-            msg->owner = this->m_saved_requests_for_wb[this->getAddressKey(msg->addr)].owner;
-            msg->msg_id = this->m_saved_requests_for_wb[this->getAddressKey(msg->addr)].msg_id;
-            this->m_saved_requests_for_wb.erase(this->getAddressKey(msg->addr));
+            // Forward the data to EVERY pending sharer that requested while we were a
+            // transient. The first becomes the primary destination (owner/msg_id); the
+            // rest are added to `to` so the response bus delivers one copy to each. A
+            // receiver classifies any inbound data as OwnData and matches it to its own
+            // pending request by address, so a single fan-out message serves them all.
+            std::vector<Message> &saved = saved_it->second;
+            msg->owner = saved.front().owner;
+            msg->msg_id = saved.front().msg_id;
+            for (size_t i = 1; i < saved.size(); i++)
+                msg->to.push_back(saved[i].owner);
+            this->m_saved_requests_for_wb.erase(saved_it);
         }
 
         if(msg->data == NULL &&
@@ -229,7 +237,7 @@ namespace octopus
     void CacheController::saveReqForWriteBack(void *data_ptr)
     {
         Message *msg = (Message *)data_ptr;
-        this->m_saved_requests_for_wb[this->getAddressKey(msg->addr)] = *msg;
+        this->m_saved_requests_for_wb[this->getAddressKey(msg->addr)].push_back(*msg);
 
         delete msg;
     }

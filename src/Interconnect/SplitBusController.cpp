@@ -63,13 +63,22 @@ namespace octopus
         {
             if (message_available_req)
             {
-                broadcast(elected_msg_req);
-                message_available_req = false;
+                // Atomic broadcast: consume the elected message only once it can be
+                // delivered to ALL receivers. If any receiver's RX buffer is full,
+                // hold it and retry next cycle -- never partially deliver or drop.
+                if (broadcast(elected_msg_req))
+                    message_available_req = false;
             }
         }
 
         if (message_available_req)
-            clk_in_slot_req = (clk_in_slot_req + 1) % m_request_latency;
+        {
+            // Advance toward the broadcast slot; once there, stay put to retry a
+            // failed broadcast rather than wrapping to 0 (which would re-elect and
+            // drop the still-undelivered message).
+            if (clk_in_slot_req < (m_request_latency - 1))
+                clk_in_slot_req++;
+        }
         else
             clk_in_slot_req = 0;
     }

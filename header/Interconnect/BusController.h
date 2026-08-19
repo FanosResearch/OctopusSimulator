@@ -47,7 +47,7 @@ namespace octopus
         int m_request_latency;
         int m_response_latency;
 
-        virtual void broadcast(Message &msg, MessageType type = MessageType::REQUEST);
+        virtual bool broadcast(Message &msg, MessageType type = MessageType::REQUEST);
         virtual void send(Message &msg, MessageType type = MessageType::DATA_RESPONSE);
 
     public:

@@ -37,13 +37,16 @@ namespace octopus
         {
             if(!service_buffers[i]->empty())
             {
-                message_available = true;
+                // Atomic service broadcast: dequeue this back-invalidation only if
+                // it can be delivered to ALL receivers this cycle; otherwise leave
+                // it queued and retry next cycle. One service message per cycle.
                 msg = service_buffers[i]->at(0);
-                service_buffers[i]->erase(service_buffers[i]->begin());
+                if (broadcast(msg, MessageType::SERVICE_REQUEST))
+                    service_buffers[i]->erase(service_buffers[i]->begin());
+                message_available = true;
+                break;
             }
         }
-
-        if (message_available)
-            broadcast(msg, MessageType::SERVICE_REQUEST);
+        (void)message_available;
     }
 }

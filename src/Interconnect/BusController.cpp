@@ -31,18 +31,31 @@ namespace octopus
         }
     }
 
-    void BusController::broadcast(Message &msg, MessageType type)
+    bool BusController::broadcast(Message &msg, MessageType type)
     {
+        // Back-pressure applies ONLY to demand requests (GetS/GetM). Service traffic
+        // -- writebacks (PutM), back-invalidations, data responses -- must ALWAYS be
+        // accepted (they are bounded upstream by MSHR/PWB and drain the queues);
+        // holding them would starve the traffic that unblocks the pipeline and
+        // deadlock. So:
+        //   * demand snoop  -> deliver ATOMICALLY (all-or-nothing): verify every
+        //     receiver can accept, else deliver to none and report failure so the
+        //     caller holds the elected message and retries next cycle. Never a
+        //     partial delivery (which would silently break coherence) or a drop.
+        //   * service/response -> force into every receiver unconditionally.
+        if (msg.isDemandRequest())
+        {
+            for (int i = 0; i < (int)m_interfaces->size(); i++)
+                if (!m_interfaces->at(i)->canAcceptRX(type))
+                    return false;
+        }
+
         Logger::getLogger()->updateRequest(msg.msg_id, Logger::EntryId::REQ_BUS_CHECKPOINT);
 
         for (int i = 0; i < (int)m_interfaces->size(); i++)
-        {
-            if (!m_interfaces->at(i)->pushMessage2RX(msg, type))
-            {
-                cout << "BusController: full buffer" << endl;
-                return;
-            }
-        }
+            m_interfaces->at(i)->pushMessage2RX(msg, type);
+
+        return true;
     }
 
     void BusController::send(Message &msg, MessageType type)

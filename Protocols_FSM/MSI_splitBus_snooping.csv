@@ -1,4 +1,4 @@
-﻿EventNum,Event,,,,,,,,,,,,
+﻿﻿EventNum,Event,,,,,,,,,,,,
 0,Load,,,,,,,,,,,,
 1,Store,,,,,,,,,,,,
 2,Replacement,,,,,,,,,,,,
@@ -43,7 +43,8 @@ StateNum,State,,,,,,,,,,,,
 17,SM_dSI,,,,,,,,,,,,
 18,M,,,,,,,,,,,,
 19,MI_a,,,,,,,,,,,,
-20,II_a,,,,,,,,,,,,
+20,MII_a,,,,,,,,,,,,
+21,II_a,,,,,,,,,,,,
 ,,,,,,,,,,,,,
 State,stable,isDataValid,Load,Store,Replacement,Own_GetS,Own_GetM,Own_PutM,Other_GetS,Other_GetM,Other_PutM,OwnData,Invalidation
 I,1,0,GetS/IS_ad,GetM/IM_ad,,Fault/,Fault/,Fault/,,,,Fault/,
@@ -65,5 +66,6 @@ SM_dI,0,1,Hit/,Stall/,Stall/,Fault/,Fault/,Fault/,,,,Hit/Data2Req/I,
 SM_dS,0,1,Hit/,Stall/,Stall/,Fault/,Fault/,Fault/,,SM_dSI,,Hit/Data2Both/S,SM_dSI
 SM_dSI,0,1,Hit/,Stall/,Stall/,Fault/,Fault/,Fault/,,,,Hit/Data2Both/I,
 M,1,1,Hit/,Hit/,PutM/MI_a,Fault/,Fault/,Fault/,Data2Both/S,Data2Req/I,,Fault/,Data2Req/I
-MI_a,0,1,Hit/,Hit/,Stall/,Fault/,Fault/,Data2Req/I,Data2Both/II_a,Data2Req/II_a,,Fault/,Data2Req/II_a
+MI_a,0,1,Hit/,Hit/,Stall/,Fault/,Fault/,Data2Req/I,Data2Both/II_a,Data2Req/II_a,,Fault/,MII_a
+MII_a,0,1,Hit/,Hit/,Stall/,Fault/,Fault/,Data2Req/I,,,,Fault/,
 II_a,0,1,Stall/,Stall/,Stall/,Fault/,Fault/,I,,,,Fault/,

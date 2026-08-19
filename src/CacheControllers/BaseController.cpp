@@ -148,6 +148,16 @@ namespace octopus
     {
         Message *msg = (Message *)data_ptr;
 
+        // An owner completing a store-upgrade (e.g. MOESI O->M) responds to its pending
+        // CPU request off its own valid cache line: the triggering bus message (Own_GetM)
+        // carries no data, so read the line here rather than faulting for lack of data.
+        if (msg->data == NULL)
+        {
+            GenericCacheLine cache_line;
+            if (m_data_handler->readCacheLine(msg->addr, &cache_line) && cache_line.m_data != NULL)
+                msg->copy(cache_line.m_data);
+        }
+
         if (m_pending_requests.find(getAddressKey(msg->addr)) != m_pending_requests.end())
         {
             vector<Message> pending_messages = this->m_pending_requests[this->getAddressKey(msg->addr)];
@@ -161,7 +171,7 @@ namespace octopus
                     pending_messages.front().copy(msg->data);
                 }
                 else
-                { 
+                {
                     cout << "CacheController: Remove from pending without data" << endl;
                     exit(0);
                 }

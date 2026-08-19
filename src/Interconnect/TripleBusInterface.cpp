@@ -55,13 +55,17 @@ namespace octopus
         if(type != MessageType::SERVICE_REQUEST)
             return BusInterface::pushMessage2RX(msg, type);
 
-        if ((int)m_rx_service_buffer.size() < m_buffer_max_size)
-        {
-            m_rx_service_buffer.push_back(msg);
-            return true;
-        }
+        // Back-invalidations are service traffic -- ALWAYS accepted, never held.
+        m_rx_service_buffer.push_back(msg);
+        return true;
+    }
 
-        return false;
+    bool TripleBusInterface::canAcceptRX(MessageType type)
+    {
+        if(type != MessageType::SERVICE_REQUEST)
+            return BusInterface::canAcceptRX(type);
+
+        return true; // back-invalidations always accepted
     }
 
     void TripleBusInterface::getCongregatedServiceBuffers(vector<CommunicationInterface *>& interfaces, vector<vector<Message>*>* buffers)
