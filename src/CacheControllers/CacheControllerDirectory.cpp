@@ -42,7 +42,12 @@ namespace octopus
                 FRFCFS_State state = m_protocol->getRequestState(msg, FRFCFS_State::NonReady);
                 if ((msg.data != NULL) && buf.pushFront(msg))
                     m_upper_interface->popFrontMessage();
-                else if(buf.pushBack(msg, state))
+                // Forwarded requests (FwdGetS/FwdGetM) arrive here with no data and are
+                // service traffic, NOT demand: they must ALWAYS be admitted, else a full
+                // queue rejects the very forward that would make an owner respond and drain
+                // the queue -> cross-node deadlock. Force-admit anything that isn't a fresh
+                // demand request (upper-interface traffic never is). Matches the lower branch.
+                else if(buf.pushBack(msg, state, /*force=*/!msg.isDemandRequest()))
                     m_upper_interface->popFrontMessage();
             }
         }
