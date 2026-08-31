@@ -10,3 +10,27 @@ __pycache__
 
 Rename_results.sh
 Run_testcases.sh
+
+# --- run outputs / scratch (not part of the artifact) ---
+*-results/
+sweep-protocols/
+sweep_big/
+build_dbg/
+.ua/
+BMs/**/newLogger/
+BMs/**/nl_*/
+BMs/**/*.out
+BMs/**/*.err
+a2time_4980_fault.csv
+block_3d00_trace.csv
+sweep_pwb.sh
+
+# --- work-in-progress multi-cycle-latency FSM variants (kept on latency-wip) ---
+Protocols_FSM/*_v2.csv
+Protocols_FSM/*_v3.csv
+Protocols_FSM/*_v4.csv
+Protocols_FSM/*_v5.csv
+Protocols_FSM/*_v6.csv
+Protocols_FSM/MSI_LLC_v2.csv
+Protocols_FSM/MSI_LLC_faulting.csv
+header/Protocols/TraceTransition.h
