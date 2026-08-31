@@ -34,6 +34,10 @@ namespace octopus
     protected:
         int m_id;
         int m_shared_memory_id;
+        // Monotonic stamp assigned to each message as it is pulled into the
+        // processing queue, so snoops to the same line keep bus-arrival order
+        // even after a stall re-queues them (see FRFCFS_Buffer per-line snoop gate).
+        uint64_t m_arrival_seq = 0;
 
         uint64_t m_cache_cycle;
 
@@ -65,6 +69,15 @@ namespace octopus
         virtual bool canAdmitRequest(Message &msg) { return true; }
 
         virtual uint64_t getAddressKey(uint64_t addr);
+
+        // --- SCRATCH: no-progress (deadlock) detector ---
+        static std::vector<BaseController*> s_controllers;
+        static uint64_t s_last_progress_cycle;
+        static uint64_t s_max_cycle;
+        static bool s_dumped;
+        virtual int mshrLimit() { return -1; }
+        void dumpDeadlockState();
+        static void checkGlobalStall();
 
         virtual void hitAction(void *);
         virtual void removePendingAndRespond(void *);

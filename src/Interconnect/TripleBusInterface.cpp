@@ -14,22 +14,19 @@ namespace octopus
     {
     }
 
+    // Invalidations (service bus) and coherence requests (request bus) must be
+    // consumed in a single global order: a back-invalidation must NOT overtake a
+    // coherence request already waiting in the RX. So service RX traffic is merged
+    // into the request RX buffer at arrival (see pushMessage2RX) and peeked/popped
+    // through the base request/response path -- no service-first priority.
     bool TripleBusInterface::peekMessage(Message *out_msg)
     {
-        if (!m_rx_service_buffer.empty())
-        {
-            out_msg->copy(m_rx_service_buffer[0]);
-            return true;
-        }
         return BusInterface::peekMessage(out_msg);
     }
 
     void TripleBusInterface::popFrontMessage()
     {
-        if (!m_rx_service_buffer.empty())
-            m_rx_service_buffer.erase(m_rx_service_buffer.begin());
-        else
-            BusInterface::popFrontMessage();
+        BusInterface::popFrontMessage();
     }
 
     bool TripleBusInterface::pushMessage(Message &msg, uint64_t cycle = 0, MessageType type)
@@ -55,8 +52,11 @@ namespace octopus
         if(type != MessageType::SERVICE_REQUEST)
             return BusInterface::pushMessage2RX(msg, type);
 
-        // Back-invalidations are service traffic -- ALWAYS accepted, never held.
-        m_rx_service_buffer.push_back(msg);
+        // Back-invalidations are ALWAYS accepted (never held), but to preserve a
+        // single global order with coherence requests they land in the SAME RX
+        // buffer as requests, in arrival order -- not a separate priority buffer.
+        // Bypasses the demand cap (service is unbounded, bounded upstream).
+        m_rx_request_buffer.push_back(msg);
         return true;
     }
 

@@ -7,6 +7,8 @@
  */
 
 #include "../../header/Protocols/MSIProtocol.h"
+#include "../../header/Protocols/TraceTransition.h"
+#include "../../header/CacheDataHandler_COTS.h"
 using namespace std;
 
 namespace octopus
@@ -29,6 +31,11 @@ namespace octopus
         // Replacement / snoop messages it mis-maps to the wrong FSM column, making a
         // stalling request look Ready -> infinite processLogic loop (clock freeze).
         this->readEvent((Message &)msg, &event_id);
+
+        if (event_id == EventId::Replacement && octopus::traceHit(msg.addr, m_data_handler->getBlockSize()))
+            std::cout << "[REPL-EVAL cyc=" << m_data_handler->getCycle() << " id=" << m_id
+                      << " a=0x" << std::hex << msg.addr << std::dec << " st=" << cache_line.state
+                      << " ready=" << (this->m_fsm->isStall(cache_line.state, (int)event_id) ? 0 : 1) << "]" << std::endl;
 
         if (this->m_fsm->isStall(cache_line.state, (int)event_id))
             return FRFCFS_State::NonReady;
@@ -54,6 +61,21 @@ namespace octopus
 
         this->readEvent(request_msg, &event_id);
         this->m_fsm->getTransition(cache_line.state, (int)event_id, next_state, actions);
+        TRACE_TRANSITION("L1 ", m_id, request_msg, cache_line.state, event_id, next_state, actions);
+        if (octopus::traceHit(request_msg.addr, m_data_handler->getBlockSize()))
+            std::cout << "        [WHERE id=" << m_id << " a=0x" << std::hex << request_msg.addr << std::dec
+                      << " st=" << cache_line.state << " ->" << next_state
+                      << " residence=" << ((CacheDataHandler_COTS*)m_data_handler)->whereIs(request_msg.addr)
+                      << " (1=arr 2=mshr 3=pwb 0=none)]" << std::endl;
+
+        for (int a : actions)
+            if (a == (int)ActionId::Fault)
+                std::cout << "[FAULT-DIAG id=" << m_id << " a=0x" << std::hex << request_msg.addr << std::dec
+                          << " state=" << cache_line.state << " event=" << (int)event_id
+                          << " ->next=" << next_state
+                          << " src=" << (int)request_msg.source
+                          << " cv=" << request_msg.complementary_value
+                          << " hasData=" << (request_msg.data != NULL) << "]" << std::endl;
 
         return handleAction(actions, request_msg, cache_line, next_state);
     }
@@ -159,6 +181,18 @@ namespace octopus
                                                              msg.owner); // Owner
                 break;
 
+            case ActionId::StartRead:
+                // Owner must read its bank to forward: start the timed bank read. The line
+                // stays valid in the transient (M_dS/M_dI) until the read completes and a self
+                // DataArrayReady message drives the final transition + data forward.
+                controller_action.type = ControllerAction::Type::START_READ;
+                controller_action.data = (void *)new Message(msg.msg_id, // Id
+                                                             msg.addr,   // Addr
+                                                             0,          // Cycle
+                                                             0,          // Complementary_value
+                                                             msg.owner); // Owner
+                break;
+
             case ActionId::Fault:
                 std::cout << " MSIProtocol: Fault Transaction is detected" << std::endl;
                 exit(0);
@@ -180,6 +214,11 @@ namespace octopus
             return;
         
         case Message::Source::SELF:
+            if (msg.complementary_value == MSIProtocol::REQUEST_TYPE_DATAREADY)
+            {
+                *out_id = EventId::DataArrayReady; // owner's timed bank read completed
+                return;
+            }
             if (msg.owner == m_id)
             {
                 *out_id = EventId::Replacement;
@@ -189,7 +228,7 @@ namespace octopus
             {
                 std::cout << " LLCMSIDirectory: Invalid Transaction" << std::endl;
                 exit(0);
-            }   
+            }
 
         case Message::Source::UPPER_INTERCONNECT:
             if (msg.data != NULL)

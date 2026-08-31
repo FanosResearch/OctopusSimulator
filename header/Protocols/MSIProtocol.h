@@ -20,6 +20,9 @@ namespace octopus
         static const uint64_t REQUEST_TYPE_GETM = 1;
         static const uint64_t REQUEST_TYPE_PUTM = 2;
         static const uint64_t REQUEST_TYPE_INV  = 10;
+        // Marker for the self-injected "data-array read complete" message that drives an
+        // owner's data-forward transient (M_dS/M_dI) to its final state.
+        static const uint64_t REQUEST_TYPE_DATAREADY = 20;
 
     protected:
         enum class EventId
@@ -38,6 +41,7 @@ namespace octopus
 
             OwnData,
             Invalidation,
+            DataArrayReady,
         };
 
         enum class ActionId
@@ -50,7 +54,8 @@ namespace octopus
             Data2Req,
             Data2Both,
             SaveReq,
-            Fault
+            Fault,
+            StartRead
         };
 
         virtual std::vector<int> statesRequireWriteBack();

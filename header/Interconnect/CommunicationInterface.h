@@ -32,6 +32,11 @@ public:
     uint16_t owner = 0;
     uint16_t from = 0;
 
+    // Monotonic bus-arrival stamp, set when the message is pulled into the
+    // processing queue. Used only to order snoops to the SAME cache line in
+    // arrival order (see FRFCFS_Buffer per-line gate); never orders different lines.
+    uint64_t order = 0;
+
     std::vector<uint16_t> to;
 
     enum Source
@@ -79,6 +84,7 @@ public:
         owner = M2.owner;
         source = M2.source;
         from = M2.from;
+        order = M2.order;
         to = M2.to;
         data_size = M2.data_size;
 
@@ -123,6 +129,14 @@ public:
     {
         return source == Source::LOWER_INTERCONNECT && data == NULL &&
                (complementary_value == 0 || complementary_value == 1);
+    }
+
+    // A coherence snoop arriving from the bus (Other_GetS/GetM/PutM/Invalidation).
+    // Excludes data responses (data != NULL) so those still advance transients
+    // freely. Snoops to the SAME line must be processed in bus-arrival order.
+    bool isSnoop() const
+    {
+        return source == Source::UPPER_INTERCONNECT && data == NULL;
     }
 };
 

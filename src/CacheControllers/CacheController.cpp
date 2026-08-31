@@ -7,6 +7,8 @@
  */
 
 #include "../../header/CacheControllers/CacheController.h"
+#include "../../header/Protocols/MSIProtocol.h"   // REQUEST_TYPE_DATAREADY marker
+#include "../../header/Protocols/TraceTransition.h"
 
 namespace octopus
 {
@@ -60,6 +62,8 @@ namespace octopus
         action_functions[ControllerAction::Type::NO_ACTION] = [&](void* ptr) {noAction(ptr);};
         action_functions[ControllerAction::Type::STALL] = [&](void* ptr) {stall(ptr);};
         action_functions[ControllerAction::Type::SEND_INV_MSG] = [&](void* ptr) {sendInvalidationMessage(ptr);};
+        action_functions[ControllerAction::Type::START_READ] = [&](void* ptr) {startTimedRead(ptr);};
+        action_functions[ControllerAction::Type::EMIT_DATAREADY] = [&](void* ptr) {emitDataReady(ptr);};
     }
 
     CacheController::~CacheController()
@@ -75,6 +79,55 @@ namespace octopus
         this->processLogic(); // Call cache controller
 
         m_cache_cycle++;
+    }
+
+    // Owner data-forward transient (M_dS/M_dI): occupy the bank for the access latency and defer
+    // a completion entry into the SHARED data-access buffer. It is serviced by the arbiter after
+    // >=L cycles (processDataArrayBuffer), or force-drained on eviction (checkReplacements) with
+    // the line living in the write buffer -- both existing paths. Either way it runs emitDataReady.
+    void CacheController::startTimedRead(void *data_ptr)
+    {
+        Message *msg = (Message *)data_ptr;
+        if (octopus::traceHit(msg->addr, m_data_handler->getBlockSize()))
+            std::cout << "[TR cyc=" << m_cache_cycle << " L1  id=" << m_id << " a=0x" << std::hex << msg->addr
+                      << std::dec << " STARTREAD readyAt=" << (m_cache_cycle + m_data_handler->getDataAccessLatency()) << "]" << std::endl;
+        m_data_handler->markBusy(); // bank occupied for the access latency
+        m_data_access_buffer.push_back(*msg);
+        m_data_access_action[msg->msg_id] = ControllerAction{.type = ControllerAction::Type::EMIT_DATAREADY,
+                                                             .data = data_ptr};
+        // data_ptr is retained by m_data_access_action; freed by emitDataReady on completion.
+    }
+
+    // Completion of a deferred data-forward read: inject a self DataArrayReady message that
+    // drives the transient (M_dS/M_dI) to its final state and forwards the data. No data is
+    // attached -- the FSM's Data2Req/Data2Both reads the (still-valid, possibly write-buffer)
+    // line itself; attaching data here would wrongly re-fill the line in updateCacheLine.
+    void CacheController::emitDataReady(void *data_ptr)
+    {
+        Message *msg = (Message *)data_ptr;
+        Message done(IdGenerator::nextReqId(), msg->addr, m_cache_cycle,
+                     (uint16_t)MSIProtocol::REQUEST_TYPE_DATAREADY, (uint16_t)this->m_id);
+        done.source = Message::Source::SELF;
+
+        if (octopus::traceHit(msg->addr, m_data_handler->getBlockSize()))
+            std::cout << "[TR cyc=" << m_cache_cycle << " L1  id=" << m_id << " a=0x" << std::hex << msg->addr
+                      << std::dec << " EMIT-DATAREADY (completion)]" << std::endl;
+
+        // Process the completion synchronously through the FSM (M_dS/M_dI + DataArrayReady ->
+        // Data2Both/S or Data2Req/I) rather than queuing it. This forwards the data at the very
+        // moment the read completes -- crucially, when this runs from the eviction drain the
+        // line is still present (in the write buffer), so the forward reads it before the
+        // eviction's write-back can clear it. "All pending work handled at eviction."
+        std::vector<ControllerAction> actions = m_protocol->processRequest(done, dprint);
+        for (ControllerAction action : actions)
+            action_functions[action.type](action.data);
+
+        // The transient just changed the line's state outside the processing queue
+        // (e.g. M_dS -> S); a request stalled on that line is now serviceable, so
+        // force a re-scan (the rescan-skip optimization can't see this change).
+        m_processing_queue->markDirty();
+
+        delete msg;
     }
 
     void CacheController::processDataArrayBuffer()
@@ -94,6 +147,7 @@ namespace octopus
                 auto action = m_data_access_action[selected_msg.msg_id];
                 action_functions[action.type](action.data);
                 m_data_access_action.erase(selected_msg.msg_id);
+                m_processing_queue->markDirty(); // deferred completion changed line state outside the queue
             }
         }
     }
@@ -118,11 +172,28 @@ namespace octopus
     {
         Message *msg = (Message *)data_ptr;
 
-        if (msg->data == NULL && 
+        if (msg->data == NULL &&
             !checkReadinessOfCache(*msg, ControllerAction::Type::HIT_Action, data_ptr))
                 return;
-        
+
         BaseController::hitAction(data_ptr);
+    }
+
+    // An owner completing its own upgrade (e.g. MOESI O/E -> M via Own_GetM) answers the
+    // pending CPU request off its cache line -- a bank read. With data-array latency the
+    // bank can be busy servicing an in-flight timed read (StartRead), so defer exactly as
+    // hitAction/performWriteBack do; the deferred REMOVE_PENDING re-runs once the bank is
+    // ready (processDataArrayBuffer) or on the eviction drain (checkReplacements). At
+    // latency 0 the bank is always ready, so this is a no-op.
+    void CacheController::removePendingAndRespond(void *data_ptr)
+    {
+        Message *msg = (Message *)data_ptr;
+
+        if (msg->data == NULL &&
+            !checkReadinessOfCache(*msg, ControllerAction::Type::REMOVE_PENDING, data_ptr))
+                return;
+
+        BaseController::removePendingAndRespond(data_ptr);
     }
 
     void CacheController::sendInvalidationMessage(void *data_ptr)
@@ -169,10 +240,39 @@ namespace octopus
         BaseController::performWriteBack(data_ptr);
     }
 
+    void CacheController::dropPendingFills(uint64_t address)
+    {
+        for (int i = 0; i < (int)m_data_access_buffer.size(); )
+        {
+            auto it = m_data_access_action.find(m_data_access_buffer[i].msg_id);
+            if (it != m_data_access_action.end() &&
+                it->second.type == ControllerAction::Type::WRITE_CACHE_LINE_DATA &&
+                getAddressKey(m_data_access_buffer[i].addr) == getAddressKey(address))
+            {
+                // Free the deferred fill's data_ptr (placement-new Message + GenericCacheLine).
+                void *dp = it->second.data;
+                Message *m = (Message *)dp;
+                GenericCacheLine *cl = (GenericCacheLine *)((uint8_t *)dp + sizeof(Message));
+                cl->~GenericCacheLine();
+                m->~Message();
+                delete[] (uint8_t *)dp;
+
+                m_data_access_action.erase(it);
+                m_data_access_buffer.erase(m_data_access_buffer.begin() + i);
+            }
+            else
+                i++;
+        }
+    }
+
     void CacheController::updateCacheLine(void *data_ptr)
     {
         Message *msg = (Message *)data_ptr;
         GenericCacheLine *cache_line = (GenericCacheLine *)((uint8_t *)data_ptr + sizeof(Message));
+
+        // A coherence action invalidating this line makes any pending fill for it moot.
+        if (!cache_line->valid)
+            dropPendingFills(msg->addr);
 
         bool has_data = (msg->data != NULL);
         if (!has_data || !cache_line->valid || msg->data_size < m_data_handler->getBlockSize())
@@ -203,7 +303,10 @@ namespace octopus
 
         if (!m_data_handler->updateLineData(msg->addr, msg->data))
         {
-            cout << "CacheController: update data of an unfound line" << endl;
+            GenericCacheLine _cl; m_data_handler->readLineBits(msg->addr, &_cl);
+            cout << "CacheController: update data of an unfound line [id=" << m_id
+                 << " a=0x" << std::hex << msg->addr << std::dec << " st=" << _cl.state
+                 << " cv=" << msg->complementary_value << " src=" << (int)msg->source << "]" << endl;
             exit(0);
         }
 
@@ -237,6 +340,13 @@ namespace octopus
     void CacheController::saveReqForWriteBack(void *data_ptr)
     {
         Message *msg = (Message *)data_ptr;
+        // A self-generated PutM (Own_PutM) saved for writeback must target the LLC
+        // (shared memory), not us -- otherwise performWriteBack's fan-out lists this
+        // core in `to` and delivers the writeback data back to ourselves (I + OwnData
+        // -> Fault). Mirrors the owner==m_id -> m_shared_memory_id redirect that the
+        // direct data-send path (BaseController::performWriteBack) already applies.
+        if (msg->owner == this->m_id)
+            msg->owner = this->m_shared_memory_id;
         this->m_saved_requests_for_wb[this->getAddressKey(msg->addr)].push_back(*msg);
 
         delete msg;
@@ -345,6 +455,12 @@ namespace octopus
 
         if (((CacheDataHandler_COTS*)m_data_handler)->addressOfLinePendingWB(false, &evicted_address))
         {
+            if (octopus::traceHit(evicted_address, m_data_handler->getBlockSize()))
+            {
+                GenericCacheLine _cl; m_data_handler->readLineBits(evicted_address, &_cl);
+                std::cout << "[TR cyc=" << m_cache_cycle << " L1  id=" << m_id << " a=0x" << std::hex
+                          << evicted_address << std::dec << " EVICT (victim in PWB) st=" << _cl.state << "]" << std::endl;
+            }
             msg = Message(IdGenerator::nextReqId(),            // Id
                           evicted_address,                     // Addr
                           m_cache_cycle,                       // Cycle

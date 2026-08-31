@@ -80,6 +80,12 @@ namespace octopus
 
         virtual bool readCacheLine(uint64_t address, GenericCacheLine *out_line = NULL, bool soft_read = false);
         virtual bool readLineBits(uint64_t address, GenericCacheLine *out_line = NULL);
+        // Non-destructive snapshot of a line's CURRENT data (bits + data), bypassing the
+        // access-latency (isReady) gate and with no latency side-effect. Used to capture a
+        // dirty line's data for a write-back BEFORE a same-cycle coherence transition
+        // (M->I) invalidates it -- so a latency-deferred write-back never re-reads a line
+        // that has since become invalid. Resolves through array / MSHR / PWB via findline.
+        virtual bool peekLineData(uint64_t address, GenericCacheLine *out_line);
 
         int findEmptyWay(uint64_t address);
 
@@ -89,6 +95,9 @@ namespace octopus
         uint64_t getCycle() { return m_cycle; }
         virtual bool isReady();
         virtual bool isReady(uint64_t address);
+        // Occupy the single bank port for the access latency without reading/writing. Used to
+        // model an owner's data-forward read: the transient dwells until the bank frees.
+        void markBusy() { m_ready_cycle = m_cycle + m_data_access_latency; }
     };
 }
 

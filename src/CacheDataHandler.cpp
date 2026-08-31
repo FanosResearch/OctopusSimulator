@@ -195,6 +195,19 @@ namespace octopus
             return false;
     }
 
+    bool CacheDataHandler::peekLineData(uint64_t address, GenericCacheLine *out_line)
+    {
+        uint64_t set;
+        int way;
+        if (findline(address, &set, &way)) // virtual: resolves array / MSHR / PWB
+        {
+            if (out_line != NULL)
+                *out_line = *((GenericCacheLine *)getLine(set, way)); // full copy incl. m_data; no isReady gate, no m_ready_cycle update
+            return true;
+        }
+        return false;
+    }
+
     int CacheDataHandler::findEmptyWay(uint64_t address)
     {
         uint64_t set = calculate_set(address);

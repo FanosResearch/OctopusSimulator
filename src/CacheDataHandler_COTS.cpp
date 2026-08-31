@@ -6,6 +6,7 @@
  * Created On May 20, 2022
  */
 #include "../header/CacheDataHandler_COTS.h"
+#include "../header/Protocols/TraceTransition.h"
 
 namespace octopus
 {
@@ -68,6 +69,9 @@ namespace octopus
     {
         GenericCacheLine *line = (GenericCacheLine *)getLine(set, way);
         uint64_t wb_address = calculate_address(line->tag, set);
+        if (octopus::traceHit(wb_address, m_block_size))
+            std::cout << "[WBLC cyc=" << m_cycle << " MOVE2WB a=0x" << std::hex << wb_address << std::dec
+                      << " fromWay=" << way << " st=" << line->state << "]" << std::endl;
         m_pending_write_back_regs[wb_address] = *line;
         line->valid = false;
 
@@ -118,7 +122,12 @@ namespace octopus
                 if (checkMSHR(set))
                     m_miss_status_holding_regs.erase(set);
                 else if (checkPWB(set))
+                {
+                    if (octopus::traceHit(address, m_block_size))
+                        std::cout << "[WBLC cyc=" << m_cycle << " PWB-ERASE a=0x" << std::hex << address << std::dec
+                                  << " (line -> Invalid while in WB)]" << std::endl;
                     m_pending_write_back_regs.erase(set);
+                }
             }
         }
 
@@ -142,6 +151,9 @@ namespace octopus
             return false;
 
         *address = m_pwb_pending_issue.front();
+        if (clear_flag && octopus::traceHit(*address, m_block_size))
+            std::cout << "[WBLC cyc=" << m_cycle << " PENDING-ISSUE-POP a=0x" << std::hex << *address << std::dec
+                      << " inPWB=" << (checkPWB(mask_offset(*address)) ? 1 : 0) << "]" << std::endl;
         if (clear_flag)
             m_pwb_pending_issue.erase(m_pwb_pending_issue.begin());
         return true;

@@ -157,6 +157,30 @@ namespace octopus
                         continue;
                 }
 
+                // Per-line snoop ordering: a snoop (Other_GetS/GetM/PutM/INV from the
+                // bus) may not be serviced ahead of an OLDER snoop to the SAME cache
+                // line. Unlike demand requests, snoop buffer positions are scrambled
+                // (fresh snoops pushFront, stalled ones pushBack), so order is decided
+                // by the arrival stamp `order`, not by buffer index -- scan the whole
+                // buffer. Only same-line snoops gate each other; different lines never
+                // serialize, and data responses (isSnoop()==false) are never gated.
+                if (this->m_line_mask != 0 && m_buffer[i].item.isSnoop())
+                {
+                    bool blocked_by_older_same_line = false;
+                    for (int j = 0; j < (int)m_buffer.size(); j++)
+                    {
+                        if (j != i && m_buffer[j].item.isSnoop() &&
+                            m_buffer[j].item.order < m_buffer[i].item.order &&
+                            ((m_buffer[j].item.addr ^ m_buffer[i].item.addr) & this->m_line_mask) == 0)
+                        {
+                            blocked_by_older_same_line = true;
+                            break;
+                        }
+                    }
+                    if (blocked_by_older_same_line)
+                        continue;
+                }
+
                 FRFCFS_State state = (m_buffer[i].state == FRFCFS_State::Ready) ? FRFCFS_State::Ready :
                                      (m_callback_owner->*m_check_state_callback)(m_buffer[i].item, m_buffer[i].state);
                                      
@@ -184,6 +208,23 @@ namespace octopus
         void setCheckStateCallback(Callback_t callback)
         {
             this->m_check_state_callback = callback;
+        }
+
+        // Force a re-scan on the next getFirstReady. Required when an item's
+        // readiness can change WITHOUT a push/pop on this buffer -- e.g. a timed
+        // bank-read completion (DataArrayReady) transitions a line out of a
+        // stalling transient synchronously, outside the queue. Without this the
+        // rescan-skip optimization would leave an already-ready request unserved.
+        void markDirty() { m_dirty = true; }
+
+        // --- SCRATCH: deadlock introspection ---
+        int size() const { return (int)m_buffer.size(); }
+        bool peekAt(int i, TItem *out_item, FRFCFS_State *out_state) const
+        {
+            if (i < 0 || i >= (int)m_buffer.size()) return false;
+            *out_item = m_buffer[i].item;
+            *out_state = m_buffer[i].state;
+            return true;
         }
     };
 }

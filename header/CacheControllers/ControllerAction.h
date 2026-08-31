@@ -40,6 +40,8 @@ namespace octopus
             CLEAR_SHARERS,
             SEND_FWD_MESSAGE,
             REMOVE_PENDING_NORESPONSE,
+            START_READ,
+            EMIT_DATAREADY,
 
             MAX_ACTIONS_NUM
         } type;

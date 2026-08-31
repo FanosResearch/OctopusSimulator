@@ -58,6 +58,16 @@ namespace octopus
         }
 
     public:
+        // Debug: where does this address physically live? 0=nowhere 1=array 2=MSHR 3=PWB
+        int whereIs(uint64_t address)
+        {
+            uint64_t s; int w;
+            if (CacheDataHandler::findline(address, &s, &w)) return 1;
+            if (checkMSHR(mask_offset(address))) return 2;
+            if (checkPWB(mask_offset(address))) return 3;
+            return 0;
+        }
+
         CacheDataHandler_COTS(ParametersMap map, string pname = "",
                               string config_path = string(CONFIGURATION_PATH),
                               string name = STRINGIFY(CacheDataHandler_COTS));

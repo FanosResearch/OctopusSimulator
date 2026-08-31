@@ -7,6 +7,7 @@
  */
 
 #include "../../header/Protocols/LLCMSIProtocol.h"
+#include "../../header/Protocols/TraceTransition.h"
 using namespace std;
 
 namespace octopus
@@ -58,6 +59,7 @@ namespace octopus
 
         this->readEvent(request_msg, cache_line, &event_id);
         this->m_fsm->getTransition(cache_line.state, (int)event_id, next_state, actions);
+        TRACE_TRANSITION("LLC", m_id, request_msg, cache_line.state, event_id, next_state, actions);
 
         return handleAction(actions, request_msg, cache_line, next_state);
     }
@@ -149,7 +151,10 @@ namespace octopus
                 break;
 
             case ActionId::Fault:
-                std::cout << " LLCMSIProtocol: Fault Transaction is detected" << std::endl;
+                std::cout << " LLCMSIProtocol: Fault Transaction is detected [LLC-DIAG a=0x" << std::hex << msg.addr
+                          << std::dec << " state=" << cache_line.state << " ->next=" << next_state
+                          << " cv=" << msg.complementary_value << " owner=" << msg.owner
+                          << " src=" << (int)msg.source << " hasData=" << (msg.data != NULL) << "]" << std::endl;
                 exit(0);
                 break;
             }

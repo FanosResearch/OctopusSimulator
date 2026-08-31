@@ -33,6 +33,7 @@ namespace octopus
             OwnData,
             Invalidation,
             OwnData_Execlusive,
+            DataArrayReady,
         };
 
         enum class ActionId
@@ -47,6 +48,7 @@ namespace octopus
             SaveReq,
             Fault,
             removeSavedReq,
+            StartRead,
         };
 
         virtual std::vector<int> statesRequireWriteBack() override;

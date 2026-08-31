@@ -41,12 +41,30 @@ namespace octopus
         std::map<int, ControllerAction> m_data_access_action; // The map holds the action is required by the entry in m_data_array_queue (Key is the message id)
         Arbiter *m_data_access_arbiter;
 
+        // Data-forward transient support (M_dS/M_dI). When an owner must read its bank to
+        // forward data on a snoop, the FSM moves to a transient state (line stays valid) and
+        // issues StartRead: this occupies the bank for the access latency and defers a
+        // completion entry into the SHARED m_data_access_buffer (so it takes its turn via the
+        // arbiter and is drained on eviction like any other pending data access). When that
+        // entry is serviced -- after >=L cycles, or forced on eviction (line then living in the
+        // write buffer with its transient state) -- it injects a self DataArrayReady message
+        // that drives the transient to its final state and forwards the data. Coherence resolves
+        // immediately; the data delay lives in the FSM, reusing the existing latency machinery.
+        virtual void startTimedRead(void *);
+        virtual void emitDataReady(void *);
+        // When a line transitions to Invalid via a coherence action, any pending fill
+        // (WRITE_CACHE_LINE_DATA) for it in m_data_access_buffer is moot -- the received data
+        // was already used/forwarded and there is no point writing it into a now-invalid line
+        // (and doing so would fault on the missing line). Drop those entries.
+        virtual void dropPendingFills(uint64_t address);
+
         virtual void cycleProcess() override;
         virtual void addRequests2ProcessingQueue(FRFCFS_Buffer<Message, CoherenceProtocolHandler> &) override;
         virtual void processDataArrayBuffer();
 
 
         virtual void hitAction(void *) override;
+        virtual void removePendingAndRespond(void *) override;
         virtual void addtoPendingRequests(void *) override;
         virtual void performWriteBack(void *) override;
         virtual void updateCacheLine(void *) override;
@@ -68,6 +86,7 @@ namespace octopus
         // Stall a brand-new demand miss when the MSHR is full (outstanding-miss
         // limit reached) or the write-back buffer (PWB) has no headroom.
         virtual bool canAdmitRequest(Message &msg) override;
+        virtual int mshrLimit() override { return m_num_mshr; } // SCRATCH: deadlock dump
 
     public:
         CacheController(ParametersMap map, CommunicationInterface *upper_interface, 

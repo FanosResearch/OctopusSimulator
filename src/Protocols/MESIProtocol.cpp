@@ -30,6 +30,17 @@ namespace octopus
     {
         MSIProtocol::readEvent(msg, out_id);
 
+        // The base maps the self-injected bank-read-complete message to its own
+        // DataArrayReady id (MSI column layout). MESI inserts OwnData_Execlusive
+        // ahead of DataArrayReady, so the base's DataArrayReady id collides
+        // numerically with MESI's OwnData_Execlusive: remap to MESI's id and
+        // return before the OwnData_Execlusive test below.
+        if (*out_id == MSIProtocol::EventId::DataArrayReady)
+        {
+            *out_id = (MSIProtocol::EventId)EventId::DataArrayReady;
+            return;
+        }
+
         if (*out_id == MSIProtocol::EventId::OwnData)
             *out_id = (MSIProtocol::EventId)((msg.complementary_value == 2) ? EventId::OwnData_Execlusive : EventId::OwnData);
 
@@ -52,6 +63,14 @@ namespace octopus
                 break;
             }
         }
+        // MESI's action layout inserts removeSavedReq(9) ahead of StartRead(10),
+        // but the base's switch keys StartRead on its own id (9). Retarget so the
+        // base runs its identical timed-bank-read (START_READ) construction.
+        // removeSavedReq and StartRead never co-occur in a transition, and the
+        // removeSavedReq strip above already ran, so there is no id-9 collision.
+        for (int i = 0; i < (int)actions.size(); i++)
+            if (actions[i] == (int)ActionId::StartRead)
+                actions[i] = (int)MSIProtocol::ActionId::StartRead;
         std::vector<ControllerAction> controller_actions = MSIProtocol::handleAction(actions, msg, cache_line_info, next_state);
 
         if (remove_saved_request == true)
