@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+#
+# sweep_common.sh -- shared harness for Octopus single-axis configuration sweeps.
+#
+# Each sweep holds a fixed BASELINE and varies ONE configuration axis, runs a
+# benchmark suite, and records completion + latency metrics parsed from the
+# per-run Summary.csv the Logger emits (see docs/Logger.md).
+#
+# Baseline: snoop MESI, TripleBus, L1-private + shared LLC, LRU replacement,
+#           FCFS bus arbiter, MainMemory (fixed-latency), cache latency default.
+#
+# Metrics per (config,benchmark): status + avg latency, worst-case Total,
+# worst-case Request-Bus, worst-case Response-Bus, worst-case DRAM, finish cycle.
+# The per-axis component (bus for arbiter, DRAM for memory, ...) shows WHERE the
+# knob acts.
+#
+# Env knobs:  SUITE=eembc|splash (default eembc)   SAFETY=<sec> (default 300)
+#             BENCH=<name>  run only one benchmark (fast smoke)
+#
+# NOTE: preset CSVs have NO trailing newline, so appended overrides are
+# newline-guarded (see set_csv) -- otherwise the line glues onto a comment and
+# is silently ignored.
+
+set -u
+SWEEP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BIN="$SWEEP_ROOT/build/Octopus_Simulator.exe"
+[ -f "$BIN" ] || BIN="$SWEEP_ROOT/build/Octopus_Simulator"
+CFG="$SWEEP_ROOT/configuration/SystemConfigurations/MultiCoreSystem.csv"
+SNOOP="$SWEEP_ROOT/configuration/SystemConfigurations/MultiCoreSystem_Snoop.csv"
+SBC="$SWEEP_ROOT/configuration/Interconnect/SplitBusController.csv"
+
+# make the runtime DLLs discoverable (MinGW UCRT + build dir)
+MINGW="/c/Users/moham/AppData/Local/Microsoft/WinGet/Packages/BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe/mingw64/bin"
+[ -d "$MINGW" ] && export PATH="$MINGW:$SWEEP_ROOT/build:$PATH"
+
+SUITE="${SUITE:-eembc}"
+SAFETY="${SAFETY:-300}"
+case "$SUITE" in
+  eembc)  TR="$SWEEP_ROOT/BMs/eembc-traces";;
+  splash) TR="$SWEEP_ROOT/BMs/splash";;
+  *) echo "ERROR: SUITE must be eembc or splash" >&2; exit 1;;
+esac
+
+# --- baseline config (snoop MESI) written to the active MultiCoreSystem.csv ---
+gen_baseline(){
+  cp "$SNOOP" "$CFG"
+  sed -i -E \
+    -e "s#^(cache_controller\[\*\]\.protocol_type\(s\),)[^,]*#\1SNOOP_MESI#" \
+    -e "s#^(cache_controller\[\*\]\.fsm_filename\(s\),)[^,]*#\1MESI_splitBus_snooping#" \
+    -e "s#^(llc_controller\.protocol_type\(s\),)[^,]*#\1SNOOP_LLC_MESI#" \
+    -e "s#^(llc_controller\.fsm_filename\(s\),)[^,]*#\1MESI_LLC#" \
+    -e "s#^(cache_controller_type\(s\),)[^,]*#\1CacheControllerExclusive#" "$CFG"
+}
+
+# set/override a system-CSV key. $1 = anchored key regex (up to the comma),
+# $2 = the full replacement line. sed if present, else newline-guarded append.
+set_csv(){
+  local keyre="$1" line="$2"
+  if grep -qE "^${keyre}" "$CFG"; then
+    sed -i -E "s#^(${keyre}).*#${line}#" "$CFG"
+  else
+    printf '\n%s\n' "$line" >> "$CFG"
+  fi
+}
+
+# set the interconnect (bus) arbiter -- lives in the controller's Extends file,
+# NOT the system CSV.
+set_arbiter(){ sed -i -E "s#^(arbiter_type\(s\),)[^,]*#\1$1#" "$SBC"; }
+
+# max-across-cores worst-case components + mean average, from a Summary.csv.
+# cols: 1 CoreId, 3 WC-ReqBus, 6 WC-RespBus, 8 WC-DRAM, 9 WC-Total, 11 Avg, 12 Finish
+metrics(){
+  awk -F, 'NR>1&&NF>=12{
+             if($9>wt)wt=$9; if($3>rq)rq=$3; if($6>rp)rp=$6; if($8>dr)dr=$8;
+             a+=$11; n++; if($12>f)f=$12
+           }
+           END{ if(n) printf "%.2f,%d,%d,%d,%d,%d", a/n, wt, rq, rp, dr, f;
+                else  printf "NA,NA,NA,NA,NA,NA" }' "$1" 2>/dev/null
+}
+METRIC_HEADER="avg,wcTotal,wcReqBus,wcRespBus,wcDRAM,finish"
+
+# run one benchmark under the active CFG. echoes: status,<6 metrics>
+run_bench(){
+  local b="$1" wp="$TR/$b"
+  [ -f "$wp/trace_C0.trc.shared" ] && { echo -n; } || { echo "SKIP,NA,NA,NA,NA,NA,NA"; return; }
+  mkdir -p "$wp/newLogger"; rm -f "$wp/newLogger"/*.csv 2>/dev/null
+  timeout "${SAFETY}s" "$BIN" -s MultiCoreSystem \
+      -p "workload_path(s)=$(cygpath -m "$wp")/" >/dev/null 2>"$wp/.sweep.stderr"
+  local rc=$? flt d=0 nc=0 c refs rows fin
+  flt=$(grep -aoiE 'fault|invalid|segmentation|abort|unfound|not found|bad_function|full buffer|wrong destination' "$wp/.sweep.stderr" 2>/dev/null | head -1)
+  for c in 0 1 2 3; do
+    [ -f "$wp/trace_C$c.trc.shared" ] || continue; nc=$((nc+1))
+    refs=$(wc -l < "$wp/trace_C$c.trc.shared")
+    rows=$(awk 'END{print NR}' "$wp/newLogger/LatencyReport_C$c.csv" 2>/dev/null); rows=${rows:-0}
+    fin=$(grep -c "Average Latency" "$wp/newLogger/LatencyReport_C$c.csv" 2>/dev/null); fin=${fin:-0}
+    { [ "$fin" -ge 1 ] && [ "$rows" -ge "$refs" ]; } && d=$((d+1))
+  done
+  local st
+  if   [ -n "$flt" ];                              then st="FAULT"
+  elif [ "$rc" -eq 124 ];                          then st="TIMEOUT"
+  elif [ "$d" -eq "$nc" ] && [ "$nc" -gt 0 ];      then st="OK"
+  else st="INCOMPLETE"; fi
+  echo "$st,$(metrics "$wp/newLogger/Summary.csv")"
+}
+
+# benchmark list (one only if BENCH is set)
+benches(){
+  if [ -n "${BENCH:-}" ]; then echo "$BENCH"; return; fi
+  local d; for d in "$TR"/*/; do [ -f "${d}trace_C0.trc.shared" ] && basename "$d"; done
+}
+
+# run one axis: $1=axis name, $2=column header for the value, then a function
+# `apply_value <value>` must be defined by the caller and `VALUES` set.
+# Emits results/<axis>.csv and prints a table.
+run_axis(){
+  local axis="$1" vcol="$2"
+  local out="$SWEEP_ROOT/results/$axis"; mkdir -p "$out"
+  local csv="$out/results.csv"
+  echo "$vcol,benchmark,status,$METRIC_HEADER" > "$csv"
+  local v b
+  for v in $VALUES; do
+    apply_value "$v"
+    for b in $(benches); do
+      echo "$v,$b,$(run_bench "$b")" | tee -a "$csv"
+    done
+  done
+  echo; echo "==== $axis sweep (SUITE=$SUITE) ===="
+  column -t -s, "$csv"
+  echo "results -> $csv"
+}
