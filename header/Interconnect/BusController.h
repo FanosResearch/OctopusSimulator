@@ -41,6 +41,11 @@ namespace octopus
     protected:
         vector<CommunicationInterface *> *m_interfaces;
         vector<int> *m_lower_level_ids;
+        // Arbiter candidates = every agent that transmits on this bus (all interface
+        // ids: lower-level L1s AND the upper-level LLC). Owner-matched arbiters
+        // (RR/TDM) need the full set, else LLC-sourced traffic (owner = LLC id) can
+        // never be elected and starves. Populated by SplitBusController.
+        vector<int> m_arbiter_candidate_ids;
         vector<Arbiter *> m_arbiters;
         DebugPrint* dprint;
 

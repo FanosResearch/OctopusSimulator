@@ -14,21 +14,29 @@ namespace octopus
     SplitBusController::SplitBusController(ParametersMap map, vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids,
             string pname, string config_path, string name) : BusController(map, interfaces, lower_level_ids, pname, config_path, name)
     {
+        // Candidate list = every agent that transmits on this bus (all interface ids:
+        // the lower-level L1s AND the upper-level LLC). An L1-only list starves
+        // LLC-sourced traffic (owner = LLC id) under owner-matched arbiters (RR/TDM),
+        // which hang; FCFS ignores owner so it happened to work. Use the full set.
+        for (CommunicationInterface *itf : *m_interfaces)
+            m_arbiter_candidate_ids.push_back(itf->m_interface_id);
+        vector<int> *cands = &m_arbiter_candidate_ids;
+
         string arbiter_type = std::get<string>(parameters.at(STRINGIFY(arbiter_type)).value);
         if(arbiter_type == STRINGIFY(TDMArbiter))
         {
-            m_arbiters.push_back(new TDMArbiter(m_lower_level_ids, m_request_latency));
-            m_arbiters.push_back(new TDMArbiter(m_lower_level_ids, m_response_latency));
+            m_arbiters.push_back(new TDMArbiter(cands, m_request_latency));
+            m_arbiters.push_back(new TDMArbiter(cands, m_response_latency));
         }
         else if(arbiter_type == STRINGIFY(FCFSArbiter))
         {
-            m_arbiters.push_back(new FCFSArbiter(m_lower_level_ids, m_request_latency));
-            m_arbiters.push_back(new FCFSArbiter(m_lower_level_ids, m_response_latency));
+            m_arbiters.push_back(new FCFSArbiter(cands, m_request_latency));
+            m_arbiters.push_back(new FCFSArbiter(cands, m_response_latency));
         }
         else if(arbiter_type == STRINGIFY(RRArbiter))
         {
-            m_arbiters.push_back(new RRArbiter(m_lower_level_ids, m_request_latency));
-            m_arbiters.push_back(new RRArbiter(m_lower_level_ids, m_response_latency));
+            m_arbiters.push_back(new RRArbiter(cands, m_request_latency));
+            m_arbiters.push_back(new RRArbiter(cands, m_response_latency));
         }
         else
         {
