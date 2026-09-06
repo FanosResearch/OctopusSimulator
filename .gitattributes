@@ -1,0 +1,2 @@
+# Trace inputs are binary-ish fixed-format; never convert line endings.
+*.trc.shared -text

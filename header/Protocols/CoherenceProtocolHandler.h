@@ -40,6 +40,11 @@ namespace octopus
         virtual FRFCFS_State getRequestState(const Message &, FRFCFS_State) = 0;
         virtual void initializeCacheStates();
         virtual void createDefaultCacheLine(uint64_t address, GenericCacheLine *cache_line) {};
+
+        // True if `state` is a stable (non-transient) coherence state. Used by the
+        // controller to decide when a block buffered in the MSHR should be written to
+        // the array (once, at stabilization).
+        bool isStable(int state) { return m_fsm->isStable(state); }
     };
 }
 

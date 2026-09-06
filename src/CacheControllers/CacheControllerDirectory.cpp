@@ -7,6 +7,8 @@
  */
 
 #include "../../header/CacheControllers/CacheControllerDirectory.h"
+#include "../../header/Protocols/TraceTransition.h"
+#include <algorithm>
 
 namespace octopus
 {
@@ -114,11 +116,43 @@ namespace octopus
         delete msg;
     }
 
+    void CacheControllerDirectory::performWriteBack(void *data_ptr)
+    {
+        Message *msg = (Message *)data_ptr;
+
+        // The block this forward must hand on may not be in the array yet: a refill just
+        // arrived from the LLC but is still parked in the deferred-fill queue (array busy),
+        // or it's in the still-valid line that this same transition is about to invalidate
+        // (-> I) and drop. This override runs before that -> I, so grab the in-flight block
+        // now -- from the pending fill, else directly from the line ignoring array-read
+        // latency -- and forward it. No array access, no busy-array defer that would let the
+        // line change out from under us. Only if the block is truly not in hand do we fall
+        // through to the base (defer/read).
+        if (msg->data == NULL)
+        {
+            Message *inflight = getPendingFillData(msg->addr);
+            const uint8_t *src =
+                (inflight != NULL && inflight->data != NULL)
+                    ? inflight->data
+                    : ((CacheDataHandler_COTS *)m_data_handler)->peekData(msg->addr);
+            if (src != NULL)
+                msg->copy(src, (uint16_t)m_data_handler->getBlockSize());
+        }
+
+        CacheController::performWriteBack(data_ptr);
+    }
+
     void CacheControllerDirectory::incrementSharers(void *data_ptr)
     {
         Message *msg = (Message *)data_ptr;
-        
-        m_sharers[this->getAddressKey(msg->addr)].push_back(msg->owner);
+
+        auto &lst = m_sharers[this->getAddressKey(msg->addr)];
+        if (octopus::traceHit(msg->addr, m_data_handler->getBlockSize()) &&
+            std::find(lst.begin(), lst.end(), msg->owner) != lst.end())
+            std::cout << "[DUP-SHARER cyc=" << m_cache_cycle << " a=0x" << std::hex << msg->addr
+                      << std::dec << " owner=" << msg->owner << " listsz=" << lst.size()
+                      << " src=" << (int)msg->source << " cv=" << msg->complementary_value << "]" << std::endl;
+        lst.push_back(msg->owner);
         delete msg;
     }
 

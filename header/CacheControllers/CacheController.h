@@ -72,6 +72,9 @@ namespace octopus
         virtual void writeCacheLineData(void *);
         virtual void modifyData(void *);
         virtual void saveReqForWriteBack(void *);
+        // In-flight refill (deferred WRITE_CACHE_LINE_DATA) for `address`, if any is queued.
+        Message *getPendingFillData(uint64_t address);
+        virtual void dumpDeadlockState() override;
         virtual void noAction(void *){}; // empty function
         virtual void stall(void *);
         // Snoop LLC eviction back-invalidation. Routed via MessageType::SERVICE_REQUEST

@@ -74,10 +74,13 @@ namespace octopus
                 delete m_sample_in_progess;
                 m_sample_in_progess = NULL;
                 if(m_sent_requests == 0)
-                {    
+                {
                     m_simulation_done = true;
                     Logger::getLogger()->traceEnd(this->m_id);
                 }
+                else if (m_clk_cycle % 100000 == 0)
+                    std::cout << "[CPU-STUCK id=" << m_id << " m_sent_requests="
+                              << m_sent_requests << " cyc=" << m_clk_cycle << "]" << std::endl;
                 return;
             }
         }

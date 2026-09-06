@@ -7,6 +7,7 @@
  */
 
 #include "../../header/Protocols/LLCMSIDirectory.h"
+#include "../../header/Protocols/TraceTransition.h"
 using namespace std;
 
 namespace octopus
@@ -46,6 +47,7 @@ namespace octopus
 
         this->readEvent(request_msg, cache_line, &event_id);
         this->m_fsm->getTransition(cache_line.state, (int)event_id, next_state, actions);
+        TRACE_TRANSITION("LLCD", m_id, request_msg, cache_line.state, event_id, next_state, actions);
 
         if(dprint)
             dprint->print(&request_msg, "state(%d) to nextState(%d) due to event(%d) and num of actions = %d", 
@@ -200,7 +202,10 @@ namespace octopus
                 break;
 
             case ActionId::Fault:
-                std::cout << " LLCMSIDirectory: Fault Transaction is detected" << std::endl;
+                std::cout << " LLCMSIDirectory: Fault Transaction is detected [a=0x" << std::hex << msg.addr
+                          << std::dec << " st=" << cache_line.state << " ->next=" << next_state
+                          << " cv=" << msg.complementary_value << " owner=" << msg.owner
+                          << " src=" << (int)msg.source << " hasData=" << (msg.data != NULL) << "]" << std::endl;
                 exit(0);
                 break;
             }

@@ -74,6 +74,22 @@ namespace octopus
         virtual ~CacheDataHandler_COTS();
 
         virtual void writeLine2MSHR(uint64_t address, GenericCacheLine *line);
+        // Land arrived block data into the MSHR (fill buffer) WITHOUT promoting to a bank
+        // way. Receiving a block off the network into the fill buffer is not a data-array
+        // access, so it is immediate; only the MSHR->bank promotion is latency-gated.
+        // Returns true iff the line is currently in the MSHR (data landed).
+        bool fillMSHRData(uint64_t address, const uint8_t *data);
+        // True iff the block is buffered in the MSHR AND its data has arrived.
+        bool hasMSHRData(uint64_t address);
+        // The block's data wherever it currently lives (array way / MSHR / PWB), ignoring
+        // array-access readiness. For a forward that must hand on an in-hand block without
+        // incurring (or waiting on) a fresh array read. NULL if the line holds no data.
+        uint8_t *peekData(uint64_t address);
+        // Write a buffered (MSHR-resident) block into a bank way -- the single array
+        // write done once the coherence line stabilizes. Uses the block's own buffered
+        // data; evicts a victim to the PWB if the set is full. No-op if not buffered or
+        // data not yet arrived.
+        void promoteFromMSHR(uint64_t address);
 
         virtual bool updateLineData(uint64_t address, const uint8_t *data) override;
         virtual bool updateLineBits(uint64_t address, GenericCacheLine *line) override;

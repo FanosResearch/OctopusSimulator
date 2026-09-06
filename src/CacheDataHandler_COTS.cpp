@@ -61,6 +61,11 @@ namespace octopus
     {
         if (line->valid == false)
             return;
+        if (octopus::traceHit(address, m_block_size))
+            std::cout << "[MSHR-W2M a=0x" << std::hex << address << std::dec
+                      << " existed=" << checkMSHR(mask_offset(address))
+                      << " existHadData=" << (checkMSHR(mask_offset(address))?(m_miss_status_holding_regs[mask_offset(address)].m_data!=NULL):0)
+                      << " newSt=" << line->state << " newHasData=" << (line->m_data!=NULL) << "]" << std::endl;
         m_miss_status_holding_regs[mask_offset(address)] = *line;
         m_miss_status_holding_regs[mask_offset(address)].m_block_size = this->m_block_size;
     }
@@ -79,6 +84,56 @@ namespace octopus
         m_pwb_pending_issue.push_back(wb_address);
     }
 
+    bool CacheDataHandler_COTS::fillMSHRData(uint64_t address, const uint8_t *data)
+    {
+        // Copy the just-arrived block into the existing MSHR entry (fill buffer). No
+        // eviction, no promotion, no state change -- just make the data available so an
+        // in-flight forward can read it before the (latency-gated) bank promotion lands.
+        if (data != NULL && checkMSHR(mask_offset(address)))
+        {
+            m_miss_status_holding_regs[mask_offset(address)].copyData(data);
+            if (octopus::traceHit(address, m_block_size))
+                std::cout << "[MSHR-FILL a=0x" << std::hex << address << std::dec
+                          << " st=" << m_miss_status_holding_regs[mask_offset(address)].state
+                          << " dataNowSet=" << (m_miss_status_holding_regs[mask_offset(address)].m_data!=NULL) << "]" << std::endl;
+            return true;
+        }
+        return false;
+    }
+
+    bool CacheDataHandler_COTS::hasMSHRData(uint64_t address)
+    {
+        uint64_t key = mask_offset(address);
+        return checkMSHR(key) && m_miss_status_holding_regs[key].m_data != NULL;
+    }
+
+    uint8_t *CacheDataHandler_COTS::peekData(uint64_t address)
+    {
+        uint64_t set; int way;
+        if (findline(address, &set, &way))
+        {
+            GenericCacheLine *cl = (GenericCacheLine *)getLine(set, way);
+            if (cl != NULL && cl->valid && cl->m_data != NULL)
+                return cl->m_data;
+        }
+        return NULL;
+    }
+
+    void CacheDataHandler_COTS::promoteFromMSHR(uint64_t address)
+    {
+        uint64_t key = mask_offset(address);
+        if (!checkMSHR(key) || m_miss_status_holding_regs[key].m_data == NULL)
+            return; // not buffered, or data has not arrived yet
+
+        uint64_t set; int way;
+        CacheDataHandler::findline(address, &set, &way); // sets `set` = cache set index
+        if (findEmptyWay(address) == -1)
+            moveLine2WB(set, chooseEvictionWay(set));
+
+        if (writeCacheLine(address, &m_miss_status_holding_regs[key]))
+            m_miss_status_holding_regs.erase(key);
+    }
+
     bool CacheDataHandler_COTS::updateLineData(uint64_t address, const uint8_t *data)
     {
         uint64_t set;
@@ -95,6 +150,8 @@ namespace octopus
 
             if (writeCacheLine(address, &m_miss_status_holding_regs[mask_offset(address)]))
             {
+                if (octopus::traceHit(address, m_block_size))
+                    std::cout << "[MSHR-ERASE-PROMO a=0x" << std::hex << address << std::dec << "]" << std::endl;
                 m_miss_status_holding_regs.erase(mask_offset(address));
                 return true;
             }
@@ -119,8 +176,11 @@ namespace octopus
         {
             if (way < 0 && line->valid == false)
             {
-                if (checkMSHR(set))
+                if (checkMSHR(set)) {
+                    if (octopus::traceHit(address, m_block_size))
+                        std::cout << "[MSHR-ERASE-INVAL a=0x" << std::hex << address << std::dec << "]" << std::endl;
                     m_miss_status_holding_regs.erase(set);
+                }
                 else if (checkPWB(set))
                 {
                     if (octopus::traceHit(address, m_block_size))

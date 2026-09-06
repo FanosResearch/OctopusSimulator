@@ -41,7 +41,9 @@ namespace octopus
             DataFromOwner,
             
             InvAck,
-            lastInvAck
+            lastInvAck,
+
+            DataArrayReady   // owner's timed L1 bank read completed (self message)
         };
 
         enum class ActionId
@@ -60,6 +62,8 @@ namespace octopus
             AckNum_set,
             SaveReq,
             Fault,
+
+            StartRead   // begin owner's timed bank read before forwarding (latency model)
         };
 
         virtual void readEvent(Message &msg, EventId *out_id);

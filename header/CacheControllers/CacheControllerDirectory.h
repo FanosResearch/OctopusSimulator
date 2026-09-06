@@ -34,7 +34,11 @@ namespace octopus
         virtual void clearSharers(void *);
         virtual void sendForwardMessage(void *);
         virtual void removePendingNoResponse(void *);
-        
+
+        // Directory forward: hand on the in-flight block (deferred fill / still-valid line)
+        // directly, then delegate to the base. Isolates this from the snoop controllers.
+        virtual void performWriteBack(void *) override;
+
     public:
         CacheControllerDirectory(ParametersMap map, CommunicationInterface *upper_interface, 
                                  CommunicationInterface *lower_interface, string pname = "",

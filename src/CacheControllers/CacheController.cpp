@@ -143,10 +143,18 @@ namespace octopus
             if(msg_available)
             {
                 Logger::getLogger()->updateRequest(selected_msg.msg_id, Logger::EntryId::CACHE_CHECKPOINT);
-                
-                auto action = m_data_access_action[selected_msg.msg_id];
+
+                auto _ait = m_data_access_action.find(selected_msg.msg_id);
+                if (_ait == m_data_access_action.end())
+                    return; // no action for this entry (defensive; should not happen)
+                // Capture and ERASE the action BEFORE running it. The action (e.g. a data=NULL
+                // write-back's performWriteBack) may re-defer itself via checkReadinessOfCache
+                // when the bank is still busy, re-inserting this msg_id into the map. Erasing
+                // after the call would then delete that fresh re-deferred entry, orphaning its
+                // buffer element -> a later election finds no action and dereferences garbage.
+                ControllerAction action = _ait->second;
+                m_data_access_action.erase(_ait);
                 action_functions[action.type](action.data);
-                m_data_access_action.erase(selected_msg.msg_id);
                 m_processing_queue->markDirty(); // deferred completion changed line state outside the queue
             }
         }
@@ -240,6 +248,43 @@ namespace octopus
         BaseController::performWriteBack(data_ptr);
     }
 
+    // Return the pending refill (deferred WRITE_CACHE_LINE_DATA) for `address` if one is
+    // queued in the data-access buffer -- the just-arrived block that has not been written
+    // to the array yet. NULL if there is none. (Used by the directory controller's forward.)
+    Message *CacheController::getPendingFillData(uint64_t address)
+    {
+        for (const Message &m : m_data_access_buffer)
+        {
+            if (getAddressKey(m.addr) != getAddressKey(address))
+                continue;
+            auto it = m_data_access_action.find(m.msg_id);
+            if (it != m_data_access_action.end() &&
+                it->second.type == ControllerAction::Type::WRITE_CACHE_LINE_DATA)
+            {
+                Message *fill = (Message *)it->second.data;
+                if (fill != NULL && fill->data != NULL)
+                    return fill;
+            }
+        }
+        return NULL;
+    }
+
+    void CacheController::dumpDeadlockState()
+    {
+        BaseController::dumpDeadlockState();
+        std::cout << "   dataAccessBuf=" << m_data_access_buffer.size();
+        for (const Message &m : m_data_access_buffer)
+        {
+            auto it = m_data_access_action.find(m.msg_id);
+            int atype = (it != m_data_access_action.end()) ? (int)it->second.type : -1;
+            GenericCacheLine cl; bool ok = m_data_handler->readLineBits(m.addr, &cl);
+            std::cout << " {a=0x" << std::hex << m.addr << std::dec << " cv=" << m.complementary_value
+                      << " actType=" << atype << " fsmSt=" << (ok ? cl.state : -1)
+                      << " rdy=" << m_data_handler->isReady(m.addr) << "}";
+        }
+        std::cout << std::endl;
+    }
+
     void CacheController::dropPendingFills(uint64_t address)
     {
         for (int i = 0; i < (int)m_data_access_buffer.size(); )
@@ -279,6 +324,11 @@ namespace octopus
         {
             if (!m_data_handler->updateLineBits(msg->addr, cache_line))
                 ((CacheDataHandler_COTS*)m_data_handler)->writeLine2MSHR(msg->addr, cache_line);//ToDo: Should be move to CacheDataHandler_COTS
+
+            // If this (non-data) transition stabilizes the line and its data has been
+            // waiting in the MSHR through the transient, do the single array write now.
+            if (cache_line->valid && m_protocol->isStable(cache_line->state))
+                ((CacheDataHandler_COTS*)m_data_handler)->promoteFromMSHR(msg->addr);
         }
         else
         {
@@ -298,6 +348,25 @@ namespace octopus
         Message *msg = (Message *)data_ptr;
         GenericCacheLine *cache_line = (GenericCacheLine *)((uint8_t *)data_ptr + sizeof(Message));
 
+        // Land the just-arrived block in the MSHR (fill buffer). This makes the data
+        // available immediately -- the core's pending hit and any forward are served
+        // straight from the buffer, with no array access.
+        bool inMSHR = ((CacheDataHandler_COTS*)m_data_handler)->fillMSHRData(msg->addr, msg->data);
+
+        // While the line is still transient, the MSHR is its data home: keep the block
+        // there and defer the single array write to stabilization (see updateCacheLine).
+        // This avoids write-then-read-back, and a block acquired only to be forwarded on
+        // (e.g. IM_a -> ... -> I) never touches the array at all.
+        if (inMSHR && !m_protocol->isStable(cache_line->state))
+        {
+            cache_line->~GenericCacheLine();
+            msg->~Message();
+            delete[] (uint8_t *)data_ptr;
+            return;
+        }
+
+        // Stable arrival, or a line already resident in a bank way: write the array now
+        // (latency-gated for bank lines; immediate promotion for a buffered MSHR block).
         if(!checkReadinessOfCache(*msg, ControllerAction::Type::WRITE_CACHE_LINE_DATA, data_ptr))
             return;
 
@@ -440,6 +509,11 @@ namespace octopus
     {
         if(!m_data_handler->isReady(msg.addr))
         {
+            if (m_data_access_action.find(msg.msg_id) != m_data_access_action.end())
+                std::cout << "[DAB-DUP id=" << m_id << " msg_id=" << msg.msg_id
+                          << " a=0x" << std::hex << msg.addr << std::dec
+                          << " newtype=" << (int)type << " cv=" << msg.complementary_value
+                          << " src=" << (int)msg.source << "]" << std::endl;
             m_data_access_buffer.push_back(msg);
             m_data_access_action[msg.msg_id] = ControllerAction{.type = type,
                                                                .data = data_ptr};

@@ -76,7 +76,7 @@ namespace octopus
         static uint64_t s_max_cycle;
         static bool s_dumped;
         virtual int mshrLimit() { return -1; }
-        void dumpDeadlockState();
+        virtual void dumpDeadlockState();
         static void checkGlobalStall();
 
         virtual void hitAction(void *);

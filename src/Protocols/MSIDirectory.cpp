@@ -7,6 +7,8 @@
  */
 
 #include "../../header/Protocols/MSIDirectory.h"
+#include "../../header/Protocols/MSIProtocol.h"   // REQUEST_TYPE_DATAREADY marker
+#include "../../header/Protocols/TraceTransition.h"
 using namespace std;
 
 namespace octopus
@@ -46,6 +48,7 @@ namespace octopus
 
         this->readEvent(request_msg, &event_id);
         this->m_fsm->getTransition(cache_line.state, (int)event_id, next_state, actions);
+        TRACE_TRANSITION("L1D", m_id, request_msg, cache_line.state, event_id, next_state, actions);
 
         if(dprint)
             dprint->print(&request_msg, "state(%d) to nextState(%d) due to event(%d) and num of actions = %d", 
@@ -224,6 +227,20 @@ namespace octopus
                                                              msg.owner); // Owner
                 break;
 
+            case ActionId::StartRead:
+                // Owner must read its bank to forward: start the timed bank read. The line
+                // stays valid in the transient (M_rS/M_rI/MI_rS/...) until the read completes
+                // and a self DataArrayReady message drives the deferred Data2*/InvAck_Data.
+                // The requester was preserved by the preceding SaveReq, so performWriteBack
+                // recovers it (this self message carries owner==m_id, not the requester).
+                controller_action.type = ControllerAction::Type::START_READ;
+                controller_action.data = (void *)new Message(msg.msg_id, // Id
+                                                             msg.addr,   // Addr
+                                                             0,          // Cycle
+                                                             0,          // Complementary_value
+                                                             msg.owner); // Owner
+                break;
+
             case ActionId::Fault:
                 std::cout << " MSIDirectory: Fault Transaction is detected" << std::endl;
                 exit(0);
@@ -245,8 +262,13 @@ namespace octopus
             return;
         
         case Message::Source::SELF:
+            if (msg.complementary_value == MSIProtocol::REQUEST_TYPE_DATAREADY)
+            {
+                *out_id = EventId::DataArrayReady; // owner's timed bank read completed
+                return;
+            }
             if (msg.owner == m_id)
-            {    
+            {
                 *out_id = EventId::Replacement;
                 return;
             }
