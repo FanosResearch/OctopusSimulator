@@ -38,21 +38,11 @@ GIANTS="${GIANTS:-raytrace radiosity}"
 say "=== OVERNIGHT SWEEP START  (cores=$(nproc), JOBS=${JOBS:-auto}) ==="
 say "eembc axes: $EEMBC_AXES | splash axes: $SPLASH_AXES | giants(baseline): $GIANTS"
 
-# ---- SPLASH giants: baseline config, run ONCE, concurrent with the sweep ----
-(
-  export SUITE=splash SAFETY="${GIANT_SAFETY:-9000}"
-  source "$here/sweep_common.sh"
-  gen_baseline
-  gdir="$root/results/giants"; mkdir -p "$gdir"; rm -f "$gdir"/.*.line 2>/dev/null
-  for g in $GIANTS; do
-    ( echo "baseline,$g,$(run_bench "$g")" > "$gdir/.${g}.line" ) &
-  done
-  wait
-  { echo "value,benchmark,status,$METRIC_HEADER"; cat "$gdir"/.*.line 2>/dev/null; } > "$gdir/splash.csv"
-) &
-GPID=$!
-say "giants launched (pid $GPID); waiting 15s for config load before mutating CSVs"
-sleep 15
+# NOTE: giants run LAST, never concurrently with the axis sweeps. A live Octopus
+# process holds the shared config file open, which makes `sed -i` in-place edits
+# (gen_baseline, set_arbiter, cache size) silently fail on Windows -- appends
+# still work, so it corrupts some axes and not others. So: sweep first (sed
+# reliable), then giants alone.
 
 # ---- EEMBC: all axes (fast; MCsim completes here) ----
 for ax in $EEMBC_AXES; do
@@ -68,8 +58,22 @@ for ax in $SPLASH_AXES; do
     && say "SPLASH $ax done" || say "SPLASH $ax FAILED (rc=$?)"
 done
 
-say "sweep done; waiting on giants ..."
-wait "$GPID"
+# ---- SPLASH giants LAST, alone (baseline config, run once) ----
+if [ -n "$GIANTS" ]; then
+  say "SPLASH giants (alone): $GIANTS"
+  (
+    export SUITE=splash SAFETY="${GIANT_SAFETY:-14400}"
+    source "$here/sweep_common.sh"
+    gen_baseline
+    gdir="$root/results/giants"; mkdir -p "$gdir"; rm -f "$gdir"/.*.line 2>/dev/null
+    for g in $GIANTS; do
+      ( echo "baseline,$g,$(run_bench "$g")" > "$gdir/.${g}.line" ) &   # giants || each other only
+    done
+    wait
+    { echo "value,benchmark,status,$METRIC_HEADER"; cat "$gdir"/.*.line 2>/dev/null; } > "$gdir/splash.csv"
+  )
+  say "giants done"
+fi
 say "=== ALL DONE ==="
 
 # ---- status summary ----

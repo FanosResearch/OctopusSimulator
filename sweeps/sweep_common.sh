@@ -73,17 +73,22 @@ set_csv(){
 # NOT the system CSV.
 set_arbiter(){ sed -i -E "s#^(arbiter_type\(s\),)[^,]*#\1$1#" "$SBC"; }
 
-# max-across-cores worst-case components + mean average, from a Summary.csv.
-# cols: 1 CoreId, 3 WC-ReqBus, 6 WC-RespBus, 8 WC-DRAM, 9 WC-Total, 11 Avg, 12 Finish
+# max-across-cores worst-case for EVERY pipeline stage + mean average, from a
+# Summary.csv. cols (1-indexed): 1 CoreId, 2 WC-L1Stall, 3 WC-ReqBus,
+# 4 WC-L2Stall, 5 WC-L2Access, 6 WC-RespBus, 7 WC-L2DRAMBus, 8 WC-DRAM,
+# 9 WC-Total, 10 WC-Effective, 11 Average, 12 Finish. Capturing all stages lets
+# the plots show a full per-stage latency breakdown (where each knob acts).
 metrics(){
   awk -F, 'NR>1&&NF>=12{
-             if($9>wt)wt=$9; if($3>rq)rq=$3; if($6>rp)rp=$6; if($8>dr)dr=$8;
-             a+=$11; n++; if($12>f)f=$12
+             if($2>l1)l1=$2; if($3>rq)rq=$3; if($4>l2s)l2s=$4; if($5>l2a)l2a=$5;
+             if($6>rp)rp=$6; if($7>db)db=$7; if($8>dr)dr=$8; if($9>wt)wt=$9;
+             if($10>ef)ef=$10; a+=$11; n++; if($12>f)f=$12
            }
-           END{ if(n) printf "%.2f,%d,%d,%d,%d,%d", a/n, wt, rq, rp, dr, f;
-                else  printf "NA,NA,NA,NA,NA,NA" }' "$1" 2>/dev/null
+           END{ if(n) printf "%.2f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d", \
+                          a/n, wt, ef, l1, rq, l2s, l2a, rp, db, dr, f;
+                else  printf "NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA" }' "$1" 2>/dev/null
 }
-METRIC_HEADER="avg,wcTotal,wcReqBus,wcRespBus,wcDRAM,finish"
+METRIC_HEADER="avg,wcTotal,wcEff,wcL1stall,wcReqBus,wcL2stall,wcL2access,wcRespBus,wcDramBus,wcDRAM,finish"
 
 # run one benchmark under the active CFG. echoes: status,<6 metrics>
 run_bench(){
