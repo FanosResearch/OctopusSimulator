@@ -35,6 +35,12 @@ MINGW="/c/Users/moham/AppData/Local/Microsoft/WinGet/Packages/BrechtSanders.WinL
 
 SUITE="${SUITE:-eembc}"
 SAFETY="${SAFETY:-300}"
+# Parallel fan-out: within one (fixed) config, benches are independent processes
+# writing to distinct newLogger dirs, so we run up to JOBS at once. Config is read
+# once at process startup, so mutating the CSV between config batches is safe.
+JOBS="${JOBS:-$(( $(nproc) - 2 ))}"; [ "$JOBS" -ge 1 ] 2>/dev/null || JOBS=1
+# EXCLUDE: space-separated bench names to skip (e.g. SPLASH giants run separately).
+EXCLUDE="${EXCLUDE:-}"
 case "$SUITE" in
   eembc)  TR="$SWEEP_ROOT/BMs/eembc-traces";;
   splash) TR="$SWEEP_ROOT/BMs/splash";;
@@ -81,7 +87,9 @@ METRIC_HEADER="avg,wcTotal,wcReqBus,wcRespBus,wcDRAM,finish"
 
 # run one benchmark under the active CFG. echoes: status,<6 metrics>
 run_bench(){
-  local b="$1" wp="$TR/$b"
+  local b="$1"; local wp="$TR/$b"   # split: under set -u a single `local` expands
+                                     # $b before it is assigned (fails unless the
+                                     # caller's scope already defines b)
   [ -f "$wp/trace_C0.trc.shared" ] && { echo -n; } || { echo "SKIP,NA,NA,NA,NA,NA,NA"; return; }
   mkdir -p "$wp/newLogger"; rm -f "$wp/newLogger"/*.csv 2>/dev/null
   timeout "${SAFETY}s" "$BIN" -s MultiCoreSystem \
@@ -103,28 +111,48 @@ run_bench(){
   echo "$st,$(metrics "$wp/newLogger/Summary.csv")"
 }
 
-# benchmark list (one only if BENCH is set)
+# benchmark list, LARGEST-TRACE-FIRST (better packing: the long pole starts
+# immediately, short benches fill in behind it). BENCH= forces a single bench;
+# EXCLUDE= drops named benches (e.g. giants swept separately).
 benches(){
   if [ -n "${BENCH:-}" ]; then echo "$BENCH"; return; fi
-  local d; for d in "$TR"/*/; do [ -f "${d}trace_C0.trc.shared" ] && basename "$d"; done
+  local d b f
+  for d in "$TR"/*/; do
+    f="${d}trace_C0.trc.shared"; [ -f "$f" ] || continue
+    b="$(basename "$d")"
+    case " $EXCLUDE " in *" $b "*) continue;; esac
+    printf '%d %s\n' "$(wc -l < "$f")" "$b"
+  done | sort -rn | awk '{print $2}'
 }
 
 # run one axis: $1=axis name, $2=column header for the value, then a function
 # `apply_value <value>` must be defined by the caller and `VALUES` set.
-# Emits results/<axis>.csv and prints a table.
+# Within each config value, benches run in PARALLEL (up to JOBS); a barrier
+# between config values keeps the on-disk CSV constant while jobs read it at
+# startup. Emits results/<axis>/<suite>.csv and prints a table.
 run_axis(){
   local axis="$1" vcol="$2"
   local out="$SWEEP_ROOT/results/$axis"; mkdir -p "$out"
-  local csv="$out/results.csv"
+  local csv="$out/${SUITE}.csv"   # suite-aware: eembc.csv vs splash.csv (no clobber)
+  local parts="$out/.parts_${SUITE}"; rm -rf "$parts"; mkdir -p "$parts"
   echo "$vcol,benchmark,status,$METRIC_HEADER" > "$csv"
   local v b
   for v in $VALUES; do
     apply_value "$v"
     for b in $(benches); do
-      echo "$v,$b,$(run_bench "$b")" | tee -a "$csv"
+      while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do wait -n; done
+      { echo "$v,$b,$(run_bench "$b")" > "$parts/${v}..${b}.line"; } &
+    done
+    wait                       # barrier: finish this config before it changes
+  done
+  # assemble deterministically (value order x largest-first bench order)
+  for v in $VALUES; do
+    for b in $(benches); do
+      [ -f "$parts/${v}..${b}.line" ] && cat "$parts/${v}..${b}.line" >> "$csv"
     done
   done
-  echo; echo "==== $axis sweep (SUITE=$SUITE) ===="
+  rm -rf "$parts"
+  echo; echo "==== $axis sweep (SUITE=$SUITE, JOBS=$JOBS) ===="
   column -t -s, "$csv"
   echo "results -> $csv"
 }
