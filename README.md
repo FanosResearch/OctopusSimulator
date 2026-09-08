@@ -3,6 +3,7 @@ Octopus is a cycle-accurate cache system simulator with flexible interconnect mo
 
 # Documentation
 * **[Supported configurations & features](SUPPORTED_CONFIGURATIONS.md)** — the full capability matrix: coherence protocols, interconnect topologies, bus arbitration, cache hierarchy, memory systems (incl. MCsim), operating/integration modes, predictable caching, and monitoring.
+* **[Reproducing the results](REPRODUCIBILITY.md)** — from a fresh clone to every figure and table via configuration-only changes; includes the paper artifact map. See also [`sweeps/README.md`](sweeps/README.md).
 * **[Publications built on Octopus](PUBLICATIONS.md)** — peer-reviewed works that were evaluated on Octopus or re-implemented in it (continuously updated).
 
 # Citation
