@@ -1,0 +1,10 @@
+value,benchmark,status,avg,wcTotal,wcEff,wcL1stall,wcReqBus,wcL2stall,wcL2access,wcRespBus,wcDramBus,wcDRAM,finish
+baseline,water_nsquared,OK,3.35,335,284,299,16,297,53,321,5,294,84518719
+baseline,ocean,OK,6.32,405,351,377,16,297,144,341,10,374,50225393
+baseline,water_spatial,OK,2.88,335,290,303,16,297,55,321,5,288,122992044
+baseline,fmm,OK,3.64,340,310,324,16,297,157,321,7,288,85401943
+baseline,lu_non_contig,OK,4.81,402,310,370,16,297,131,334,7,293,108385217
+baseline,cholesky,OK,5.11,335,304,310,16,297,65,321,6,294,221677703
+baseline,fft,OK,4.51,344,307,336,16,297,76,326,5,333,476903077
+baseline,barnes,OK,3.20,341,299,325,16,297,61,337,5,293,240620395
+baseline,volrend,OK,2.45,335,293,306,16,297,58,321,6,294,265890765
