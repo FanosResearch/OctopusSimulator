@@ -36,3 +36,11 @@ Protocols_FSM/*_v6.csv
 Protocols_FSM/MSI_LLC_v2.csv
 Protocols_FSM/MSI_LLC_faulting.csv
 header/Protocols/TraceTransition.h
+
+# --- not part of the public code artifact ---
+ESSC_submission/
+EMSOFT2026_Octopus/
+EMSOFT2026_OCtopus/
+/ECRTS_ARM_2025*.pdf
+ESSC_paper_draft.md
+results/iirflt01_*
