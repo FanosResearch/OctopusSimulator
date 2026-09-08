@@ -13,8 +13,8 @@
 #                        [--out DIR]
 #   --no-gate : run SPLASH for every protocol even if it failed EEMBC triage
 set -u
-ROOT="/c/Octopus"; cd "$ROOT"
-BIN="$ROOT/build/Octopus_Simulator.exe"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; cd "$ROOT"
+BIN="$ROOT/build/Octopus_Simulator"; [ -x "$BIN.exe" ] && BIN="$BIN.exe"
 CFGDIR="$ROOT/configuration/SystemConfigurations"
 ACTIVE="$CFGDIR/MultiCoreSystem.csv"
 

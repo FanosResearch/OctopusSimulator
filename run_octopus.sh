@@ -23,7 +23,7 @@
 #
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BIN="$ROOT/build/Octopus_Simulator.exe"
+BIN="$ROOT/build/Octopus_Simulator"; [ -x "$BIN.exe" ] && BIN="$BIN.exe"
 CFG="$ROOT/configuration/SystemConfigurations"
 MINGW="/c/Users/moham/AppData/Local/Microsoft/WinGet/Packages/BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe/mingw64/bin"
 [ -d "$MINGW" ] && export PATH="$MINGW:$ROOT/build:$PATH"

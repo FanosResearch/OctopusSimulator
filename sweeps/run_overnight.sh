@@ -26,8 +26,10 @@ ts(){ date '+%m-%d %H:%M:%S'; }
 say(){ echo "[$(ts)] $*" | tee -a "$LOG"; }
 
 MINGW="/c/Users/moham/AppData/Local/Microsoft/WinGet/Packages/BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe/mingw64/bin"
-export PATH="$MINGW:$root/build:$PATH"
-taskkill //F //IM Octopus_Simulator.exe >/dev/null 2>&1
+[ -d "$MINGW" ] && export PATH="$MINGW:$PATH"
+export PATH="$root/build:$PATH"
+# kill any stray simulator (portable: Windows taskkill or POSIX pkill)
+taskkill //F //IM Octopus_Simulator.exe >/dev/null 2>&1 || pkill -f Octopus_Simulator >/dev/null 2>&1 || true
 
 # Memory axis is EEMBC-only: MCsim (cycle-accurate DDR4) is ~5-10x slower and
 # TIMEOUTs even on the smallest SPLASH bench, so SPLASH keeps the MainMemory axes.
