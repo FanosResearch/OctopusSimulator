@@ -86,8 +86,5 @@ runtime). The per-axis component shows *where* the knob acts.
   line onto a comment and be silently ignored.
 - The **arbiter** is set in the interconnect *Extends* file, not the system CSV
   (`sweep_arbiter.sh` backs it up and restores it on exit).
-- RR/TDM bus arbiters require the fix that includes the LLC in the arbiter
-  candidate list (commit `ad46e150`); without it they starve LLC responses and
-  hang.
 - Under `set -u`, declare `local b="$1"; local wp="$TR/$b"` on **separate**
   lines — a single `local` expands `$b` before assigning it.
