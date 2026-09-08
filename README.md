@@ -7,6 +7,68 @@ Octopus is a cycle-accurate cache system simulator with flexible interconnect mo
 * **[Results & figures](results/)** — pre-generated sweep CSVs and the paper figures; [`results/README.md`](results/README.md) explains the layout, columns, and figure-to-paper mapping.
 * **[Publications built on Octopus](PUBLICATIONS.md)** — peer-reviewed works that were evaluated on Octopus or re-implemented in it (continuously updated).
 
+# Architecture
+
+Octopus is built from modular, **clocked** components that are *configured, not
+hard-coded*, and connected through bounded, back-pressured interfaces. The
+diagrams below (from the Octopus CAL paper) explain the design; the full
+capability matrix is in [`SUPPORTED_CONFIGURATIONS.md`](SUPPORTED_CONFIGURATIONS.md).
+
+### System organization
+
+![Octopus system organization](docs/imgs/organization.png)
+
+A configurable multi-core system: clusters of CPU cores, each with private caches
+joined by a direct interconnect, connected through configurable interconnects to a
+shared last-level cache (LLC) and main memory. Hierarchy depth, private/shared
+placement, topology, and per-level parameters are all set by configuration.
+
+### Class design (UML)
+
+![Octopus UML class diagram](docs/imgs/uml.png)
+
+Every simulation entity derives from `Configurable` (hierarchical parameters) and
+`ClockedObj` (cycle-stepped by the `ClockManager`). Coherence is a
+`CoherenceProtocolHandler` driven by an `FSMReader`; an interconnect is an
+`InterconnectTopology` + `InterconnectController` + `Arbiter`; a cache splits into a
+`CacheController` and a `CacheDataHandler`. New protocols, arbiters, topologies, and
+replacement policies are added by subclassing — or, for coherence, by editing a CSV.
+
+### Inside a cache controller
+
+![Cache controller internals](docs/imgs/cache_controller.png)
+
+Messages enter the processing queue; the **protocol handler** interprets the CSV FSM
+through the **FSM reader** and emits controller actions; the **data handler** serves
+the arrays via a replacement policy, MSHRs, a write-back buffer, and a port arbiter.
+
+### Interconnect
+
+![Interconnect internals](docs/imgs/interconnect.png)
+
+An interconnect is an `InterconnectTopology` (message-holding *interfaces* plus a
+*connection map*) and an `InterconnectController` whose *arbiter* resolves contention
+on shared links. Swapping the topology/controller yields point-to-point, unified bus,
+split bus, mesh, or NoC.
+
+### Coherence as an editable CSV finite-state machine
+
+![Coherence FSM CSV example](docs/imgs/fsm_example.png)
+
+Each coherence protocol is a finite-state machine stored as a **CSV table**: rows are
+(stable and transient) states, columns are coherence events, and each cell is the
+action(s) and next state. Adding or modifying a protocol is a spreadsheet edit — no
+C++ change and no recompilation.
+
+### Hierarchical configuration
+
+![Configuration propagation](docs/imgs/configuration.png)
+
+Configuration propagates from the CLI through the top-level module down to every
+sub-component and FSM; parameters are inherited, overridden, and extended. This is
+what lets a single build sweep the entire design space
+(see [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md)).
+
 # Citation
 If you use this simulator in your work, please consider cite:
 
