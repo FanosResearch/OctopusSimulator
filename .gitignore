@@ -21,6 +21,8 @@ BMs/**/newLogger/
 BMs/**/nl_*/
 BMs/**/*.out
 BMs/**/*.err
+BMs/**/*.stderr
+BMs/**/.o
 a2time_4980_fault.csv
 block_3d00_trace.csv
 sweep_pwb.sh
