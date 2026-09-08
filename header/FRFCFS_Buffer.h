@@ -135,18 +135,18 @@ namespace octopus
             for (int i = 0; i < (int)m_buffer.size(); i++)
             {
                 // Per-line FCFS gate: a demand request (CPU Load/Store, or GetS/GetM
-                // from an L1) may not overtake an OLDER demand request to the same cache
-                // line. Only demand requests are ordered -- data responses, writebacks,
-                // back-invalidations and snoops are service traffic and must stay free to
-                // advance transients (e.g. an eviction's Own_Invalidation), else the
-                // controller deadlocks. An older demand request to the line blocks a
-                // younger one regardless of the younger one's kind.
-                if (this->m_line_mask != 0 && m_buffer[i].item.isDemandRequest())
+                // from an L1) OR a back-invalidation may not overtake an OLDER demand
+                // request / invalidation to the same cache line. Ordering invalidations
+                // too stops an eviction's Own_Invalidation from leapfrogging earlier-
+                // broadcast GetS/GetM and orphaning them. DATA responses stay exempt so
+                // they can still advance waiting transients (ordering those deadlocks).
+                if (this->m_line_mask != 0 &&
+                    (m_buffer[i].item.isDemandRequest() || m_buffer[i].item.isInvalidation()))
                 {
                     bool blocked_by_older_same_line = false;
                     for (int j = 0; j < i; j++)
                     {
-                        if (m_buffer[j].item.isDemandRequest() &&
+                        if ((m_buffer[j].item.isDemandRequest() || m_buffer[j].item.isInvalidation()) &&
                             ((m_buffer[j].item.addr ^ m_buffer[i].item.addr) & this->m_line_mask) == 0)
                         {
                             blocked_by_older_same_line = true;

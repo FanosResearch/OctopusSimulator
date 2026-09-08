@@ -124,6 +124,16 @@ public:
         return source == Source::LOWER_INTERCONNECT && data == NULL &&
                (complementary_value == 0 || complementary_value == 1);
     }
+
+    // A back-invalidation (INV = 10), carrying no data. Ordered together with
+    // demand requests under per-line FCFS so an eviction's invalidation cannot
+    // leapfrog an OLDER demand request to the same line (which would evict the
+    // line out from under earlier-broadcast GetS/GetM and orphan them). Data
+    // responses stay exempt so they can still advance waiting transients.
+    bool isInvalidation() const
+    {
+        return complementary_value == 10 && data == NULL;   // REQUEST_TYPE_INV
+    }
 };
 
 class CommunicationInterface
