@@ -3,6 +3,8 @@ Octopus is a cycle-accurate cache system simulator with flexible interconnect mo
 
 # Documentation
 * **[Supported configurations & features](SUPPORTED_CONFIGURATIONS.md)** — the full capability matrix: coherence protocols, interconnect topologies, bus arbitration, cache hierarchy, memory systems (incl. MCsim), operating/integration modes, predictable caching, and monitoring.
+* **[Architecture deep-dive](docs/Architecture.md)** — how the clocked, configurable components fit together, the CSV-FSM coherence engine, a request's end-to-end journey, and how to extend the tool.
+* **Monitoring internals:** [Logger](docs/Logger.md) (per-request, per-stage latency + worst-case) · [Debugger](docs/Debugger.md) (filterable component/coherence tracing).
 * **[Reproducing the results](REPRODUCIBILITY.md)** — from a fresh clone to every figure and table via configuration-only changes; includes the paper artifact map. See also [`sweeps/README.md`](sweeps/README.md).
 * **[Results & figures](results/)** — pre-generated sweep CSVs and the paper figures; [`results/README.md`](results/README.md) explains the layout, columns, and figure-to-paper mapping.
 * **[Publications built on Octopus](PUBLICATIONS.md)** — peer-reviewed works that were evaluated on Octopus or re-implemented in it (continuously updated).
@@ -68,6 +70,8 @@ Configuration propagates from the CLI through the top-level module down to every
 sub-component and FSM; parameters are inherited, overridden, and extended. This is
 what lets a single build sweep the entire design space
 (see [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md)).
+
+> **Deeper dive:** [`docs/Architecture.md`](docs/Architecture.md) walks through the clock model, the coherence engine, a request's end-to-end journey, the integration modes, and how to add new protocols and components.
 
 # Citation
 If you use this simulator in your work, please consider cite:
