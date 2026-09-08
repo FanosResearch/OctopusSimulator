@@ -1,6 +1,10 @@
 # Octopus
 Octopus is a cycle-accurate cache system simulator with flexible interconnect models. It simulates various cache system and interconnect components, including controllers, data arrays, coherence protocols, and arbiters. Octopus enables the user to build reconfigurable simulation infrastructure for multicore processor chip with a high degree of flexibility of controlling system's configuration parameters. Octopus is implemented in C++ using object-oriented programming concepts to support a modular, expansible, configurable, and integrable design.
 
+# Documentation
+* **[Supported configurations & features](SUPPORTED_CONFIGURATIONS.md)** — the full capability matrix: coherence protocols, interconnect topologies, bus arbitration, cache hierarchy, memory systems (incl. MCsim), operating/integration modes, predictable caching, and monitoring.
+* **[Publications built on Octopus](PUBLICATIONS.md)** — peer-reviewed works that were evaluated on Octopus or re-implemented in it (continuously updated).
+
 # Citation
 If you use this simulator in your work, please consider cite:
 
