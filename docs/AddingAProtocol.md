@@ -66,6 +66,17 @@ The `mi_pingpong` toy has cores 0 and 1 repeatedly **read the same line** `0x100
 (cores 2–3 idle). MI runs it **fault-free, all four cores complete** — the FSM has
 no undefined `(state,event)` cells for this workload.
 
+> **One-command demo.** `bash demo_protocol.sh` runs the toy under MESI and MI and
+> prints both the cost and the coherence trace shown below:
+> ```
+> == Cost of the two protocols on the SAME read-sharing workload ==
+>    MESI  (reads SHARE)     -> finish = 332 cycles
+>    MI    (reads PING-PONG) -> finish = 482 cycles
+> == Coherence trace on the shared line 0x1000 (a load's transition) ==
+>    MI:   I --Load--> IM_ad   (GetM: the read goes exclusive -> line ping-pongs)
+>    MESI: I --Load--> IS_ad   (GetS: the read is shared -> cores share)
+> ```
+
 ## 4. See the difference: MI vs MESI
 
 Under **MESI** the two cores *share* the line; under **MI** they can't, so the line
