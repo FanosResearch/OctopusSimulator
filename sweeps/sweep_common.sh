@@ -47,31 +47,67 @@ case "$SUITE" in
   *) echo "ERROR: SUITE must be eembc or splash" >&2; exit 1;;
 esac
 
-# --- baseline config (snoop MESI) written to the active MultiCoreSystem.csv ---
+# Free any simulator that might hold a config file open. On Windows a running
+# Octopus_Simulator keeps MultiCoreSystem.csv / SplitBusController.csv open, and
+# `sed -i` (temp-file + rename) then fails SILENTLY -- leaving the un-edited
+# preset, so the run uses the WRONG protocol/controller/arbiter. Portable:
+# taskkill on Windows, pkill on POSIX.
+_free_configs(){ taskkill //F //IM Octopus_Simulator.exe >/dev/null 2>&1 || pkill -f Octopus_Simulator >/dev/null 2>&1 || true; }
+
+# --- baseline config (snoop MESI + exclusive controller) written to the active
+# MultiCoreSystem.csv. Retried + VERIFIED: if the edit cannot land (config held
+# open by a stray sim), abort loudly rather than silently run plain MSI. ---
 gen_baseline(){
-  cp "$SNOOP" "$CFG"
-  sed -i -E \
-    -e "s#^(cache_controller\[\*\]\.protocol_type\(s\),)[^,]*#\1SNOOP_MESI#" \
-    -e "s#^(cache_controller\[\*\]\.fsm_filename\(s\),)[^,]*#\1MESI_splitBus_snooping#" \
-    -e "s#^(llc_controller\.protocol_type\(s\),)[^,]*#\1SNOOP_LLC_MESI#" \
-    -e "s#^(llc_controller\.fsm_filename\(s\),)[^,]*#\1MESI_LLC#" \
-    -e "s#^(cache_controller_type\(s\),)[^,]*#\1CacheControllerExclusive#" "$CFG"
+  local try
+  for try in 1 2 3; do
+    _free_configs
+    cp "$SNOOP" "$CFG" 2>/dev/null
+    sed -i -E \
+      -e "s#^(cache_controller\[\*\]\.protocol_type\(s\),)[^,]*#\1SNOOP_MESI#" \
+      -e "s#^(cache_controller\[\*\]\.fsm_filename\(s\),)[^,]*#\1MESI_splitBus_snooping#" \
+      -e "s#^(llc_controller\.protocol_type\(s\),)[^,]*#\1SNOOP_LLC_MESI#" \
+      -e "s#^(llc_controller\.fsm_filename\(s\),)[^,]*#\1MESI_LLC#" \
+      -e "s#^(cache_controller_type\(s\),)[^,]*#\1CacheControllerExclusive#" "$CFG" 2>/dev/null
+    grep -qF 'SNOOP_MESI' "$CFG" && grep -qF 'CacheControllerExclusive' "$CFG" && return 0
+    sleep 1
+  done
+  echo "FATAL: gen_baseline could not write MESI + CacheControllerExclusive to $CFG" >&2
+  echo "       (a simulator is holding the config open -- Windows sed-lock). Aborting." >&2
+  exit 1
 }
 
 # set/override a system-CSV key. $1 = anchored key regex (up to the comma),
 # $2 = the full replacement line. sed if present, else newline-guarded append.
+# Retried + verified (same silent-lock hazard as gen_baseline).
 set_csv(){
-  local keyre="$1" line="$2"
-  if grep -qE "^${keyre}" "$CFG"; then
-    sed -i -E "s#^(${keyre}).*#${line}#" "$CFG"
-  else
-    printf '\n%s\n' "$line" >> "$CFG"
-  fi
+  local keyre="$1" line="$2" try
+  for try in 1 2 3; do
+    _free_configs
+    if grep -qE "^${keyre}" "$CFG"; then
+      sed -i -E "s#^(${keyre}).*#${line}#" "$CFG" 2>/dev/null
+    else
+      printf '\n%s\n' "$line" >> "$CFG"
+    fi
+    grep -qF "$line" "$CFG" && return 0
+    sleep 1
+  done
+  echo "FATAL: set_csv could not apply '$line' to $CFG (config locked). Aborting." >&2
+  exit 1
 }
 
 # set the interconnect (bus) arbiter -- lives in the controller's Extends file,
-# NOT the system CSV.
-set_arbiter(){ sed -i -E "s#^(arbiter_type\(s\),)[^,]*#\1$1#" "$SBC"; }
+# NOT the system CSV. Retried + verified.
+set_arbiter(){
+  local try
+  for try in 1 2 3; do
+    _free_configs
+    sed -i -E "s#^(arbiter_type\(s\),)[^,]*#\1$1#" "$SBC" 2>/dev/null
+    grep -qF "arbiter_type(s),$1" "$SBC" && return 0
+    sleep 1
+  done
+  echo "FATAL: set_arbiter could not set '$1' in $SBC (config locked). Aborting." >&2
+  exit 1
+}
 
 # max-across-cores worst-case for EVERY pipeline stage + mean average, from a
 # Summary.csv. cols (1-indexed): 1 CoreId, 2 WC-L1Stall, 3 WC-ReqBus,

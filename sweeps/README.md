@@ -88,3 +88,10 @@ runtime). The per-axis component shows *where* the knob acts.
   (`sweep_arbiter.sh` backs it up and restores it on exit).
 - Under `set -u`, declare `local b="$1"; local wp="$TR/$b"` on **separate**
   lines — a single `local` expands `$b` before assigning it.
+- **Config mutations are verified.** On Windows a running simulator keeps the
+  config file open, so `sed -i` (temp-file + rename) can fail **silently** and
+  leave the un-edited MSI preset — making a sweep run the wrong
+  protocol/controller/arbiter without any error. `gen_baseline`, `set_csv`, and
+  `set_arbiter` now kill stray sims, retry, and **verify the edit landed,
+  aborting loudly if it cannot** — so a sweep can never silently produce the
+  wrong config.
