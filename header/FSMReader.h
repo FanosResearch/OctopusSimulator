@@ -42,6 +42,10 @@ namespace octopus
         void getTransition(int current_state, int event,
                             int& out_next_state, std::vector<int>& out_actions);
 
+        // reverse lookups (id -> name) for readable coherence traces / debugging
+        std::string getStateName(int id);
+        std::string getEventName(int id);
+
     private:
         class FSMState
         {

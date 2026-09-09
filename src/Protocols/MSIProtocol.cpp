@@ -55,6 +55,16 @@ namespace octopus
         this->readEvent(request_msg, &event_id);
         this->m_fsm->getTransition(cache_line.state, (int)event_id, next_state, actions);
 
+        // opt-in coherence trace (built ONLY when this controller's debugger is
+        // enabled -- zero cost otherwise): shows the FSM transition as readable
+        // state/event names, e.g. "I --Store--> IM_ad". Same facility the
+        // directory protocols already use.
+        if (dprint && dprint->enabled())
+            dprint->print(&request_msg, "%s --%s--> %s",
+                          this->m_fsm->getStateName(cache_line.state).c_str(),
+                          this->m_fsm->getEventName((int)event_id).c_str(),
+                          this->m_fsm->getStateName(next_state).c_str());
+
         return handleAction(actions, request_msg, cache_line, next_state);
     }
 

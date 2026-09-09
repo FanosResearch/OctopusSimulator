@@ -60,6 +60,9 @@ namespace octopus
         ~DebugPrint();
     
         void print(Message *msg = NULL, const char * format = "", ...);
+
+        // lets callers skip building a trace string when tracing is disabled
+        bool enabled() const { return enable != 0; }
     };
 }
 
