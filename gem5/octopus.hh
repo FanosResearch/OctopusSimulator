@@ -155,6 +155,11 @@ namespace gem5
     static bool ext_cache_started;
     static uint64_t num_pending_req;
 
+    /// All instantiated Octopus caches (one per cache of the external
+    /// cache simulator). Used to look up the other cores when a store
+    /// has to be broadcast as an invalidation.
+    static std::vector<Octopus *> instances;
+
     /**
      * Event to schedule clock ticks
      */
@@ -189,6 +194,14 @@ namespace gem5
          * @param packet to send.
          */
         void sendPacket(PacketPtr pkt);
+
+        /**
+         * Send an invalidation snoop packet to the CPU. Snoop requests
+         * bypass the transmit list and always succeed.
+         *
+         * @param packet to send.
+         */
+        void sendSnoop(PacketPtr pkt);
 
         /**
          * Get a list of the non-overlapping address ranges the owner is
@@ -228,6 +241,21 @@ namespace gem5
          *         request again.
          */
         bool recvTimingReq(PacketPtr pkt) override;
+      public:
+        /**
+         * Check if this port needs a retry.
+         * @return true if a retry is needed
+         */
+        bool needsRetry() const { return needRetry; }
+
+        /**
+         * Send a retry request to this port.
+         */
+        void sendRetryReq() {
+            needRetry = false;
+            ResponsePort::sendRetryReq();
+        }
+
       private:
         /// Since this is a vector port, need to know what number this one is
         int connection_id;
@@ -238,6 +266,12 @@ namespace gem5
 
         /** A normal packet queue used to store responses. */
         RespPacketQueue queue;
+
+        /// Track if this port needs a retry
+        bool needRetry = false;
+
+        // Allow owner to set the retry flag
+        friend class Octopus;
     };
 
     /**
@@ -316,7 +350,7 @@ namespace gem5
      *
      * @param packet
      */
-    void handleAtomic(PacketPtr pkt, int connection_id, int port_id);
+    Tick handleAtomic(PacketPtr pkt, int connection_id, int port_id);
 
     /**
      * Access the cache for a timing access. This is called after the cache
@@ -337,9 +371,27 @@ namespace gem5
      */
     void sendRangeChange() const;
 
+    /**
+     * Helper function to get address from packet.
+     * Returns physical address if available, otherwise returns virtual address.
+     */
+    Addr getAddr(PacketPtr pkt) const;
+
     void cacheSimCallback(uint64_t address, uint64_t cycle, ns3::RequestType type, uint8_t* data);
 
     void cacheSimMemCallback(uint64_t address, uint64_t cycle, ns3::RequestType type, uint8_t* data);
+
+    /**
+     * Broadcast an invalidation for the cache line of a just-performed
+     * store to the CPUs of all other cores. The external cache simulator
+     * already invalidated their cached copies of the line, but that is
+     * invisible to gem5: without this snoop a core that speculatively
+     * loaded the line (not yet retired) would keep the stale value and
+     * retire the load, violating per-address ordering with respect to
+     * the retired store. The snoop makes the O3 load queue squash those
+     * loads so they are re-executed and observe the new value.
+     */
+    void sendInvalidations(Addr addr);
 
     /// The block size for the cache
     const unsigned blockSize;
