@@ -42,6 +42,7 @@ namespace gem5
 ns3::CacheSim* Octopus::cache_sim = NULL;
 bool Octopus::ext_cache_started = false;
 uint64_t Octopus::num_pending_req = 0;
+std::vector<Octopus *> Octopus::instances;
 
 Octopus::Octopus(const OctopusParams &params) :
     ClockedObject(params),
@@ -59,51 +60,114 @@ Octopus::Octopus(const OctopusParams &params) :
     cout << "Octopus " << params.config_file_path.c_str() <<" "<<params.output_logs_path.c_str() << endl;
     if(Octopus::cache_sim == NULL)
         Octopus::cache_sim = new ns3::CacheSim(params.config_file_path.c_str(),
-                                      params.output_logs_path.c_str());
+                                              params.output_logs_path.c_str());
 
     ns3::CPUCallback<Octopus, uint64_t, uint64_t, ns3::RequestType, uint8_t*>* cache_sim_callback =
         new ns3::CPUCallback<Octopus, uint64_t, uint64_t, ns3::RequestType, uint8_t*>(this, &Octopus::cacheSimCallback);
     ns3::ExternalCPU::getExtCPUs()->at(params.cache_id)->registerCPUCallback(cache_sim_callback);
 
-    ns3::MemCallback<Octopus, uint64_t, uint64_t, ns3::RequestType, uint8_t*>* cache_sim_mem_callback =
-        new ns3::MemCallback<Octopus, uint64_t, uint64_t, ns3::RequestType, uint8_t*>(this, &Octopus::cacheSimMemCallback);
+    // ns3::MemCallback<Octopus, uint64_t, uint64_t, ns3::RequestType, uint8_t*>* cache_sim_mem_callback =
+    //     new ns3::MemCallback<Octopus, uint64_t, uint64_t, ns3::RequestType, uint8_t*>(this, &Octopus::cacheSimMemCallback);
     // ns3::ExternalMem::getExtMem()->registerMemCallback(params.cache_id, cache_sim_mem_callback);
 
     for (int i = 0; i < params.port_cpu_side_connection_count; ++i) {
         cpuPorts.emplace_back(name() + csprintf(".cpu_side[%d]", i),"CpuSidePort", params.cache_id, i, this);
     }
     DPRINTF(Octopus, "Connect to cache id %d\n", params.cache_id);
+
+    // Register this cache so that stores retired by the other cores can
+    // reach the CPU behind it with an invalidation snoop.
+    instances.push_back(this);
+}
+
+Addr
+Octopus::getAddr(PacketPtr pkt) const
+{
+    // Check if request object exists and has physical address
+    if (pkt->req && pkt->req->hasPaddr()) {
+        return pkt->req->getPaddr();
+    } else {
+        // Fall back to packet's address (handles both vaddr and missing req cases)
+        return pkt->getAddr();
+    }
 }
 
 void Octopus::cacheSimCallback(uint64_t address, uint64_t cycle, ns3::RequestType type, uint8_t* data)
 {
     auto itr = std::find_if(pending_requests.begin(), pending_requests.end(),
                             [&](pair<PacketPtr, pair<int,int>> entry) -> bool{
-                                return entry.first->getAddr() == address;
+                                return getAddr(entry.first) == address;
                             });
     assert(itr != pending_requests.end()); // we should always find a coresponding pkt
     PacketPtr pkt = itr->first;
-    int connection_id = itr->second.first;
+    //int connection_id = itr->second.first;
     int port_id = itr->second.second;
 
-    bool swapCompleted = type == ns3::RequestType::WRITE;
-    bool isSwap = pkt->cmd == MemCmd::SwapReq;
-    if (isSwap && !swapCompleted){
-        ns3::ExternalCPU::getExtCPUs()->at(connection_id)->addRequest(pkt->req->getPaddr(), ns3::RequestType::WRITE, NULL /*Do not attenpt to get ptr to avoid masked write assertion*/, pkt->getSize());
-    }
+    // bool swapCompleted = type == ns3::RequestType::WRITE;
+    // bool isSwap = pkt->cmd == MemCmd::SwapResp;
+    // if (isSwap && !swapCompleted){
+    //     ns3::ExternalCPU::getExtCPUs()->at(connection_id)->addRequest(getAddr(pkt), ns3::RequestType::WRITE, NULL /*Do not attenpt to get ptr to avoid masked write assertion*/, pkt->getSize());
+    // }
 
-    if (!isSwap || swapCompleted){
+    // if (!isSwap || swapCompleted){
+    // memPort.sendAtomic(pkt);
+
+    // The store has now been performed in gem5's memory. The line
+    // invalidations this store caused inside the external cache
+    // simulator are invisible to the gem5 CPUs, so mirror them here:
+    // snoop an invalidation to the other cores, which squashes their
+    // speculative (not yet retired) loads of this line so they are
+    // re-executed and pick up the new value.
+
+
         pending_requests.erase(itr);
         num_pending_req--;
         outstandingReqs--;
         assert(pkt->isResponse());
         cpuPorts[port_id].sendPacket(pkt);
+
+        // After freeing up capacity, send retry to blocked ports
+        for (auto& port : cpuPorts) {
+            if (port.needsRetry()) {
+                port.sendRetryReq();
+                break; // Retry one at a time
+            }
+        }
+    // }
+}
+
+void
+Octopus::sendInvalidations(Addr addr)
+{
+    DPRINTF(Octopus, "Broadcasting invalidation of addr %#x to other cores\n",
+            addr);
+
+    for (Octopus *peer : instances) {
+        // Loads on our own core are already ordered against our stores
+        // by the CPU itself, so never snoop ourselves.
+        if (peer == this)
+            continue;
+        for (auto& port : peer->cpuPorts) {
+            // Only ports whose peer actually snoops (e.g. the data port
+            // of an O3 CPU, which relies on invalidations to squash
+            // loads held speculatively in its load queue) may receive
+            // snoops. Peers such as instruction ports do not implement
+            // snoop reception and would panic.
+            if (!port.isSnooping())
+                continue;
+            RequestPtr inv_req = std::make_shared<Request>(addr, blockSize, 0, 0);
+            PacketPtr inv_pkt = new Packet(inv_req, MemCmd::InvalidateReq);
+            port.sendSnoop(inv_pkt);
+            // The snoop is handled synchronously and expects no response
+            // (the load queue only inspects the packet), so reclaim it.
+            delete inv_pkt;
+        }
     }
 }
 
 void Octopus::cacheSimMemCallback(uint64_t address, uint64_t cycle, ns3::RequestType type, uint8_t* data)
 {
-    if (type == ns3::RequestType::SETUP_READ || type == ns3::RequestType::SETUP_WRITE)
+    if (type != ns3::RequestType::READ && type != ns3::RequestType::WRITE)
     {
         assert("receive functional request\n");
     }
@@ -119,7 +183,7 @@ void Octopus::cacheSimMemCallback(uint64_t address, uint64_t cycle, ns3::Request
 
     auto itr = std::find_if(pending_requests.begin(), pending_requests.end(),
                             [&](pair<PacketPtr, pair<int,int>> entry) -> bool{
-                                return entry.first->getAddr() == address;
+                                return entry.first->req->getPaddr() == address;
                             });
     
     // Never write the actuall data at this stage in case this is a failed LLSC.
@@ -191,7 +255,15 @@ void
 Octopus::CPUSidePort::sendPacket(PacketPtr pkt)
 {
     DPRINTF(Octopus, "Sending %s to CPU\n", pkt->print());
+    //pkt->makeResponse();
     schedTimingResp(pkt, curTick());
+}
+
+void
+Octopus::CPUSidePort::sendSnoop(PacketPtr pkt)
+{
+    DPRINTF(Octopus, "Snooping %s to CPU\n", pkt->print());
+    sendTimingSnoopReq(pkt);
 }
 
 AddrRangeList
@@ -209,10 +281,9 @@ Octopus::CPUSidePort::recvFunctional(PacketPtr pkt)
 Tick
 Octopus::CPUSidePort::recvAtomic(PacketPtr pkt)
 {
-    owner->handleAtomic(pkt, connection_id, id);
-
+    return owner->handleAtomic(pkt, connection_id, id);
     // 1 ns is just an arbitrary value at this point
-    return 1000;
+
 }
 
 bool
@@ -266,7 +337,7 @@ bool
 Octopus::handleResponse(PacketPtr pkt)
 {
     // forward packet to octopus only if this request if send from octopus mem ctrl
-    bool isMemRead = pkt->isRead();
+    // bool isMemRead = pkt->isRead();
 
     // if (isMemRead)
     //     ns3::ExternalMem::getExtMem()->read_callback(pkt->req->getPaddr(), curTick());
@@ -283,11 +354,11 @@ Octopus::handleFunctional(PacketPtr pkt, int connection_id)
     memPort.sendFunctional(pkt);
 }
 
-void
+Tick
 Octopus::handleAtomic(PacketPtr pkt, int connection_id, int port_id)
 {
-    memPort.sendAtomic(pkt);
-    assert(pkt->isResponse());
+    return memPort.sendAtomic(pkt);
+    // assert(pkt->isResponse());
 }
 
 bool
@@ -301,7 +372,6 @@ Octopus::accessTiming(PacketPtr pkt, int connection_id, int port_id)
     }
 
     memPort.sendAtomic(pkt);
-    assert(pkt->isResponse());
 
     // Do not forward failed LLSC write to octopus
     const RequestPtr &req = pkt->req;
@@ -310,18 +380,30 @@ Octopus::accessTiming(PacketPtr pkt, int connection_id, int port_id)
         return true;
     }
 
+    if (pkt->isWrite()) {
+        sendInvalidations(getAddr(pkt));
+    }
+
+    // // Debug-only: Simulate cache callback with random timing instead of actual Octopus interface
+    // scheduleDebugCacheCallback(pkt, connection_id, port_id);
+    // return true;
+    // cpuPorts[port_id].sendPacket(pkt);
+    // return true;
+
     if (outstandingReqs >= reqFIFOSize) {
+        cpuPorts[port_id].needRetry = true;
         return false;
     }
 
-    if (pkt->isRead()) {
-        ns3::ExternalCPU::getExtCPUs()->at(connection_id)->addRequest(pkt->req->getPaddr(), ns3::RequestType::READ, NULL, pkt->getSize());
+    
+    if (pkt->isWrite()) {
+        ns3::ExternalCPU::getExtCPUs()->at(connection_id)->addRequest(getAddr(pkt), ns3::RequestType::WRITE, NULL /*Do not attenpt to get ptr to avoid masked write assertion*/, pkt->getSize());
         pending_requests.push_back(std::make_pair(pkt, std::make_pair(connection_id,port_id)));
         num_pending_req++;
         outstandingReqs++;
     }
-    else if (pkt->isWrite()) {
-        ns3::ExternalCPU::getExtCPUs()->at(connection_id)->addRequest(pkt->req->getPaddr(), ns3::RequestType::WRITE, NULL /*Do not attenpt to get ptr to avoid masked write assertion*/, pkt->getSize());
+    else if (pkt->isRead()) {
+        ns3::ExternalCPU::getExtCPUs()->at(connection_id)->addRequest(getAddr(pkt), ns3::RequestType::READ, NULL, pkt->getSize());
         pending_requests.push_back(std::make_pair(pkt, std::make_pair(connection_id,port_id)));
         num_pending_req++;
         outstandingReqs++;
