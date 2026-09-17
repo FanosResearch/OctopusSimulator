@@ -30,6 +30,12 @@ namespace octopus
 
         virtual void requestBusStep(uint64_t cycle_number);
         virtual void responseBusStep(uint64_t cycle_number);
+        // True while any agent's response buffer free space is within its in-flight
+        // reserve -> stall the request bus until it drains.
+        bool responseBackpressured();
+        // Response-buffer slots reserved for in-flight (already-broadcast) responses;
+        // the request bus stalls when free space falls to this. Config-tunable.
+        int m_response_reserve = 0;
 
     public:
         SplitBusController(ParametersMap map, vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids,

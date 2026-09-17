@@ -155,6 +155,13 @@ public:
     // always acceptable (unbounded interconnects have no receive bound).
     virtual bool canAcceptRX(MessageType type = MessageType::REQUEST) { return true; }
 
+    // Free slots left in this interface's outgoing (TX) response buffer. Drives
+    // bus-level flow control: the request bus serializes no new coherence
+    // transaction while any response buffer's free space has fallen into its
+    // in-flight reserve, so a response emitted by an already-broadcast transaction
+    // never overflows. Default = effectively unbounded (non-bus interconnects).
+    virtual int txResponseFreeSlots() { return 1 << 30; }
+
     virtual bool rollback(uint64_t address, uint64_t mask, Message *out_msg) { return false; }
     
     virtual bool operator == (CommunicationInterface const& a) const

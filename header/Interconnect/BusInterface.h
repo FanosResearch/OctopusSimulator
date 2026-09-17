@@ -36,6 +36,7 @@ namespace octopus
         virtual bool pushMessage(Message &msg, uint64_t cycle, MessageType type = MessageType::REQUEST) override;
         virtual bool pushMessage2RX(Message &msg, MessageType type = MessageType::REQUEST) override;
         virtual bool canAcceptRX(MessageType type = MessageType::REQUEST) override;
+        virtual int txResponseFreeSlots() override { return m_buffer_max_size - (int)m_tx_response_buffer.size(); }
 
         static void getCongregatedBuffers(vector<CommunicationInterface *>& interfaces, bool request_buffer, vector<vector<Message>*>* buffers);
         

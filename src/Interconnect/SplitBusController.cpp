@@ -44,6 +44,12 @@ namespace octopus
             exit(0);
         }
 
+        // In-flight reserve for the response back-pressure high-water mark. Optional
+        // config param; default 0 (stall exactly at full). Tune to >= the worst-case
+        // number of in-flight (already-broadcast) responses so an emit never overflows.
+        if (parameters.find(STRINGIFY(response_reserve)) != parameters.end())
+            m_response_reserve = std::get<int>(parameters.at(STRINGIFY(response_reserve)).value);
+
         clk_in_slot_req = 0;
         message_available_req = false;
         BusInterface::getCongregatedBuffers(*m_interfaces, true, &buffers_req);
@@ -63,8 +69,30 @@ namespace octopus
         responseBusStep(cycle_number);
     }
 
+    bool SplitBusController::responseBackpressured()
+    {
+        // Back-pressure is asserted while ANY agent's response buffer free space has
+        // dropped into its in-flight reserve: a new coherence transaction could make
+        // some responder emit a response that overflows before it drains. Stalling the
+        // request bus until space frees is the flow-control a real split-transaction
+        // bus uses. The reserve holds responses from already-broadcast (in-flight)
+        // transactions so their emits never overflow -- controllers are never gated.
+        for (CommunicationInterface *itf : *m_interfaces)
+            if (itf->txResponseFreeSlots() <= m_response_reserve)
+                return true;
+        return false;
+    }
+
     void SplitBusController::requestBusStep(uint64_t cycle_number)
     {
+        // Bus-level flow control: while a response buffer is within its reserve,
+        // serialize NO new coherence request (do not elect, broadcast, or advance the
+        // slot). The response bus keeps draining (responseBusStep runs regardless), so
+        // this is deadlock-free; controllers are never frozen mid-transaction, so
+        // coherence order and per-transaction atomicity hold.
+        if (responseBackpressured())
+            return;
+
         if (clk_in_slot_req == 0)
             message_available_req = m_arbiters[(int)BusType::RequestBus]->elect(cycle_number, buffers_req, &elected_msg_req);
         else if (clk_in_slot_req == (m_request_latency - 1))
