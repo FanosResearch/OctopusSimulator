@@ -180,3 +180,11 @@ In order to disable the refreshes, "none" can be chosed as refresh_mechanism.
 Upon finishing a trace file from core under analysis (REQ0), the simulation will end, and the stats will be printed. This includes the worst-case latency of the READ/WRITE (open/close) requests, as well as the simulation time and bandwidth. In order to track the operation of the controller at each clock cycle, you may enable the debug flags. The debug format is consists of two formats; one for the requests and the other one for commands. Notice that the stats assume that the cores are in order. In the case of using OoO cores, the stats must be modified according to the WC definitions.  
 
 
+
+## Note (Octopus vendored copy)
+
+The sample traces that upstream MCsim ships in `src/Mem_Trace/` (`1M`,
+`1M_random_out`, ~35 MB) are **not included** in this vendored copy: Octopus
+drives MCsim as a library (`MCsimInterface` feeds it requests from the LLC) and
+never uses the standalone trace-driven mode. To run MCsim standalone with
+`-t Mem_Trace/<trace.trc>`, fetch the traces from the upstream MCsim repository.
