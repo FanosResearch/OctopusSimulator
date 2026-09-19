@@ -46,6 +46,8 @@ case "$SUITE" in
   splash) TR="$SWEEP_ROOT/BMs/splash";;
   *) echo "ERROR: SUITE must be eembc or splash" >&2; exit 1;;
 esac
+# benchmarks live in their own repo (cloned into BMs/ on demand); fetch + inflate (idempotent)
+bash "$SWEEP_ROOT/get_benchmarks.sh" "$TR" || { echo "ERROR: could not get/prepare benchmarks under $TR" >&2; exit 1; }
 
 # Free any simulator that might hold a config file open. On Windows a running
 # Octopus_Simulator keeps MultiCoreSystem.csv / SplitBusController.csv open, and

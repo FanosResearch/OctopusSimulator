@@ -54,6 +54,11 @@ else
     exit 1
 fi
 
+# --- benchmarks live in their own repo (cloned into BMs/ on demand) and the
+#     SPLASH-2 traces are stored compressed; fetch + inflate (idempotent) -----
+bash "$OCTOPUS_ROOT/get_benchmarks.sh" "$TRACES_DIR" \
+    || { echo "ERROR: could not get/prepare benchmarks under $TRACES_DIR" >&2; exit 1; }
+
 # --- benchmark selection --------------------------------------------------
 if [ "$#" -gt 0 ]; then
     BENCHES=("$@")

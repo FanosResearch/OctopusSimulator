@@ -135,3 +135,12 @@ cd $Octopus/build/
 `-s` is used to specify the configuration, and `-p` is to overwrite any parameter in the configuration.
 
 The default output reports will be found in `$Octopus/BMs/TestBM/newLogger/`.
+
+> **The benchmarks are a separate repository**
+> ([`FanosResearch/OctopusBMs`](https://github.com/FanosResearch/OctopusBMs)),
+> cloned into `BMs/` on first use; its SPLASH-2 traces are stored compressed
+> (~10 GB inflated). If you point the binary at a benchmark directory yourself,
+> run `./get_benchmarks.sh` first (idempotent: clones if absent, then inflates).
+> The driver scripts (`run_octopus.sh`, `run_splash.sh`, `sweep_protocols.sh`,
+> `sweeps/*`) do this automatically — see
+> [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md).

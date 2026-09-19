@@ -18,6 +18,9 @@ CFG="$ROOT/configuration/SystemConfigurations/MultiCoreSystem.csv"
 cp "$CFG" "$CFG.demobak"; trap 'cp "$CFG.demobak" "$CFG"; rm -f "$CFG.demobak"' EXIT   # leave config untouched
 cp "$ROOT/configuration/SystemConfigurations/MultiCoreSystem_Snoop.csv" "$CFG"   # MSI/snoop base
 WP="$ROOT/BMs/eembc-traces/mi_pingpong"
+# benchmarks live in their own repo (cloned into BMs/ on demand); fetch + inflate (idempotent)
+bash "$ROOT/get_benchmarks.sh" "$ROOT/BMs/eembc-traces" \
+    || { echo "ERROR: could not get/prepare benchmarks" >&2; exit 1; }
 wp_arg(){ cygpath -m "$WP" 2>/dev/null || echo "$WP"; }
 
 MESI=( -p "cache_controller[*].protocol_type(s)=SNOOP_MESI"

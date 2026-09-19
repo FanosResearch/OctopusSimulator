@@ -107,6 +107,8 @@ run_suite(){
     eembc)  tr_root="$ROOT/BMs/eembc-traces";;
     splash) tr_root="$ROOT/BMs/splash";;
   esac
+  # benchmarks live in their own repo (cloned into BMs/ on demand); fetch + inflate (idempotent)
+  bash "$ROOT/get_benchmarks.sh" "$tr_root" || { echo "ERROR: could not get/prepare benchmarks under $tr_root" >&2; exit 1; }
   for d in "$tr_root"/*/; do
     [ -f "${d}trace_C0.trc.shared" ] || continue
     local b; b="$(basename "$d")"

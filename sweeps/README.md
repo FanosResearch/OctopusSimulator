@@ -81,6 +81,13 @@ From each run's `newLogger/Summary.csv` (per-core worst-case + average):
 runtime). The per-axis component shows *where* the knob acts.
 
 ## Notes / gotchas
+- **Benchmarks live in a separate repository** (`FanosResearch/OctopusBMs`; the
+  SPLASH-2 set is ~10 GB, over GitHub's per-file limit, so it is stored
+  compressed there). `sweep_common.sh` calls `../get_benchmarks.sh "$TR"` right
+  after selecting the suite: it clones the repo into `BMs/` if absent and
+  inflates the traces, so the plain `trace_C*.trc.shared` files exist before
+  `benches()` discovers them. Both steps are idempotent, so it costs nothing
+  once done. See `../REPRODUCIBILITY.md`.
 - **Preset CSVs have no trailing newline** — appended overrides are
   newline-guarded in `sweep_common.sh::set_csv`; a bare `echo >>` would glue the
   line onto a comment and be silently ignored.

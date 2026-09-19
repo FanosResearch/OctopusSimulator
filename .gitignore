@@ -17,12 +17,9 @@ sweep-protocols/
 sweep_big/
 build_dbg/
 .ua/
-BMs/**/newLogger/
-BMs/**/nl_*/
-BMs/**/*.out
-BMs/**/*.err
-BMs/**/*.stderr
-BMs/**/.o
+# --- the benchmarks live in their own repository (FanosResearch/OctopusBMs);
+#     get_benchmarks.sh clones it into BMs/ on demand. Never tracked here. ---
+BMs/
 a2time_4980_fault.csv
 block_3d00_trace.csv
 sweep_pwb.sh
@@ -45,3 +42,4 @@ EMSOFT2026_OCtopus/
 ESSC_paper_draft.md
 results/iirflt01_*
 BMs/**/coh*.csv
+DATE2027_RTCoherence/

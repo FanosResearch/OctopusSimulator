@@ -57,6 +57,8 @@ esac
 [ -f "$BIN" ]    || { echo "ERROR: binary not found: $BIN (build it first)" >&2; exit 1; }
 [ -f "$PRESET" ] || { echo "ERROR: preset not found: $PRESET" >&2; exit 1; }
 [ -d "$TR" ]     || { echo "ERROR: trace dir not found: $TR" >&2; exit 1; }
+# benchmarks live in their own repo (cloned into BMs/ on demand); fetch + inflate (idempotent)
+bash "$ROOT/get_benchmarks.sh" "$TR" || { echo "ERROR: could not get/prepare benchmarks under $TR" >&2; exit 1; }
 OUT="${OUT:-$ROOT/results/${PROTO}-${SUITE}}"
 mkdir -p "$OUT/rows"; : > "$OUT/progress.log"
 

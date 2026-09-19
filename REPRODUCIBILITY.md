@@ -16,6 +16,8 @@ For the internal design of the sweep harness, see
   on Windows).
 - **Python 3** with **matplotlib** for the figures: `pip install matplotlib`
 - **Bash** (the driver scripts are POSIX bash).
+- **xz** (`xz-utils`) to inflate the compressed SPLASH-2 traces (preinstalled on
+  most Linux distributions; part of MSYS2/MinGW on Windows).
 
 ## 2. Build (one command)
 
@@ -42,6 +44,27 @@ Runs in seconds and prints per-core latency reports plus a completion verdict.
   data-sharing stress workload.
 - `BMs/splash/` — SPLASH-2 application traces (including the `raytrace` and
   `radiosity` "giants").
+
+### The benchmarks are a separate repository
+
+The traces are **not in this repository** (the SPLASH-2 set alone is ~10 GB
+uncompressed). They live in
+[`FanosResearch/OctopusBMs`](https://github.com/FanosResearch/OctopusBMs), where
+the SPLASH-2 traces are stored as **xz archives** (~650 MB total; every archive is
+under GitHub's 100 MB limit, and the tooling also reassembles split `.xz.part-NN`
+pieces should a future trace need them). **Nothing to do by hand:** every driver (`run_octopus.sh`, `run_splash.sh`, `sweep_protocols.sh`,
+and the `sweeps/` scripts) first calls
+
+```bash
+./get_benchmarks.sh      # clone OctopusBMs into BMs/ if absent, then inflate
+```
+
+which clones the benchmark repository into `BMs/` on first use (skipped when
+`BMs/` is already a clone) and then runs `BMs/prepare_traces.sh` to reassemble
+and decompress the archives *in place*. Both steps are idempotent — an existing
+clone and existing traces are skipped — so it is cheap to run every time. Run it
+yourself only if you invoke the simulator binary on a benchmark directly. Budget
+**~10 GB of disk** for the inflated traces. `BMs/` is git-ignored here.
 
 ## 5. Reproduce the configuration sweeps
 
@@ -103,6 +126,7 @@ CSVs, for readers who want the other axes.
 
 | Scope | Rough wall-clock |
 |---|---|
+| One-time benchmark fetch + inflate (`get_benchmarks.sh`) | clone ~650 MB, then ~1 minute to inflate (~10 GB written) |
 | Single EEMBC benchmark | seconds |
 | One EEMBC axis (all benches, parallel) | minutes |
 | SPLASH-2 (non-giant benches) | minutes |
