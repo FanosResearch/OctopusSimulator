@@ -35,6 +35,19 @@ namespace octopus
         int m_id;
         int m_shared_memory_id;
 
+        // Perfect-LLC knob (default 0 = off). When 1, this controller never issues
+        // to the memory above it: a miss's fetch is synthesized locally and looped
+        // back as an upper-interface data response (no bus transport, no DRAM
+        // latency), and a dirty eviction's write-back to memory is dropped. Set
+        // only on the LLC (llc_controller.perfect_llc). Models the "perfect LLC"
+        // assumption of predictable-coherence analyses. Allocation/eviction are
+        // unchanged, so a perfect-vs-real run isolates exactly the DRAM leg.
+        int m_perfect_llc;
+
+        // Design B logging role for this controller (L1 by default; the LLC is
+        // tagged via setLogRole). Used to stamp self-describing timeline events.
+        Logger::Role m_log_role = Logger::Role::L1;
+
         uint64_t m_cache_cycle;
 
         CommunicationInterface *m_lower_interface; // A pointer to the lower Interface FIFO
@@ -81,6 +94,9 @@ namespace octopus
         ~BaseController();
 
         virtual void init();
+
+        // Design B: tag this controller's logging role (e.g. LLC). Default is L1.
+        void setLogRole(Logger::Role role) { m_log_role = role; }
 
         virtual void initialize(uint64_t address, const uint8_t* data, int size) {} //for Initializable
         virtual void read(uint64_t address, uint8_t* data) {} //for Initializable

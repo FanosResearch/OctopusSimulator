@@ -91,6 +91,8 @@ namespace octopus
                 if(m_upper_interface->pushMessage(m_sample_in_progess->msg))
                 {
                     Logger::getLogger()->addRequest(this->m_id, m_sample_in_progess->msg);
+                    Logger::getLogger()->event(m_sample_in_progess->msg.msg_id, Logger::Role::CPU,
+                                               (uint32_t)this->m_id, Logger::Phase::ENTER);
                     delete m_sample_in_progess;
                     m_sample_in_progess = NULL;
                     m_sent_requests++;
@@ -106,7 +108,7 @@ namespace octopus
         if (m_upper_interface->peekMessage(&msg))
         {            
             m_upper_interface->popFrontMessage();
-            Logger::getLogger()->updateRequest(msg.msg_id, Logger::EntryId::CPU_RX_CHECKPOINT);
+            Logger::getLogger()->event(msg.msg_id, Logger::Role::CPU, (uint32_t)this->m_id, Logger::Phase::EXIT);
             
             m_sent_requests--;
             if (m_sent_requests < 0)

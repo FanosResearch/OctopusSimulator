@@ -50,7 +50,9 @@ namespace octopus
                     return false;
         }
 
-        Logger::getLogger()->updateRequest(msg.msg_id, Logger::EntryId::REQ_BUS_CHECKPOINT);
+        Logger::getLogger()->event(msg.msg_id,
+                                   m_is_mem_bus ? Logger::Role::MEM_BUS : Logger::Role::REQ_BUS,
+                                   m_is_mem_bus ? 1u : 0u, Logger::Phase::EXIT);
 
         for (int i = 0; i < (int)m_interfaces->size(); i++)
             m_interfaces->at(i)->pushMessage2RX(msg, type);
@@ -60,7 +62,9 @@ namespace octopus
 
     void BusController::send(Message &msg, MessageType type)
     {
-        Logger::getLogger()->updateRequest(msg.msg_id, Logger::EntryId::RESP_BUS_CHECKPOINT);
+        Logger::getLogger()->event(msg.msg_id,
+                                   m_is_mem_bus ? Logger::Role::MEM_BUS : Logger::Role::RESP_BUS,
+                                   m_is_mem_bus ? 1u : 0u, Logger::Phase::EXIT);
 
         for (int i = 0; i < (int)msg.to.size(); i++)
         {

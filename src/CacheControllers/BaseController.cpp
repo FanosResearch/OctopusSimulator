@@ -20,6 +20,12 @@ namespace octopus
         //Parameters initialization
         m_id = std::get<int>(parameters.at(STRINGIFY(m_id)).value);
         m_shared_memory_id = std::get<int>(parameters.at(STRINGIFY(m_shared_memory_id)).value);
+
+        // Optional perfect-LLC knob, defaulted off so existing configs parse and
+        // every non-LLC controller (which never sets it) behaves normally.
+        m_perfect_llc = 0;
+        if (parameters.find(STRINGIFY(perfect_llc)) != parameters.end())
+            m_perfect_llc = std::get<int>(parameters.at(STRINGIFY(perfect_llc)).value);
         m_clk_period = std::get<int>(parameters.at(STRINGIFY(m_clk_period)).value);
         int processing_queue_size = std::get<int>(parameters.at(STRINGIFY(processing_queue_size)).value);
         string protocol_type = std::get<string>(parameters.at(STRINGIFY(protocol_type)).value);
@@ -91,7 +97,7 @@ namespace octopus
             }
 
             if(ready_msg.source == Message::Source::LOWER_INTERCONNECT)
-                Logger::getLogger()->updateRequest(ready_msg.msg_id, Logger::EntryId::CACHE_CHECKPOINT);
+                Logger::getLogger()->event(ready_msg.msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::ENTER);
 
             // if(ready_msg.source == Message::Source::SELF)
             //     dprint->print(NULL, "Ready Message for Replacement");
@@ -176,6 +182,11 @@ namespace octopus
                     exit(0);
                 }
 
+                // Design B: refill data available -> array access (SERVICE) then
+                // response emitted (EXIT) to this pending requester.
+                Logger::getLogger()->event(pending_messages.front().msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::SERVICE);
+                Logger::getLogger()->event(pending_messages.front().msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::EXIT);
+
                 if (!m_lower_interface->pushMessage(pending_messages.front(), this->m_cache_cycle, MessageType::DATA_RESPONSE))
                 {
                     cout << "CacheController: Cannot insert the Msg into lower interface." << endl;
@@ -198,12 +209,19 @@ namespace octopus
     {
         Message *msg = (Message *)data_ptr;
 
+        // Design B: data-array access granted (after any wait in the data-access
+        // buffer) -- the SERVICE point that splits L2-Stall from L2-Access.
+        Logger::getLogger()->event(msg->msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::SERVICE);
+
         if (msg->data == NULL)
         {
             GenericCacheLine cache_line;
             if (m_data_handler->readCacheLine(msg->addr, &cache_line) && cache_line.m_data != NULL)
                 msg->copy(cache_line.m_data);
         }
+
+        // Design B: response emitted to the response bus -- the LLC/L1 hand-off point.
+        Logger::getLogger()->event(msg->msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::EXIT);
 
         if (!m_lower_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::DATA_RESPONSE))
         {
@@ -218,6 +236,24 @@ namespace octopus
     {
         Message *msg = (Message *)data_ptr;
         msg->cycle = this->m_cache_cycle;
+
+        // Perfect LLC: a fetch that would go to the memory above is served locally.
+        // Instead of transporting the REQUEST over the upper bus to DRAM, synthesize
+        // the data fill and inject it straight into this controller's own upper-
+        // interface receive path -- byte-identical to how a real memory response
+        // arrives (BusController delivers responses via the same pushMessage2RX),
+        // but with no bus transport and no DRAM latency. The existing fill FSM path
+        // (transient --Data_fromUpperInterface--> resident) then completes normally.
+        if (m_perfect_llc && !msg->to.empty() && msg->to[0] == (uint16_t)m_shared_memory_id)
+        {
+            uint8_t return_data[64] = {0};
+            Message fill(msg->msg_id, msg->addr, this->m_cache_cycle, 0, msg->owner);
+            fill.to.push_back((uint16_t)this->m_id); // response addressed to this LLC
+            fill.copy(return_data);
+            m_upper_interface->pushMessage2RX(fill, MessageType::DATA_RESPONSE);
+            delete msg;
+            return;
+        }
 
         if (!m_upper_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::REQUEST))
         {
@@ -240,7 +276,17 @@ namespace octopus
         }
 
         if (msg->owner == this->m_id)
+        {
+            // Perfect LLC never writes back to DRAM: the (infinite, always-hit)
+            // LLC absorbs the dirty line. Nothing waits on a memory write, so drop
+            // it -- keeping bus[1] and the memory controller idle under perfect LLC.
+            if (m_perfect_llc)
+            {
+                delete msg;
+                return;
+            }
             msg->to.push_back(this->m_shared_memory_id);
+        }
         else
             msg->to.push_back(msg->owner);
 

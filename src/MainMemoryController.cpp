@@ -7,6 +7,7 @@
  */
 
 #include "../header/MainMemoryController.h"
+#include "../header/Logger.h"
 
 namespace octopus
 {
@@ -62,9 +63,11 @@ namespace octopus
         if (m_processing_queue->getFirstReady(&ready_msg) == false)
             return;
 
-        if (ready_msg.data == NULL) //Read message 
+        if (ready_msg.data == NULL) //Read message
         {
             m_read_count++;
+            // Design B: DRAM finished servicing this read -> data leaves DRAM.
+            Logger::getLogger()->event(ready_msg.msg_id, Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::EXIT);
             uint8_t return_data[64] = {0};
 
             Message msg = Message(ready_msg.msg_id,    // Id
@@ -99,7 +102,11 @@ namespace octopus
             msg.source = Message::Source::LOWER_INTERCONNECT;
             msg.cycle = m_clk_cycle;
             if (buf.pushBack(msg, FRFCFS_State::NonReady))
+            {
                 m_lower_interface->popFrontMessage();
+                // Design B: request has arrived at DRAM (crossed the mem bus in).
+                Logger::getLogger()->event(msg.msg_id, Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::ENTER);
+            }
         }
     }
 

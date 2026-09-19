@@ -33,144 +33,14 @@ namespace octopus
             return;
         }
 
-        log_entries[entry.msg_id] = new vector<uint64_t>[NUM_OF_ELEMENTS_PER_ENTRY];
-        // memset(log_entries[entry.msgId], 0, NUM_OF_ELEMENTS_PER_ENTRY * sizeof(uint64_t));
-
-        log_entries[entry.msg_id][(int)EntryId::CPU_ID].push_back(cpu_id);
-        log_entries[entry.msg_id][(int)EntryId::REQ_ID].push_back(entry.msg_id);
-        log_entries[entry.msg_id][(int)EntryId::REQ_ADDRESS].push_back(entry.addr);
-        log_entries[entry.msg_id][(int)EntryId::TRACE_CYCLE].push_back(entry.cycle);
-        log_entries[entry.msg_id][(int)EntryId::CPU_CHECKPOINT].push_back(core_clk_count[cpu_id]);
+        // Design B: bind msg -> core + identity; the event timeline (built by
+        // event()/finalizeEvents) is the sole per-request decomposition.
+        event_core[entry.msg_id] = cpu_id;
+        event_meta[entry.msg_id] = EventMeta{entry.msg_id, entry.addr, entry.cycle};
 
         initializeStats(cpu_id);
     }
 
-    void Logger::updateRequest(uint64_t msg_id, EntryId entryId)
-    {
-        if (g_no_log)
-            return;
-
-        if (log_entries.find(msg_id) == log_entries.end())
-            return; // ignore updates with no ID (it happens in the case of replacement requests) and updates for unpresent messages (can be generated from Shared memory)
-
-        uint64_t core_id = log_entries[msg_id][(int)EntryId::CPU_ID][0];
-
-        log_entries[msg_id][(int)entryId].push_back(core_clk_count[core_id]);
-
-        if (entryId == EntryId::CPU_RX_CHECKPOINT)
-            calculateLatencies(msg_id);
-    }
-
-    void Logger::calculateLatencies(uint64_t msg_id)
-    {
-        uint64_t effective_latency;
-        uint64_t core_id = getEntry(msg_id, EntryId::CPU_ID, 0);
-
-        this->prepareReportFile(core_id);
-
-        // for(int i = 0; i < NUM_OF_ELEMENTS_PER_ENTRY; i++)
-        // {
-        //     cout << "i = " << i << ":";
-        //     for(int j = 0; j < log_entries[msg_id][i].size(); j++)
-        //         cout << log_entries[msg_id][i][j] << "\t";
-        //     cout << endl;
-        // }
-        // cout << "___________________________" << endl;
-
-        report_files[core_id] << getEntry(msg_id, EntryId::REQ_ID, 0) << ",";
-        report_files[core_id] << std::hex << getEntry(msg_id, EntryId::REQ_ADDRESS, 0) << "," << std::dec;
-        report_files[core_id] << getEntry(msg_id, EntryId::TRACE_CYCLE, 0) << ",";
-
-        writeLatency(report_files[core_id], getEntry(msg_id, EntryId::CPU_CHECKPOINT, 0),
-                        getEntry(msg_id, EntryId::TRACE_CYCLE, 0)); // CPU Latency
-                     
-        logMax(writeLatency(report_files[core_id], getEntry(msg_id, EntryId::CACHE_CHECKPOINT, 0),
-                        getEntry(msg_id, EntryId::CPU_CHECKPOINT, 0)), // L1 Stall latency
-               &worst_case_l1_stall[core_id]);
-
-        logMax(writeLatency(report_files[core_id], getEntry(msg_id, EntryId::REQ_BUS_CHECKPOINT, 0),
-                               getEntry(msg_id, EntryId::CACHE_CHECKPOINT, 0)), // Request Bus Latency
-               &worst_case_req_bus_latency[core_id]);
-
-        logMax(writeLatency(report_files[core_id], getEntry(msg_id, EntryId::CACHE_CHECKPOINT, 1),
-                        getEntry(msg_id, EntryId::REQ_BUS_CHECKPOINT, 0)), // L2 Stall latency
-               &worst_case_l2_stall[core_id]);
-
-        
-        //L2 Access Latency
-        if(log_entries[msg_id][(int)EntryId::CACHE_CHECKPOINT].size() == 3)
-        {
-            if(log_entries[msg_id][(int)EntryId::RESP_BUS_CHECKPOINT].size() == 1) //L2 Hit
-            {
-                logMax(writeLatency(report_files[core_id], getEntry(msg_id, EntryId::CACHE_CHECKPOINT, 2),
-                                getEntry(msg_id, EntryId::CACHE_CHECKPOINT, 1)), 
-                       &worst_case_l2_access[core_id]);
-            }
-            else //L2 miss
-            {
-                logMax(writeLatency(report_files[core_id], getEntry(msg_id, EntryId::CACHE_CHECKPOINT, 2),
-                                getEntry(msg_id, EntryId::RESP_BUS_CHECKPOINT, 1)), //L2 access checkpoint - (DRAM-L2) checkpoint
-                       &worst_case_l2_access[core_id]); 
-            }
-        }
-        else
-            report_files[core_id] << 0 << ",";//L2 Access Latency
-
-        //Response Bus Latency
-        if(log_entries[msg_id][(int)EntryId::RESP_BUS_CHECKPOINT].size() == 1) //Other L1 hit
-        {
-            logMax(writeLatency(report_files[core_id], getEntry(msg_id, EntryId::RESP_BUS_CHECKPOINT, 0),
-                                              getEntry(msg_id, EntryId::REQ_BUS_CHECKPOINT, 0)),
-                    &worst_case_resp_bus_latency[core_id]);
-        }
-        else if(log_entries[msg_id][(int)EntryId::RESP_BUS_CHECKPOINT].size() == 1 && 
-                log_entries[msg_id][(int)EntryId::CACHE_CHECKPOINT].size() == 3) //L2 Hit
-        {
-            logMax(writeLatency(report_files[core_id], getEntry(msg_id, EntryId::RESP_BUS_CHECKPOINT, 0),
-                                              getEntry(msg_id, EntryId::CACHE_CHECKPOINT, 2)),
-                    &worst_case_resp_bus_latency[core_id]);
-        }
-        else //L2 Miss
-        {
-            logMax(writeLatency(report_files[core_id], getEntry(msg_id, EntryId::RESP_BUS_CHECKPOINT, 2),
-                                              getEntry(msg_id, EntryId::RESP_BUS_CHECKPOINT, 1)), //L2 access checkpoint - (DRAM-L2) checkpoint
-                    &worst_case_resp_bus_latency[core_id]);
-        }
-
-        //L2-DRAM Bus Latency + DRAM latency
-        if(log_entries[msg_id][(int)EntryId::RESP_BUS_CHECKPOINT].size() > 1)
-        {
-            logMax(writeLatency(report_files[core_id], getEntry(msg_id, EntryId::RESP_BUS_CHECKPOINT, 0),
-                            getEntry(msg_id, EntryId::CACHE_CHECKPOINT, 1)), //L2-DRAM Bus Latency
-                    &worst_case_l2_dram_bus[core_id]);
-
-            logMax(writeLatency(report_files[core_id], getEntry(msg_id, EntryId::RESP_BUS_CHECKPOINT, 1),
-                            getEntry(msg_id, EntryId::RESP_BUS_CHECKPOINT, 0)), //DRAM latency including L2-DRAM bus delay
-                    &worst_case_dram_latency[core_id]);
-        }
-        else
-        {
-            report_files[core_id] << 0 << ","; //L2-DRAM Bus Latency
-            report_files[core_id] << 0 << ","; //DRAM latency
-        }
-
-        logMax(writeLatency(report_files[core_id], getEntry(msg_id, EntryId::CPU_RX_CHECKPOINT, 0),
-                                        getEntry(msg_id, EntryId::CPU_CHECKPOINT, 0)), // Total Latency
-                    &worst_case_latency[core_id]);
-
-        effective_latency = writeLatency(report_files[core_id], getEntry(msg_id, EntryId::CPU_RX_CHECKPOINT, 0),
-                                            max(this->last_checkpoint[core_id], getEntry(msg_id, EntryId::CPU_CHECKPOINT, 0))); // Effective Latency
-        logMax(effective_latency, &max_effective_latency[core_id]);
-        
-        average_latency[core_id] += effective_latency;
-        num_request[core_id]++;
-
-        report_files[core_id] << endl;
-        this->last_checkpoint[core_id] = log_entries[msg_id][(int)EntryId::CPU_RX_CHECKPOINT][0];
-
-        delete[] log_entries[msg_id];
-        log_entries.erase(msg_id);
-    }
 
     void Logger::registerReportPath(string file_path)
     {
@@ -212,39 +82,158 @@ namespace octopus
         }
     }
 
-    uint64_t Logger::writeLatency(ofstream &file_handler, uint64_t *checkpoints, EntryId idx)
-    {
-        if (checkpoints[(int)idx] == 0)
-            file_handler << 0 << ",";
-        else
-        {
-            for (int i = (int)idx - 1; i >= 0; i--)
-            {
-                if (checkpoints[i] != 0)
-                    return writeLatency(file_handler, checkpoints[(int)idx], checkpoints[i]);
-            }
-        }
-        return 0;
-    }
-
-    uint64_t Logger::writeLatency(ofstream &file_handler, uint64_t checkpoint2, uint64_t checkpoint1)
-    {
-        uint64_t diff = ((((int64_t)checkpoint2 - (int64_t)checkpoint1) > 0) ? checkpoint2 - checkpoint1 : 0);
-        file_handler << diff << ",";
-        return diff;
-    }
-
-    uint64_t Logger::getEntry(uint64_t msg_id, EntryId entry_id, uint64_t entry_idx)
-    {
-        if(log_entries[msg_id][(int)entry_id].size() > entry_idx)
-            return log_entries[msg_id][(int)entry_id][entry_idx];
-        else
-            return 0;
-    }
-
     void Logger::logMax(uint64_t latency, uint64_t* max_latency)
     {
         *max_latency = max(latency, *max_latency);
+    }
+
+    // ---- Design B: event path (Phase 1 = record + validate, reports still legacy) ----
+    static uint64_t g_evt_ok = 0;    // requests whose event timeline tiled to Total
+    static uint64_t g_evt_fail = 0;  // requests that did not (gap / non-monotone)
+
+    void Logger::event(uint64_t msg_id, Role role, uint32_t comp_id, Phase phase)
+    {
+        if (g_no_log)
+            return;
+
+        // event_core is bound in addRequest (at issue). Untracked traffic (service
+        // messages, replacements) never had an addRequest, so it is skipped here.
+        auto it = event_core.find(msg_id);
+        if (it == event_core.end())
+            return;
+
+        event_log[msg_id].push_back(LogEvent{comp_id, role, phase, core_clk_count[it->second]});
+
+        if (role == Role::CPU && phase == Phase::EXIT)
+        {
+            finalizeEvents(msg_id);
+            event_log.erase(msg_id);
+            event_core.erase(msg_id);
+            event_meta.erase(msg_id);
+        }
+    }
+
+    void Logger::finalizeEvents(uint64_t msg_id)
+    {
+        static const bool dbg = (std::getenv("OCTOPUS_EVENT_DEBUG") != nullptr);
+        auto lit = event_log.find(msg_id);
+        if (lit == event_log.end() || lit->second.empty())
+            return;
+        std::vector<LogEvent> &ev = lit->second;
+
+        auto find = [&](Role r, Phase p, bool last) -> long long {
+            long long found = -1;
+            for (auto &e : ev)
+                if (e.role == r && e.phase == p) { found = (long long)e.cycle; if (!last) break; }
+            return found;
+        };
+        auto nth = [&](Role r, Phase p, int idx) -> long long {
+            int c = 0;
+            for (auto &e : ev)
+                if (e.role == r && e.phase == p) { if (c == idx) return (long long)e.cycle; c++; }
+            return -1;
+        };
+
+        long long issue = find(Role::CPU, Phase::ENTER, false);
+        long long rx    = find(Role::CPU, Phase::EXIT,  true);
+        long long l1a   = find(Role::L1,  Phase::ENTER, false);
+        long long reqb  = find(Role::REQ_BUS,  Phase::EXIT, false);
+        long long llca  = find(Role::LLC, Phase::ENTER, false);
+        long long llcs  = find(Role::LLC, Phase::SERVICE, false);
+        long long llce  = find(Role::LLC, Phase::EXIT,  true);
+        long long respb = find(Role::RESP_BUS, Phase::EXIT, true);
+        long long memout= nth(Role::MEM_BUS, Phase::EXIT, 0);
+        long long memin = nth(Role::MEM_BUS, Phase::EXIT, 1);
+        long long dre   = find(Role::DRAM, Phase::ENTER, false);
+        long long drx   = find(Role::DRAM, Phase::EXIT,  true);
+
+        if (issue < 0 || rx < 0)
+            return;
+        long long total = rx - issue;
+
+        // Forward milestones actually present, in canonical order. Consecutive
+        // differences are the stages; their sum must equal Total (tiling).
+        std::vector<long long> mil;
+        mil.push_back(issue);
+        if (l1a   >= 0) mil.push_back(l1a);
+        if (reqb  >= 0) mil.push_back(reqb);
+        if (llca  >= 0) mil.push_back(llca);
+        if (memout>= 0) mil.push_back(memout);
+        if (dre   >= 0) mil.push_back(dre);
+        if (drx   >= 0) mil.push_back(drx);
+        if (memin >= 0) mil.push_back(memin);
+        if (llcs  >= 0) mil.push_back(llcs);
+        if (llce  >= 0) mil.push_back(llce);
+        if (respb >= 0) mil.push_back(respb);
+        mil.push_back(rx);
+
+        long long sum = 0; bool monotone = true;
+        for (size_t i = 1; i < mil.size(); i++)
+        {
+            long long d = mil[i] - mil[i - 1];
+            if (d < 0) monotone = false;
+            sum += d;
+        }
+        bool tiled = monotone && (sum == total);
+        if (tiled) g_evt_ok++; else g_evt_fail++;
+
+        if (dbg && !tiled)
+            fprintf(stderr, "EVTILE FAIL msg=%llu total=%lld sum=%lld | issue=%lld l1a=%lld reqb=%lld llca=%lld memout=%lld dre=%lld drx=%lld memin=%lld llcs=%lld llce=%lld respb=%lld rx=%lld\n",
+                    (unsigned long long)msg_id, total, sum, issue, l1a, reqb, llca, memout, dre, drx, memin, llcs, llce, respb, rx);
+
+        // ---- Report: the event timeline is the sole decomposition ----
+        auto mit = event_meta.find(msg_id);
+        if (mit == event_meta.end())
+            return;
+        uint64_t core_id = event_core[msg_id];
+        uint64_t req_id  = mit->second.req_id;
+        uint64_t addr    = mit->second.addr;
+        uint64_t trace   = mit->second.trace;
+
+        // Clamped difference of two milestones (0 when either is absent or negative).
+        auto cd = [](long long a, long long b) -> uint64_t {
+            return (a >= 0 && b >= 0 && a > b) ? (uint64_t)(a - b) : 0;
+        };
+
+        bool miss = (memout >= 0);
+        uint64_t cpu_lat = cd(issue, (long long)trace);
+        uint64_t l1s = cd(l1a, issue);
+        uint64_t rqb = cd(reqb, l1a);
+        uint64_t l2s = cd(llca, reqb);
+        uint64_t l2a, l2d, drm;
+        if (miss)
+        {
+            l2d = cd(dre, llca) + cd(memin, drx);   // LLC->membus handoff + membus transfers
+            drm = cd(drx, dre);                      // pure DRAM service
+            l2a = cd(llcs, memin);                   // refill wait (data back -> array service)
+        }
+        else
+        {
+            l2d = 0; drm = 0;
+            l2a = cd(llcs, llca);                    // data-array wait (admit -> access grant)
+        }
+        uint64_t rsb = cd(respb, llce);              // CLEAN response bus (grant - LLC emit)
+        uint64_t tot = (uint64_t)total;
+        uint64_t eff = (uint64_t)(rx - std::max((long long)last_checkpoint[core_id], issue));
+
+        prepareReportFile(core_id);
+        std::ofstream &f = report_files[core_id];
+        f << req_id << "," << std::hex << addr << std::dec << "," << trace << ",";
+        f << cpu_lat << ",";
+        f << l1s << ","; logMax(l1s, &worst_case_l1_stall[core_id]);
+        f << rqb << ","; logMax(rqb, &worst_case_req_bus_latency[core_id]);
+        f << l2s << ","; logMax(l2s, &worst_case_l2_stall[core_id]);
+        f << l2a << ","; logMax(l2a, &worst_case_l2_access[core_id]);
+        f << rsb << ","; logMax(rsb, &worst_case_resp_bus_latency[core_id]);
+        f << l2d << ","; logMax(l2d, &worst_case_l2_dram_bus[core_id]);
+        f << drm << ","; logMax(drm, &worst_case_dram_latency[core_id]);
+        f << tot << ","; logMax(tot, &worst_case_latency[core_id]);
+        f << eff;        logMax(eff, &max_effective_latency[core_id]);
+        f << std::endl;
+
+        average_latency[core_id] += eff;
+        num_request[core_id]++;
+        last_checkpoint[core_id] = (uint64_t)rx;
     }
 
     void Logger::traceEnd(uint64_t core_id)
@@ -297,7 +286,14 @@ namespace octopus
         last_checkpoint.erase(core_id);
 
         if (report_files.empty())
+        {
             summary_file.close();
+            // Event-path self-check: report stage-tiling only if something failed
+            // (a bug), or when explicitly debugging. Quiet in normal runs.
+            if (g_evt_fail > 0 || std::getenv("OCTOPUS_EVENT_DEBUG") != nullptr)
+                fprintf(stderr, "[EVENT-PATH] tiling ok=%llu fail=%llu\n",
+                        (unsigned long long)g_evt_ok, (unsigned long long)g_evt_fail);
+        }
     }
 
     void Logger::setClkCount(uint64_t core_id, uint64_t clk)

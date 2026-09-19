@@ -52,10 +52,16 @@ namespace octopus
         int m_request_latency;
         int m_response_latency;
 
+        // Design B: true for the LLC<->DRAM bus, so its crossings log as MEM_BUS
+        // rather than the L1<->LLC REQ_BUS/RESP_BUS. Set via setMemBus() at build.
+        bool m_is_mem_bus = false;
+
         virtual bool broadcast(Message &msg, MessageType type = MessageType::REQUEST);
         virtual void send(Message &msg, MessageType type = MessageType::DATA_RESPONSE);
 
     public:
+        void setMemBus() { m_is_mem_bus = true; }
+
         BusController(ParametersMap map, vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids,
                       string pname = "",
                       string config_path = string(CONFIGURATION_PATH) + string(INTERCONNECT),

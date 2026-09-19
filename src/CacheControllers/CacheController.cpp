@@ -89,8 +89,6 @@ namespace octopus
                                                               messages_pending_data_access, &selected_msg);
             if(msg_available)
             {
-                Logger::getLogger()->updateRequest(selected_msg.msg_id, Logger::EntryId::CACHE_CHECKPOINT);
-                
                 auto action = m_data_access_action[selected_msg.msg_id];
                 action_functions[action.type](action.data);
                 m_data_access_action.erase(selected_msg.msg_id);

@@ -19,28 +19,33 @@
 #include <map>
 #include <vector>
 
-#define NUM_OF_ELEMENTS_PER_ENTRY   9
-
 namespace octopus
 {
     class Logger
     {
     public:
-        enum class EntryId
+        // ---- Design B: self-describing timeline events ------------------------
+        // Each checkpoint records WHICH component and WHICH phase stamped it, so
+        // the per-stage decomposition is a generic walk over the event list --
+        // never inferred from a vector's index/size (see docs/Logger_DesignB_plan.md).
+        enum class Role : uint8_t { CPU, L1, REQ_BUS, RESP_BUS, LLC, MEM_BUS, DRAM, UNKNOWN };
+        enum class Phase : uint8_t { ENTER, SERVICE, EXIT };
+        struct LogEvent
         {
-            CPU_ID = 0,
-            REQ_ID,
-            REQ_ADDRESS,
-            TRACE_CYCLE,
-            CPU_CHECKPOINT,
-            CACHE_CHECKPOINT,
-            REQ_BUS_CHECKPOINT,
-            RESP_BUS_CHECKPOINT,
-            CPU_RX_CHECKPOINT
+            uint32_t comp_id;   // stable per-component id (m_id / core id / bus id)
+            Role     role;
+            Phase    phase;
+            uint64_t cycle;     // originating core's clock (same clock trick as legacy)
         };
 
     protected:
-        std::map<uint64_t, std::vector<uint64_t>*> log_entries; //msg_id is the key, and the value is an uint64_t array
+        // Design B: event timeline per in-flight message (msg_id -> events),
+        // plus msg_id -> core binding and identity, so the decomposition is fully
+        // self-contained.
+        struct EventMeta { uint64_t req_id; uint64_t addr; uint64_t trace; };
+        std::map<uint64_t, std::vector<LogEvent>> event_log;
+        std::map<uint64_t, uint64_t> event_core;
+        std::map<uint64_t, EventMeta> event_meta;
 
         //core_id is the key, and the value is the latency
         std::map<uint64_t, uint64_t> worst_case_l1_stall;
@@ -69,17 +74,18 @@ namespace octopus
         Logger();
         void prepareReportFile(uint64_t core_id);
         void initializeStats(uint64_t core_id);
-        void calculateLatencies(uint64_t msg_id);
-
-        uint64_t writeLatency(std::ofstream&, uint64_t, uint64_t); //int64_t is used instead of uint64_t to keep the sign after subtraction
-        uint64_t writeLatency(std::ofstream&, uint64_t *, EntryId);
-
-        uint64_t getEntry(uint64_t msg_id, EntryId entry_id, uint64_t entry_idx);
         void logMax(uint64_t latency, uint64_t* max_latency);
 
+        // Build the per-request report row from the message's event timeline:
+        // recover each stage as a difference of named milestones (self-describing,
+        // no positional inference), update the worst-case stats, and validate that
+        // the stages tile to Total (OCTOPUS_EVENT_DEBUG dumps any mismatch).
+        void finalizeEvents(uint64_t msg_id);
+
     public:
+        // Design B: append a self-describing event to a tracked message's timeline.
+        void event(uint64_t msg_id, Role role, uint32_t comp_id, Phase phase);
         void addRequest(uint64_t cpu_id, Message&);
-        void updateRequest(uint64_t msg_id, EntryId entryId);
         void registerReportPath(std::string file_path);
         void traceEnd(uint64_t core_id);
         void setClkCount(uint64_t core_id, uint64_t clk);

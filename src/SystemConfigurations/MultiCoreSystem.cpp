@@ -43,6 +43,10 @@ namespace octopus
             }
         }
 
+        // Design B: bus[1] is the LLC<->DRAM bus; its crossings log as MEM_BUS.
+        if (bus_type.size() > 1)
+            bus[1]->setMemBus();
+
         // iterate over each core
         for (int i = 0; i < num_cores; i++)
         {
@@ -64,8 +68,9 @@ namespace octopus
         int llc_id = std::get<int>(getSubMap(STRINGIFY(llc_controller)).at("m_id").value);
         llc_controller = createController(llc_controller_type,
                                           getSubMap(STRINGIFY(llc_controller)),
-                                          bus[1]->getInterfaceFor(llc_id), 
+                                          bus[1]->getInterfaceFor(llc_id),
                                           bus[0]->getInterfaceFor(llc_id), name);
+        llc_controller->setLogRole(Logger::Role::LLC);   // Design B: tag LLC events
 
         // Main memory: the basic MainMemoryController by default, or the MCsim DRAM
         // simulator when `main_memory_type=MCsim` (configured for DDR4 in MCsimInterface).

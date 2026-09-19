@@ -75,9 +75,9 @@ namespace octopus
     void MeshController::send(Message &msg)
     {
         if(msg.data == NULL)
-            Logger::getLogger()->updateRequest(msg.msg_id, Logger::EntryId::REQ_BUS_CHECKPOINT);
+            Logger::getLogger()->event(msg.msg_id, Logger::Role::REQ_BUS, 0u, Logger::Phase::EXIT);
         else
-            Logger::getLogger()->updateRequest(msg.msg_id, Logger::EntryId::RESP_BUS_CHECKPOINT);
+            Logger::getLogger()->event(msg.msg_id, Logger::Role::RESP_BUS, 0u, Logger::Phase::EXIT);
 
         for (int i = 0; i < (int)msg.to.size(); i++)
         {

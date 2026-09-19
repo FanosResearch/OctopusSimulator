@@ -66,6 +66,16 @@ namespace octopus
     {
         Message *msg = (Message *)data_ptr;
 
+        // Perfect LLC never writes back to DRAM (see BaseController::m_perfect_llc):
+        // the infinite always-hit LLC absorbs the dirty line, nothing waits on a
+        // memory write, so drop it -- keeping bus[1] and memory idle. End2End
+        // overrides performWriteBack, so the guard must live here too.
+        if (m_perfect_llc)
+        {
+            delete msg;
+            return;
+        }
+
         if(msg->data == NULL)
         {
             if(!checkReadinessOfCache(*msg, ControllerAction::Type::WRITE_BACK, data_ptr))
