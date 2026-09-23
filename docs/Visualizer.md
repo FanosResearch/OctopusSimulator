@@ -24,6 +24,9 @@ raw event trace (phase 3) will fill those in and give per‑bank DRAM lanes.
 | `tools/octoviz/server.py --root <dir>` | finds every `octoviz.parquet` under `<dir>`, serves the UI at `http://localhost:8765/` and the JSON API |
 | `tools/octoviz/static/index.html` | the viewer (vanilla JS + canvas, no build step) |
 
+Prerequisites: Python 3.9+ with `pip install duckdb numpy` (nothing else; the UI has no build
+step and needs no network) and a browser. Everything runs on the user's machine.
+
 ```bash
 # convert one run, or all runs of a sweep
 python tools/octoviz/convert.py results/pcc_par/wl_eembc/0_8/a2time01-trace/newLogger

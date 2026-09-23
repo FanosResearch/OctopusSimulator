@@ -160,9 +160,9 @@ def window(q):
 def request(q):
     p = run_path(q["run"]); rid = int(q["id"]); core = q.get("core")
     W = f"id = {rid}" + (f" AND core = {int(core)}" if core else "")
-    row = CON.execute(f"SELECT * FROM '{p}' WHERE {W} LIMIT 1").fetchdf()
-    if row.empty: return {"error": "not found"}
-    r = row.iloc[0].to_dict(); r = {k: (int(v) if hasattr(v, "item") and str(v).lstrip('-').isdigit() else (None if str(v) == "nan" else v)) for k, v in r.items()}
+    cur = CON.execute(f"SELECT * FROM '{p}' WHERE {W} LIMIT 1"); row = cur.fetchone()
+    if row is None: return {"error": "not found"}
+    r = {d[0]: (int(v) if hasattr(v, "item") else v) for d, v in zip(cur.description, row)}   # plain dict, no pandas
     line = int(r["addr"]) & ~63
     same = CON.execute(f"""SELECT id, core, addr_hex, issue, retire, total, cls, llc_state, llc_stall, oldest
                            FROM '{p}' WHERE (addr & ~63) = {line} AND retire >= {r['issue']} - 2000 AND issue <= {r['retire']} + 2000
