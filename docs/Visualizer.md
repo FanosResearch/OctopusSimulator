@@ -27,6 +27,12 @@ raw event trace (phase 3) will fill those in and give per‑bank DRAM lanes.
 Prerequisites: Python 3.9+ with `pip install duckdb numpy` (nothing else; the UI has no build
 step and needs no network) and a browser. Everything runs on the user's machine.
 
+The one‑command way is the root script: `./octoviz.sh view <workload_dir>` simulates the
+workload with the trace on, converts it and opens the viewer; `run`, `convert` and `serve` are
+the same steps separately (`./octoviz.sh` prints the options: `WINDOW=t0:t1` for giant runs,
+`TRACE=0` for rows only, `PORT`, `TIMEOUT`, extra simulator `-p` flags after `--`). The manual
+steps below are what it runs.
+
 ```bash
 # convert one run, or all runs of a sweep
 python tools/octoviz/convert.py results/pcc_par/wl_eembc/0_8/a2time01-trace/newLogger

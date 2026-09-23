@@ -144,3 +144,10 @@ The default output reports will be found in `$Octopus/BMs/TestBM/newLogger/`.
 > The driver scripts (`run_octopus.sh`, `run_splash.sh`, `sweep_protocols.sh`,
 > `sweeps/*`) do this automatically — see
 > [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md).
+
+To *see* a run rather than read its reports, `./octoviz.sh view <workload_dir>` simulates it with
+the raw event trace on, converts the run and opens the timeline viewer in the browser (per-request
+pipeline, resource lanes for every message, a "why did I wait" view and a per-line coherence
+transition table); `./octoviz.sh serve <dir>` serves runs converted earlier. Needs
+`pip install duckdb numpy`. See [`docs/Visualizer.md`](docs/Visualizer.md) and
+[`docs/Trace.md`](docs/Trace.md).
