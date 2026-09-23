@@ -7,6 +7,7 @@
  */
 
 #include "../header/DebugPrint.h"
+#include "../header/Logger.h"
 
 using namespace std;
 
@@ -97,6 +98,16 @@ namespace octopus
     void DebugPrint::cycleProcess()
     {
         m_clk_cycle++;
+    }
+
+    void DebugPrint::transition(Message *msg, uint32_t comp, int old_state, int event_id, int new_state, bool stalled, FSMReader *fsm)
+    {
+        int next = stalled ? old_state : new_state;
+        if (enable && condition(msg))
+            print(msg, "%s --%s--> %s%s (src=%d cv=%llu data=%d)",
+                  fsm->getStateName(old_state).c_str(), fsm->getEventName(event_id).c_str(), fsm->getStateName(next).c_str(),
+                  stalled ? " [stall]" : "", (int)msg->source, (unsigned long long)msg->complementary_value, msg->data != NULL);
+        Logger::getLogger()->traceFsm(*msg, comp, old_state, next, event_id, fsm);
     }
 
     void DebugPrint::print(Message *msg, const char * format, ...)

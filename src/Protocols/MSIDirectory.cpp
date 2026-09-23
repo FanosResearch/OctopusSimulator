@@ -47,9 +47,8 @@ namespace octopus
         this->readEvent(request_msg, &event_id);
         this->m_fsm->getTransition(cache_line.state, (int)event_id, next_state, actions);
 
-        if(dprint)
-            dprint->print(&request_msg, "state(%d) to nextState(%d) due to event(%d) and num of actions = %d", 
-                            cache_line.state, next_state, (int)event_id, actions.size());
+        if (dprint)   // coherence transition hook (docs/Debugger.md): readable names + raw-trace FSM record
+            dprint->transition(&request_msg, (uint32_t)m_id, cache_line.state, (int)event_id, next_state, false, this->m_fsm);
 
         return handleAction(actions, request_msg, cache_line, next_state);
     }

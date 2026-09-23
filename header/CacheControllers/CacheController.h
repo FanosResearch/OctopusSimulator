@@ -40,6 +40,9 @@ namespace octopus
         std::vector<Message> m_data_access_buffer;
         std::map<int, ControllerAction> m_data_access_action; // The map holds the action is required by the entry in m_data_array_queue (Key is the message id)
         Arbiter *m_data_access_arbiter;
+        // array-port tracker (see checkReadinessOfCache)
+        uint64_t m_array_served = 0, m_array_served_writes = 0;
+        std::map<uint64_t, std::pair<uint64_t, uint64_t>> m_array_park;
 
         virtual void cycleProcess() override;
         virtual void addRequests2ProcessingQueue(FRFCFS_Buffer<Message, CoherenceProtocolHandler> &) override;
@@ -69,8 +72,10 @@ namespace octopus
         // limit reached) or the write-back buffer (PWB) has no headroom.
         virtual bool canAdmitRequest(Message &msg) override;
 
+        virtual void dumpState() override;   // adds MSHR/PWB/data-access-buffer occupancy
+
     public:
-        CacheController(ParametersMap map, CommunicationInterface *upper_interface, 
+        CacheController(ParametersMap map, CommunicationInterface *upper_interface,
                         CommunicationInterface *lower_interface, string pname = "",
                         string config_path = string(CONFIGURATION_PATH) + string(CACHECONTROLLERS),
                         string name = STRINGIFY(CacheController));

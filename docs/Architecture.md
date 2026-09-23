@@ -99,6 +99,17 @@ agnostic: it knows *how* to perform actions (send a bus message, update a line,
 issue a writeback), not *which* actions a given (state, event) requires — that is
 the protocol handler's job.
 
+**Bus‑delivery order at the interface.** A snoop protocol is only correct if every
+controller observes bus transactions in the *same* order. `BusInterface` therefore
+stamps each RX delivery with one global sequence number, and `TripleBusInterface`
+hands out a service‑channel message (an LLC back‑invalidation) only when it was
+delivered *before* the request at the head of the request RX. Data responses are
+deliberately not ordered against requests (they are exempt so that a full queue of
+stalled requests can always drain). Giving the service channel unconditional
+priority let a controller that was one message behind process an invalidation
+ahead of a `GetM` every other snooper had already seen, which parked the LLC in a
+transient state with no exit.
+
 ---
 
 ## 5. The coherence engine (CSV‑FSM)

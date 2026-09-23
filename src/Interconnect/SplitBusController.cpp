@@ -7,6 +7,7 @@
  */
 
 #include "../../header/Interconnect/SplitBusController.h"
+#include "../../header/Logger.h"
 
 using namespace std;
 namespace octopus
@@ -94,7 +95,11 @@ namespace octopus
             return;
 
         if (clk_in_slot_req == 0)
+        {
             message_available_req = m_arbiters[(int)BusType::RequestBus]->elect(cycle_number, buffers_req, &elected_msg_req);
+            if (message_available_req)   // trace: grant = start of the slot
+                Logger::getLogger()->trace(elected_msg_req, m_is_mem_bus ? Logger::Role::MEM_BUS : Logger::Role::REQ_BUS, m_is_mem_bus ? 1u : 0u, Logger::Phase::ENTER);
+        }
         else if (clk_in_slot_req == (m_request_latency - 1))
         {
             if (message_available_req)
@@ -122,7 +127,11 @@ namespace octopus
     void SplitBusController::responseBusStep(uint64_t cycle_number)
     {
         if (clk_in_slot_resp == 0)
+        {
             message_available_resp = m_arbiters[(int)BusType::ResponseBus]->elect(cycle_number, buffers_resp, &elected_msg_resp);
+            if (message_available_resp)
+                Logger::getLogger()->trace(elected_msg_resp, m_is_mem_bus ? Logger::Role::MEM_BUS : Logger::Role::RESP_BUS, m_is_mem_bus ? 1u : 0u, Logger::Phase::ENTER);
+        }
         else if (clk_in_slot_resp == (m_response_latency - 1))
         {
             if (message_available_resp)

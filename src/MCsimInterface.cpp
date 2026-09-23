@@ -7,17 +7,24 @@
  */
 
 #include "../header/MCsimInterface.h"
+#include "../header/Logger.h"
 
 using namespace std;
 
 namespace octopus
 {
     MCsimInterface::MCsimInterface(CommunicationInterface *lower_interface, int dram_id, int llc_id,
-                                   int num_cores, int block_size, const std::string &mem_system)
-        : ClockedObj(1) // period MUST be non-zero: ClockManager reschedules at current_time+period,
-                        // so period 0 self-reschedules at the same timestamp forever and starves the
-                        // whole clock (CPUs never advance). Period 1 = tick every cycle to drive update().
+                                   int num_cores, int block_size, uint64_t clk_period,
+                                   const std::string &mem_system)
+        : ClockedObj(clk_period) // == LLC period: one tick per core cycle (see header). Must be
+                                 // non-zero: ClockManager reschedules at current_time+period, so
+                                 // period 0 self-reschedules at the same timestamp forever.
     {
+        if (clk_period == 0)
+        {
+            cout << "MCsimInterface: clock period must be non-zero" << endl;
+            exit(0);
+        }
         m_id = dram_id;
         m_llc_id = llc_id;
         m_clk_cycle = 1;
@@ -71,6 +78,9 @@ namespace octopus
         {
             if (m_mcsim->addRequest(ready_msg.owner, ready_msg.addr, ready_msg.data == NULL, m_llc_line_size)) // 1 -> Read, 0 -> Write
             {
+                // Design B: request has entered DRAM (mirrors MainMemoryController's stamp).
+                Logger::getLogger()->event(ready_msg.msg_id, Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::ENTER);
+                Logger::getLogger()->trace(ready_msg, Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::ENTER);
                 if (ready_msg.data == NULL) // Add read requests only (writes are fire-and-forget)
                     m_pending_requests.push_back(ready_msg);
             }
@@ -83,6 +93,9 @@ namespace octopus
 
         if (!m_output_buffer.empty())
         {
+            // Design B: DRAM finished servicing this read -> data leaves DRAM.
+            Logger::getLogger()->event(m_output_buffer[0].msg_id, Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::EXIT);
+            Logger::getLogger()->trace(m_output_buffer[0], Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::EXIT);
             if (!m_lower_interface->pushMessage(m_output_buffer[0], m_clk_cycle, MessageType::DATA_RESPONSE))
             {
                 cout << "MCsimInterface(id = " << this->m_id << "): Cannot insert the Msg into the lower interface FIFO, FIFO is Full" << endl;
@@ -126,6 +139,7 @@ namespace octopus
                                       0,                            // Complementary_value
                                       m_pending_requests[i].owner); // Owner
                 msg.to.push_back((uint16_t)m_llc_id);               // To (back to the LLC)
+                msg.kind = Message::K_FILL;
                 msg.copy((uint8_t *)&data);
                 m_output_buffer.push_back(msg);
 

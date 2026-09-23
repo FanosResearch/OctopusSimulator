@@ -58,6 +58,7 @@ namespace octopus
     void CPU::init()
     {
         m_sample_in_progess = new TraceSample;
+        m_sample_in_progess->read_cycle = 0;
         readSampleFromWorkload(&m_sample_in_progess->msg);
         m_sample_in_progess->compute_time = m_sample_in_progess->msg.cycle;
 
@@ -69,6 +70,7 @@ namespace octopus
         if (m_sample_in_progess == NULL)
         {
             m_sample_in_progess = new TraceSample;
+            m_sample_in_progess->read_cycle = m_clk_cycle;
             if(!readSampleFromWorkload(m_sample_in_progess))
             {
                 delete m_sample_in_progess;
@@ -88,11 +90,18 @@ namespace octopus
 
             if (m_clk_cycle >= issue_cycle)
             {
+                // The Logger reports the READY cycle (earliest possible issue: compute gap
+                // elapsed and sample loaded) rather than the raw trace timestamp, which the
+                // CPU model only uses for gaps and which is unrelated to sim time. The
+                // difference issue - ready is then the own-core OoO-window wait.
+                m_sample_in_progess->msg.cycle = std::max(issue_cycle, m_sample_in_progess->read_cycle);
+                m_sample_in_progess->msg.kind = Message::K_DEMAND;
                 if(m_upper_interface->pushMessage(m_sample_in_progess->msg))
                 {
                     Logger::getLogger()->addRequest(this->m_id, m_sample_in_progess->msg);
                     Logger::getLogger()->event(m_sample_in_progess->msg.msg_id, Logger::Role::CPU,
                                                (uint32_t)this->m_id, Logger::Phase::ENTER);
+                    Logger::getLogger()->trace(m_sample_in_progess->msg, Logger::Role::CPU, (uint32_t)this->m_id, Logger::Phase::ENTER);
                     delete m_sample_in_progess;
                     m_sample_in_progess = NULL;
                     m_sent_requests++;
@@ -109,6 +118,7 @@ namespace octopus
         {            
             m_upper_interface->popFrontMessage();
             Logger::getLogger()->event(msg.msg_id, Logger::Role::CPU, (uint32_t)this->m_id, Logger::Phase::EXIT);
+            Logger::getLogger()->trace(msg, Logger::Role::CPU, (uint32_t)this->m_id, Logger::Phase::EXIT);
             
             m_sent_requests--;
             if (m_sent_requests < 0)

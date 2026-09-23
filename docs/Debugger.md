@@ -69,6 +69,20 @@ void print(Message *msg = NULL, const char *format = "", ...);   // printf-style
    dprint->print(&msg, "state(%d) -> next(%d) ev(%d)", st, next, ev);
    ```
 
+3. **Coherence transition** — the one hook every protocol calls right after
+   `FSMReader::getTransition`:
+   ```cpp
+   dprint->transition(&msg, m_id, old_state, event_id, next_state, stalled, m_fsm);
+   ```
+   For an enabled debugger (subject to the §4 filters) it prints the readable line
+   `I --Store--> IM_ad (src, cv, data)` using the FSM's own state/event names, so the
+   snoop L1/LLC and the directory protocols all read the same way. Independently of the
+   debugger being enabled, when `OCTOPUS_TRACE` is set the same call appends a binary
+   `Role::FSM` record to the raw event trace ([Trace.md](Trace.md)), which is what the
+   visualizer's per‑line transition table is built from. A `Stall` row leaves the line
+   untouched and is reported as `old --event--> old [stall]`. Keep new protocols on this
+   hook rather than a bespoke `print`: it is the single place transitions are reported.
+
 ---
 
 ## 3. The preamble (configurable CSV columns)
@@ -137,7 +151,9 @@ cond[0]  |  (cond_addr_ok & cond_msgid_ok & cond_from_ok & cond_owner_ok)
 
 **Examples**
 - Watch one block across the whole run: `addr_filter = FFFFFFC0` (64‑B block
-  mask), `cond_addr = <block base>`.
+  mask), `cond_addr = <block base>`. **Note the units:** `addr_filter` is parsed as
+  hex, but `cond_addr` entries are parsed as **decimal** (`std::stoull(addr)`), so
+  write `36749952`, not `0x230c280`. The `Addr` column of the report is decimal too.
 - Narrow to one core's traffic to that block: also set `cond_from = 2`.
 - Follow a single transaction: `cond_msg_id = 1234`.
 
@@ -244,3 +260,19 @@ stateDiagram-v2
 Reach for the **Logger** to measure latency and worst‑case bounds; reach for the
 **Debugger** to see exactly what happens to a chosen message, address, or
 component.
+
+---
+
+## 10. Deadlock / stall triage (environment switches)
+
+Three env‑gated diagnostics complement the Debugger when a run wedges or a report
+shows an implausible outlier. All are zero‑cost when the variable is unset.
+
+| Variable | What it does |
+|---|---|
+| `OCTOPUS_HANG_DUMP=<cycles>` | Every cache controller that has processed nothing for that many cycles while its processing queue is non‑empty dumps, once, to stderr: each queued message (addr, id, source, kind, readiness, the line's state and whether it is resident/MSHR/PWB), the pending‑request lines, RX occupancy, and MSHR/PWB/data‑access‑buffer occupancy (`[HANG] …` lines). Start here: it names the line and the transient state everyone is waiting on. |
+| `OCTOPUS_EVENT_DUMP=<N>` (+ `OCTOPUS_EVENT_DUMP_MIN=<cycles>`) | Logger: raw event timelines of the first *N* requests above a Total threshold — shows which component stamped what and when (see [Logger.md](Logger.md)). |
+| Debugger on the LLC | The snoop LLC protocol prints the same `state --event--> next (src, cv, data)` transition trace as the L1 protocols; enable it on `llc_controller` and every `cache_controller[*]` with a shared `target` and a `cond_addr`/`addr_filter` on the line named by the hang dump to get the full interleaving that led there. |
+
+Typical sequence: hang dump → address → aggregated transition trace on that address →
+the last few transitions before the stuck state.

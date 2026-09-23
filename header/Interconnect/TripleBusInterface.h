@@ -20,6 +20,8 @@ namespace octopus
     protected:
         vector<Message> m_tx_service_buffer;
         vector<Message> m_rx_service_buffer;
+        vector<uint64_t> m_rx_service_seq;   // parallel to m_rx_service_buffer (see BusInterface)
+        bool m_service_selected = false;     // last peek returned the service head
 
     public:
         TripleBusInterface(int id, int buffer_max_size);

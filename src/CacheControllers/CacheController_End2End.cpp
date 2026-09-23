@@ -47,6 +47,7 @@ namespace octopus
             if(returned_msg.data != NULL)
             {
                 msg->copy(returned_msg.data);
+                msg->kind = Message::K_FILL_ROLLBACK;
                 m_upper_interface->pushMessage2RX(*msg, MessageType::DATA_RESPONSE);
             }
             else

@@ -72,6 +72,12 @@ namespace octopus
         virtual void processLogic();
         virtual void addRequests2ProcessingQueue(FRFCFS_Buffer<Message, CoherenceProtocolHandler> &);
 
+        // Diagnostics: OCTOPUS_HANG_DUMP=<cycles> dumps this controller's queues to
+        // stderr once it has processed nothing for that many cycles (deadlock triage).
+        uint64_t m_last_progress_cycle = 0;
+        bool m_hang_dumped = false;
+        virtual void dumpState();
+
         // Structural admission gate. Returns false when a ready request must be
         // held back (e.g., the derived controller has no free MSHR/PWB entry for
         // a new miss). Default: always admit. Overridden by CacheController.

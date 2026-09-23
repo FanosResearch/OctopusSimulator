@@ -65,6 +65,7 @@ namespace octopus
         ClockManager();
 
     public:
+        uint64_t getCurrentTime() const { return current_time; }   // ticks since start (core period = 100 ticks)
         void registerCLKObj(uint64_t clk_period, ClockedObj* obj);
         void deregisterCLKObj(ClockedObj* obj);
         void registerCLKTrigger(ClockedObj* obj);

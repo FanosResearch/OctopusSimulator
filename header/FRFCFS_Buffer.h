@@ -185,6 +185,16 @@ namespace octopus
         {
             this->m_check_state_callback = callback;
         }
+
+        int size() const { return (int)m_buffer.size(); }
+
+        // Read-only walk over the queued items (diagnostics: hang dumps).
+        template <typename F>
+        void forEach(F f) const
+        {
+            for (const Element &e : m_buffer)
+                f(e.item, e.state);
+        }
     };
 }
 

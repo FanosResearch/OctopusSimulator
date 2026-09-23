@@ -7,6 +7,7 @@
  */
 
 #include "../../header/Protocols/LLCMSIProtocol.h"
+#include "../../header/Logger.h"
 using namespace std;
 
 namespace octopus
@@ -42,7 +43,14 @@ namespace octopus
         if (msg.data != NULL)
             return FRFCFS_State::Ready;
         else if (this->m_fsm->isStall(cache_line.state, (int)event_id))
+        {
+            // Mechanism tracker: the line state that first stalls a demand request at the
+            // LLC (recorded once per request; the per-line gate stalls a request BEFORE this
+            // callback, so a gate-only stall leaves the column at -2). docs/Logger.md S5.
+            if (msg.isDemandRequest())
+                Logger::getLogger()->annotate(msg.msg_id, Logger::Annot::LLC_STALL_STATE, cache_line.state);
             return FRFCFS_State::NonReady;
+        }
 
         return FRFCFS_State::Ready;
     }
@@ -58,6 +66,12 @@ namespace octopus
 
         this->readEvent(request_msg, cache_line, &event_id);
         this->m_fsm->getTransition(cache_line.state, (int)event_id, next_state, actions);
+
+        // coherence transition hook (docs/Debugger.md): readable "EorM --GetS--> S_d" for an
+        // enabled debugger, binary FSM record for the raw trace (docs/Trace.md).
+        if (dprint)
+            dprint->transition(&request_msg, (uint32_t)m_id, cache_line.state, (int)event_id, next_state,
+                               actions.size() > 0 && actions[0] == (int)ActionId::Stall, this->m_fsm);
 
         return handleAction(actions, request_msg, cache_line, next_state);
     }
@@ -86,6 +100,7 @@ namespace octopus
                 ((Message *)controller_action.data)->copy(msg);
                 ((Message *)controller_action.data)->to.clear();
                 ((Message *)controller_action.data)->to.push_back(msg.owner); // DualTrans == false
+                ((Message *)controller_action.data)->kind = Message::K_RESP;
                 break;
 
             case ActionId::GetData:
@@ -103,6 +118,7 @@ namespace octopus
                                                              (uint16_t)action, // Complementary_value
                                                              msg.owner);       // Owner
                 ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+                ((Message *)controller_action.data)->kind = Message::K_MEM_READ;
                 break;
 
             case ActionId::SetOwner:
@@ -127,6 +143,7 @@ namespace octopus
                                                              (uint16_t)MSIProtocol::REQUEST_TYPE_INV, // Complementary_value
                                                              (uint16_t)this->m_id);              // Owner
                 ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_id);
+                ((Message *)controller_action.data)->kind = Message::K_INV;
                 break;
 
             case ActionId::WriteBack:
@@ -146,6 +163,7 @@ namespace octopus
                 // msg.data is NULL and performWriteBack reads the resident copy.
                 if (msg.data != NULL)
                     ((Message *)controller_action.data)->copy(msg.data);
+                ((Message *)controller_action.data)->kind = Message::K_MEM_WRITE;
                 break;
 
             case ActionId::Fault:

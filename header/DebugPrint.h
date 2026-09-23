@@ -13,6 +13,7 @@
 #include "Configurable.h"
 
 #include "CommunicationInterface.h"
+#include "FSMReader.h"
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -63,6 +64,12 @@ namespace octopus
 
         // lets callers skip building a trace string when tracing is disabled
         bool enabled() const { return enable != 0; }
+        // THE hook for a coherence transition (every protocol calls it right after
+        // getTransition): prints the readable "old --event--> new" line when this
+        // debugger is enabled (subject to its cond_* filters), and records the binary
+        // Role::FSM event in the raw trace when OCTOPUS_TRACE is set (docs/Trace.md).
+        // A Stall row leaves the line untouched, so it is reported as old --event--> old.
+        void transition(Message *msg, uint32_t comp, int old_state, int event_id, int new_state, bool stalled, FSMReader *fsm);
     };
 }
 

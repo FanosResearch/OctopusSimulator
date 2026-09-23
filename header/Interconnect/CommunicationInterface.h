@@ -44,6 +44,13 @@ public:
     uint8_t *data = NULL;
     uint16_t data_size = 0;
 
+    // Producer-assigned classification (docs/MessageEncoding.md). The protocol decoders never
+    // read it; the event trace (OCTOPUS_TRACE) and the viewer do. 0 = not tagged (e.g. the
+    // directory protocols).
+    enum Kind : uint8_t { K_UNKNOWN = 0, K_DEMAND, K_GETS, K_GETM, K_PUTM, K_INV, K_MEM_READ, K_EVICT,
+                          K_WB_DATA, K_WB_INV, K_SUPPLY, K_SUPPLY_DEFERRED, K_RESP, K_FILL, K_FILL_ROLLBACK, K_MEM_WRITE };
+    uint8_t kind = K_UNKNOWN;
+
     Message(uint64_t msg_id = 0, uint64_t addr = 0, uint64_t cycle = 0, uint64_t complementary_value = 0, uint16_t owner = 0)
     {
         this->msg_id = msg_id;
@@ -81,6 +88,7 @@ public:
         from = M2.from;
         to = M2.to;
         data_size = M2.data_size;
+        kind = M2.kind;
 
         if (M2.data != NULL)
             this->copy(M2.data, M2.data_size);

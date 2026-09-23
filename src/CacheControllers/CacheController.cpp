@@ -7,6 +7,9 @@
  */
 
 #include "../../header/CacheControllers/CacheController.h"
+#include "../../header/Protocols/MSIProtocol.h"   // REQUEST_TYPE_GETS for the deferred-supply rule
+#include <cstdio>
+#include <cstdlib>
 
 namespace octopus
 {
@@ -155,9 +158,37 @@ namespace octopus
             std::vector<Message> &saved = saved_it->second;
             msg->owner = saved.front().owner;
             msg->msg_id = saved.front().msg_id;
+
+            // Destination rule of the deferred supply, mirroring the FSM's Data2Both /
+            // Data2Req choice: a parked GetS means the LLC handed ownership to us and
+            // is waiting for the data it must serve/keep (S_d, or MN_d if it evicted the
+            // line meanwhile), so the LLC gets a copy; a parked GetM means the LLC keeps
+            // the line owned (EorM) and must not see the data. The FSM row IS_dI reuses
+            // Data2Req for "parked GetS, then invalidated before our data arrived" --
+            // without this the LLC parks in MN_d forever (seen on water_nsquared/ocean
+            // under a perfect LLC with OoO=8).
+            bool has_llc = false;
+            for (uint16_t t : msg->to) if (t == (uint16_t)m_shared_memory_id) has_llc = true;
+            if (saved.front().complementary_value == MSIProtocol::REQUEST_TYPE_GETS && !has_llc)
+                msg->to.push_back((uint16_t)m_shared_memory_id);
             for (size_t i = 1; i < saved.size(); i++)
+            {
                 msg->to.push_back(saved[i].owner);
+                // Design B: the fan-out copies are served by this same emit. The primary's
+                // stamps come from BaseController::performWriteBack (keyed by msg_id); the
+                // others are stamped here, before the saved list is dropped.
+                Logger::getLogger()->event(saved[i].msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::SERVICE);
+                Logger::getLogger()->event(saved[i].msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::EXIT);
+            }
             this->m_saved_requests_for_wb.erase(saved_it);
+        }
+        else if (msg->kind == Message::K_SUPPLY_DEFERRED)
+        {
+            // Our own data arrived but nobody is parked: this is the IS_dI / IM_dI path --
+            // we were invalidated while waiting, the LLC sits in MN_d for the line, and the
+            // data goes straight back to it. Tag it as an INV-forced write-back, not a supply
+            // (docs/MessageEncoding.md); the message keeps our request id and owner.
+            msg->kind = Message::K_WB_INV;
         }
 
         if(msg->data == NULL &&
@@ -293,6 +324,18 @@ namespace octopus
         }
     }
 
+    void CacheController::dumpState()
+    {
+        BaseController::dumpState();
+        CacheDataHandler_COTS *cots = (CacheDataHandler_COTS *)m_data_handler;
+        fprintf(stderr, "[HANG]   mshr=%d/%d pwb=%d/%d pwb_pending_issue=%d data_access_buffer=%zu saved_for_wb=%zu\n",
+                cots->mshrCount(), m_num_mshr, cots->pwbCount(), cots->pwbSize(), cots->pwbPendingIssueCount(),
+                m_data_access_buffer.size(), m_saved_requests_for_wb.size());
+        for (auto &m : m_data_access_buffer)
+            fprintf(stderr, "[HANG]   dab addr=%llx id=%llu action=%d ready=%d\n", (unsigned long long)m.addr,
+                    (unsigned long long)m.msg_id, (int)m_data_access_action[m.msg_id].type, m_data_handler->isReady(m.addr));
+    }
+
     bool CacheController::canAdmitRequest(Message &msg)
     {
         // Only a brand-new demand request can open a fresh outstanding miss (and
@@ -326,14 +369,42 @@ namespace octopus
 
     bool CacheController::checkReadinessOfCache(Message &msg, ControllerAction::Type type, void *data_ptr)
     {
-        if(!m_data_handler->isReady(msg.addr))
+        // Array-port tracker: every access that takes the port (direct grab or elected
+        // from the buffer) bumps m_array_served (+ writes). A demand read that has to park
+        // remembers the counters; when it is finally granted, the difference is the number
+        // of accesses served ahead of it at the port (docs/Logger.md S5).
+        // Port state BEFORE this claim. CacheDataHandler_COTS::isReady(addr) admits an
+        // access to an MSHR/PWB-resident line even while the port timer is busy (the
+        // data lives in the register, not the array) -- but the fill / write-back that
+        // follows still resets the port timer, so such an access overlaps the one in
+        // progress. The trace marks these "cut-in" claims (flag 0x100) so the occupancy
+        // builder can tell a genuine port slot from a bypass (docs/Trace.md).
+        bool port_busy = !m_data_handler->isReady();
+        CacheDataHandler_COTS *cots = dynamic_cast<CacheDataHandler_COTS *>(m_data_handler);
+        uint16_t reg_flags = cots ? ((cots->inMSHR(msg.addr) ? 0x200 : 0) | (cots->inPWB(msg.addr) ? 0x400 : 0)) : 0;
+        if (m_data_handler->isReady(msg.addr))
         {
+            auto it = m_array_park.find(msg.msg_id);
+            if (it != m_array_park.end())
+            {
+                Logger::getLogger()->annotate(msg.msg_id, Logger::Annot::ARRAY_AHEAD, (int64_t)(m_array_served - it->second.first));
+                Logger::getLogger()->annotate(msg.msg_id, Logger::Annot::ARRAY_AHEAD_WRITES, (int64_t)(m_array_served_writes - it->second.second));
+                m_array_park.erase(it);
+            }
+            m_array_served++;
+            if (type == ControllerAction::Type::WRITE_CACHE_LINE_DATA) m_array_served_writes++;
+            Logger::getLogger()->trace(msg, Logger::Role::ARRAY, (uint32_t)m_id, Logger::Phase::SERVICE,
+                                       (uint16_t)type | (port_busy ? 0x100 : 0) | reg_flags);   // port claim; flags = action | cut-in | MSHR | PWB
+            return true;
+        }
+        {
+            if (type == ControllerAction::Type::HIT_Action && m_array_park.find(msg.msg_id) == m_array_park.end())
+                m_array_park[msg.msg_id] = std::make_pair(m_array_served, m_array_served_writes);
             m_data_access_buffer.push_back(msg);
             m_data_access_action[msg.msg_id] = ControllerAction{.type = type,
                                                                .data = data_ptr};
             return false;
         }
-        return true;
     }
 
     void CacheController::checkReplacements(FRFCFS_Buffer<Message, CoherenceProtocolHandler> &buf)
@@ -350,6 +421,7 @@ namespace octopus
                           (uint16_t)this->m_id);               // Owner
             msg.to.push_back((uint16_t)this->m_shared_memory_id);
             msg.source = Message::Source::SELF;
+            msg.kind = Message::K_EVICT;
             // force=true: a write-back must be admitted to drain the PWB. It is
             // maintenance traffic, not new demand, so it bypasses the queue cap
             // (which bounds demand admission only). Bounded upstream by pwb_size.

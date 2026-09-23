@@ -43,3 +43,14 @@ ESSC_paper_draft.md
 results/iirflt01_*
 BMs/**/coh*.csv
 DATE2027_RTCoherence/
+
+# --- per-run sweep outputs (hardlinked workloads, LatencyReports, Parquet: up to 100s of GB) ---
+results/**/wl_*/
+results/**/rows/*.stderr
+results/pcc_par/oldest/
+results/pcc_par/pccperfect/
+results/**/*.log
+results/giants/.*
+*.parquet
+results_kept_fixedfsm/
+results/**/.*/

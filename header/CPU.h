@@ -36,6 +36,7 @@ namespace octopus
         struct TraceSample
         {
             uint64_t compute_time;
+            uint64_t read_cycle;   // sim cycle the sample was loaded (earliest it could issue)
             Message msg;
         };
 

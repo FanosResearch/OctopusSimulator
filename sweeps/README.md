@@ -17,6 +17,10 @@ L1-private + shared LLC, **LRU** replacement, **FCFS** bus arbiter,
 | `sweep_cache.sh` | LLC capacity | 16K / 32K / 64K | system CSV | wcTotal / finish |
 | `sweep_memory.sh` | main memory | MainMemory, MCsim (DDR4) | system CSV | wcDRAM / avg |
 | *(coherence)* | protocol × family | MSI/MESI/MOESI × snoop/dir | `../sweep_protocols.sh` | wcTotal |
+| `sweep_pcc_ab.sh` | perfect vs real LLC (PCC-like: RR bus, RR LLC, MCsim/FRFCFS DRAM) | `perfect_llc` 1 / 0 | system CSV + `SplitBusController.csv` | per-stage wc (where DRAM leaks into a *hit*) |
+| `sweep_pcc_par.sh` | same A/B × core OoO window, **all cells in parallel** (per-run knobs via `-p`, hardlinked per-run dirs; see the header) | `perfect_llc` {2 = PCC-perfect (no misses), 1 = zero-latency memory, 0 = real} × `OoO` {1,8} | shared config once + `-p` per run | per-stage wc, hit-only via `analyze_pcc_par.sh` |
+| `analyze_mechanisms.sh` | aggregates the Logger's per-request mechanism trackers over `sweep_pcc_par.sh` runs: request classes by LLC arrival state (L1 hit / stable / transient / coalesced / miss) with worst-case Total, Oldest, L2-Stall, L2-Access, Response-Bus per class; younger own responses granted ahead (and refills among them); array-port accesses ahead (and writes) | — | rows under `results/pcc_par/wl_<suite>/` | `results/pcc_par/mechanisms_<suite>.csv` |
+| `split_hits.sh` | (older, window-based) independent-vs-coalesced split from time-resolvable rows; superseded by the `LLC Arrival State` column — kept for cross-checking | — | one `newLogger` dir | stdout |
 
 ## Parallelism
 
@@ -72,7 +76,9 @@ Env knobs: `SUITE=eembc|splash` (default `eembc`), `JOBS` (default `nproc-2`),
 
 Results are written to `results/<axis>/<suite>.csv` (suite-aware: `eembc.csv`
 vs `splash.csv`, no clobber) with columns
-`value,benchmark,status,avg,wcTotal,wcReqBus,wcRespBus,wcDRAM,finish`.
+`value,benchmark,status,avg,wcTotal,wcEff,wcL1stall,wcReqBus,wcL2stall,wcL2access,wcRespBus,wcDramBus,wcDRAM,wcL1access,finish,wcOldest`
+(`METRIC_HEADER` in `sweep_common.sh`; `wcL1access` is the Logger's return-path
+stage, so the seven stage columns tile to Total; `wcOldest` is the worst head-of-queue latency, PCC's per-request quantity, equal to `wcTotal` at OoO=1).
 
 ## Metrics
 From each run's `newLogger/Summary.csv` (per-core worst-case + average):
@@ -93,6 +99,14 @@ runtime). The per-axis component shows *where* the knob acts.
   line onto a comment and be silently ignored.
 - The **arbiter** is set in the interconnect *Extends* file, not the system CSV
   (`sweep_arbiter.sh` backs it up and restores it on exit).
+- **`gen_baseline` copies the `MultiCoreSystem_Snoop.csv` preset over the active
+  system CSV**, so any sizing that only lives in the committed
+  `MultiCoreSystem.csv` is silently lost for every sweep run. The snoop bus
+  back-pressure sizing (`bus[*].buffers_max_size 256` + `bus[0].response_reserve
+  128`, sized to the MSHR bound) now lives in the preset too; with the preset's
+  old `32`/no-reserve the response TX buffer could overflow (`Cannot insert the
+  Msg into BusTxResp FIFO`, an `exit(0)` mid-run that leaves an INCOMPLETE
+  status with no footer). Keep the preset and the committed system CSV in sync.
 - Under `set -u`, declare `local b="$1"; local wp="$TR/$b"` on **separate**
   lines — a single `local` expands `$b` before assigning it.
 - **Config mutations are verified.** On Windows a running simulator keeps the

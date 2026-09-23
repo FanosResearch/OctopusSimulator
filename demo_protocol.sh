@@ -32,7 +32,7 @@ MI=(   -p "cache_controller[*].fsm_filename(s)=MI_splitBus_snooping" )
 
 run(){ rm -f "$WP/newLogger"/*.csv 2>/dev/null; mkdir -p "$WP/newLogger"
        "$BIN" -s MultiCoreSystem -p "workload_path(s)=$(wp_arg)/" "$@" >/dev/null 2>&1; }
-fin(){ awk -F, 'NR>1{if($12>m)m=$12}END{print m+0}' "$WP/newLogger/Summary.csv"; }
+fin(){ awk -F, 'NR>1{if($13>m)m=$13}END{print m+0}' "$WP/newLogger/Summary.csv"; }   # col 13 = Finish Cycle
 
 echo "== Cost of the two protocols on the SAME read-sharing workload =="
 run "${MESI[@]}"; printf "   MESI  (reads SHARE)     -> finish = %s cycles\n" "$(fin)"

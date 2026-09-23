@@ -85,7 +85,7 @@ namespace octopus
             if (parameters.count(STRINGIFY(mcsim_scheduler)))
                 mem_system = std::get<string>(parameters.at(STRINGIFY(mcsim_scheduler)).value);
             new MCsimInterface(bus[1]->getInterfaceFor(main_memory_id), main_memory_id, llc_id,
-                               num_cores, /*block_size=*/64, mem_system);
+                               num_cores, /*block_size=*/64, llc_controller->getClkPeriod(), mem_system);
         }
         else
         {

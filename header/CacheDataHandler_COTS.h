@@ -81,6 +81,12 @@ namespace octopus
             return findline(address, &set, &way);
         }
 
+        // Occupancy (diagnostics: hang dumps).
+        int mshrCount() const { return (int)m_miss_status_holding_regs.size(); }
+        int pwbCount() const { return (int)m_pending_write_back_regs.size(); }
+        int pwbPendingIssueCount() const { return (int)m_pwb_pending_issue.size(); }
+        int pwbSize() const { return m_pwb_size; }
+
         // Headroom in the write-back buffer for one more evicted line.
         inline bool pwbHasSpace()
         {
@@ -94,6 +100,12 @@ namespace octopus
         // the MSHR (not yet resident) into a set with no free way, while the
         // PWB has no headroom. Read-only -- safe to evaluate before the fill is
         // processed, so the response can be stalled without any rollback.
+        // Is the line's data currently in a register rather than the array? Such an access
+        // is admitted regardless of the port timer (isReady(addr)); a PWB data merge never
+        // touches the port, an MSHR fill / PWB read still resets it (docs/Trace.md).
+        inline bool inMSHR(uint64_t address) { return checkMSHR(mask_offset(address)); }
+        inline bool inPWB(uint64_t address) { return checkPWB(mask_offset(address)); }
+
         inline bool fillWouldOverflowPwb(uint64_t address)
         {
             if (pwbHasSpace())

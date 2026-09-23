@@ -101,10 +101,10 @@ for b in "${BENCHES[@]}"; do
     final=$(grep -oE '[0-9]+' "$logf" 2>/dev/null | sort -n | tail -1); final=${final:-0}
 
     # Aggregate latency across all four cores' reports.
-    #   col 12 = Total Latency, col 13 = Effective Latency (see report header).
+    #   col 13 = Total Latency, col 14 = Effective Latency (see report header).
     read -r reqs mtot meff < <(awk -F, '
         FNR==1 { next }                       # skip per-file header
-        NF>=13 { c++; tot+=$12; eff+=$13 }
+        NF>=14 { c++; tot+=$13; eff+=$14 }
         END { if (c>0) printf "%d %.1f %.1f\n", c, tot/c, eff/c; else print "0 0.0 0.0" }
     ' "$wp/newLogger"/LatencyReport_C*.csv 2>/dev/null)
     reqs=${reqs:-0}; mtot=${mtot:-0.0}; meff=${meff:-0.0}
