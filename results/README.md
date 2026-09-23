@@ -22,7 +22,7 @@ Each per-axis directory holds one row per `(config value, benchmark)`:
 | `directory-eembc/` | directory-based protocols | `summary.csv`, `rows/`, `progress.log` |
 | `giants/` | SPLASH-2 giants at baseline | `splash.csv` |
 | `splash_baseline/` | SPLASH-2 baseline (snoop MESI) | `baseline.csv` |
-| `pcc_par/` | perfect-vs-real LLC × core OoO window (PCC-like RR setup, MCsim FRFCFS; `sweeps/sweep_pcc_par.sh`) | `eembc.csv`, `splash.csv` (per-cell worst cases incl. `wcOldest`), `mechanisms_<suite>.csv` (per-class trackers), per-run rows + Parquet under `wl_<suite>/` |
+| `pcc_par/` | perfect-vs-real LLC × core OoO window (PCC-like RR setup, MCsim FRFCFS; `sweeps/sweep_pcc_par.sh`) | `eembc.csv`, `splash.csv` (per-cell worst cases incl. `wcOldest`), `mechanisms_<suite>.csv` (per-class trackers), `trace_eembc.csv` (traced re-runs: status, trace size, validation), `trace_ahead_eembc.csv` (what sat ahead of waiting requests, from the raw trace), per-run rows + Parquet under `wl_<suite>/`, `wl_trace_<suite>/` |
 | `figures/` | generated plots | `fig1`–`fig7` (`.png` + `.pdf`) |
 
 `overnight.log` is the driver's progress + final status summary.

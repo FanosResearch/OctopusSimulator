@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Octoviz timeline</title>
+<style>
+  :root { --bg:#14161a; --panel:#1d2026; --ink:#e7e9ee; --muted:#9aa3b2; --line:#2c313a; --accent:#f2b03d; --hl:#ffffff; --wait:#ff2d95;
+          --l1s:#4c6ef5; --reqb:#20c997; --l2s:#fab005; --membus:#845ef7; --dram:#e64980; --l2a:#15aabf; --resp:#fd7e14; --l1a:#82c91e;
+          --c0:#f8f9fa; --c1:#ff8787; --c2:#c0eb75; --c3:#b197fc;
+          --k-l1hit:#868e96; --k-stable:#f8f9fa; --k-transient:#c0eb75; --k-coalesced:#ff8787; --k-miss:#b197fc;
+          /* message kinds (trace lanes, docs/Trace.md) */
+          --kd-DEMAND:#ced4da; --kd-GETS:#20c997; --kd-GETM:#0ca678; --kd-PUTM:#fab005; --kd-INV:#e03131; --kd-EVICT:#868e96;
+          --kd-WB_DATA:#fd7e14; --kd-WB_INV:#d9480f; --kd-SUPPLY:#82c91e; --kd-SUPPLY_DEFERRED:#5c940d; --kd-RESP:#f8f9fa;
+          --kd-FILL:#b197fc; --kd-FILL_ROLLBACK:#cc5de8; --kd-MEM_READ:#4c6ef5; --kd-MEM_WRITE:#7048e8; --kd-UNKNOWN:#495057; }
+  html,body { margin:0; background:var(--bg); color:var(--ink); font:13px/1.35 system-ui, Segoe UI, Roboto, sans-serif; }
+  #top { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:flex-end; padding:10px 14px; background:var(--panel); border-bottom:1px solid var(--line); }
+  #top label { display:flex; flex-direction:column; gap:3px; color:var(--muted); font-size:11px; letter-spacing:.03em; text-transform:uppercase; }
+  #top input, #top select, .panel select { background:#0f1114; color:var(--ink); border:1px solid var(--line); border-radius:4px; padding:4px 6px; font:13px ui-monospace, Consolas, monospace; min-width:90px; }
+  #top .chk { display:flex; gap:6px; flex-wrap:wrap; text-transform:none; color:var(--ink); font-size:12px; }
+  #top button, .panel button { background:var(--accent); color:#111; border:0; border-radius:4px; padding:6px 12px; font-weight:600; cursor:pointer; }
+  #status { color:var(--muted); font-family: ui-monospace, Consolas, monospace; padding:4px 14px; border-bottom:1px solid var(--line); }
+  #minimap { display:block; width:100%; height:44px; background:#0f1114; cursor:crosshair; }
+  #gantt, #lanes { display:block; width:100%; background:#0f1114; }
+  #gantt { height:44vh; cursor:grab; } #lanes { height:26vh; border-top:1px solid var(--line); }
+  #legend, #legend2 { display:flex; gap:12px; padding:4px 14px; color:var(--muted); font-size:12px; flex-wrap:wrap; }
+  #legend span[style]::before, #legend2 span[style]::before { content:""; display:inline-block; width:10px; height:10px; margin-right:4px; border-radius:2px; background:var(--sw); vertical-align:-1px; }
+  #bottom { display:grid; grid-template-columns: 1fr 1fr; gap:12px; padding:8px 14px 16px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:8px 10px; min-width:0; }
+  /* the inspector is a fixed 440px column on the right: push the bottom panels out from under it */
+  body.ins #bottom, body.ins #legend, body.ins #legend2 { margin-right:440px; }
+  .panel h4 { margin:0 0 6px; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; display:flex; gap:8px; align-items:center; }
+  .panel canvas { display:block; width:100%; height:160px; background:#0f1114; }
+  .panel table { border-collapse:collapse; width:100%; font:12px ui-monospace, Consolas, monospace; } .panel td, .panel th { padding:2px 6px; border-bottom:1px solid var(--line); text-align:right; }
+  .panel th { color:var(--muted); font-weight:normal; } .panel td:first-child, .panel th:first-child { text-align:left; } .panel tr.jump { cursor:pointer; } .panel tr.jump:hover { background:#262a31; }
+  #tip { position:fixed; pointer-events:none; background:#000d; color:#fff; padding:6px 8px; border-radius:4px; font:12px ui-monospace, Consolas, monospace; white-space:pre; display:none; z-index:5; max-width:640px; }
+  #inspector { position:fixed; right:0; top:0; width:440px; height:100vh; overflow:auto; background:var(--panel); border-left:1px solid var(--line); padding:12px; box-sizing:border-box; display:none; z-index:4; }
+  #inspector h3 { margin:0 0 8px; font-size:14px; } #inspector h4 { margin:12px 0 4px; font-size:12px; color:var(--muted); text-transform:uppercase; }
+  #inspector table { border-collapse:collapse; width:100%; font:12px ui-monospace, Consolas, monospace; }
+  #inspector td { padding:2px 4px; border-bottom:1px solid var(--line); } #inspector tr.sel { background:#2b2f37; }
+  #inspector .close { float:right; cursor:pointer; color:var(--muted); } #inspector tr.jump { cursor:pointer; } #inspector tr.jump:hover { background:#262a31; }
+  #inspector .why { background:#0f1114; border-left:3px solid var(--accent); padding:6px 8px; margin:6px 0; font-size:12px; }
+  /* transition table: wide (one column per agent), so it scrolls sideways with an always-visible bar and a sticky header */
+  #fsm { height:340px; resize:vertical; overflow-y:auto; overflow-x:scroll; border:1px solid var(--line); }
+  #fsm table { width:max-content; min-width:100%; white-space:nowrap; }
+  #fsm th { position:sticky; top:0; background:var(--panel); z-index:1; }
+  #fsm td:nth-child(n+4), #fsm th:nth-child(n+4) { min-width:96px; }
+</style>
+</head>
+<body>
+<div id="top">
+  <label>run <select id="run"></select></label>
+  <label>cycle from <input id="t0" type="number"></label>
+  <label>cycle to <input id="t1" type="number"></label>
+  <label>address (hex) <input id="addr" placeholder="7f12e6436a20"></label>
+  <label>mask (hex) <input id="mask" value="ffffffffffffffc0" title="line mask: ...c0 = 64-B line; f..f = exact word"></label>
+  <label>request id <input id="id" placeholder="exact"></label>
+  <label>id range <input id="ids" placeholder="a-b"></label>
+  <label>cores <span class="chk"><label><input type="checkbox" class="core" value="0" checked>0</label><label><input type="checkbox" class="core" value="1" checked>1</label><label><input type="checkbox" class="core" value="2" checked>2</label><label><input type="checkbox" class="core" value="3" checked>3</label></span></label>
+  <label>class <span class="chk">
+    <label><input type="checkbox" class="cls" value="l1hit">L1 hit</label><label><input type="checkbox" class="cls" value="stable" checked>stable</label>
+    <label><input type="checkbox" class="cls" value="transient" checked>transient</label><label><input type="checkbox" class="cls" value="coalesced" checked>coalesced</label>
+    <label><input type="checkbox" class="cls" value="miss" checked>miss</label></span></label>
+  <label>used resource <span class="chk">
+    <label><input type="checkbox" class="res" value="reqbus">req bus</label><label><input type="checkbox" class="res" value="array">array</label>
+    <label><input type="checkbox" class="res" value="membus">mem bus</label><label><input type="checkbox" class="res" value="dram">DRAM</label>
+    <label><input type="checkbox" class="res" value="respbus">resp bus</label></span></label>
+  <label>stall state <input id="stall" placeholder="8,9,7 …" title="MESI_LLC state ids at first NonReady: 1 NE_d 2 NM_d 6 IorS_a 7 MN_d 8 S_d 9 I_d 10 N_a; -2 never"></label>
+  <label>rows <select id="layout"><option value="flat">flat (by issue)</option><option value="core">swimlane per core</option><option value="line">swimlane per line</option><option value="compact">compact (cores, packed)</option></select></label>
+  <label>lanes <select id="lanesrc" title="requests: occupancy derived from the per-request rows; trace: every message (write-backs, invalidations, supplies, fills) from the raw event trace, when the run has one"><option value="req">requests (rows)</option><option value="trace">trace (all traffic)</option></select></label>
+  <label>lane colour <select id="lanecolor"><option value="core">by core</option><option value="cls">by class</option><option value="kind">by kind (trace)</option></select></label>
+  <label>more <span class="chk"><label><input type="checkbox" id="oldest">oldest only</label><label>resp-ahead ≥ <input id="ahead" type="number" style="min-width:50px;width:50px"></label><label><input type="checkbox" id="context" checked>context lanes</label></span></label>
+  <button id="go">Apply</button>
+</div>
+<div id="status">loading…</div>
+<canvas id="minimap"></canvas>
+<canvas id="gantt"></canvas>
+<canvas id="lanes"></canvas>
+<div id="legend">
+  <b style="color:var(--ink)">Pipeline</b> — stages:
+  <span style="--sw:var(--l1s)">L1 stall</span><span style="--sw:var(--reqb)">req bus</span><span style="--sw:var(--l2s)">L2 stall (LLC queue)</span>
+  <span style="--sw:var(--membus)">mem bus</span><span style="--sw:var(--dram)">DRAM</span><span style="--sw:var(--l2a)">L2 access (array wait)</span>
+  <span style="--sw:var(--resp)">resp bus</span><span style="--sw:var(--l1a)">L1 access</span><span style="--sw:var(--accent)">▲ became oldest</span> <span style="--sw:repeating-linear-gradient(135deg,var(--muted) 0 2px,transparent 2px 5px)">hatched = waiting</span> <span style="--sw:var(--muted)">solid = being served (broadcast, array read, mem bus, DRAM, transfer, L1 access)</span>
+  <span style="margin-left:auto">wheel = zoom · drag = pan · click a bar = inspect &amp; "why did I wait"</span>
+</div>
+<div id="legend2"><b style="color:var(--ink)">Resource lanes</b> — one segment = one request occupying the resource, coloured by
+  <span class="lc-core"><span style="--sw:var(--c0)">core 0</span> <span style="--sw:var(--c1)">core 1</span> <span style="--sw:var(--c2)">core 2</span> <span style="--sw:var(--c3)">core 3</span></span>
+  <span class="lc-cls" style="display:none"><span style="--sw:var(--k-stable)">stable hit</span> <span style="--sw:var(--k-transient)">transient hit</span> <span style="--sw:var(--k-coalesced)">coalesced hit</span> <span style="--sw:var(--k-miss)">miss</span></span>
+  <span class="lc-kind" style="display:none"><span style="--sw:var(--kd-GETS)">GetS</span> <span style="--sw:var(--kd-GETM)">GetM</span> <span style="--sw:var(--kd-PUTM)">PutM</span> <span style="--sw:var(--kd-INV)">INV</span> <span style="--sw:var(--kd-RESP)">response</span> <span style="--sw:var(--kd-SUPPLY)">supply</span> <span style="--sw:var(--kd-SUPPLY_DEFERRED)">deferred supply</span> <span style="--sw:var(--kd-WB_DATA)">write-back</span> <span style="--sw:var(--kd-WB_INV)">INV-forced WB</span> <span style="--sw:var(--kd-MEM_READ)">mem read</span> <span style="--sw:var(--kd-FILL)">fill</span> <span style="--sw:var(--kd-MEM_WRITE)">mem write</span> <span style="--sw:repeating-linear-gradient(135deg,#fff 0 1px,transparent 1px 4px)">dashed = array cut-in (admitted while the port was busy)</span></span>
+  <span style="--sw:#3b4250">context (not in the filtered set)</span> <span style="--sw:var(--hl)">occupant AHEAD of the selected request (white outline)</span> <span style="--sw:repeating-linear-gradient(135deg,var(--wait) 0 2px,transparent 2px 5px)">selected request's WAIT window (magenta hatching)</span> <span style="--sw:var(--accent)">selected request's OWN service slot (orange outline)</span></div>
+<div id="bottom">
+  <div class="panel"><h4>Distribution of <select id="histcol"><option value="total">Total</option><option value="oldest">Oldest</option><option value="l2s">L2 stall</option><option value="l2a">L2 access</option><option value="resp">Resp bus</option><option value="dram">DRAM</option><option value="l1s">L1 stall</option><option value="resp_ahead">Resp ahead</option><option value="array_ahead">Array ahead</option></select>
+    <label style="text-transform:none"><input type="checkbox" id="histpos" checked> only rows &gt; 0</label> <label style="text-transform:none"><input type="checkbox" id="histwin" checked> current window only</label> <span id="histstats" style="margin-left:auto;font-family:ui-monospace,Consolas,monospace"></span></h4>
+    <canvas id="hist"></canvas></div>
+  <div class="panel"><h4>Hot lines by <select id="hotby"><option value="coalesced">coalesced hits</option><option value="transient">transient hits</option><option value="miss">misses</option><option value="all">all requests</option></select>
+    <label style="text-transform:none"><input type="checkbox" id="hotwin"> current window only</label> <span style="margin-left:auto;color:var(--muted)">click a line to filter on it</span></h4>
+    <div id="hot" style="max-height:170px;overflow:auto"></div></div>
+  <div class="panel" style="grid-column:1 / -1"><h4>Coherence transitions on line <span id="fsmline" style="font-family:ui-monospace,Consolas,monospace;text-transform:none;color:var(--ink)">—</span>
+    <label style="text-transform:none"><input type="checkbox" id="fsmwin"> current window only</label> <span id="fsmstats" style="margin-left:auto;font-family:ui-monospace,Consolas,monospace"></span></h4>
+    <div style="color:var(--muted);font-size:11px;margin-bottom:4px">One row per event a controller's FSM processed on the line (from the raw trace). The acting agent shows <b>old → new</b>; the other columns carry the state each agent held at that moment. Rows of the selected request are highlighted; click a row to move the view there. Set the address filter or click a request to choose the line.</div>
+    <div id="fsm"></div></div>
+</div>
+<div id="tip"></div>
+<div id="inspector"><span class="close" onclick="document.getElementById('inspector').style.display='none'; document.body.classList.remove('ins'); selected=null; draw(); refreshFsm();">✕</span><h3 id="insTitle"></h3><div id="insBody"></div></div>
+<script>
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const STAGES = [["l1s","--l1s"],["reqb","--reqb"],["l2s","--l2s"],["membus","--membus"],["dram","--dram"],["l2a","--l2a"],["resp","--resp"],["l1a","--l1a"]];
+const RES = [["reqbus","request bus"],["llc","LLC line / queue"],["array","LLC array port"],["membus","memory bus"],["dram","DRAM"],["respbus","response bus"]];
+// "llc" is a virtual resource: a request is resident at the LLC from its arrival (end of Req-Bus) to its array service; the WAIT on it is the L2-Stall stage.
+const occ = (row, C, r) => r === "llc" ? [get(row, C, "reqb") > 0 || get(row, C, "e_reqb") > get(row, C, "s_reqb") ? get(row, C, "e_reqb") : null, get(row, C, "e_l2a")] : [get(row, C, `o_${r}_s`), get(row, C, `o_${r}_e`)];
+const STATE = {"-2":"never reached the LLC","-1":"absent","0":"N","1":"NE_d (DRAM fetch in flight, exclusive)","2":"NM_d (DRAM fetch in flight, modified)","3":"I","4":"S","5":"EorM (owned by an L1)","6":"IorS_a","7":"MN_d (eviction, owner data awaited)","8":"S_d (owner supply in flight)","9":"I_d (owner write-back in flight)","10":"N_a"};
+const A_RES = 5, A_LLC = 10;
+// trace lanes (docs/Trace.md): every message's busy intervals from occupancy.parquet; the memory bus is full duplex (comp = direction)
+const TRES = [["REQ_BUS",0,"request bus","reqbus"],["SVC_BUS",0,"service bus (INV)",null],["ARRAY",10,"LLC array port","array"],["MEM_BUS",0,"mem bus → DRAM",null],["MEM_BUS",1,"mem bus → LLC",null],["DRAM",100,"DRAM (banks overlap)",null],["RESP_BUS",0,"response bus","respbus"]];
+const KIND_TXT = { DEMAND:"CPU request", GETS:"GetS", GETM:"GetM", PUTM:"PutM", INV:"back-invalidation", EVICT:"L1 replacement", WB_DATA:"eviction write-back", WB_INV:"INV-forced write-back", SUPPLY:"cache-to-cache supply", SUPPLY_DEFERRED:"deferred supply (parked request)", RESP:"LLC/L1 data response", FILL:"DRAM fill", FILL_ROLLBACK:"fill (rollback)", MEM_READ:"memory read", MEM_WRITE:"LLC eviction to memory", UNKNOWN:"untagged" };
+let runs = [], run = null, view = { t0: 0, t1: 0 }, data = null, ctxData = null, occData = null, mini = null, hover = null, timer = null, selected = null, laneHover = null;
+const traceMode = () => run && run.trace && $("#lanesrc").value === "trace";
+
+async function api(path, q) { const u = new URL(path, location.href); Object.entries(q).forEach(([k, v]) => v !== "" && v != null && u.searchParams.set(k, v)); const r = await fetch(u); return r.json(); }
+function filters() {
+  return { run: run.run, core: $$(".core:checked").map(c => c.value).join(","), addr: $("#addr").value.trim(), mask: $("#mask").value.trim() || "ffffffffffffffff",
+           id: $("#id").value.trim(), ids: $("#ids").value.trim(), cls: $$(".cls:checked").map(c => c.value).join(","), res: $$(".res:checked").map(c => c.value).join(","),
+           stall: $("#stall").value.trim(), oldest: $("#oldest").checked ? "1" : "", ahead_min: $("#ahead").value };
+}
+function setStatus(s) { $("#status").textContent = s; }
+function saveHash() { const f = filters(); location.hash = new URLSearchParams({ ...f, t0: view.t0, t1: view.t1 }).toString(); }
+function loadHash() { const h = new URLSearchParams(location.hash.slice(1)); if (!h.get("run")) return false;
+  const set = (id, v) => { if (v != null) $(id).value = v; }; set("#addr", h.get("addr")); set("#mask", h.get("mask")); set("#id", h.get("id")); set("#ids", h.get("ids")); set("#stall", h.get("stall")); set("#ahead", h.get("ahead_min"));
+  const cores = (h.get("core") || "0,1,2,3").split(","); $$(".core").forEach(c => c.checked = cores.includes(c.value));
+  if (h.get("cls") != null) { const cls = h.get("cls").split(","); $$(".cls").forEach(c => c.checked = cls.includes(c.value)); }
+  const res = (h.get("res") || "").split(","); $$(".res").forEach(c => c.checked = res.includes(c.value));
+  $("#oldest").checked = h.get("oldest") === "1"; view.t0 = +h.get("t0"); view.t1 = +h.get("t1"); return h.get("run"); }
+
+async function refresh() {
+  if (!run) return; view.t0 = Math.max(run.tmin, Math.floor(view.t0)); view.t1 = Math.min(run.tmax, Math.ceil(view.t1)); if (view.t1 <= view.t0) view.t1 = view.t0 + 1000;
+  $("#t0").value = view.t0; $("#t1").value = view.t1; saveHash();
+  setStatus("querying…"); const f = filters();
+  const [d, c, o] = await Promise.all([api("/api/window", { ...f, t0: view.t0, t1: view.t1 }),
+                                    ($("#context").checked || selected) ? api("/api/window", { run: run.run, t0: view.t0, t1: view.t1, limit: 20000 }) : Promise.resolve(null),
+                                    traceMode() ? api("/api/occupancy", { run: run.run, t0: view.t0, t1: view.t1, core: f.core, addr: f.addr, mask: f.addr ? f.mask : "" }) : Promise.resolve(null)]);
+  data = d; ctxData = c; occData = o; draw(); refreshHist(); refreshHot(); refreshFsm();
+  setStatus(d.mode === "rows" ? `${run.run} · cycles ${view.t0}–${view.t1} (${view.t1 - view.t0}) · ${d.rows.length} of ${d.total} matching requests shown` :
+            `${run.run} · cycles ${view.t0}–${view.t1} (${view.t1 - view.t0}) · aggregated view, ${d.bins.length} bins of ${d.bw} cycles — zoom in below 40 000 cycles for individual requests`);
+}
+const x = t => (t - view.t0) / (view.t1 - view.t0);
+function fit(cv) { const r = cv.getBoundingClientRect(); cv.width = r.width * devicePixelRatio; cv.height = r.height * devicePixelRatio; const g = cv.getContext("2d"); g.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0); return [g, r.width, r.height]; }
+const get = (row, C, k) => row[C.indexOf(k)];
+
+// ---- "why did I wait": occupants overlapping the selected request's WAIT windows ----
+// wait windows (cycles the request spent waiting for the resource, before its own service slot):
+//   respbus: [s_resp, e_resp - A_RES]   array: [s_l2a, e_l2a]   reqbus: [s_reqb, e_reqb - 2]
+//   LLC queue (l2s) has no lane; the same-line list in the inspector explains it.
+function waitWindows(r, C) {
+  const w = {}; const a = (k) => get(r, C, k);
+  if (a("e_resp") - a("s_resp") > A_RES) w.respbus = [a("s_resp"), a("e_resp") - A_RES];
+  if (a("e_l2a") - a("s_l2a") > 0) w.array = [a("s_l2a"), a("e_l2a")];
+  if (a("e_reqb") - a("s_reqb") > 2) w.reqbus = [a("s_reqb"), a("e_reqb") - 2];
+  if (a("e_l2s") - a("s_l2s") > 1) w.llc = [a("s_l2s"), a("e_l2s")];
+  return w;
+}
+function aheadOf(sel, selC, rows, C) { // -> {resource: [row,...]} occupants whose service interval overlaps the wait window
+  const w = waitWindows(sel, selC), out = {}; const sid = get(sel, selC, "id"), score = get(sel, selC, "core");
+  const sline = BigInt("0x" + get(sel, selC, "addr_hex")) >> 6n;
+  for (const [r] of RES) { if (!w[r]) continue; const [a, b] = w[r]; out[r] = rows.filter(row => { const [s, e] = occ(row, C, r); if (s == null || e == null) return false;
+      if (r === "llc" && (BigInt("0x" + get(row, C, "addr_hex")) >> 6n) !== sline) return false;   // only the SAME LINE can hold the LLC against me
+      return e > a && s < b && !(get(row, C, "id") == sid && get(row, C, "core") == score); }); }
+  return out;
+}
+
+function drawMini() {
+  const [g, W, H] = fit($("#minimap")); if (!mini) return; g.clearRect(0, 0, W, H);
+  const mx = Math.max(1, ...mini.bins.map(b => b[1])); g.fillStyle = "#3b4250";
+  mini.bins.forEach(b => { const x0 = (b[0] * mini.bw) / (mini.tmax - mini.tmin) * W; g.fillRect(x0, H - (b[1] / mx) * (H - 4), Math.max(1, mini.bw / (mini.tmax - mini.tmin) * W), (b[1] / mx) * (H - 4)); });
+  g.fillStyle = "rgba(242,176,61,.25)"; g.strokeStyle = css("--accent"); const a = (view.t0 - mini.tmin) / (mini.tmax - mini.tmin) * W, b = (view.t1 - mini.tmin) / (mini.tmax - mini.tmin) * W;
+  g.fillRect(a, 0, Math.max(2, b - a), H); g.strokeRect(a + .5, .5, Math.max(2, b - a), H - 1);
+}
+function ticks(g, W, H) { g.strokeStyle = css("--line"); g.fillStyle = css("--muted"); g.font = "11px ui-monospace, Consolas, monospace"; const span = view.t1 - view.t0; const step = Math.pow(10, Math.floor(Math.log10(span / 8)));
+  for (let t = Math.ceil(view.t0 / step) * step; t <= view.t1; t += step) { const px = x(t) * W; g.beginPath(); g.moveTo(px, 0); g.lineTo(px, H); g.stroke(); g.fillText(t, px + 3, 11); } }
+// diagonal hatch pattern (magenta) for the selected request's WAIT windows
+let _hatch = null;
+function hatch() { if (_hatch) return _hatch; const c = document.createElement("canvas"); c.width = c.height = 8; const g = c.getContext("2d"); g.strokeStyle = css("--wait"); g.lineWidth = 2;
+  g.beginPath(); g.moveTo(-2, 10); g.lineTo(10, -2); g.moveTo(-2, 2); g.lineTo(2, -2); g.moveTo(6, 10); g.lineTo(10, 6); g.stroke(); _hatch = $("#lanes").getContext("2d").createPattern(c, "repeat"); return _hatch; }
+const _hatches = {};
+function hatchFor(v) { if (_hatches[v]) return _hatches[v]; const c = document.createElement("canvas"); c.width = c.height = 6; const g = c.getContext("2d");
+  g.fillStyle = css(v); g.globalAlpha = .28; g.fillRect(0, 0, 6, 6); g.globalAlpha = 1; g.strokeStyle = css(v); g.lineWidth = 1.5; g.beginPath(); g.moveTo(-1, 7); g.lineTo(7, -1); g.moveTo(-1, 1); g.lineTo(1, -1); g.moveTo(5, 7); g.lineTo(7, 5); g.stroke();
+  return _hatches[v] = $("#gantt").getContext("2d").createPattern(c, "repeat"); }
+function draw() { drawMini(); drawGantt(); drawLanes(); }
+
+// ---- row layouts: returns {slots: [{row, idx} | {label}], n} ----
+function layout(rows, C) {
+  const mode = $("#layout").value, out = [];
+  if (mode === "flat") { rows.forEach((r, i) => out.push({ row: r, idx: i })); return out; }
+  const key = mode === "line" ? (r => (BigInt("0x" + get(r, C, "addr_hex")) >> 6n).toString(16) + "…") : (r => "core " + get(r, C, "core"));
+  const groups = new Map(); rows.forEach((r, i) => { const k = key(r); if (!groups.has(k)) groups.set(k, []); groups.get(k).push({ row: r, idx: i }); });
+  const order = [...groups.keys()]; if (mode === "core") order.sort();
+  for (const k of order) { const g = groups.get(k);
+    if (mode === "compact") { const tracks = []; const lab = k + " (" + g.length + ")"; out.push({ label: lab });
+      g.forEach(e => { const a = get(e.row, C, "issue"), b = get(e.row, C, "retire"); let t = tracks.findIndex(end => end <= a); if (t < 0) { t = tracks.length; tracks.push(b); out.push({ track: true, items: [] }); } else tracks[t] = b;
+        const base = out.length - tracks.length; out[base + t].items.push(e); }); }
+    else { out.push({ label: k + " (" + g.length + ")" }); g.forEach(e => out.push(e)); } }
+  return out;
+}
+function drawGantt() {
+  const [g, W, H] = fit($("#gantt")); g.clearRect(0, 0, W, H); ticks(g, W, H); if (!data) return;
+  if (data.mode === "bins") {
+    const C = data.cols, mx = Math.max(1, ...data.bins.map(b => b[C.indexOf("issued")])), mt = Math.max(1, ...data.bins.map(b => b[C.indexOf("max_total")] || 0));
+    data.bins.forEach(b => { const x0 = x(b[C.indexOf("b0")]) * W, w = Math.max(1, x(b[C.indexOf("b1")]) * W - x0);
+      g.fillStyle = "#3b4250"; g.fillRect(x0, H - 14 - b[C.indexOf("issued")] / mx * (H - 40), w, b[C.indexOf("issued")] / mx * (H - 40));
+      g.fillStyle = css("--l2s"); g.fillRect(x0, H - 14 - b[C.indexOf("coalesced")] / mx * (H - 40), w, b[C.indexOf("coalesced")] / mx * (H - 40));
+      g.fillStyle = css("--dram"); g.fillRect(x0, H - 14, w, -(b[C.indexOf("misses")] / mx * (H - 40)) / 2); });
+    g.strokeStyle = css("--accent"); g.beginPath(); data.bins.forEach((b, i) => { const px = x(b[C.indexOf("b0")]) * W, py = 20 + (1 - (b[C.indexOf("max_total")] || 0) / mt) * (H - 60); i ? g.lineTo(px, py) : g.moveTo(px, py); }); g.stroke();
+    g.fillStyle = css("--muted"); g.fillText("grey: requests issued per bin · yellow: coalesced · pink: misses · orange line: max Total per bin (" + mt + ")", 8, H - 2); return; }
+  const C = data.cols, rows = data.rows, slots = layout(rows, C), rh = Math.max(2, Math.min(14, (H - 16) / Math.max(1, slots.length))); g.__rh = rh; g.__slots = slots;
+  const ahead = selected && ctxData && ctxData.mode === "rows" ? aheadOf(selected.row, selected.C, ctxData.rows, ctxData.cols) : null;
+  const aheadKey = new Set(); if (ahead) Object.values(ahead).forEach(list => list.forEach(row => aheadKey.add(get(row, ctxData.cols, "core") + ":" + get(row, ctxData.cols, "id"))));
+  const drawOne = (r, y) => {
+    // waiting = hatched in the stage colour, service = solid (same reading as the lanes)
+    const seg = (a, b, v, solid) => { if (b <= a) return; const x0 = x(a) * W, x1 = x(b) * W; g.fillStyle = solid ? css(v) : hatchFor(v); g.fillRect(x0, y, Math.max(1, x1 - x0), rh - 1); };
+    const st = k => get(r, C, "s_" + k), en = k => get(r, C, "e_" + k);
+    seg(st("l1s"), en("l1s"), "--l1s", false);                                   // queued at own L1
+    seg(st("reqb"), Math.max(st("reqb"), en("reqb") - 2), "--reqb", false); seg(Math.max(st("reqb"), en("reqb") - 2), en("reqb"), "--reqb", true);   // wait for grant | broadcast
+    seg(st("l2s"), en("l2s"), "--l2s", false);                                   // LLC queue / line held by someone else
+    seg(st("membus"), en("membus"), "--membus", true); seg(st("dram"), en("dram"), "--dram", true);
+    seg(st("l2a"), en("l2a"), "--l2a", false);                                   // wait for the array port
+    { const rs = st("resp"), re = en("resp"), len = re - rs, tr = Math.min(A_RES, len), rd = Math.min(A_LLC, len - tr);   // array read | wait for grant | transfer
+      seg(rs, rs + rd, "--l2a", true); seg(rs + rd, re - tr, "--resp", false); seg(re - tr, re, "--resp", true); }
+    seg(st("l1a"), en("l1a"), "--l1a", true);
+    const to = get(r, C, "t_oldest"); if (to != null && rh >= 4) { g.fillStyle = css("--accent"); const px = x(to) * W; g.beginPath(); g.moveTo(px, y + rh - 1); g.lineTo(px - 3, y + rh + 3); g.lineTo(px + 3, y + rh + 3); g.fill(); }
+    const key = get(r, C, "core") + ":" + get(r, C, "id");
+    if (selected && key === selected.key) { g.strokeStyle = css("--accent"); g.lineWidth = 2; g.strokeRect(x(get(r, C, "issue")) * W - 1, y - 1, Math.max(2, (x(get(r, C, "retire")) - x(get(r, C, "issue"))) * W) + 2, rh + 1); g.lineWidth = 1; }
+    else if (aheadKey.has(key)) { g.strokeStyle = css("--hl"); g.strokeRect(x(get(r, C, "issue")) * W - .5, y - .5, Math.max(2, (x(get(r, C, "retire")) - x(get(r, C, "issue"))) * W) + 1, rh); }
+    if (rh >= 9) { g.fillStyle = "#fff9"; g.font = "9px ui-monospace, Consolas, monospace"; g.fillText(`c${get(r, C, "core")} #${get(r, C, "id")} ${get(r, C, "cls")}`, x(get(r, C, "issue")) * W + 2, y + rh - 2); } };
+  slots.forEach((sl, si) => { const y = 14 + si * rh; if (y > H) return;
+    if (sl.label) { g.fillStyle = "#1d2026"; g.fillRect(0, y, W, rh - 1); g.fillStyle = css("--muted"); g.font = "10px system-ui"; g.fillText(sl.label, 4, y + Math.min(rh - 2, 10)); return; }
+    if (sl.track) { sl.items.forEach(e => drawOne(e.row, y)); return; }
+    drawOne(sl.row, y); });
+  if (hover != null && rows[hover]) { const si = slots.findIndex(sl => (sl.row && sl.idx === hover) || (sl.track && sl.items.some(e => e.idx === hover))); if (si >= 0) { const y = 14 + si * rh; g.strokeStyle = "#fff6"; g.strokeRect(0, y - .5, W, rh); } }
+}
+// ---- trace lanes: intervals of every message, packed into sub-rows where they overlap (DRAM banks, array cut-ins) ----
+const oget = (row, k) => row[occData.cols.indexOf(k)];
+function laneRows(res, comp) { const C = occData.cols, ir = C.indexOf("resource"), ic = C.indexOf("comp"); return occData.rows.filter(r => r[ir] === res && r[ic] === comp); }
+function pack(rows) { const ends = []; return rows.map(r => { const s = oget(r, "start"), e = oget(r, "end"); let k = ends.findIndex(t => t <= s); if (k < 0) { if (ends.length < 4) { k = ends.length; ends.push(e); } else { k = 3; ends[3] = Math.max(ends[3], e); } } else ends[k] = e; return k; }); }
+const occKey = r => oget(r, "core") + ":" + oget(r, "msg_id");
+function occAhead(sel, selC) { // trace occupants (any kind) overlapping the selected request's wait windows -> {lane index: [row,...]}
+  const w = waitWindows(sel, selC), out = {}, me = get(sel, selC, "core") + ":" + get(sel, selC, "id");
+  TRES.forEach(([res, comp, , wk], li) => { if (!wk || !w[wk]) return; const [a, b] = w[wk]; out[li] = laneRows(res, comp).filter(r => oget(r, "end") > a && oget(r, "start") < b && occKey(r) !== me); });
+  return out;
+}
+function drawTraceLanes(g, W, H) {
+  const lh = (H - 4) / TRES.length; const ahead = selected && occData.mode === "rows" ? occAhead(selected.row, selected.C) : null; const ww = selected ? waitWindows(selected.row, selected.C) : null;
+  const me = selected ? selected.core + ":" + selected.id : null; g.__lh = lh; g.__hits = [];
+  TRES.forEach(([res, comp, name, wk], li) => { const y = 2 + li * lh; g.fillStyle = css("--muted"); g.font = "11px system-ui"; g.fillText(name, 4, y + 11);
+    if (occData.mode === "bins") { const C = occData.cols; occData.bins.filter(b => b[C.indexOf("resource")] === res && b[C.indexOf("comp")] === comp).forEach(b => { const i = b[0], u = Math.min(1, b[C.indexOf("busy")] / occData.bw), un = Math.min(1, b[C.indexOf("busy_nonreq")] / occData.bw);
+        const x0 = x(occData.t0 + i * occData.bw) * W, w = Math.max(1, occData.bw / (view.t1 - view.t0) * W); g.fillStyle = `rgba(242,176,61,${0.15 + 0.85 * u})`; g.fillRect(x0, y + 14, w, lh - 16); g.fillStyle = `rgba(177,151,252,${un})`; g.fillRect(x0, y + 14, w, (lh - 16) * 0.35); }); return; }
+    if (ww && wk && ww[wk]) { const x0 = x(ww[wk][0]) * W, x1 = x(ww[wk][1]) * W; g.fillStyle = hatch(); g.fillRect(x0, y + 12, Math.max(1, x1 - x0), lh - 12); g.strokeStyle = css("--wait"); g.lineWidth = 1.5; g.strokeRect(x0 + .5, y + 12.5, Math.max(1, x1 - x0), lh - 13); g.lineWidth = 1; }
+    const rows = laneRows(res, comp), sub = pack(rows), nsub = Math.max(1, ...sub.map(k => k + 1)), sh = (lh - 16) / nsub;
+    rows.forEach((r, i) => { const s = oget(r, "start"), e = oget(r, "end"); if (e <= s) return; const x0 = x(s) * W, x1 = x(e) * W, yy = y + 14 + sub[i] * sh, key = occKey(r);
+      const mode = $("#lanecolor").value; g.fillStyle = mode === "kind" ? css("--kd-" + oget(r, "kind")) : mode === "cls" ? "#3b4250" : css("--c" + Math.min(3, oget(r, "core")));
+      if (oget(r, "core") > 3) g.fillStyle = css("--kd-INV");
+      g.fillRect(x0, yy, Math.max(1, x1 - x0), Math.max(2, sh - 1)); g.__hits.push({ x0, x1, y0: yy, y1: yy + sh, r, li });
+      if (oget(r, "cutin")) { g.setLineDash([2, 2]); g.strokeStyle = "#fff"; g.strokeRect(x0 + .5, yy + .5, Math.max(1, x1 - x0) - 1, Math.max(2, sh - 1) - 1); g.setLineDash([]); }
+      if (me && key === me) { g.strokeStyle = css("--accent"); g.lineWidth = 2; g.strokeRect(x0 - 1, yy - 1, Math.max(2, x1 - x0) + 2, sh + 1); g.lineWidth = 1; }
+      if (ahead && ahead[li] && ahead[li].includes(r)) { g.strokeStyle = css("--hl"); g.strokeRect(x0 - .5, yy - .5, Math.max(2, x1 - x0) + 1, sh); } });
+    if (laneHover && laneHover.li === li) { g.strokeStyle = "#fff6"; g.strokeRect(0, y + 12.5, W, lh - 12); } });
+}
+function drawLanes() {
+  const [g, W, H] = fit($("#lanes")); g.clearRect(0, 0, W, H); ticks(g, W, H);
+  if (traceMode()) { if (occData && occData.trace) { drawTraceLanes(g, W, H); return; } g.fillStyle = css("--muted"); g.fillText("no trace for this run (run with OCTOPUS_TRACE and convert.py --trace)", 4, 26); return; }
+  const lh = (H - 4) / RES.length; if (!data) return;
+  const ahead = selected && ctxData && ctxData.mode === "rows" ? aheadOf(selected.row, selected.C, ctxData.rows, ctxData.cols) : null;
+  const ww = selected ? waitWindows(selected.row, selected.C) : null;
+  RES.forEach(([r, name], li) => { const y = 2 + li * lh; g.fillStyle = css("--muted"); g.font = "11px system-ui"; g.fillText(name, 4, y + 11);
+    if (data.mode === "bins") { if (r === "llc") return; const C = data.cols; data.bins.forEach(b => { const u = Math.min(1, b[C.indexOf("occ_" + r)] / data.bw); const x0 = x(b[C.indexOf("b0")]) * W, w = Math.max(1, x(b[C.indexOf("b1")]) * W - x0); g.fillStyle = `rgba(242,176,61,${0.15 + 0.85 * u})`; g.fillRect(x0, y + 14, w, lh - 16); }); return; }
+    if (ww && ww[r]) { const x0 = x(ww[r][0]) * W, x1 = x(ww[r][1]) * W; g.fillStyle = hatch(); g.fillRect(x0, y + 12, Math.max(1, x1 - x0), lh - 12); g.strokeStyle = css("--wait"); g.lineWidth = 1.5; g.strokeRect(x0 + .5, y + 12.5, Math.max(1, x1 - x0), lh - 13); g.lineWidth = 1; }
+    const paint = (rows, C, dim) => rows.forEach(row => { const [a, b] = occ(row, C, r); if (a == null || b == null || b <= a) return;
+      if (r === "llc" && selected && (BigInt("0x" + get(row, C, "addr_hex")) >> 6n) !== (BigInt("0x" + get(selected.row, selected.C, "addr_hex")) >> 6n)) { dim = true; }
+      const key = $("#lanecolor").value === "cls" ? "--k-" + get(row, C, "cls") : "--c" + get(row, C, "core");
+      g.fillStyle = dim ? "#3b4250" : css(key); const x0 = x(a) * W, x1 = x(b) * W; g.fillRect(x0, y + 14, Math.max(1, x1 - x0), lh - 16);
+      if (selected && get(row, C, "id") == selected.id && get(row, C, "core") == selected.core) { g.strokeStyle = css("--accent"); g.lineWidth = 2; g.strokeRect(x0 - 1, y + 13, Math.max(2, x1 - x0) + 2, lh - 14); g.lineWidth = 1; } });
+    if (ctxData && ctxData.mode === "rows") paint(ctxData.rows, ctxData.cols, !$("#context").checked ? true : true);
+    paint(data.rows, data.cols, false);
+    if (ahead && ahead[r]) ahead[r].forEach(row => { const C = ctxData.cols; const [oa, ob] = occ(row, C, r); const x0 = x(oa) * W, x1 = x(ob) * W; g.strokeStyle = css("--hl"); g.strokeRect(x0 - .5, y + 13.5, Math.max(2, x1 - x0) + 1, lh - 15); }); });
+}
+
+// ---- hover with reasons in words ----
+function reasons(r, C) {
+  const a = k => get(r, C, k), out = [];
+  const l2s = a("e_l2s") - a("s_l2s"), l2a = a("e_l2a") - a("s_l2a"), resp = a("e_resp") - a("s_resp"), l1s = a("e_l1s") - a("s_l1s");
+  if (l1s > 2) out.push(`L1 stall ${l1s}: queued at its own L1 behind older own requests (OoO window)`);
+  if (l2s > 1) { const st = a("llc_stall"), ar = a("llc_state");
+    if (st == 1 || st == 2 || ar == 1 || ar == 2) out.push(`L2 stall ${l2s}: line was being FETCHED FROM DRAM for another request (coalesced hit)`);
+    else if (st >= 6 && st <= 10) out.push(`L2 stall ${l2s}: line in transient ${STATE[st]}`);
+    else if (st == -2 && a("llc_gate") == 1) out.push(`L2 stall ${l2s}: an older request to the same line was queued ahead (per-line FCFS gate), line was ${STATE[ar]} at arrival`);
+    else if (st == -2) out.push(`L2 stall ${l2s}: LLC admission wait (queue/MSHR), line ${STATE[ar]} at arrival`);
+    else out.push(`L2 stall ${l2s}: line ${STATE[st] || st}`); }
+  if (l2a > A_LLC && a("array_ahead") > 0) out.push(`L2 access ${l2a}: ${a("array_ahead")} accesses served ahead at the array port (${a("array_ahead_w")} of them writes)`);
+  else if (l2a > 1) out.push(`L2 access ${l2a}: array port wait`);
+  if (resp > A_RES) out.push(`Resp bus ${resp}: ${a("resp_ahead")} younger own responses granted ahead (${a("resp_ahead_ref")} refills)${a("resp_ahead") == 0 ? " — other owners' rounds" : ""}`);
+  if (a("oldest") == 0) out.push("never became the oldest request of its core (retired behind an older one)");
+  return out;
+}
+const gantt = $("#gantt"); let drag = null;
+gantt.addEventListener("wheel", e => { e.preventDefault(); const W = gantt.getBoundingClientRect().width, f = e.deltaY > 0 ? 1.25 : 0.8, tc = view.t0 + (e.offsetX / W) * (view.t1 - view.t0); view.t0 = tc - (tc - view.t0) * f; view.t1 = tc + (view.t1 - tc) * f; schedule(); }, { passive: false });
+gantt.addEventListener("mousedown", e => drag = { x: e.clientX, t0: view.t0, t1: view.t1, moved: false });
+window.addEventListener("mouseup", () => drag = null);
+gantt.addEventListener("mousemove", e => { const W = gantt.getBoundingClientRect().width;
+  if (drag) { const dt = (drag.x - e.clientX) / W * (drag.t1 - drag.t0); if (Math.abs(e.clientX - drag.x) > 3) drag.moved = true; view.t0 = drag.t0 + dt; view.t1 = drag.t1 + dt; schedule(); return; }
+  if (!data || data.mode !== "rows") { $("#tip").style.display = "none"; return; }
+  const gg = gantt.getContext("2d"), si = Math.floor((e.offsetY - 14) / (gg.__rh || 1)), sl = (gg.__slots || [])[si]; let i = null;
+  if (sl && sl.row) i = sl.idx; else if (sl && sl.track) { const W2 = gantt.getBoundingClientRect().width, tc = view.t0 + (e.offsetX / W2) * (view.t1 - view.t0); const hit = sl.items.find(it => get(it.row, data.cols, "issue") <= tc && get(it.row, data.cols, "retire") >= tc); if (hit) i = hit.idx; }
+  const r = i != null ? data.rows[i] : null; hover = r ? i : null; drawGantt();
+  if (!r) { $("#tip").style.display = "none"; return; } const C = data.cols, a = k => get(r, C, k);
+  $("#tip").style.display = "block"; $("#tip").style.left = Math.min(e.clientX + 14, window.innerWidth - 660) + "px"; $("#tip").style.top = (e.clientY + 14) + "px";
+  $("#tip").textContent = `core ${a("core")}  id ${a("id")}  addr ${a("addr_hex")}  ${a("cls")}\nissue ${a("issue")}  retire ${a("retire")}  total ${a("total")}  oldest ${a("oldest")}\nL1s ${a("e_l1s")-a("s_l1s")}  reqB ${a("e_reqb")-a("s_reqb")}  L2s ${a("e_l2s")-a("s_l2s")}  memB ${a("e_membus")-a("s_membus")}  DRAM ${a("e_dram")-a("s_dram")}  L2a ${a("e_l2a")-a("s_l2a")}  resp ${a("e_resp")-a("s_resp")}  L1a ${a("e_l1a")-a("s_l1a")}\n` + reasons(r, C).map(s => "• " + s).join("\n"); });
+gantt.addEventListener("click", e => { if (drag && drag.moved) return; if (!data || data.mode !== "rows" || hover == null) return; const C = data.cols, r = data.rows[hover]; if (!r) return; select(r, C); });
+function select(r, C) { selected = { row: r, C, id: get(r, C, "id"), core: get(r, C, "core"), key: get(r, C, "core") + ":" + get(r, C, "id") }; if (!ctxData) { refresh().then(() => { draw(); inspect(); }); } else { draw(); inspect(); refreshFsm(); } }
+$("#minimap").addEventListener("click", e => { const W = $("#minimap").getBoundingClientRect().width, t = mini.tmin + e.offsetX / W * (mini.tmax - mini.tmin), span = view.t1 - view.t0; view.t0 = t - span / 2; view.t1 = t + span / 2; schedule(); });
+function schedule() { draw(); clearTimeout(timer); timer = setTimeout(refresh, 180); }
+// ---- trace-lane hover / click: any message, not only requests ----
+const lanesCv = $("#lanes");
+lanesCv.addEventListener("mousemove", e => { const g = lanesCv.getContext("2d"); if (!traceMode() || !g.__hits) { $("#tip").style.display = "none"; return; }
+  const hit = g.__hits.find(h => e.offsetX >= h.x0 - 1 && e.offsetX <= h.x1 + 1 && e.offsetY >= h.y0 && e.offsetY <= h.y1); laneHover = hit ? { li: hit.li } : null; drawLanes();
+  if (!hit) { $("#tip").style.display = "none"; return; } const r = hit.r, k = oget(r, "kind");
+  $("#tip").style.display = "block"; $("#tip").style.left = Math.min(e.clientX + 14, window.innerWidth - 400) + "px"; $("#tip").style.top = (e.clientY - 70) + "px";
+  $("#tip").textContent = `${TRES[hit.li][2]}: ${KIND_TXT[k] || k} (${k})\nmsg ${oget(r, "msg_id")}  owner ${oget(r, "core") > 3 ? "LLC" : "core " + oget(r, "core")}  cycles ${oget(r, "start")}–${oget(r, "end")} (${oget(r, "end") - oget(r, "start")})` +
+    (oget(r, "cutin") ? "\ncut-in: admitted while the array port was busy (MSHR/PWB-resident line)" : "") + (hit.li === 2 ? `\narray action ${({1:"read for a response",4:"read for a write-back/supply",6:"write (fill / write-back / supply copy)"})[oget(r, "flags")] || oget(r, "flags")}` : "") + "\nclick = inspect the request with this id"; });
+lanesCv.addEventListener("mouseleave", () => { laneHover = null; $("#tip").style.display = "none"; drawLanes(); });
+lanesCv.addEventListener("click", e => { const g = lanesCv.getContext("2d"); if (!traceMode() || !g.__hits) return;
+  const hit = g.__hits.find(h => e.offsetX >= h.x0 - 1 && e.offsetX <= h.x1 + 1 && e.offsetY >= h.y0 && e.offsetY <= h.y1); if (!hit) return; jumpTo(oget(hit.r, "msg_id"), oget(hit.r, "core") > 3 ? null : oget(hit.r, "core")); });
+
+async function inspect() {
+  if (!selected) return; const d = await api("/api/request", { run: run.run, id: selected.id, core: selected.core }); if (d.error) return; const r = d.row; $("#inspector").style.display = "block"; document.body.classList.add("ins");
+  $("#insTitle").textContent = `core ${r.core} · request ${r.id} · ${r.addr_hex} · ${r.cls}`; const r_core = r.core;
+  let h = `<div class="why">${reasons(selected.row, selected.C).map(s => "• " + s).join("<br>") || "no waiting worth explaining"}</div>`;
+  const keys = ["issue","retire","total","eff","oldest","t_oldest","llc_state","llc_stall","llc_gate","resp_ahead","resp_ahead_ref","array_ahead","array_ahead_w","l1s","reqb","l2s","membus","dram","l2a","resp","l1a"];
+  h += "<table>" + keys.map(k => `<tr><td>${k}</td><td>${k === "llc_state" || k === "llc_stall" ? (STATE[r[k]] || r[k]) : r[k]}</td></tr>`).join("") + "</table>";
+  const ahead = ctxData && ctxData.mode === "rows" ? aheadOf(selected.row, selected.C, ctxData.rows, ctxData.cols) : {};
+  for (const [res, name] of RES) { const list = ahead[res]; if (!list || !list.length) continue; const C = ctxData.cols;
+    h += `<h4>ahead of it on the ${name} (${list.length})</h4><table><tr><td>id</td><td>core</td><td>class</td><td>occupied</td></tr>` +
+         list.map(row => { const [oa, ob] = occ(row, C, res); return `<tr class="jump" data-id="${get(row,C,"id")}" data-core="${get(row,C,"core")}"><td>${get(row,C,"id")}</td><td>${get(row,C,"core")}${get(row,C,"core")==r.core?" (own)":""}</td><td>${get(row,C,"cls")}</td><td>${oa}–${ob}</td></tr>`; }).join("") + "</table>"; }
+  if (traceMode() && occData && occData.mode === "rows") { const oa = occAhead(selected.row, selected.C);
+    TRES.forEach(([res, comp, name], li) => { const list = oa[li]; if (!list || !list.length) return;
+      h += `<h4>trace: ahead of it on the ${name} (${list.length})</h4><table><tr><td>kind</td><td>msg</td><td>owner</td><td>occupied</td></tr>` +
+           list.map(r => `<tr class="jump" data-id="${oget(r,"msg_id")}" data-core="${oget(r,"core")}"><td>${KIND_TXT[oget(r,"kind")] || oget(r,"kind")}${oget(r,"cutin") ? " (cut-in)" : ""}</td><td>${oget(r,"msg_id")}</td><td>${oget(r,"core") > 3 ? "LLC" : oget(r,"core") + (oget(r,"core") == r_core ? " (own)" : "")}</td><td>${oget(r,"start")}–${oget(r,"end")}</td></tr>`).join("") + "</table>"; }); }
+  if (d.occ && d.occ.length) { const C = occData ? occData.cols : ["resource","comp","start","end","kind","core","msg_id","flags","cutin"]; const gk = (r, k) => r[C.indexOf(k)];
+    h += `<h4>trace intervals of this id (${d.occ.length})</h4><table><tr><td>resource</td><td>kind</td><td>owner</td><td>cycles</td></tr>` +
+         d.occ.map(r => `<tr><td>${gk(r,"resource")}${gk(r,"resource") === "MEM_BUS" ? (gk(r,"comp") ? " →LLC" : " →DRAM") : gk(r,"resource") === "LLC_QUEUE" || gk(r,"resource") === "ARRAY" ? " @" + (gk(r,"comp") == 10 ? "LLC" : "L1-" + gk(r,"comp")) : ""}</td><td>${KIND_TXT[gk(r,"kind")] || gk(r,"kind")}${gk(r,"cutin") ? " (cut-in)" : ""}</td><td>${gk(r,"core") > 3 ? "LLC" : gk(r,"core")}</td><td>${gk(r,"start")}–${gk(r,"end")} (${gk(r,"end") - gk(r,"start")})</td></tr>`).join("") + "</table>"; }
+  h += `<h4>same 64-B line, ±2000 cycles (${d.same_line.length})</h4><table><tr><td>id</td><td>core</td><td>issue</td><td>retire</td><td>total</td><td>class</td><td>arrival</td><td>stall</td></tr>` +
+       d.same_line.map(s => `<tr class="jump ${s[0] == r.id && s[1] == r.core ? 'sel' : ''}" data-id="${s[0]}" data-core="${s[1]}"><td>${s[0]}</td><td>${s[1]}</td><td>${s[3]}</td><td>${s[4]}</td><td>${s[5]}</td><td>${s[6]}</td><td>${s[7]}</td><td>${s[8]}</td></tr>`).join("") + "</table>";
+  $("#insBody").innerHTML = h;
+  $$("#insBody tr.jump").forEach(tr => tr.onclick = () => jumpTo(+tr.dataset.id, +tr.dataset.core));
+}
+async function jumpTo(id, core) {
+  const d = await api("/api/request", { run: run.run, id, core }); if (d.error) { setStatus(`msg ${id} is not a CPU request (an eviction / LLC-generated message) — nothing to inspect`); return; } const r = d.row; const span = Math.max(400, (r.retire - r.issue) * 3);
+  view.t0 = r.issue - span / 3; view.t1 = r.retire + span / 3; await refresh();
+  const C = data.cols; const row = data.rows.find(z => get(z, C, "id") == id && get(z, C, "core") == core) || (ctxData && ctxData.rows.find(z => get(z, ctxData.cols, "id") == id && get(z, ctxData.cols, "core") == core));
+  if (row) select(row, row === data.rows.find(z => z === row) && data.rows.includes(row) ? data.cols : ctxData.cols);
+}
+
+// ---- distribution panel ----
+async function refreshHist() {
+  if (!run) return; const f = filters(); const q = { ...f, col: $("#histcol").value, pos: $("#histpos").checked ? "1" : "", bins: 60 };
+  if ($("#histwin").checked) { q.t0 = view.t0; q.t1 = view.t1; }
+  const d = await api("/api/hist", q); const [g, W, H] = fit($("#hist")); g.clearRect(0, 0, W, H);
+  if (!d.n) { $("#histstats").textContent = "no rows"; return; }
+  $("#histstats").textContent = `n=${d.n}  mean=${d.mean.toFixed(1)}  p50=${d.p50}  p90=${d.p90}  p99=${d.p99}  max=${d.max}`;
+  const mx = Math.max(1, ...d.bins.map(b => b[1])), nb = Math.ceil((d.max - d.lo + 1) / d.bw), bwpx = W / nb; let cum = 0;
+  g.fillStyle = css("--l2s"); d.bins.forEach(b => g.fillRect(b[0] * bwpx, H - 14 - (b[1] / mx) * (H - 24), Math.max(1, bwpx - 1), (b[1] / mx) * (H - 24)));
+  g.strokeStyle = css("--accent"); g.beginPath(); d.bins.forEach((b, i) => { cum += b[1]; const px = (b[0] + 1) * bwpx, py = 10 + (1 - cum / d.n) * (H - 24); i ? g.lineTo(px, py) : g.moveTo(px, py); }); g.stroke();
+  g.fillStyle = css("--muted"); g.font = "10px ui-monospace, Consolas, monospace"; [0, .25, .5, .75, 1].forEach(fr => g.fillText(Math.round(d.lo + fr * nb * d.bw), fr * (W - 30), H - 3));
+  g.fillText("bars: count per bin · line: CDF", W - 170, 10);
+}
+$("#histcol").onchange = $("#histpos").onchange = $("#histwin").onchange = refreshHist;
+
+// ---- hot lines ----
+async function refreshHot() {
+  if (!run) return; const q = { run: run.run, by: $("#hotby").value, n: 25, core: $$(".core:checked").map(c => c.value).join(",") };
+  if ($("#hotwin").checked) { q.t0 = view.t0; q.t1 = view.t1; }
+  const d = await api("/api/hotlines", q); const lab = { coalesced: "coalesced", transient: "transient", miss: "misses", stable: "stable", all: "requests" }[d.by];
+  $("#hot").innerHTML = `<table><tr><th>line</th><th>${lab}</th><th>requests</th><th>wc Total</th><th>wc L2s</th><th>first</th><th>last</th></tr>` +
+    d.rows.map(r => `<tr class="jump" data-line="${r[0]}" data-first="${r[5]}"><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td><td>${r[5]}</td><td>${r[6]}</td></tr>`).join("") + "</table>";
+  $$("#hot tr.jump").forEach(tr => tr.onclick = () => { $("#addr").value = tr.dataset.line; $("#mask").value = "ffffffffffffffc0"; if (!$("#hotwin").checked) { view.t0 = +tr.dataset.first - 200; view.t1 = view.t0 + 20000; } refresh(); });
+}
+$("#hotby").onchange = $("#hotwin").onchange = refreshHot;
+
+// ---- per-line coherence transition table (fsm.parquet, docs/Trace.md) ----
+const AGENT = c => c >= 10 ? "LLC" : "L1-" + c;
+function fsmLine() { // the line to show: the selected request's, else the address filter's
+  if (selected) return (BigInt("0x" + get(selected.row, selected.C, "addr_hex")) & ~63n).toString(16);
+  const a = $("#addr").value.trim(); if (!a) return null; const m = BigInt("0x" + ($("#mask").value.trim() || "ffffffffffffffff")); return ((BigInt("0x" + a) & m) & ~63n).toString(16);
+}
+async function refreshFsm() {
+  if (!run) return; const line = fsmLine(); $("#fsmline").textContent = line || "—";
+  if (!run.fsm) { $("#fsm").innerHTML = `<span style="color:var(--muted)">no trace for this run (run with OCTOPUS_TRACE and convert.py --trace)</span>`; $("#fsmstats").textContent = ""; return; }
+  if (!line) { $("#fsm").innerHTML = ""; $("#fsmstats").textContent = ""; return; }
+  const q = { run: run.run, addr: line, mask: "ffffffffffffffc0", limit: 3000 }; if ($("#fsmwin").checked) { q.t0 = view.t0; q.t1 = view.t1; }
+  const d = await api("/api/fsm", q); if (!d.trace) { $("#fsm").innerHTML = ""; return; }
+  const C = d.cols, g = (r, k) => r[C.indexOf(k)], agents = d.agents;
+  $("#fsmstats").textContent = `${d.rows.length} of ${d.total} events${d.rows.length < d.total ? " (first 3000 — narrow the window)" : ""}`;
+  const cur = {}; agents.forEach(a => cur[a] = null);   // state each agent holds; back-filled from its first event
+  const first = {}; d.rows.forEach(r => { const a = g(r, "comp"); if (!(a in first)) first[a] = g(r, "old"); }); agents.forEach(a => { if (a in first) cur[a] = first[a]; });
+  const selId = selected ? selected.id : null, selCore = selected ? selected.core : null;
+  let h = `<table><tr><th>cycle</th><th>event</th><th>message</th>` + agents.map(a => `<th style="text-align:center">${AGENT(a)}</th>`).join("") + "</tr>";
+  d.rows.forEach(r => { const a = g(r, "comp"), o = g(r, "old"), n = g(r, "new"), mine = selId != null && g(r, "msg_id") == selId && (g(r, "core") == selCore || g(r, "kind") === "INV");
+    const cells = agents.map(x => x === a ? `<td style="text-align:center;color:var(--ink)"><b>${o}${o === n ? "" : " → " + n}</b>${o === n ? " <span style='color:var(--muted)'>(stays)</span>" : ""}</td>` : `<td style="text-align:center;color:var(--muted)">${cur[x] == null ? "·" : cur[x]}</td>`).join("");
+    cur[a] = n;
+    h += `<tr class="jump ${mine ? "sel" : ""}" data-cycle="${g(r, "cycle")}" data-id="${g(r, "msg_id")}" data-core="${g(r, "core")}"><td>${g(r, "cycle")}</td><td style="text-align:left">${g(r, "event")} <span style="color:var(--muted)">(${KIND_TXT[g(r, "kind")] || g(r, "kind")})</span></td><td style="text-align:left">${g(r, "msg_id")} <span style="color:var(--muted)">${g(r, "core") >= 10 ? "LLC" : "core " + g(r, "core")}</span></td>${cells}</tr>`; });
+  $("#fsm").innerHTML = h + "</table>";
+  $$("#fsm tr.jump").forEach(tr => tr.onclick = () => { const c = +tr.dataset.cycle, span = Math.max(200, view.t1 - view.t0); view.t0 = c - span / 2; view.t1 = c + span / 2; refresh(); });
+  const selRow = $("#fsm tr.sel"); if (selRow) selRow.scrollIntoView({ block: "center" });
+}
+$("#fsmwin").onchange = refreshFsm;
+
+async function selectRun(name) { run = runs.find(r => r.run === name) || runs[0]; $("#run").value = run.run; mini = await api("/api/minimap", { run: run.run }); selected = null;
+  if (!(view.t1 > view.t0)) { view.t0 = run.tmin; view.t1 = Math.min(run.tmax, run.tmin + 20000); } refresh(); }
+(async () => { runs = await api("/api/runs", {}); $("#run").innerHTML = runs.map(r => `<option>${r.run}</option>`).join(""); const fromHash = loadHash(); await selectRun(fromHash || runs[0].run);
+  $("#run").onchange = () => { view = { t0: 0, t1: 0 }; selectRun($("#run").value); };
+  $("#go").onclick = () => { view.t0 = +$("#t0").value; view.t1 = +$("#t1").value; refresh(); };
+  $$("#top input").forEach(i => i.addEventListener("keydown", e => e.key === "Enter" && $("#go").click()));
+  $("#layout").onchange = () => draw();
+  const laneLegend = () => { const m = $("#lanecolor").value; $(".lc-core").style.display = m === "core" ? "" : "none"; $(".lc-cls").style.display = m === "cls" ? "" : "none"; $(".lc-kind").style.display = m === "kind" ? "" : "none"; };
+  $("#lanecolor").onchange = () => { laneLegend(); drawLanes(); };
+  $("#lanesrc").onchange = () => { if ($("#lanesrc").value === "trace" && $("#lanecolor").value !== "core") { $("#lanecolor").value = "kind"; } laneLegend(); refresh(); };
+  window.addEventListener("resize", () => { draw(); refreshHist(); }); })();
+</script>
+</body>
+</html>
