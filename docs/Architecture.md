@@ -88,6 +88,19 @@ main memory. The class hierarchy behind it:
 
 ![Cache controller internals](imgs/cache_controller.png)
 
+For a concrete instance of everything below, wired up as the four-core system actually
+configures it, see the annotated LLC:
+
+![Detailed architecture of the Octopus last-level cache](imgs/llc_architecture.svg)
+
+It shows the three channels of the snoop bus that surround the cache, the processing queue and
+its per-line gate, the coherence FSM with the state and event names of `MESI_LLC.csv`, the
+controller actions that FSM emits, the in-flight bookkeeping, the arbitration for the single
+data-array port, and the data handler with its sets and ways, MSHR, write-back buffer,
+replacement mask and inclusion behaviour. The four points where the Logger and the raw event
+trace observe the cache are listed at the bottom, so the diagram doubles as a map of
+[`docs/Logger.md`](Logger.md) and [`docs/Trace.md`](Trace.md).
+
 A `CacheController` (a `BaseController`) has **two `CommunicationInterface`s** — one
 facing the cores below, one facing the interconnect above. Incoming messages are
 serialized into a **processing queue** ordered **First‑Ready First‑Come‑First‑Serve
