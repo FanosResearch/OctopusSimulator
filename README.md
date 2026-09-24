@@ -145,6 +145,11 @@ The default output reports will be found in `$Octopus/BMs/TestBM/newLogger/`.
 > `sweeps/*`) do this automatically — see
 > [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md).
 
+A worked end-to-end example of the simulator driving something visible is
+[`demo/`](demo/README.md): a periodic localization task ([`docs/Tasks.md`](docs/Tasks.md)) whose
+job timings steer a robot along a planned path, showing what shared-cache and DRAM interference
+cost a real-time task, and what a reserved cache way recovers.
+
 To *see* a run rather than read its reports, `./octoviz.sh view <workload_dir>` simulates it with
 the raw event trace on, converts the run and opens the timeline viewer in the browser (per-request
 pipeline, resource lanes for every message, a "why did I wait" view and a per-line coherence
