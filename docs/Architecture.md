@@ -93,13 +93,15 @@ configures it, see the annotated LLC:
 
 ![Detailed architecture of the Octopus last-level cache](imgs/llc_architecture.svg)
 
-It shows the three channels of the snoop bus that surround the cache, the processing queue and
-its per-line gate, the coherence FSM with the state and event names of `MESI_LLC.csv`, the
-controller actions that FSM emits, the in-flight bookkeeping, the arbitration for the single
-data-array port, and the data handler with its sets and ways, MSHR, write-back buffer,
-replacement mask and inclusion behaviour. The four points where the Logger and the raw event
-trace observe the cache are listed at the bottom, so the diagram doubles as a map of
-[`docs/Logger.md`](Logger.md) and [`docs/Trace.md`](Trace.md).
+It is a datapath drawing: the address splits into tag, set and offset; the set indexes the tag
+array; two comparators produce hit and way select; the way select steers the data array, which
+sits behind a single port that four kinds of access compete for through the round-robin arbiter
+and a 10-cycle busy timer. Control is drawn separately, dashed: the line's state and the decoded
+event enter the coherence FSM, whose next state is written back into the tag array and whose
+actions drive every port and interface. A miss allocates in the MSHR and leaves on the memory
+bus; a dirty victim goes to the write-back buffer; and because the cache is inclusive, evicting
+a line an L1 holds sends that L1 an invalidation on the service channel — the red path, and the
+reason a task whose working set fits in its own L1 can still be disturbed by other cores.
 
 A `CacheController` (a `BaseController`) has **two `CommunicationInterface`s** — one
 facing the cores below, one facing the interconnect above. Incoming messages are

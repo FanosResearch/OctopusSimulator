@@ -1,247 +1,210 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 940" width="1180" height="940"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1260 980" width="1260" height="980"
      font-family="'IBM Plex Sans','Segoe UI',system-ui,sans-serif" role="img"
-     aria-label="Detailed architecture of the Octopus last-level cache: controller, coherence FSM, data handler and the buses that surround it">
+     aria-label="Datapath of the Octopus last-level cache: bus interfaces, processing queue, coherence FSM, tag array with comparators, data array behind a single arbitrated port, MSHR and write-back buffer, and the memory bus">
   <defs>
-    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#3C4A52"/>
-    </marker>
-    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#BE3F24"/>
-    </marker>
-    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#2F6F9F"/>
-    </marker>
-    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#2E7D5B"/>
-    </marker>
+    <marker id="d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#14212A"/></marker>
+    <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#9A6B12"/></marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#BE3F24"/></marker>
   </defs>
+  <style>
+    .blk  { fill:#FFFFFF; stroke:#5A6B75; stroke-width:1.3 }
+    .mem  { fill:#EAF1F6; stroke:#2F6F9F; stroke-width:1.3 }
+    .ctl  { fill:#FDF6E6; stroke:#9A6B12; stroke-width:1.3 }
+    .io   { fill:#F0ECFA; stroke:#6244C7; stroke-width:1.3 }
+    .lbl  { font-size:11.5px; fill:#14212A; font-weight:600 }
+    .sub  { font-size:9.5px;  fill:#5E6E76 }
+    .mono { font-family:'IBM Plex Mono',monospace }
+    .wire { stroke:#14212A; stroke-width:2; fill:none }
+    .cwire{ stroke:#9A6B12; stroke-width:1.4; fill:none; stroke-dasharray:5 3 }
+    .iwire{ stroke:#BE3F24; stroke-width:1.8; fill:none }
+    .wl   { font-size:9.5px; fill:#14212A; font-family:'IBM Plex Mono',monospace }
+    .cl   { font-size:9.5px; fill:#9A6B12; font-family:'IBM Plex Mono',monospace }
+  </style>
 
-  <rect width="1180" height="940" fill="#F7F6F2"/>
+  <rect width="1260" height="980" fill="#FBFAF7"/>
+  <text x="34" y="30" font-size="17" font-weight="700" fill="#14212A">Octopus LLC datapath</text>
+  <text x="34" y="48" class="sub">CacheController_End2End + CacheDataHandler_COTS · 32 KB, 2-way, 64 B lines · one 10-cycle array port · MESI_LLC coherence FSM</text>
 
-  <!-- ─────────── title ─────────── -->
-  <text x="40" y="36" font-size="20" font-weight="700" fill="#14212A">Octopus last-level cache — detailed architecture</text>
-  <text x="40" y="58" font-size="12.5" fill="#5E6E76">
-    <tspan font-family="'IBM Plex Mono',monospace">CacheController_End2End</tspan> (id 10) + <tspan font-family="'IBM Plex Mono',monospace">CacheDataHandler_COTS</tspan>,
-    as configured in configuration/SystemConfigurations/MultiCoreSystem.csv
-  </text>
+  <!-- ══════════ bus[0] interface ══════════ -->
+  <rect x="34" y="66" width="1192" height="62" rx="4" class="io"/>
+  <text x="46" y="82" class="lbl mono" fill="#4B32A8">bus[0] — TripleBus interface</text>
+  <rect x="210" y="88" width="150" height="30" rx="3" class="blk"/><text x="222" y="101" class="lbl">RX request</text><text x="222" y="113" class="sub mono">GetS GetM PutM</text>
+  <rect x="384" y="88" width="150" height="30" rx="3" class="blk"/><text x="396" y="101" class="lbl">RX response</text><text x="396" y="113" class="sub mono">data in</text>
+  <rect x="558" y="88" width="150" height="30" rx="3" class="blk"/><text x="570" y="101" class="lbl">TX response</text><text x="570" y="113" class="sub mono">data out</text>
+  <rect x="1020" y="88" width="180" height="30" rx="3" class="blk" stroke="#BE3F24"/><text x="1032" y="101" class="lbl" fill="#BE3F24">TX service</text><text x="1032" y="113" class="sub mono">INV to sharers</text>
 
-  <!-- ─────────── L1s ─────────── -->
+  <!-- ══════════ processing queue ══════════ -->
+  <rect x="150" y="164" width="420" height="52" rx="4" class="blk"/>
+  <text x="162" y="182" class="lbl">processing queue — FR-FCFS, 64 entries</text>
+  <g fill="#F2F7FB" stroke="#5A6B75" stroke-width=".9">
+    <rect x="162" y="190" width="30" height="18"/><rect x="194" y="190" width="30" height="18"/>
+    <rect x="226" y="190" width="30" height="18"/><rect x="258" y="190" width="30" height="18"/>
+    <rect x="290" y="190" width="30" height="18"/><rect x="322" y="190" width="30" height="18"/>
+  </g>
+  <text x="360" y="204" class="sub mono">…</text>
+  <text x="150" y="232" class="sub">the head is chosen by readiness, not by age alone</text>
+  <line x1="285" y1="118" x2="285" y2="162" class="wire" marker-end="url(#d)"/>
+  <line x1="459" y1="118" x2="459" y2="162" class="wire" marker-end="url(#d)"/>
+
+  <!-- admission -->
+  <path d="M230 236 L490 236 L462 268 L258 268 Z" class="ctl"/>
+  <text x="290" y="254" class="lbl" fill="#9A6B12">admission select</text>
+  <text x="250" y="284" class="sub">ready (FSM does not stall) AND no older demand queued to the same line</text>
+  <line x1="360" y1="216" x2="360" y2="234" class="wire" marker-end="url(#d)"/>
+  <line x1="360" y1="268" x2="360" y2="300" class="wire" marker-end="url(#d)"/>
+  <text x="366" y="292" class="wl">msg</text>
+
+  <!-- ══════════ address decode ══════════ -->
   <g>
-    <text x="40" y="88" font-size="11.5" font-weight="600" fill="#5E6E76" letter-spacing=".06em">PRIVATE CACHES</text>
-    <g fill="#FFFFFF" stroke="#C9C4B8" stroke-width="1.2">
-      <rect x="60"  y="96" width="220" height="42" rx="5"/>
-      <rect x="340" y="96" width="220" height="42" rx="5"/>
-      <rect x="620" y="96" width="220" height="42" rx="5"/>
-      <rect x="900" y="96" width="220" height="42" rx="5"/>
-    </g>
-    <g font-size="12" fill="#14212A" font-family="'IBM Plex Mono',monospace">
-      <text x="76"  y="114">L1 — core 0</text><text x="356" y="114">L1 — core 1</text>
-      <text x="636" y="114">L1 — core 2</text><text x="916" y="114">L1 — core 3</text>
-    </g>
-    <g font-size="10.5" fill="#5E6E76">
-      <text x="76"  y="130">16 KB, direct-mapped, exclusive</text>
-      <text x="356" y="130">CacheControllerExclusive</text>
-      <text x="636" y="130">CacheControllerExclusive</text>
-      <text x="916" y="130">CacheControllerExclusive</text>
-    </g>
+    <rect x="150" y="302" width="420" height="34" rx="3" class="blk"/>
+    <line x1="392" y1="302" x2="392" y2="336" stroke="#5A6B75"/>
+    <line x1="500" y1="302" x2="500" y2="336" stroke="#5A6B75"/>
+    <text x="250" y="323" class="lbl mono">tag [63:14]</text>
+    <text x="414" y="323" class="lbl mono">set [13:6]</text>
+    <text x="510" y="323" class="lbl mono">off</text>
+    <text x="160" y="323" class="sub">addr</text>
   </g>
 
-  <!-- ─────────── bus[0]: TripleBus, three channels ─────────── -->
-  <g>
-    <rect x="60" y="156" width="1060" height="84" rx="6" fill="#EFEAFB" stroke="#6244C7" stroke-width="1.3"/>
-    <text x="76" y="174" font-size="12" font-weight="600" fill="#4B32A8" font-family="'IBM Plex Mono',monospace">bus[0] — TripleBus (snoop), Split controller</text>
-    <text x="418" y="174" font-size="10.5" fill="#5E6E76">buffers 256 · response reserve 128 · arbiter per channel (FCFS / RR / TDM)</text>
+  <!-- tag → comparators, set → arrays -->
+  <path d="M300 336 L300 372 L610 372" class="wire" marker-end="url(#d)"/>
+  <text x="430" y="368" class="wl">tag</text>
+  <path d="M440 336 L440 396" class="wire" marker-end="url(#d)"/>
+  <text x="446" y="360" class="wl">set index</text>
+  <path d="M440 372 L880 372 L880 470" class="wire" marker-end="url(#d)"/>
 
-    <!-- request channel -->
-    <line x1="150" y1="186" x2="150" y2="232" stroke="#2F6F9F" stroke-width="2" marker-end="url(#ab)"/>
-    <text x="164" y="196" font-size="11" font-weight="600" fill="#2F6F9F">request channel</text>
-    <text x="164" y="210" font-size="10.5" fill="#5E6E76" font-family="'IBM Plex Mono',monospace">GetS · GetM · PutM  (broadcast, A_req = 2 cyc)</text>
-
-    <!-- response channel -->
-    <line x1="560" y1="232" x2="560" y2="186" stroke="#2E7D5B" stroke-width="2" marker-end="url(#ag)"/>
-    <line x1="578" y1="186" x2="578" y2="232" stroke="#2E7D5B" stroke-width="2" marker-end="url(#ag)"/>
-    <text x="592" y="196" font-size="11" font-weight="600" fill="#2E7D5B">response channel</text>
-    <text x="592" y="210" font-size="10.5" fill="#5E6E76" font-family="'IBM Plex Mono',monospace">data to a requester · L1→L1 supply · write-back (A_res = 5 cyc)</text>
-
-    <!-- service channel -->
-    <line x1="1010" y1="232" x2="1010" y2="186" stroke="#BE3F24" stroke-width="2" marker-end="url(#ar)"/>
-    <text x="852" y="196" font-size="11" font-weight="600" fill="#BE3F24" text-anchor="end">service channel</text>
-    <text x="1000" y="210" font-size="10.5" fill="#5E6E76" font-family="'IBM Plex Mono',monospace" text-anchor="end">INV — back-invalidation on eviction (inclusive LLC)</text>
+  <!-- ══════════ tag array ══════════ -->
+  <rect x="150" y="398" width="420" height="136" rx="4" class="mem"/>
+  <text x="162" y="416" class="lbl">tag array — 256 sets × 2 ways</text>
+  <g font-size="9.5" class="mono" fill="#5E6E76"><text x="162" y="434">way 0</text><text x="366" y="434">way 1</text></g>
+  <g fill="#FFFFFF" stroke="#8FB2C9" stroke-width=".9">
+    <rect x="162" y="440" width="196" height="22"/><rect x="366" y="440" width="192" height="22"/>
+    <rect x="162" y="466" width="196" height="22"/><rect x="366" y="466" width="192" height="22"/>
+    <rect x="162" y="492" width="196" height="22"/><rect x="366" y="492" width="192" height="22"/>
   </g>
-
-  <!-- ─────────── LLC controller ─────────── -->
-  <g>
-    <rect x="60" y="250" width="1060" height="336" rx="8" fill="#FFFFFF" stroke="#2F6F9F" stroke-width="1.8"/>
-    <rect x="60" y="250" width="1060" height="26" rx="8" fill="#2F6F9F"/>
-    <rect x="60" y="266" width="1060" height="10" fill="#2F6F9F"/>
-    <text x="76" y="268" font-size="12.5" font-weight="700" fill="#FFFFFF" font-family="'IBM Plex Mono',monospace">LLC controller — CacheController_End2End</text>
-    <text x="1104" y="268" font-size="11" fill="#D6E6F2" text-anchor="end">one clock tick = one core cycle</text>
-
-    <!-- 1. processing queue -->
-    <rect x="84" y="296" width="300" height="130" rx="6" fill="#F2F7FB" stroke="#A9C4D8"/>
-    <text x="98" y="316" font-size="11.5" font-weight="700" fill="#14212A">1 · processing queue</text>
-    <text x="98" y="332" font-size="10.5" fill="#5E6E76" font-family="'IBM Plex Mono',monospace">FRFCFS_Buffer, depth 64</text>
-    <g>
-      <rect x="98" y="342" width="34" height="20" rx="3" fill="#FFFFFF" stroke="#A9C4D8"/>
-      <rect x="136" y="342" width="34" height="20" rx="3" fill="#FFFFFF" stroke="#A9C4D8"/>
-      <rect x="174" y="342" width="34" height="20" rx="3" fill="#FFFFFF" stroke="#A9C4D8"/>
-      <rect x="212" y="342" width="34" height="20" rx="3" fill="#FFFFFF" stroke="#A9C4D8"/>
-      <text x="256" y="357" font-size="11" fill="#5E6E76" font-family="'IBM Plex Mono',monospace">… 64</text>
-    </g>
-    <text x="98" y="384" font-size="10.5" fill="#14212A" font-weight="600">per-line FCFS gate</text>
-    <text x="98" y="398" font-size="10" fill="#5E6E76">a demand request is held while an older demand</text>
-    <text x="98" y="410" font-size="10" fill="#5E6E76">to the same line is still queued (data is exempt)</text>
-
-    <!-- 2. protocol handler -->
-    <rect x="412" y="296" width="330" height="130" rx="6" fill="#F2F7FB" stroke="#A9C4D8"/>
-    <text x="426" y="316" font-size="11.5" font-weight="700" fill="#14212A">2 · coherence protocol handler</text>
-    <text x="426" y="332" font-size="10.5" fill="#5E6E76" font-family="'IBM Plex Mono',monospace">SNOOP_LLC_MESI ← FSMReader ← MESI_LLC.csv</text>
-    <text x="426" y="352" font-size="10" fill="#14212A" font-weight="600">states</text>
-    <text x="426" y="366" font-size="10" fill="#5E6E76" font-family="'IBM Plex Mono',monospace">stable: N · I · S · EorM</text>
-    <text x="426" y="379" font-size="10" fill="#5E6E76" font-family="'IBM Plex Mono',monospace">transient: NE_d NM_d IorS_a MN_d S_d I_d N_a</text>
-    <text x="426" y="399" font-size="10" fill="#14212A" font-weight="600">events</text>
-    <text x="426" y="413" font-size="10" fill="#5E6E76" font-family="'IBM Plex Mono',monospace">GetS GetM Replacement PutM_from{Owner,NonOwner}</text>
-    <text x="426" y="425" font-size="10" fill="#5E6E76" font-family="'IBM Plex Mono',monospace">Data_from{Lower,Upper}Interface Own_Invalidation</text>
-
-    <!-- 3. action dispatch -->
-    <rect x="770" y="296" width="326" height="130" rx="6" fill="#F2F7FB" stroke="#A9C4D8"/>
-    <text x="784" y="316" font-size="11.5" font-weight="700" fill="#14212A">3 · controller actions</text>
-    <text x="784" y="332" font-size="10.5" fill="#5E6E76">the cell of the FSM table, executed in order</text>
-    <g font-size="10" fill="#5E6E76" font-family="'IBM Plex Mono',monospace">
-      <text x="784" y="352">HIT_Action           read the array, answer</text>
-      <text x="784" y="366">SEND_BUS_MSG         GetData / IssueInv / WB</text>
-      <text x="784" y="380">WRITE_BACK           supply data, evict to memory</text>
-      <text x="784" y="394">UPDATE_CACHE_LINE    state bits only</text>
-      <text x="784" y="408">WRITE_CACHE_LINE_DATA  install a fill</text>
-      <text x="784" y="422">ADD_PENDING / SAVE_REQ_FOR_WRITE_BACK / STALL</text>
-    </g>
-
-    <!-- flow arrows between 1-2-3 -->
-    <line x1="384" y1="361" x2="410" y2="361" stroke="#3C4A52" stroke-width="1.6" marker-end="url(#a)"/>
-    <line x1="742" y1="361" x2="768" y2="361" stroke="#3C4A52" stroke-width="1.6" marker-end="url(#a)"/>
-
-    <!-- 4. bookkeeping -->
-    <rect x="84" y="444" width="300" height="118" rx="6" fill="#FBF7EC" stroke="#D8C48A"/>
-    <text x="98" y="464" font-size="11.5" font-weight="700" fill="#14212A">4 · in-flight bookkeeping</text>
-    <text x="98" y="482" font-size="10.5" fill="#5E6E76" font-family="'IBM Plex Mono',monospace">pending requests — MSHR-backed, 64</text>
-    <text x="98" y="496" font-size="10" fill="#5E6E76">one entry per line with a fetch or a coherence</text>
-    <text x="98" y="508" font-size="10" fill="#5E6E76">round trip outstanding</text>
-    <text x="98" y="528" font-size="10.5" fill="#5E6E76" font-family="'IBM Plex Mono',monospace">saved_requests_for_wb</text>
-    <text x="98" y="542" font-size="10" fill="#5E6E76">snooped GetS/GetM parked until our own data</text>
-    <text x="98" y="554" font-size="10" fill="#5E6E76">arrives, then answered in one fan-out</text>
-
-    <!-- 5. array port arbitration -->
-    <rect x="412" y="444" width="330" height="118" rx="6" fill="#FBF7EC" stroke="#D8C48A"/>
-    <text x="426" y="464" font-size="11.5" font-weight="700" fill="#14212A">5 · data-array port arbitration</text>
-    <text x="426" y="482" font-size="10.5" fill="#5E6E76" font-family="'IBM Plex Mono',monospace">data-access buffer → RRArbiter</text>
-    <text x="426" y="496" font-size="10" fill="#5E6E76">candidates: the four L1s (one slot each, oldest first)</text>
-    <text x="426" y="514" font-size="10" fill="#14212A" font-weight="600">contenders for the single port</text>
-    <text x="426" y="528" font-size="10" fill="#5E6E76">demand reads · write-backs and snooped supplies</text>
-    <text x="426" y="540" font-size="10" fill="#5E6E76">written in · DRAM fills · eviction reads</text>
-    <text x="426" y="554" font-size="10" fill="#5E6E76">MSHR/PWB-resident accesses may cut in (flagged)</text>
-
-    <!-- 6. what leaves -->
-    <rect x="770" y="444" width="326" height="118" rx="6" fill="#FBF7EC" stroke="#D8C48A"/>
-    <text x="784" y="464" font-size="11.5" font-weight="700" fill="#14212A">6 · what the controller emits</text>
-    <g font-size="10" fill="#5E6E76">
-      <text x="784" y="482">↑ response channel: data to the requesting L1</text>
-      <text x="784" y="496">↑ service channel: INV to every sharer of a line</text>
-      <text x="784" y="508">   it is about to evict (inclusion)</text>
-      <text x="784" y="522">↓ memory bus: read for a miss, write for a dirty</text>
-      <text x="784" y="534">   eviction</text>
-      <text x="784" y="550">every emission is stamped for the Logger and the</text>
-      <text x="784" y="562">raw event trace</text>
-    </g>
-
-    <line x1="234" y1="426" x2="234" y2="442" stroke="#3C4A52" stroke-width="1.4" marker-end="url(#a)"/>
-    <line x1="577" y1="426" x2="577" y2="442" stroke="#3C4A52" stroke-width="1.4" marker-end="url(#a)"/>
-    <line x1="933" y1="426" x2="933" y2="442" stroke="#3C4A52" stroke-width="1.4" marker-end="url(#a)"/>
+  <g font-size="9.5" class="mono" fill="#14212A">
+    <text x="170" y="455">V · state · tag · owner</text><text x="374" y="455">V · state · tag · owner</text>
+    <text x="170" y="481">V · state · tag · owner</text><text x="374" y="481">V · state · tag · owner</text>
+    <text x="170" y="507">⋮</text><text x="374" y="507">⋮</text>
   </g>
+  <text x="162" y="526" class="sub">state is the MESI_LLC state of the line; owner names the L1 that holds it</text>
 
-  <!-- ─────────── data handler ─────────── -->
+  <!-- comparators -->
   <g>
-    <rect x="60" y="600" width="1060" height="206" rx="8" fill="#FFFFFF" stroke="#2E7D5B" stroke-width="1.8"/>
-    <rect x="60" y="600" width="1060" height="26" rx="8" fill="#2E7D5B"/>
-    <rect x="60" y="616" width="1060" height="10" fill="#2E7D5B"/>
-    <text x="76" y="618" font-size="12.5" font-weight="700" fill="#FFFFFF" font-family="'IBM Plex Mono',monospace">CacheDataHandler_COTS — tags, data, and the single array port</text>
-
-    <!-- the array -->
-    <text x="84" y="650" font-size="11.5" font-weight="700" fill="#14212A">tag + data array</text>
-    <text x="84" y="665" font-size="10.5" fill="#5E6E76" font-family="'IBM Plex Mono',monospace">32 KB · 2-way · 64 B lines → 256 sets</text>
-    <g font-size="9.5" fill="#5E6E76" font-family="'IBM Plex Mono',monospace">
-      <text x="88" y="688">set</text><text x="132" y="688">way 0</text><text x="256" y="688">way 1</text>
-    </g>
-    <g stroke="#B7C9BF" fill="#FFFFFF">
-      <rect x="84" y="694" width="40" height="19"/><rect x="124" y="694" width="124" height="19" fill="#EAF3EE"/><rect x="248" y="694" width="124" height="19"/>
-      <rect x="84" y="713" width="40" height="19"/><rect x="124" y="713" width="124" height="19" fill="#EAF3EE"/><rect x="248" y="713" width="124" height="19"/>
-      <rect x="84" y="732" width="40" height="19"/><rect x="124" y="732" width="124" height="19" fill="#EAF3EE"/><rect x="248" y="732" width="124" height="19"/>
-      <rect x="84" y="751" width="40" height="19"/><rect x="124" y="751" width="124" height="19"/><rect x="248" y="751" width="124" height="19"/>
-    </g>
-    <g font-size="9.5" fill="#14212A" font-family="'IBM Plex Mono',monospace">
-      <text x="92" y="708">0</text><text x="130" y="708">tag · state · data</text><text x="254" y="708">tag · state · data</text>
-      <text x="92" y="727">1</text><text x="130" y="727">tag · state · data</text><text x="254" y="727">tag · state · data</text>
-      <text x="92" y="746">2</text><text x="130" y="746">tag · state · data</text><text x="254" y="746">tag · state · data</text>
-      <text x="92" y="765">…</text><text x="130" y="765">…</text><text x="254" y="765">…</text>
-    </g>
-    <text x="124" y="782" font-size="9.5" fill="#2E7D5B" font-weight="600">shaded: way reserved for core 0 by way_partition = "0:0"</text>
-
-    <!-- structures beside it -->
-    <g>
-      <rect x="400" y="642" width="228" height="64" rx="5" fill="#F1F8F4" stroke="#B7C9BF"/>
-      <text x="414" y="662" font-size="11" font-weight="700" fill="#14212A">MSHR — 64 entries</text>
-      <text x="414" y="678" font-size="10" fill="#5E6E76">a line being fetched lives here, not in</text>
-      <text x="414" y="690" font-size="10" fill="#5E6E76">the array, until its fill is installed</text>
-
-      <rect x="400" y="716" width="228" height="64" rx="5" fill="#F1F8F4" stroke="#B7C9BF"/>
-      <text x="414" y="736" font-size="11" font-weight="700" fill="#14212A">PWB — 32 entries</text>
-      <text x="414" y="752" font-size="10" fill="#5E6E76">a dirty victim waits here for its</text>
-      <text x="414" y="764" font-size="10" fill="#5E6E76">write; the array way is freed at once</text>
-
-      <rect x="646" y="642" width="228" height="64" rx="5" fill="#F1F8F4" stroke="#B7C9BF"/>
-      <text x="660" y="662" font-size="11" font-weight="700" fill="#14212A">replacement</text>
-      <text x="660" y="678" font-size="10" fill="#5E6E76">LRU (or Random), candidate restricted</text>
-      <text x="660" y="690" font-size="10" fill="#5E6E76">to the requester's way mask</text>
-
-      <rect x="646" y="716" width="228" height="64" rx="5" fill="#FDF2EF" stroke="#E0B0A4"/>
-      <text x="660" y="736" font-size="11" font-weight="700" fill="#BE3F24">inclusion</text>
-      <text x="660" y="752" font-size="10" fill="#5E6E76">evicting a line an L1 holds sends it</text>
-      <text x="660" y="764" font-size="10" fill="#5E6E76">an INV first — the interference path</text>
-      <text x="660" y="776" font-size="10" fill="#5E6E76">for a task that fits in its own L1</text>
-
-      <rect x="892" y="642" width="204" height="138" rx="5" fill="#F1F8F4" stroke="#B7C9BF"/>
-      <text x="906" y="662" font-size="11" font-weight="700" fill="#14212A">the port</text>
-      <text x="906" y="680" font-size="10.5" fill="#5E6E76" font-family="'IBM Plex Mono',monospace">A_LLC = 10 cycles</text>
-      <text x="906" y="696" font-size="10" fill="#5E6E76">one access at a time, for reads</text>
-      <text x="906" y="708" font-size="10" fill="#5E6E76">and writes alike</text>
-      <text x="906" y="728" font-size="10" fill="#5E6E76">every claim is recorded with its</text>
-      <text x="906" y="740" font-size="10" fill="#5E6E76">action, and whether it cut in</text>
-      <text x="906" y="752" font-size="10" fill="#5E6E76">while the port was busy</text>
-      <text x="906" y="772" font-size="10" fill="#5E6E76">(docs/Trace.md)</text>
-    </g>
+    <path d="M612 424 L664 438 L664 462 L612 476 Z" class="blk"/><text x="624" y="454" class="lbl">=</text>
+    <path d="M612 486 L664 500 L664 524 L612 538 Z" class="blk"/><text x="624" y="516" class="lbl">=</text>
+    <path d="M560 452 L610 452" class="wire" marker-end="url(#d)"/>
+    <path d="M560 502 L610 502" class="wire" marker-end="url(#d)"/>
+    <text x="572" y="444" class="wl">w0</text><text x="572" y="494" class="wl">w1</text>
   </g>
+  <rect x="686" y="452" width="86" height="48" rx="3" class="ctl"/>
+  <text x="698" y="472" class="lbl" fill="#9A6B12">hit / way</text>
+  <text x="698" y="488" class="sub">select</text>
+  <path d="M664 450 L684 462" class="wire" marker-end="url(#d)"/>
+  <path d="M664 512 L684 492" class="wire" marker-end="url(#d)"/>
 
-  <!-- controller ↔ data handler -->
-  <line x1="577" y1="586" x2="577" y2="598" stroke="#3C4A52" stroke-width="1.6" marker-end="url(#a)"/>
+  <!-- hit/state to FSM (control) -->
+  <path d="M686 476 L620 476 L620 560 L200 560 L200 598" class="cwire" marker-end="url(#c)"/>
+  <text x="300" y="556" class="cl">hit, way, line state</text>
 
-  <!-- ─────────── memory side ─────────── -->
-  <g>
-    <rect x="60" y="822" width="1060" height="44" rx="6" fill="#EFEAFB" stroke="#6244C7" stroke-width="1.3"/>
-    <text x="76" y="840" font-size="12" font-weight="600" fill="#4B32A8" font-family="'IBM Plex Mono',monospace">bus[1] — Point2Point (memory bus, full duplex)</text>
-    <text x="76" y="856" font-size="10.5" fill="#5E6E76">read request and dirty write-back out · fill in</text>
-    <rect x="700" y="828" width="404" height="32" rx="5" fill="#FFFFFF" stroke="#C9C4B8"/>
-    <text x="714" y="849" font-size="11.5" fill="#14212A" font-family="'IBM Plex Mono',monospace">main memory — MCsim DDR4-2400, FR-FCFS scheduler</text>
-    <line x1="340" y1="806" x2="340" y2="820" stroke="#6244C7" stroke-width="2" marker-end="url(#a)"/>
+  <!-- way select to data array -->
+  <path d="M772 476 L820 476 L820 470" class="cwire" marker-end="url(#c)"/>
+  <text x="784" y="468" class="cl">way_sel</text>
+
+  <!-- ══════════ coherence FSM (control) ══════════ -->
+  <rect x="80" y="600" width="300" height="96" rx="4" class="ctl"/>
+  <text x="92" y="620" class="lbl" fill="#9A6B12">coherence FSM — MESI_LLC.csv</text>
+  <text x="92" y="638" class="sub mono">state × event → next state + actions</text>
+  <text x="92" y="656" class="sub">events: GetS GetM Replacement PutM_from*</text>
+  <text x="92" y="668" class="sub">Data_from{Lower,Upper} Own_Invalidation</text>
+  <text x="92" y="686" class="sub">states: N I S EorM + NE_d NM_d IorS_a MN_d S_d I_d N_a</text>
+  <path d="M230 696 L230 724" class="cwire" marker-end="url(#c)"/>
+  <path d="M80 640 L50 640 L50 320 L148 320" class="cwire" marker-end="url(#c)"/>
+  <text x="56" y="314" class="cl">next state → tag array</text>
+
+  <!-- action sequencer -->
+  <rect x="80" y="726" width="300" height="74" rx="4" class="ctl"/>
+  <text x="92" y="746" class="lbl" fill="#9A6B12">action sequencer</text>
+  <text x="92" y="762" class="sub mono">HIT · SEND_BUS_MSG · WRITE_BACK</text>
+  <text x="92" y="774" class="sub mono">UPDATE_LINE · WRITE_LINE_DATA · SAVE_REQ</text>
+  <text x="92" y="792" class="sub">drives every port, buffer and interface below</text>
+
+  <!-- ══════════ array port arbiter ══════════ -->
+  <path d="M800 398 L1180 398 L1146 440 L834 440 Z" class="ctl"/>
+  <text x="860" y="418" class="lbl" fill="#9A6B12">array-port arbiter</text><text x="860" y="432" class="sub" fill="#9A6B12">round-robin over the four L1 slots, oldest first within a slot</text>
+  <g class="wl">
+    <path d="M830 370 L845 396" class="wire" marker-end="url(#d)"/><text x="806" y="366">demand read</text>
+    <path d="M930 370 L935 396" class="wire" marker-end="url(#d)"/><text x="906" y="366">fill write</text>
+    <path d="M1030 370 L1025 396" class="wire" marker-end="url(#d)"/><text x="992" y="366">WB / supply read</text>
+    <path d="M1130 370 L1115 396" class="wire" marker-end="url(#d)"/><text x="1098" y="366">evict read</text>
   </g>
+  <rect x="1094" y="452" width="132" height="40" rx="3" class="blk"/>
+  <text x="1104" y="468" class="lbl">busy timer</text>
+  <text x="1104" y="483" class="sub mono">A_LLC = 10 cycles</text>
+  <path d="M1040 440 L1040 452 L1092 470" class="cwire" marker-end="url(#c)"/>
 
-  <!-- ─────────── trace probes legend ─────────── -->
+  <!-- ══════════ data array ══════════ -->
+  <rect x="800" y="470" width="380" height="120" rx="4" class="mem"/>
+  <text x="812" y="490" class="lbl">data array — 256 sets × 2 ways × 64 B</text>
+  <g fill="#FFFFFF" stroke="#8FB2C9" stroke-width=".9">
+    <rect x="812" y="500" width="176" height="24"/><rect x="996" y="500" width="172" height="24"/>
+    <rect x="812" y="528" width="176" height="24"/><rect x="996" y="528" width="172" height="24"/>
+  </g>
+  <g font-size="9.5" class="mono" fill="#14212A">
+    <text x="822" y="516">way 0 · 64 B line</text><text x="1006" y="516">way 1 · 64 B line</text>
+    <text x="822" y="544">⋮</text><text x="1006" y="544">⋮</text>
+  </g>
+  <text x="812" y="572" class="sub">a way may be reserved for one core (way_partition); LRU picks the victim</text>
+  <line x1="990" y1="440" x2="990" y2="468" class="wire" marker-end="url(#d)"/>
+
+  <!-- data out -->
+  <path d="M800 540 L640 540 L640 118" class="wire" marker-end="url(#d)"/>
+  <text x="646" y="300" class="wl">line data → TX response</text>
+
+  <!-- ══════════ MSHR / PWB ══════════ -->
+  <rect x="420" y="726" width="330" height="74" rx="4" class="mem"/>
+  <text x="432" y="746" class="lbl">MSHR — 64 entries</text>
+  <text x="432" y="762" class="sub">one per line with a fetch outstanding; the line</text>
+  <text x="432" y="774" class="sub">lives here, not in the array, until its fill lands</text>
+  <text x="432" y="792" class="sub mono">alloc on miss · free on fill</text>
+
+  <rect x="790" y="726" width="330" height="74" rx="4" class="mem"/>
+  <text x="802" y="746" class="lbl">write-back buffer — 32 entries</text>
+  <text x="802" y="762" class="sub">a dirty victim waits here for its write to memory;</text>
+  <text x="802" y="774" class="sub">the array way is released immediately</text>
+  <text x="802" y="792" class="sub mono">alloc on eviction · free on write</text>
+
+  <path d="M772 476 L772 700 L585 700 L585 724" class="wire" marker-end="url(#d)"/>
+  <text x="640" y="695" class="wl">miss</text>
+  <path d="M955 590 L955 724" class="wire" marker-end="url(#d)"/>
+  <text x="960" y="700" class="wl">victim line</text>
+
+  <!-- eviction → INV (inclusion) -->
+  <path d="M1120 750 L1210 750 L1210 118" class="iwire" marker-end="url(#r)"/>
+  <text x="1150" y="742" class="wl" fill="#BE3F24">inclusion:</text>
+  <text x="1150" y="754" class="wl" fill="#BE3F24">evicting a line</text>
+  <text x="1150" y="766" class="wl" fill="#BE3F24">an L1 holds</text>
+  <text x="1150" y="778" class="wl" fill="#BE3F24">sends it an INV</text>
+
+  <!-- ══════════ bus[1] + memory ══════════ -->
+  <rect x="34" y="840" width="1192" height="62" rx="4" class="io"/>
+  <text x="46" y="856" class="lbl mono" fill="#4B32A8">bus[1] — point-to-point memory bus (full duplex)</text>
+  <rect x="420" y="862" width="150" height="30" rx="3" class="blk"/><text x="432" y="875" class="lbl">TX read / write</text><text x="432" y="887" class="sub mono">miss · dirty evict</text>
+  <rect x="600" y="862" width="150" height="30" rx="3" class="blk"/><text x="612" y="875" class="lbl">RX fill</text><text x="612" y="887" class="sub mono">data from DRAM</text>
+  <rect x="800" y="862" width="400" height="30" rx="3" class="blk"/><text x="812" y="882" class="lbl mono">MCsim DDR4-2400 · FR-FCFS scheduler</text>
+  <line x1="585" y1="800" x2="585" y2="860" class="wire" marker-end="url(#d)"/>
+  <line x1="955" y1="800" x2="955" y2="860" class="wire" marker-end="url(#d)"/>
+  <path d="M675 862 L675 620 L930 620 L930 592" class="wire" marker-end="url(#d)"/>
+  <text x="700" y="616" class="wl">fill → array write + MSHR free</text>
+  <line x1="750" y1="877" x2="798" y2="877" class="wire" marker-end="url(#d)"/>
+
+  <!-- ══════════ legend ══════════ -->
   <g>
-    <text x="40" y="892" font-size="11" font-weight="700" fill="#14212A">Where the Logger and the raw event trace observe this cache</text>
-    <g font-size="10.5" fill="#5E6E76" font-family="'IBM Plex Mono',monospace">
-      <text x="40" y="910">LLC_QUEUE ENTER — arrival in the processing queue</text>
-      <text x="360" y="910">LLC ENTER — admitted (gate passed)</text>
-      <text x="640" y="910">ARRAY SERVICE — port claimed</text>
-      <text x="900" y="910">LLC EXIT — data emitted</text>
-      <text x="40" y="926">the difference between the first two is the L2-Stall stage; between the second and third, the L2-Access stage (docs/Logger.md)</text>
-    </g>
+    <line x1="34" y1="928" x2="70" y2="928" class="wire"/><text x="78" y="932" class="sub">data path</text>
+    <line x1="150" y1="928" x2="186" y2="928" class="cwire"/><text x="194" y="932" class="sub">control</text>
+    <line x1="266" y1="928" x2="302" y2="928" class="iwire"/><text x="310" y="932" class="sub">back-invalidation (inclusion)</text>
+    <rect x="520" y="921" width="14" height="12" class="mem"/><text x="540" y="932" class="sub">storage</text>
+    <rect x="612" y="921" width="14" height="12" class="ctl"/><text x="632" y="932" class="sub">control logic</text>
+    <rect x="726" y="921" width="14" height="12" class="io"/><text x="746" y="932" class="sub">interconnect interface</text>
+    <text x="900" y="926" class="sub">observed by the Logger and the raw trace:</text><text x="900" y="938" class="sub">queue arrival · admission · port claim · data emitted</text>
   </g>
 </svg>
