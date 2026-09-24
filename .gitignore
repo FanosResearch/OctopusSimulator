@@ -54,3 +54,5 @@ results/giants/.*
 *.parquet
 results_kept_fixedfsm/
 results/**/.*/
+demo/workloads/*/newLogger/
+demo/workloads/*/.out*

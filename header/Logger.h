@@ -78,6 +78,7 @@ namespace octopus
         std::map<uint64_t, uint64_t> num_request; //core_id is the key, number of requests
 
         std::map<uint64_t, std::ofstream> report_files; //core_id is the key, and the value is the report file handler
+        std::map<uint64_t, std::ofstream> job_files;    //JobReport_C<n>.csv of the cores running a periodic task
         std::ofstream summary_file;                     //To report the worst-case values of all the cores
         
         std::map<uint64_t, uint64_t> core_clk_count; //core_id is the key, and the value is the report file handler
@@ -140,6 +141,10 @@ namespace octopus
         void registerReportPath(std::string file_path);
         void traceEnd(uint64_t core_id);
         void setClkCount(uint64_t core_id, uint64_t clk);
+        // periodic task mode (docs/Tasks.md): one row per job in JobReport_C<n>.csv
+        void jobReport(uint64_t core_id, uint64_t job, uint64_t release, uint64_t finish, uint64_t deadline,
+                       bool miss, uint32_t n_accesses, uint64_t skipped_periods,
+                       uint64_t mean_access_lat, uint64_t max_access_lat);
 
         static Logger *getLogger()
         {

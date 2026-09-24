@@ -27,6 +27,29 @@ namespace octopus
         m_cache = new GenericCacheLine[lines_count];
         m_replacement_policy = Policy::getReplacementPolicy(replacement_policy_name, m_ways_count);
 
+        // way_partition(s): "<cores>:<ways>;..." with ranges a-b, e.g. "0:0;1-3:1" (core 0 owns
+        // way 0, cores 1..3 way 1). Cores not listed share the ways nobody claimed.
+        m_all_mask = (m_ways_count >= 32) ? 0xffffffffu : ((1u << m_ways_count) - 1);
+        m_shared_mask = m_all_mask;
+        if (parameters.find(STRINGIFY(way_partition)) != parameters.end())
+        {
+            std::string spec = std::get<std::string>(parameters.at(STRINGIFY(way_partition)).value);
+            auto range = [](const std::string &s, int &lo, int &hi) {
+                size_t d = s.find('-'); lo = atoi(s.c_str()); hi = (d == std::string::npos) ? lo : atoi(s.c_str() + d + 1); };
+            size_t p = 0;
+            while (p < spec.size())
+            {
+                size_t e = spec.find(';', p); if (e == std::string::npos) e = spec.size();
+                std::string entry = spec.substr(p, e - p); p = e + 1;
+                size_t c = entry.find(':'); if (c == std::string::npos || entry.empty()) continue;
+                int c0, c1, w0, w1; range(entry.substr(0, c), c0, c1); range(entry.substr(c + 1), w0, w1);
+                uint32_t mask = 0; for (int w = w0; w <= w1 && w < (int)m_ways_count; w++) mask |= 1u << w;
+                for (int core = c0; core <= c1; core++) m_way_mask[core] = mask;
+                m_shared_mask &= ~mask;
+            }
+            if (!m_way_mask.empty() && m_shared_mask == 0) m_shared_mask = m_all_mask;   // everything claimed: unlisted cores fall back to all ways
+        }
+
         dprint = new DebugPrint(getSubMap(STRINGIFY(dprint)), name, parent_name + "." + name);
 
         m_cycle = 0;
@@ -199,8 +222,10 @@ namespace octopus
     {
         uint64_t set = calculate_set(address);
 
+        uint32_t allowed = allowedWays();
         for (uint32_t way = 0; way < m_ways_count; way++)
         {
+            if (!(allowed & (1u << way))) continue;
             GenericCacheLine *cache_line = (GenericCacheLine *)getLine(set, way);
 
             if (cache_line->valid == false)

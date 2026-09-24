@@ -230,7 +230,11 @@ namespace octopus
         if(!checkReadinessOfCache(*msg, ControllerAction::Type::WRITE_CACHE_LINE_DATA, data_ptr))
             return;
 
-        if (!m_data_handler->updateLineData(msg->addr, msg->data))
+        // way partitioning: the fill is installed in (and evicts from) the requester's ways
+        m_data_handler->setRequester((int)msg->owner);
+        bool ok = m_data_handler->updateLineData(msg->addr, msg->data);
+        m_data_handler->setRequester(-1);
+        if (!ok)
         {
             cout << "CacheController: update data of an unfound line" << endl;
             exit(0);

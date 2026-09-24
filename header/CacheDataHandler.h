@@ -26,6 +26,12 @@ namespace octopus
         GenericCacheLine *m_cache;
         uint32_t m_block_size;
         uint32_t m_ways_count;
+        // way partitioning (way_partition(s), e.g. "0:0;1-3:1"): the ways a core may fill;
+        // cores not listed share the ways nobody claimed. Applied when the controller names the
+        // requester of the fill (setRequester); -1 = unrestricted.
+        std::map<int, uint32_t> m_way_mask;
+        uint32_t m_shared_mask = 0, m_all_mask = 0;
+        int m_requester = -1;
         uint32_t m_sets_count;
 
         // ReplcPolicy m_replacement_policy;
@@ -82,6 +88,14 @@ namespace octopus
         virtual bool readLineBits(uint64_t address, GenericCacheLine *out_line = NULL);
 
         int findEmptyWay(uint64_t address);
+        uint32_t allowedWays() const
+        {
+            if (m_requester < 0 || m_way_mask.empty()) return m_all_mask;
+            auto it = m_way_mask.find(m_requester);
+            return it != m_way_mask.end() ? it->second : m_shared_mask;
+        }
+        void setRequester(int core) { m_requester = core; }
+        bool partitioned() const { return !m_way_mask.empty(); }
 
         uint64_t getEvictionCandidate(uint64_t address, GenericCacheLine *line);
         

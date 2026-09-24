@@ -59,6 +59,25 @@ namespace octopus
         this->report_file_path = file_path;
     }
 
+    void Logger::jobReport(uint64_t core_id, uint64_t job, uint64_t release, uint64_t finish, uint64_t deadline,
+                           bool miss, uint32_t n_accesses, uint64_t skipped_periods,
+                           uint64_t mean_access_lat, uint64_t max_access_lat)
+    {
+        std::ofstream &f = job_files[core_id];
+        if (!f.is_open())
+        {
+            f.open(report_file_path + string("/JobReport_C") + to_string(core_id) + string(".csv"));
+            // release = max(previous finish, j*period); deadline = j*period + deadline;
+            // finish = last access returned (+ trailing compute); skipped_periods = periods
+            // an overrun swallowed (each one a missed deadline, no job was released for it)
+            f << "job,release_cycle,finish_cycle,deadline_cycle,deadline_miss,n_accesses,skipped_periods,"
+                 "mean_access_lat,max_access_lat" << endl;
+        }
+        f << job << "," << release << "," << finish << "," << deadline << "," << (miss ? 1 : 0) << ","
+          << n_accesses << "," << skipped_periods << "," << mean_access_lat << "," << max_access_lat << endl;
+        f.flush();   // a live reader (demo/live_server.py) tails this file while the run is going
+    }
+
     void Logger::prepareReportFile(uint64_t core_id)
     {
         if (!this->report_files[core_id].is_open())

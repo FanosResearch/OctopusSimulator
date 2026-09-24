@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Octopus — real-time navigation demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#E4E1D6;
+  --panel:#F6F4EC;
+  --panel2:#EDEAE0;
+  --line:#CBC5B5;
+  --text:#14212A;
+  --dim:#5E6E76;
+  --nominal:#1B8A5F;
+  --alarm:#BE3F24;
+  --octo:#6244C7;
+  --warn:#B8820F;
+  --paper:#F4F1E6;
+  --grid:#CBD6D6;
+  --refline:#7E8C93;
+  --shadow:0 1px 0 rgba(20,33,42,.10), 0 10px 30px -22px rgba(20,33,42,.55);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D161B;
+    --panel:#152229;
+    --panel2:#1B2C34;
+    --line:#27404A;
+    --text:#E7EFF1;
+    --dim:#90A7B0;
+    --nominal:#3BC98C;
+    --alarm:#F0684A;
+    --octo:#9C82FF;
+    --warn:#E0A93B;
+    --paper:#111C22;
+    --grid:#223038;
+    --refline:#7C939C;
+    --shadow:0 1px 0 rgba(255,255,255,.04), 0 16px 40px -26px #000;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D161B; --panel:#152229; --panel2:#1B2C34; --line:#27404A;
+  --text:#E7EFF1; --dim:#90A7B0; --nominal:#3BC98C; --alarm:#F0684A;
+  --octo:#9C82FF; --warn:#E0A93B; --paper:#111C22; --grid:#223038; --refline:#7C939C;
+  --shadow:0 1px 0 rgba(255,255,255,.04), 0 16px 40px -26px #000;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:"Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size:15px;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:22px 18px 56px}
+
+/* ---------- header ---------- */
+header{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px 24px;margin-bottom:18px}
+.mark{display:flex;align-items:baseline;gap:12px}
+h1{
+  font-size:clamp(30px,5.2vw,46px);
+  font-weight:700;letter-spacing:-.025em;margin:0;line-height:.95;
+}
+h1 .dot{color:var(--octo)}
+.tagline{font-size:14px;color:var(--dim);max-width:38ch;margin:0}
+.livebadge{
+  margin-left:auto;display:flex;align-items:center;gap:9px;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12.5px;color:var(--dim);
+  border:1px solid var(--line);border-radius:999px;padding:5px 12px;background:var(--panel);
+}
+.pulse{width:8px;height:8px;border-radius:50%;background:var(--nominal);box-shadow:0 0 0 0 currentColor}
+body[data-mode="interf"] .pulse{background:var(--alarm)}
+body[data-mode="octopus"] .pulse{background:var(--octo)}
+body[data-mode="live"] .pulse{background:var(--warn);animation:blink 1.2s ease-in-out infinite}
+@keyframes blink{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.pulse{animation:none !important}}
+.datasrc{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--dim);border:1px dashed var(--line);border-radius:6px;padding:4px 9px}
+.datasrc.live{border-style:solid;color:var(--nominal)}
+
+/* ---------- layout ---------- */
+.stage{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(260px,1fr);gap:16px;align-items:start}
+@media (max-width:880px){.stage{grid-template-columns:1fr}}
+
+.plotter{
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:12px;box-shadow:var(--shadow);position:relative;
+}
+.screen{
+  position:relative;width:100%;aspect-ratio:4/3;border-radius:6px;overflow:hidden;
+  background:var(--paper);border:1px solid var(--line);
+}
+@media (max-width:560px){.screen{aspect-ratio:1/1}}
+canvas{display:block;width:100%;height:100%}
+
+.caption{
+  display:flex;gap:12px;align-items:flex-start;
+  margin-top:11px;padding:11px 13px;border-radius:7px;
+  background:var(--panel2);border-left:3px solid var(--nominal);
+  min-height:74px;
+}
+body[data-mode="interf"] .caption{border-left-color:var(--alarm)}
+body[data-mode="octopus"] .caption{border-left-color:var(--octo)}
+body[data-mode="live"] .caption{border-left-color:var(--warn)}
+.caption .act{
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--dim);
+  flex:0 0 auto;padding-top:2px;
+}
+.caption p{margin:0;font-size:14.5px;max-width:70ch}
+.caption strong{font-weight:500;color:var(--nominal)}
+body[data-mode="interf"] .caption strong{color:var(--alarm)}
+body[data-mode="octopus"] .caption strong{color:var(--octo)}
+body[data-mode="live"] .caption strong{color:var(--warn)}
+
+/* ---------- rail ---------- */
+.rail{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 13px;box-shadow:var(--shadow)}
+.card h2{font-size:13px;font-weight:500;color:var(--dim);margin:0 0 9px}
+
+.readouts{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.ro{background:var(--panel);padding:11px 12px 10px}
+.ro .lab{font-size:12px;color:var(--dim);margin-bottom:3px}
+.ro .val{font-family:"IBM Plex Mono",monospace;font-size:24px;font-weight:500;letter-spacing:-.02em;line-height:1.1}
+.ro .val small{font-size:13px;color:var(--dim);font-weight:400}
+.ro .sub{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--dim);margin-top:2px}
+.ro.hot .val{color:var(--alarm)}
+.ro.good .val{color:var(--nominal)}
+.ro.prot .val{color:var(--octo)}
+.ro.livec .val{color:var(--warn)}
+
+.scope{width:100%;height:96px;display:block;border-radius:5px;background:var(--panel2)}
+.jobs{display:flex;align-items:flex-end;gap:2px;height:46px;padding-top:4px}
+.jobs i{flex:1 1 0;min-width:2px;background:var(--nominal);border-radius:1px;display:block}
+.jobs i.miss{background:var(--alarm)}
+.jobs i.skip{background:var(--warn)}
+.legend{display:flex;gap:14px;font-size:11.5px;color:var(--dim);margin-top:7px;flex-wrap:wrap}
+.legend span{display:flex;align-items:center;gap:5px}
+.sw{width:11px;height:3px;border-radius:2px;display:inline-block}
+
+/* ---------- schematic ---------- */
+.schem svg{width:100%;height:auto;display:block}
+.box{fill:var(--panel2);stroke:var(--line);stroke-width:1.2}
+.boxrt{fill:var(--panel2);stroke:var(--octo);stroke-width:1.6}
+.blab{fill:var(--text);font-family:"IBM Plex Mono",monospace;font-size:9.5px}
+.bsub{fill:var(--dim);font-family:"IBM Plex Mono",monospace;font-size:8px}
+.link{stroke:var(--line);stroke-width:1.6;fill:none}
+.flow{stroke:var(--dim);stroke-width:2.2;fill:none;stroke-dasharray:4 7;opacity:.35}
+.flow.be{animation:march 1.1s linear infinite}
+.flow.rt{stroke:var(--nominal);opacity:.85;animation:march 1.4s linear infinite}
+@keyframes march{to{stroke-dashoffset:-22}}
+body[data-mode="solo"] .flow.be{opacity:.08;animation:none}
+body[data-mode="interf"] .flow.be{stroke:var(--alarm);opacity:.95;stroke-width:3.4;animation-duration:.4s}
+body[data-mode="octopus"] .flow.be{stroke:var(--octo);opacity:.6;stroke-width:2.2;animation-duration:1.3s}
+body[data-mode="live"] .flow.be{stroke:var(--warn);opacity:.8;stroke-width:2.8;animation-duration:.7s}
+body[data-mode="octopus"] .flow.rt{stroke:var(--octo)}
+.gate{opacity:0;transition:opacity .25s}
+body[data-mode="octopus"] .gate{opacity:1}
+.part{fill:var(--octo);opacity:0;transition:opacity .25s}
+body[data-mode="octopus"] .part{opacity:.28}
+.llcfill{fill:var(--alarm);opacity:0;transition:opacity .25s}
+body[data-mode="interf"] .llcfill{opacity:.22}
+@media (prefers-reduced-motion:reduce){.flow{animation:none !important}}
+
+/* ---------- controls ---------- */
+.controls{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;box-shadow:var(--shadow)}
+.acts{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.acts button{
+  appearance:none;border:0;background:var(--panel2);color:var(--text);
+  font-family:inherit;font-size:13.5px;text-align:left;padding:11px 13px;cursor:pointer;
+  display:flex;flex-direction:column;gap:2px;transition:background .15s;
+}
+.acts button:hover{background:var(--panel)}
+.acts button .n{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--dim)}
+.acts button[aria-pressed="true"]{background:var(--text);color:var(--panel)}
+.acts button[aria-pressed="true"] .n{color:var(--panel);opacity:.7}
+.acts button:focus-visible{outline:2px solid var(--octo);outline-offset:-2px}
+
+.knobs{display:flex;flex-wrap:wrap;gap:16px 26px;margin-top:14px;align-items:center}
+.knob{display:flex;flex-direction:column;gap:4px;min-width:150px}
+.knob label{font-size:12px;color:var(--dim)}
+.knob .rowv{display:flex;align-items:center;gap:8px}
+input[type=range]{width:130px;accent-color:var(--octo)}
+select{
+  font-family:inherit;font-size:13px;padding:5px 8px;border-radius:6px;
+  border:1px solid var(--line);background:var(--panel2);color:var(--text);
+}
+.num{font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--text);min-width:44px}
+.btns{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+.btn{
+  font-family:inherit;font-size:13px;padding:8px 14px;border-radius:7px;cursor:pointer;
+  border:1px solid var(--line);background:var(--panel2);color:var(--text);
+}
+.btn:hover{background:var(--panel)}
+.btn.primary{background:var(--octo);border-color:var(--octo);color:#fff}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn:focus-visible{outline:2px solid var(--octo);outline-offset:2px}
+.drop{border:1px dashed var(--line);border-radius:7px;padding:8px 12px;font-size:12.5px;color:var(--dim);margin-top:12px}
+.drop.over{border-color:var(--octo);color:var(--octo)}
+.drop code{font-family:"IBM Plex Mono",monospace;font-size:11.5px}
+
+footer{margin-top:22px;font-size:12.5px;color:var(--dim);max-width:78ch}
+kbd{font-family:"IBM Plex Mono",monospace;font-size:11.5px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:1px 5px;background:var(--panel2)}
+</style>
+</head>
+<body data-mode="solo">
+<div class="wrap">
+
+<header>
+  <div class="mark">
+    <h1>Octopus<span class="dot">.</span></h1>
+    <p class="tagline">A mobile robot follows a planned path using a periodic localization task on core 0 of a four-core machine with a shared cache and one DDR4 controller. Every job's timing is a cycle-accurate Octopus run.</p>
+  </div>
+  <div class="livebadge"><span class="pulse"></span><span id="clock">t = 0 cycles</span></div>
+  <div class="datasrc" id="datasrc">loading Octopus data…</div>
+</header>
+
+<div class="stage">
+  <div class="plotter">
+    <div class="screen"><canvas id="cv"></canvas></div>
+    <div class="caption">
+      <span class="act" id="capAct">Act 1</span>
+      <p id="capText"></p>
+    </div>
+  </div>
+
+  <div class="rail">
+    <div class="readouts">
+      <div class="ro" id="roExec">
+        <div class="lab">Localization job time</div>
+        <div class="val"><span id="vExec">–</span> <small>cycles</small></div>
+        <div class="sub" id="vExecSub">period 5 000 cycles</div>
+      </div>
+      <div class="ro" id="roLat">
+        <div class="lab">Memory access latency</div>
+        <div class="val"><span id="vLat">–</span> <small>cycles</small></div>
+        <div class="sub" id="vLatMax">peak –</div>
+      </div>
+      <div class="ro" id="roMiss">
+        <div class="lab">Deadline misses</div>
+        <div class="val" id="vMiss">0</div>
+        <div class="sub" id="vMissRate">0 of 0 periods</div>
+      </div>
+      <div class="ro" id="roErr">
+        <div class="lab">Position error</div>
+        <div class="val"><span id="vErr">0.0</span> <small>cm</small></div>
+        <div class="sub" id="vErrPk">peak 0.0 cm · pose age –</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Per-job mean memory latency (log scale)</h2>
+      <canvas class="scope" id="scope"></canvas>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--text)"></i>measured</span>
+        <span><i class="sw" style="background:var(--octo)"></i>worst case measured under protection</span>
+        <span id="noBound"><i class="sw" style="background:var(--alarm)"></i>no bound holds</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Last 64 control periods</h2>
+      <div class="jobs" id="jobs"></div>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--nominal)"></i>job finished in time</span>
+        <span><i class="sw" style="background:var(--alarm)"></i>overran its deadline</span>
+        <span><i class="sw" style="background:var(--warn)"></i>period skipped (no job could be released)</span>
+      </div>
+    </div>
+
+    <div class="card schem">
+      <h2>What the hardware is doing</h2>
+      <svg viewBox="0 0 400 168" role="img" aria-label="Four cores sharing a last-level cache and a memory controller">
+        <rect class="boxrt" x="6"   y="6" width="88" height="30" rx="4"/>
+        <rect class="box"   x="110" y="6" width="84" height="30" rx="4"/>
+        <rect class="box"   x="206" y="6" width="84" height="30" rx="4"/>
+        <rect class="box"   x="302" y="6" width="84" height="30" rx="4"/>
+        <text class="blab" x="16"  y="20">Core 0</text><text class="bsub" x="16" y="30">localization task</text>
+        <text class="blab" x="120" y="20">Core 1</text><text class="bsub" x="120" y="30" class="bsub agg">streaming</text>
+        <text class="blab" x="216" y="20">Core 2</text><text class="bsub" x="216" y="30">streaming</text>
+        <text class="blab" x="312" y="20">Core 3</text><text class="bsub" x="312" y="30">streaming</text>
+
+        <path class="link" d="M50 36 V78"/><path class="link" d="M152 36 V78"/>
+        <path class="link" d="M248 36 V78"/><path class="link" d="M344 36 V78"/>
+        <path class="flow rt" d="M50 36 V78"/>
+        <path class="flow be" d="M152 36 V78"/>
+        <path class="flow be" d="M248 36 V78"/>
+        <path class="flow be" d="M344 36 V78"/>
+
+        <g class="gate">
+          <rect x="144" y="50" width="16" height="10" rx="2" fill="var(--octo)"/>
+          <rect x="240" y="50" width="16" height="10" rx="2" fill="var(--octo)"/>
+          <rect x="336" y="50" width="16" height="10" rx="2" fill="var(--octo)"/>
+          <text class="bsub" x="150" y="47" text-anchor="middle" fill="var(--octo)">RR slot</text>
+          <text class="bsub" x="246" y="47" text-anchor="middle" fill="var(--octo)">RR slot</text>
+          <text class="bsub" x="342" y="47" text-anchor="middle" fill="var(--octo)">RR slot</text>
+        </g>
+
+        <rect class="box" x="6" y="78" width="380" height="28" rx="4"/>
+        <rect class="llcfill" x="7" y="79" width="378" height="26" rx="3"/>
+        <rect class="part" x="7" y="79" width="189" height="26" rx="3"/>
+        <text class="blab" x="16" y="96">Shared last-level cache (32 KB, 2-way, inclusive)</text>
+        <text class="bsub" x="262" y="96" id="llcNote">unmanaged</text>
+
+        <path class="link" d="M196 106 V126"/>
+        <path class="flow be" d="M196 106 V126"/>
+        <rect class="box" x="112" y="126" width="168" height="30" rx="4"/>
+        <text class="blab" x="124" y="140">Bus + DDR4 controller</text>
+        <text class="bsub" x="124" y="150" id="mcNote">FCFS bus · FR-FCFS DRAM</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <div class="acts" role="group" aria-label="Demo acts">
+    <button id="b1" aria-pressed="true"><span class="n">Act 1</span>Localization task alone</button>
+    <button id="b2" aria-pressed="false"><span class="n">Act 2</span>Three streaming cores start</button>
+    <button id="b3" aria-pressed="false"><span class="n">Act 3</span>Predictable arbitration + reserved cache way</button>
+  </div>
+  <div class="acts" id="liveRow" style="display:none;grid-template-columns:1fr;margin-top:1px">
+    <button id="bL" aria-pressed="false"><span class="n">Live</span><span id="bLlabel">Follow a running Octopus simulation</span></button>
+  </div>
+
+  <div class="knobs">
+    <div class="knob">
+      <label for="path">Planned path</label>
+      <select id="path">
+        <option value="fig8">Figure eight</option>
+        <option value="circle">Circle</option>
+        <option value="square">Rounded square</option>
+        <option value="rose">Five-lobe rosette</option>
+      </select>
+    </div>
+    <div class="knob">
+      <label for="speed">Playback (simulated cycles per real second)</label>
+      <div class="rowv"><input type="range" id="speed" min="2000" max="60000" step="1000" value="12000"><span class="num" id="nSpeed">12k</span></div>
+    </div>
+    <div class="btns">
+      <button class="btn primary" id="auto">Play all three acts</button>
+      <button class="btn" id="pause">Pause</button>
+      <button class="btn" id="clear">Clear trail</button>
+    </div>
+  </div>
+  <div class="drop" id="drop">Drop your own <code>act1.jsonl</code>, <code>act2.jsonl</code>, <code>act3.jsonl</code> (from <code>demo/run_acts.sh</code>) here to replay another Octopus configuration.</div>
+</div>
+
+<footer>
+  Every job's release and finish cycle is replayed from a cycle-accurate Octopus run of the same localization task
+  (<code>demo/run_acts.sh</code>: snoop MESI, 32 KB inclusive LLC, MCsim DDR4 with FR-FCFS). Time is shown in simulated
+  cycles, played back at the rate set above. Act 3's protection is exactly what Octopus models: a Round-Robin bus
+  arbiter and one LLC way reserved for core 0 (<code>way_partition</code>). The robot's path is a pure function of when
+  jobs finish: it steers toward the goal using the pose estimate of the last finished job.
+  Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> switch acts, <kbd>space</kbd> pauses.
+</footer>
+
+</div>
+
+<!-- OCTOPUS-DATA: demo/build_page.py inlines demo/data/act{1,2,3}.jsonl + manifests here so the page is self-contained -->
+<script id="octopus-data" type="application/json">{"built":"2026-09-24","manifest":{"act1":{"label":"alone: core 0 only, FCFS bus","core":0,"cycle_ns":1.0,"jobs":200,"period_cycles":5000,"deadline_misses":0,"exec_mean":4192.8,"exec_max":4747,"exec_p99":4190,"access_mean_ns":2.14,"access_max_ns":95.0,"llc_miss_share":0.002},"act2":{"label":"contention: 3 streaming cores, FCFS bus","core":0,"cycle_ns":1.0,"jobs":57,"period_cycles":5000,"deadline_misses":198,"exec_mean":19716.8,"exec_max":181266,"exec_p99":154366,"access_mean_ns":778.34,"access_max_ns":30920.0,"llc_miss_share":0.171},"act3":{"label":"protected: RR bus + LLC way reserved for core 0","core":0,"cycle_ns":1.0,"jobs":200,"period_cycles":5000,"deadline_misses":0,"exec_mean":4192.8,"exec_max":4747,"exec_p99":4190,"access_mean_ns":2.14,"access_max_ns":95.0,"llc_miss_share":0.002}},"act1":[{"job":0,"release_cycle":0,"finish_cycle":4747,"deadline_cycle":5000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4747,"mean_lat_ns":29.85,"max_lat_ns":95.0,"llc_misses":9,"l1_hits":11,"mean_dram_ns":47.89},{"job":1,"release_cycle":5000,"finish_cycle":9190,"deadline_cycle":10000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":2,"release_cycle":10000,"finish_cycle":14190,"deadline_cycle":15000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":3,"release_cycle":15000,"finish_cycle":19190,"deadline_cycle":20000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":4,"release_cycle":20000,"finish_cycle":24190,"deadline_cycle":25000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":5,"release_cycle":25000,"finish_cycle":29190,"deadline_cycle":30000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":6,"release_cycle":30000,"finish_cycle":34190,"deadline_cycle":35000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":7,"release_cycle":35000,"finish_cycle":39190,"deadline_cycle":40000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":8,"release_cycle":40000,"finish_cycle":44190,"deadline_cycle":45000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":9,"release_cycle":45000,"finish_cycle":49190,"deadline_cycle":50000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":10,"release_cycle":50000,"finish_cycle":54190,"deadline_cycle":55000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":11,"release_cycle":55000,"finish_cycle":59190,"deadline_cycle":60000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":12,"release_cycle":60000,"finish_cycle":64190,"deadline_cycle":65000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":13,"release_cycle":65000,"finish_cycle":69190,"deadline_cycle":70000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":14,"release_cycle":70000,"finish_cycle":74190,"deadline_cycle":75000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":15,"release_cycle":75000,"finish_cycle":79190,"deadline_cycle":80000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":16,"release_cycle":80000,"finish_cycle":84190,"deadline_cycle":85000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":17,"release_cycle":85000,"finish_cycle":89190,"deadline_cycle":90000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":18,"release_cycle":90000,"finish_cycle":94190,"deadline_cycle":95000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":19,"release_cycle":95000,"finish_cycle":99190,"deadline_cycle":100000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":20,"release_cycle":100000,"finish_cycle":104190,"deadline_cycle":105000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":21,"release_cycle":105000,"finish_cycle":109190,"deadline_cycle":110000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":22,"release_cycle":110000,"finish_cycle":114190,"deadline_cycle":115000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":23,"release_cycle":115000,"finish_cycle":119190,"deadline_cycle":120000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":24,"release_cycle":120000,"finish_cycle":124190,"deadline_cycle":125000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":25,"release_cycle":125000,"finish_cycle":129190,"deadline_cycle":130000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":26,"release_cycle":130000,"finish_cycle":134190,"deadline_cycle":135000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":27,"release_cycle":135000,"finish_cycle":139190,"deadline_cycle":140000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":28,"release_cycle":140000,"finish_cycle":144190,"deadline_cycle":145000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":29,"release_cycle":145000,"finish_cycle":149190,"deadline_cycle":150000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":30,"release_cycle":150000,"finish_cycle":154190,"deadline_cycle":155000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":31,"release_cycle":155000,"finish_cycle":159190,"deadline_cycle":160000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":32,"release_cycle":160000,"finish_cycle":164190,"deadline_cycle":165000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":33,"release_cycle":165000,"finish_cycle":169190,"deadline_cycle":170000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":34,"release_cycle":170000,"finish_cycle":174190,"deadline_cycle":175000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":35,"release_cycle":175000,"finish_cycle":179190,"deadline_cycle":180000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":36,"release_cycle":180000,"finish_cycle":184190,"deadline_cycle":185000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":37,"release_cycle":185000,"finish_cycle":189190,"deadline_cycle":190000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":38,"release_cycle":190000,"finish_cycle":194190,"deadline_cycle":195000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":39,"release_cycle":195000,"finish_cycle":199190,"deadline_cycle":200000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":40,"release_cycle":200000,"finish_cycle":204190,"deadline_cycle":205000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":41,"release_cycle":205000,"finish_cycle":209190,"deadline_cycle":210000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":42,"release_cycle":210000,"finish_cycle":214190,"deadline_cycle":215000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":43,"release_cycle":215000,"finish_cycle":219190,"deadline_cycle":220000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":44,"release_cycle":220000,"finish_cycle":224190,"deadline_cycle":225000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":45,"release_cycle":225000,"finish_cycle":229190,"deadline_cycle":230000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":46,"release_cycle":230000,"finish_cycle":234190,"deadline_cycle":235000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":47,"release_cycle":235000,"finish_cycle":239190,"deadline_cycle":240000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":48,"release_cycle":240000,"finish_cycle":244190,"deadline_cycle":245000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":49,"release_cycle":245000,"finish_cycle":249190,"deadline_cycle":250000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":50,"release_cycle":250000,"finish_cycle":254190,"deadline_cycle":255000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":51,"release_cycle":255000,"finish_cycle":259190,"deadline_cycle":260000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":52,"release_cycle":260000,"finish_cycle":264190,"deadline_cycle":265000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":53,"release_cycle":265000,"finish_cycle":269190,"deadline_cycle":270000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":54,"release_cycle":270000,"finish_cycle":274190,"deadline_cycle":275000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":55,"release_cycle":275000,"finish_cycle":279190,"deadline_cycle":280000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":56,"release_cycle":280000,"finish_cycle":284190,"deadline_cycle":285000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":57,"release_cycle":285000,"finish_cycle":289190,"deadline_cycle":290000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":58,"release_cycle":290000,"finish_cycle":294190,"deadline_cycle":295000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":59,"release_cycle":295000,"finish_cycle":299190,"deadline_cycle":300000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":60,"release_cycle":300000,"finish_cycle":304190,"deadline_cycle":305000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":61,"release_cycle":305000,"finish_cycle":309190,"deadline_cycle":310000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":62,"release_cycle":310000,"finish_cycle":314190,"deadline_cycle":315000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":63,"release_cycle":315000,"finish_cycle":319190,"deadline_cycle":320000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":64,"release_cycle":320000,"finish_cycle":324190,"deadline_cycle":325000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":65,"release_cycle":325000,"finish_cycle":329190,"deadline_cycle":330000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":66,"release_cycle":330000,"finish_cycle":334190,"deadline_cycle":335000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":67,"release_cycle":335000,"finish_cycle":339190,"deadline_cycle":340000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":68,"release_cycle":340000,"finish_cycle":344190,"deadline_cycle":345000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":69,"release_cycle":345000,"finish_cycle":349190,"deadline_cycle":350000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":70,"release_cycle":350000,"finish_cycle":354190,"deadline_cycle":355000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":71,"release_cycle":355000,"finish_cycle":359190,"deadline_cycle":360000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":72,"release_cycle":360000,"finish_cycle":364190,"deadline_cycle":365000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":73,"release_cycle":365000,"finish_cycle":369190,"deadline_cycle":370000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":74,"release_cycle":370000,"finish_cycle":374190,"deadline_cycle":375000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":75,"release_cycle":375000,"finish_cycle":379190,"deadline_cycle":380000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":76,"release_cycle":380000,"finish_cycle":384190,"deadline_cycle":385000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":77,"release_cycle":385000,"finish_cycle":389190,"deadline_cycle":390000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":78,"release_cycle":390000,"finish_cycle":394190,"deadline_cycle":395000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":79,"release_cycle":395000,"finish_cycle":399190,"deadline_cycle":400000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":80,"release_cycle":400000,"finish_cycle":404190,"deadline_cycle":405000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":81,"release_cycle":405000,"finish_cycle":409190,"deadline_cycle":410000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":82,"release_cycle":410000,"finish_cycle":414190,"deadline_cycle":415000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":83,"release_cycle":415000,"finish_cycle":419190,"deadline_cycle":420000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":84,"release_cycle":420000,"finish_cycle":424190,"deadline_cycle":425000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":85,"release_cycle":425000,"finish_cycle":429190,"deadline_cycle":430000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":86,"release_cycle":430000,"finish_cycle":434190,"deadline_cycle":435000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":87,"release_cycle":435000,"finish_cycle":439190,"deadline_cycle":440000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":88,"release_cycle":440000,"finish_cycle":444190,"deadline_cycle":445000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":89,"release_cycle":445000,"finish_cycle":449190,"deadline_cycle":450000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":90,"release_cycle":450000,"finish_cycle":454190,"deadline_cycle":455000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":91,"release_cycle":455000,"finish_cycle":459190,"deadline_cycle":460000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":92,"release_cycle":460000,"finish_cycle":464190,"deadline_cycle":465000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":93,"release_cycle":465000,"finish_cycle":469190,"deadline_cycle":470000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":94,"release_cycle":470000,"finish_cycle":474190,"deadline_cycle":475000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":95,"release_cycle":475000,"finish_cycle":479190,"deadline_cycle":480000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":96,"release_cycle":480000,"finish_cycle":484190,"deadline_cycle":485000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":97,"release_cycle":485000,"finish_cycle":489190,"deadline_cycle":490000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":98,"release_cycle":490000,"finish_cycle":494190,"deadline_cycle":495000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":99,"release_cycle":495000,"finish_cycle":499190,"deadline_cycle":500000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":100,"release_cycle":500000,"finish_cycle":504190,"deadline_cycle":505000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":101,"release_cycle":505000,"finish_cycle":509190,"deadline_cycle":510000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":102,"release_cycle":510000,"finish_cycle":514190,"deadline_cycle":515000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":103,"release_cycle":515000,"finish_cycle":519190,"deadline_cycle":520000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":104,"release_cycle":520000,"finish_cycle":524190,"deadline_cycle":525000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":105,"release_cycle":525000,"finish_cycle":529190,"deadline_cycle":530000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":106,"release_cycle":530000,"finish_cycle":534190,"deadline_cycle":535000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":107,"release_cycle":535000,"finish_cycle":539190,"deadline_cycle":540000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":108,"release_cycle":540000,"finish_cycle":544190,"deadline_cycle":545000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":109,"release_cycle":545000,"finish_cycle":549190,"deadline_cycle":550000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":110,"release_cycle":550000,"finish_cycle":554190,"deadline_cycle":555000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":111,"release_cycle":555000,"finish_cycle":559190,"deadline_cycle":560000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":112,"release_cycle":560000,"finish_cycle":564190,"deadline_cycle":565000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":113,"release_cycle":565000,"finish_cycle":569190,"deadline_cycle":570000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":114,"release_cycle":570000,"finish_cycle":574190,"deadline_cycle":575000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":115,"release_cycle":575000,"finish_cycle":579190,"deadline_cycle":580000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":116,"release_cycle":580000,"finish_cycle":584190,"deadline_cycle":585000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":117,"release_cycle":585000,"finish_cycle":589190,"deadline_cycle":590000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":118,"release_cycle":590000,"finish_cycle":594190,"deadline_cycle":595000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":119,"release_cycle":595000,"finish_cycle":599190,"deadline_cycle":600000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":120,"release_cycle":600000,"finish_cycle":604190,"deadline_cycle":605000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":121,"release_cycle":605000,"finish_cycle":609190,"deadline_cycle":610000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":122,"release_cycle":610000,"finish_cycle":614190,"deadline_cycle":615000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":123,"release_cycle":615000,"finish_cycle":619190,"deadline_cycle":620000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":124,"release_cycle":620000,"finish_cycle":624190,"deadline_cycle":625000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":125,"release_cycle":625000,"finish_cycle":629190,"deadline_cycle":630000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":126,"release_cycle":630000,"finish_cycle":634190,"deadline_cycle":635000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":127,"release_cycle":635000,"finish_cycle":639190,"deadline_cycle":640000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":128,"release_cycle":640000,"finish_cycle":644190,"deadline_cycle":645000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":129,"release_cycle":645000,"finish_cycle":649190,"deadline_cycle":650000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":130,"release_cycle":650000,"finish_cycle":654190,"deadline_cycle":655000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":131,"release_cycle":655000,"finish_cycle":659190,"deadline_cycle":660000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":132,"release_cycle":660000,"finish_cycle":664190,"deadline_cycle":665000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":133,"release_cycle":665000,"finish_cycle":669190,"deadline_cycle":670000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":134,"release_cycle":670000,"finish_cycle":674190,"deadline_cycle":675000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":135,"release_cycle":675000,"finish_cycle":679190,"deadline_cycle":680000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":136,"release_cycle":680000,"finish_cycle":684190,"deadline_cycle":685000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":137,"release_cycle":685000,"finish_cycle":689190,"deadline_cycle":690000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":138,"release_cycle":690000,"finish_cycle":694190,"deadline_cycle":695000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":139,"release_cycle":695000,"finish_cycle":699190,"deadline_cycle":700000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":140,"release_cycle":700000,"finish_cycle":704190,"deadline_cycle":705000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":141,"release_cycle":705000,"finish_cycle":709190,"deadline_cycle":710000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":142,"release_cycle":710000,"finish_cycle":714190,"deadline_cycle":715000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":143,"release_cycle":715000,"finish_cycle":719190,"deadline_cycle":720000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":144,"release_cycle":720000,"finish_cycle":724190,"deadline_cycle":725000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":145,"release_cycle":725000,"finish_cycle":729190,"deadline_cycle":730000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":146,"release_cycle":730000,"finish_cycle":734190,"deadline_cycle":735000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":147,"release_cycle":735000,"finish_cycle":739190,"deadline_cycle":740000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":148,"release_cycle":740000,"finish_cycle":744190,"deadline_cycle":745000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":149,"release_cycle":745000,"finish_cycle":749190,"deadline_cycle":750000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":150,"release_cycle":750000,"finish_cycle":754190,"deadline_cycle":755000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":151,"release_cycle":755000,"finish_cycle":759190,"deadline_cycle":760000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":152,"release_cycle":760000,"finish_cycle":764190,"deadline_cycle":765000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":153,"release_cycle":765000,"finish_cycle":769190,"deadline_cycle":770000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":154,"release_cycle":770000,"finish_cycle":774190,"deadline_cycle":775000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":155,"release_cycle":775000,"finish_cycle":779190,"deadline_cycle":780000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":156,"release_cycle":780000,"finish_cycle":784190,"deadline_cycle":785000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":157,"release_cycle":785000,"finish_cycle":789190,"deadline_cycle":790000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":158,"release_cycle":790000,"finish_cycle":794190,"deadline_cycle":795000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":159,"release_cycle":795000,"finish_cycle":799190,"deadline_cycle":800000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":160,"release_cycle":800000,"finish_cycle":804190,"deadline_cycle":805000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":161,"release_cycle":805000,"finish_cycle":809190,"deadline_cycle":810000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":162,"release_cycle":810000,"finish_cycle":814190,"deadline_cycle":815000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":163,"release_cycle":815000,"finish_cycle":819190,"deadline_cycle":820000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":164,"release_cycle":820000,"finish_cycle":824190,"deadline_cycle":825000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":165,"release_cycle":825000,"finish_cycle":829190,"deadline_cycle":830000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":166,"release_cycle":830000,"finish_cycle":834190,"deadline_cycle":835000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":167,"release_cycle":835000,"finish_cycle":839190,"deadline_cycle":840000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":168,"release_cycle":840000,"finish_cycle":844190,"deadline_cycle":845000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":169,"release_cycle":845000,"finish_cycle":849190,"deadline_cycle":850000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":170,"release_cycle":850000,"finish_cycle":854190,"deadline_cycle":855000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":171,"release_cycle":855000,"finish_cycle":859190,"deadline_cycle":860000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":172,"release_cycle":860000,"finish_cycle":864190,"deadline_cycle":865000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":173,"release_cycle":865000,"finish_cycle":869190,"deadline_cycle":870000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":174,"release_cycle":870000,"finish_cycle":874190,"deadline_cycle":875000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":175,"release_cycle":875000,"finish_cycle":879190,"deadline_cycle":880000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":176,"release_cycle":880000,"finish_cycle":884190,"deadline_cycle":885000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":177,"release_cycle":885000,"finish_cycle":889190,"deadline_cycle":890000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":178,"release_cycle":890000,"finish_cycle":894190,"deadline_cycle":895000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":179,"release_cycle":895000,"finish_cycle":899190,"deadline_cycle":900000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":180,"release_cycle":900000,"finish_cycle":904190,"deadline_cycle":905000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":181,"release_cycle":905000,"finish_cycle":909190,"deadline_cycle":910000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":182,"release_cycle":910000,"finish_cycle":914190,"deadline_cycle":915000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":183,"release_cycle":915000,"finish_cycle":919190,"deadline_cycle":920000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":184,"release_cycle":920000,"finish_cycle":924190,"deadline_cycle":925000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":185,"release_cycle":925000,"finish_cycle":929190,"deadline_cycle":930000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":186,"release_cycle":930000,"finish_cycle":934190,"deadline_cycle":935000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":187,"release_cycle":935000,"finish_cycle":939190,"deadline_cycle":940000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":188,"release_cycle":940000,"finish_cycle":944190,"deadline_cycle":945000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":189,"release_cycle":945000,"finish_cycle":949190,"deadline_cycle":950000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":190,"release_cycle":950000,"finish_cycle":954190,"deadline_cycle":955000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":191,"release_cycle":955000,"finish_cycle":959190,"deadline_cycle":960000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":192,"release_cycle":960000,"finish_cycle":964190,"deadline_cycle":965000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":193,"release_cycle":965000,"finish_cycle":969190,"deadline_cycle":970000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":194,"release_cycle":970000,"finish_cycle":974190,"deadline_cycle":975000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":195,"release_cycle":975000,"finish_cycle":979190,"deadline_cycle":980000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":196,"release_cycle":980000,"finish_cycle":984190,"deadline_cycle":985000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":197,"release_cycle":985000,"finish_cycle":989190,"deadline_cycle":990000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":198,"release_cycle":990000,"finish_cycle":994190,"deadline_cycle":995000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":199,"release_cycle":995000,"finish_cycle":999190,"deadline_cycle":1000000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0}],"act2":[{"job":0,"release_cycle":0,"finish_cycle":4747,"deadline_cycle":5000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4747,"mean_lat_ns":29.85,"max_lat_ns":95.0,"llc_misses":9,"l1_hits":11,"mean_dram_ns":47.89},{"job":1,"release_cycle":5000,"finish_cycle":155299,"deadline_cycle":10000,"deadline_miss":true,"skipped_periods":29,"n_accesses":20,"exec_cycles":150299,"mean_lat_ns":7307.45,"max_lat_ns":30920.0,"llc_misses":13,"l1_hits":7,"mean_dram_ns":11225.08},{"job":31,"release_cycle":155299,"finish_cycle":294979,"deadline_cycle":160000,"deadline_miss":true,"skipped_periods":26,"n_accesses":20,"exec_cycles":139680,"mean_lat_ns":6776.5,"max_lat_ns":30920.0,"llc_misses":18,"l1_hits":2,"mean_dram_ns":7513.22},{"job":58,"release_cycle":294979,"finish_cycle":301117,"deadline_cycle":295000,"deadline_miss":true,"skipped_periods":1,"n_accesses":20,"exec_cycles":6138,"mean_lat_ns":99.4,"max_lat_ns":888.0,"llc_misses":3,"l1_hits":17,"mean_dram_ns":632.0},{"job":60,"release_cycle":301117,"finish_cycle":305307,"deadline_cycle":305000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":61,"release_cycle":305307,"finish_cycle":309639,"deadline_cycle":310000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4332,"mean_lat_ns":9.1,"max_lat_ns":144.0,"llc_misses":1,"l1_hits":19,"mean_dram_ns":128.0},{"job":62,"release_cycle":310000,"finish_cycle":316895,"deadline_cycle":315000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":6895,"mean_lat_ns":137.25,"max_lat_ns":1066.0,"llc_misses":5,"l1_hits":15,"mean_dram_ns":527.0},{"job":63,"release_cycle":316895,"finish_cycle":321485,"deadline_cycle":320000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":4590,"mean_lat_ns":22.0,"max_lat_ns":402.0,"llc_misses":1,"l1_hits":19,"mean_dram_ns":386.0},{"job":64,"release_cycle":321485,"finish_cycle":327389,"deadline_cycle":325000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":5904,"mean_lat_ns":87.7,"max_lat_ns":1026.0,"llc_misses":2,"l1_hits":18,"mean_dram_ns":843.0},{"job":65,"release_cycle":327389,"finish_cycle":332104,"deadline_cycle":330000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":4715,"mean_lat_ns":28.25,"max_lat_ns":527.0,"llc_misses":1,"l1_hits":19,"mean_dram_ns":508.0},{"job":66,"release_cycle":332104,"finish_cycle":338145,"deadline_cycle":335000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":6041,"mean_lat_ns":94.55,"max_lat_ns":828.0,"llc_misses":3,"l1_hits":17,"mean_dram_ns":603.0},{"job":67,"release_cycle":338145,"finish_cycle":342335,"deadline_cycle":340000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":68,"release_cycle":342335,"finish_cycle":350829,"deadline_cycle":345000,"deadline_miss":true,"skipped_periods":1,"n_accesses":20,"exec_cycles":8494,"mean_lat_ns":217.2,"max_lat_ns":2731.0,"llc_misses":2,"l1_hits":18,"mean_dram_ns":2136.5},{"job":70,"release_cycle":350829,"finish_cycle":369064,"deadline_cycle":355000,"deadline_miss":true,"skipped_periods":2,"n_accesses":20,"exec_cycles":18235,"mean_lat_ns":704.25,"max_lat_ns":3174.0,"llc_misses":7,"l1_hits":13,"mean_dram_ns":1992.14},{"job":73,"release_cycle":369064,"finish_cycle":374461,"deadline_cycle":370000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":5397,"mean_lat_ns":62.35,"max_lat_ns":1209.0,"llc_misses":1,"l1_hits":19,"mean_dram_ns":1193.0},{"job":74,"release_cycle":374461,"finish_cycle":382497,"deadline_cycle":375000,"deadline_miss":true,"skipped_periods":1,"n_accesses":20,"exec_cycles":8036,"mean_lat_ns":194.3,"max_lat_ns":2005.0,"llc_misses":2,"l1_hits":18,"mean_dram_ns":1907.0},{"job":76,"release_cycle":382497,"finish_cycle":386687,"deadline_cycle":385000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":77,"release_cycle":386687,"finish_cycle":391506,"deadline_cycle":390000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":4819,"mean_lat_ns":33.45,"max_lat_ns":631.0,"llc_misses":1,"l1_hits":19,"mean_dram_ns":614.0},{"job":78,"release_cycle":391506,"finish_cycle":397253,"deadline_cycle":395000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":5747,"mean_lat_ns":79.85,"max_lat_ns":1559.0,"llc_misses":1,"l1_hits":19,"mean_dram_ns":1543.0},{"job":79,"release_cycle":397253,"finish_cycle":401443,"deadline_cycle":400000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":80,"release_cycle":401443,"finish_cycle":412315,"deadline_cycle":405000,"deadline_miss":true,"skipped_periods":1,"n_accesses":20,"exec_cycles":10872,"mean_lat_ns":336.1,"max_lat_ns":3282.0,"llc_misses":3,"l1_hits":17,"mean_dram_ns":2213.0},{"job":82,"release_cycle":412315,"finish_cycle":416505,"deadline_cycle":415000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":83,"release_cycle":416505,"finish_cycle":427013,"deadline_cycle":420000,"deadline_miss":true,"skipped_periods":1,"n_accesses":20,"exec_cycles":10508,"mean_lat_ns":317.9,"max_lat_ns":2280.0,"llc_misses":3,"l1_hits":17,"mean_dram_ns":2092.0},{"job":85,"release_cycle":427013,"finish_cycle":434315,"deadline_cycle":430000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":7302,"mean_lat_ns":157.6,"max_lat_ns":1616.0,"llc_misses":2,"l1_hits":18,"mean_dram_ns":1542.0},{"job":86,"release_cycle":434315,"finish_cycle":438901,"deadline_cycle":435000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":4586,"mean_lat_ns":21.8,"max_lat_ns":398.0,"llc_misses":1,"l1_hits":19,"mean_dram_ns":382.0},{"job":87,"release_cycle":438901,"finish_cycle":445291,"deadline_cycle":440000,"deadline_miss":true,"skipped_periods":1,"n_accesses":20,"exec_cycles":6390,"mean_lat_ns":112.0,"max_lat_ns":2202.0,"llc_misses":1,"l1_hits":19,"mean_dram_ns":2186.0},{"job":89,"release_cycle":445291,"finish_cycle":451310,"deadline_cycle":450000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":6019,"mean_lat_ns":93.45,"max_lat_ns":1831.0,"llc_misses":1,"l1_hits":19,"mean_dram_ns":1812.0},{"job":90,"release_cycle":451310,"finish_cycle":465641,"deadline_cycle":455000,"deadline_miss":true,"skipped_periods":2,"n_accesses":20,"exec_cycles":14331,"mean_lat_ns":509.05,"max_lat_ns":3518.0,"llc_misses":4,"l1_hits":16,"mean_dram_ns":2521.25},{"job":93,"release_cycle":465641,"finish_cycle":472339,"deadline_cycle":470000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":6698,"mean_lat_ns":127.4,"max_lat_ns":2510.0,"llc_misses":1,"l1_hits":19,"mean_dram_ns":2494.0},{"job":94,"release_cycle":472339,"finish_cycle":478255,"deadline_cycle":475000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":5916,"mean_lat_ns":88.3,"max_lat_ns":1728.0,"llc_misses":1,"l1_hits":19,"mean_dram_ns":1712.0},{"job":95,"release_cycle":478255,"finish_cycle":606539,"deadline_cycle":480000,"deadline_miss":true,"skipped_periods":25,"n_accesses":20,"exec_cycles":128284,"mean_lat_ns":6206.7,"max_lat_ns":15020.0,"llc_misses":20,"l1_hits":0,"mean_dram_ns":6189.6},{"job":121,"release_cycle":606539,"finish_cycle":787805,"deadline_cycle":610000,"deadline_miss":true,"skipped_periods":35,"n_accesses":20,"exec_cycles":181266,"mean_lat_ns":8855.8,"max_lat_ns":27848.0,"llc_misses":20,"l1_hits":0,"mean_dram_ns":8836.8},{"job":157,"release_cycle":787805,"finish_cycle":794385,"deadline_cycle":790000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":6580,"mean_lat_ns":121.5,"max_lat_ns":1242.0,"llc_misses":4,"l1_hits":16,"mean_dram_ns":582.0},{"job":158,"release_cycle":794385,"finish_cycle":798575,"deadline_cycle":795000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":159,"release_cycle":798575,"finish_cycle":804881,"deadline_cycle":800000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":6306,"mean_lat_ns":107.8,"max_lat_ns":1398.0,"llc_misses":2,"l1_hits":18,"mean_dram_ns":1044.0},{"job":160,"release_cycle":804881,"finish_cycle":818359,"deadline_cycle":805000,"deadline_miss":true,"skipped_periods":2,"n_accesses":20,"exec_cycles":13478,"mean_lat_ns":466.4,"max_lat_ns":1948.0,"llc_misses":6,"l1_hits":14,"mean_dram_ns":1533.33},{"job":163,"release_cycle":818359,"finish_cycle":822549,"deadline_cycle":820000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":164,"release_cycle":822549,"finish_cycle":828115,"deadline_cycle":825000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":5566,"mean_lat_ns":70.8,"max_lat_ns":1378.0,"llc_misses":1,"l1_hits":19,"mean_dram_ns":1362.0},{"job":165,"release_cycle":828115,"finish_cycle":844755,"deadline_cycle":830000,"deadline_miss":true,"skipped_periods":2,"n_accesses":20,"exec_cycles":16640,"mean_lat_ns":624.5,"max_lat_ns":3104.0,"llc_misses":6,"l1_hits":14,"mean_dram_ns":2060.83},{"job":168,"release_cycle":844755,"finish_cycle":849511,"deadline_cycle":845000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":4756,"mean_lat_ns":30.3,"max_lat_ns":568.0,"llc_misses":1,"l1_hits":19,"mean_dram_ns":552.0},{"job":169,"release_cycle":849511,"finish_cycle":866525,"deadline_cycle":850000,"deadline_miss":true,"skipped_periods":3,"n_accesses":20,"exec_cycles":17014,"mean_lat_ns":643.2,"max_lat_ns":3566.0,"llc_misses":5,"l1_hits":15,"mean_dram_ns":2550.8},{"job":173,"release_cycle":866525,"finish_cycle":879559,"deadline_cycle":870000,"deadline_miss":true,"skipped_periods":1,"n_accesses":20,"exec_cycles":13034,"mean_lat_ns":444.2,"max_lat_ns":3417.0,"llc_misses":4,"l1_hits":16,"mean_dram_ns":2196.25},{"job":175,"release_cycle":879559,"finish_cycle":883749,"deadline_cycle":880000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":176,"release_cycle":883749,"finish_cycle":890961,"deadline_cycle":885000,"deadline_miss":true,"skipped_periods":1,"n_accesses":20,"exec_cycles":7212,"mean_lat_ns":153.1,"max_lat_ns":1620.0,"llc_misses":2,"l1_hits":18,"mean_dram_ns":1497.0},{"job":178,"release_cycle":890961,"finish_cycle":899347,"deadline_cycle":895000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":8386,"mean_lat_ns":211.8,"max_lat_ns":2250.0,"llc_misses":2,"l1_hits":18,"mean_dram_ns":2084.0},{"job":179,"release_cycle":899347,"finish_cycle":905187,"deadline_cycle":900000,"deadline_miss":true,"skipped_periods":1,"n_accesses":20,"exec_cycles":5840,"mean_lat_ns":84.5,"max_lat_ns":1652.0,"llc_misses":1,"l1_hits":19,"mean_dram_ns":1635.0},{"job":181,"release_cycle":905187,"finish_cycle":910437,"deadline_cycle":910000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":5250,"mean_lat_ns":55.0,"max_lat_ns":1062.0,"llc_misses":1,"l1_hits":19,"mean_dram_ns":1046.0},{"job":182,"release_cycle":910437,"finish_cycle":917013,"deadline_cycle":915000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":6576,"mean_lat_ns":121.3,"max_lat_ns":1494.0,"llc_misses":2,"l1_hits":18,"mean_dram_ns":1179.0},{"job":183,"release_cycle":917013,"finish_cycle":921869,"deadline_cycle":920000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":4856,"mean_lat_ns":35.3,"max_lat_ns":668.0,"llc_misses":1,"l1_hits":19,"mean_dram_ns":652.0},{"job":184,"release_cycle":921869,"finish_cycle":926577,"deadline_cycle":925000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":4708,"mean_lat_ns":27.9,"max_lat_ns":520.0,"llc_misses":1,"l1_hits":19,"mean_dram_ns":504.0},{"job":185,"release_cycle":926577,"finish_cycle":930767,"deadline_cycle":930000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":186,"release_cycle":930767,"finish_cycle":940175,"deadline_cycle":935000,"deadline_miss":true,"skipped_periods":1,"n_accesses":20,"exec_cycles":9408,"mean_lat_ns":262.9,"max_lat_ns":1878.0,"llc_misses":3,"l1_hits":17,"mean_dram_ns":1725.33},{"job":188,"release_cycle":940175,"finish_cycle":947354,"deadline_cycle":945000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":7179,"mean_lat_ns":151.45,"max_lat_ns":1683.0,"llc_misses":2,"l1_hits":18,"mean_dram_ns":1479.0},{"job":189,"release_cycle":947354,"finish_cycle":951544,"deadline_cycle":950000,"deadline_miss":true,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":190,"release_cycle":951544,"finish_cycle":960658,"deadline_cycle":955000,"deadline_miss":true,"skipped_periods":1,"n_accesses":20,"exec_cycles":9114,"mean_lat_ns":248.2,"max_lat_ns":2035.0,"llc_misses":3,"l1_hits":17,"mean_dram_ns":1623.67},{"job":192,"release_cycle":960658,"finish_cycle":970103,"deadline_cycle":965000,"deadline_miss":true,"skipped_periods":1,"n_accesses":20,"exec_cycles":9445,"mean_lat_ns":264.75,"max_lat_ns":3058.0,"llc_misses":3,"l1_hits":17,"mean_dram_ns":1737.33},{"job":194,"release_cycle":970103,"finish_cycle":1124469,"deadline_cycle":975000,"deadline_miss":true,"skipped_periods":5,"n_accesses":20,"exec_cycles":154366,"mean_lat_ns":7510.8,"max_lat_ns":24842.0,"llc_misses":18,"l1_hits":2,"mean_dram_ns":8328.89}],"act3":[{"job":0,"release_cycle":0,"finish_cycle":4747,"deadline_cycle":5000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4747,"mean_lat_ns":29.85,"max_lat_ns":95.0,"llc_misses":9,"l1_hits":11,"mean_dram_ns":47.89},{"job":1,"release_cycle":5000,"finish_cycle":9190,"deadline_cycle":10000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":2,"release_cycle":10000,"finish_cycle":14190,"deadline_cycle":15000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":3,"release_cycle":15000,"finish_cycle":19190,"deadline_cycle":20000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":4,"release_cycle":20000,"finish_cycle":24190,"deadline_cycle":25000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":5,"release_cycle":25000,"finish_cycle":29190,"deadline_cycle":30000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":6,"release_cycle":30000,"finish_cycle":34190,"deadline_cycle":35000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":7,"release_cycle":35000,"finish_cycle":39190,"deadline_cycle":40000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":8,"release_cycle":40000,"finish_cycle":44190,"deadline_cycle":45000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":9,"release_cycle":45000,"finish_cycle":49190,"deadline_cycle":50000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":10,"release_cycle":50000,"finish_cycle":54190,"deadline_cycle":55000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":11,"release_cycle":55000,"finish_cycle":59190,"deadline_cycle":60000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":12,"release_cycle":60000,"finish_cycle":64190,"deadline_cycle":65000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":13,"release_cycle":65000,"finish_cycle":69190,"deadline_cycle":70000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":14,"release_cycle":70000,"finish_cycle":74190,"deadline_cycle":75000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":15,"release_cycle":75000,"finish_cycle":79190,"deadline_cycle":80000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":16,"release_cycle":80000,"finish_cycle":84190,"deadline_cycle":85000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":17,"release_cycle":85000,"finish_cycle":89190,"deadline_cycle":90000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":18,"release_cycle":90000,"finish_cycle":94190,"deadline_cycle":95000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":19,"release_cycle":95000,"finish_cycle":99190,"deadline_cycle":100000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":20,"release_cycle":100000,"finish_cycle":104190,"deadline_cycle":105000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":21,"release_cycle":105000,"finish_cycle":109190,"deadline_cycle":110000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":22,"release_cycle":110000,"finish_cycle":114190,"deadline_cycle":115000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":23,"release_cycle":115000,"finish_cycle":119190,"deadline_cycle":120000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":24,"release_cycle":120000,"finish_cycle":124190,"deadline_cycle":125000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":25,"release_cycle":125000,"finish_cycle":129190,"deadline_cycle":130000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":26,"release_cycle":130000,"finish_cycle":134190,"deadline_cycle":135000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":27,"release_cycle":135000,"finish_cycle":139190,"deadline_cycle":140000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":28,"release_cycle":140000,"finish_cycle":144190,"deadline_cycle":145000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":29,"release_cycle":145000,"finish_cycle":149190,"deadline_cycle":150000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":30,"release_cycle":150000,"finish_cycle":154190,"deadline_cycle":155000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":31,"release_cycle":155000,"finish_cycle":159190,"deadline_cycle":160000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":32,"release_cycle":160000,"finish_cycle":164190,"deadline_cycle":165000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":33,"release_cycle":165000,"finish_cycle":169190,"deadline_cycle":170000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":34,"release_cycle":170000,"finish_cycle":174190,"deadline_cycle":175000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":35,"release_cycle":175000,"finish_cycle":179190,"deadline_cycle":180000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":36,"release_cycle":180000,"finish_cycle":184190,"deadline_cycle":185000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":37,"release_cycle":185000,"finish_cycle":189190,"deadline_cycle":190000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":38,"release_cycle":190000,"finish_cycle":194190,"deadline_cycle":195000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":39,"release_cycle":195000,"finish_cycle":199190,"deadline_cycle":200000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":40,"release_cycle":200000,"finish_cycle":204190,"deadline_cycle":205000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":41,"release_cycle":205000,"finish_cycle":209190,"deadline_cycle":210000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":42,"release_cycle":210000,"finish_cycle":214190,"deadline_cycle":215000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":43,"release_cycle":215000,"finish_cycle":219190,"deadline_cycle":220000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":44,"release_cycle":220000,"finish_cycle":224190,"deadline_cycle":225000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":45,"release_cycle":225000,"finish_cycle":229190,"deadline_cycle":230000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":46,"release_cycle":230000,"finish_cycle":234190,"deadline_cycle":235000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":47,"release_cycle":235000,"finish_cycle":239190,"deadline_cycle":240000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":48,"release_cycle":240000,"finish_cycle":244190,"deadline_cycle":245000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":49,"release_cycle":245000,"finish_cycle":249190,"deadline_cycle":250000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":50,"release_cycle":250000,"finish_cycle":254190,"deadline_cycle":255000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":51,"release_cycle":255000,"finish_cycle":259190,"deadline_cycle":260000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":52,"release_cycle":260000,"finish_cycle":264190,"deadline_cycle":265000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":53,"release_cycle":265000,"finish_cycle":269190,"deadline_cycle":270000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":54,"release_cycle":270000,"finish_cycle":274190,"deadline_cycle":275000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":55,"release_cycle":275000,"finish_cycle":279190,"deadline_cycle":280000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":56,"release_cycle":280000,"finish_cycle":284190,"deadline_cycle":285000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":57,"release_cycle":285000,"finish_cycle":289190,"deadline_cycle":290000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":58,"release_cycle":290000,"finish_cycle":294190,"deadline_cycle":295000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":59,"release_cycle":295000,"finish_cycle":299190,"deadline_cycle":300000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":60,"release_cycle":300000,"finish_cycle":304190,"deadline_cycle":305000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":61,"release_cycle":305000,"finish_cycle":309190,"deadline_cycle":310000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":62,"release_cycle":310000,"finish_cycle":314190,"deadline_cycle":315000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":63,"release_cycle":315000,"finish_cycle":319190,"deadline_cycle":320000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":64,"release_cycle":320000,"finish_cycle":324190,"deadline_cycle":325000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":65,"release_cycle":325000,"finish_cycle":329190,"deadline_cycle":330000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":66,"release_cycle":330000,"finish_cycle":334190,"deadline_cycle":335000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":67,"release_cycle":335000,"finish_cycle":339190,"deadline_cycle":340000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":68,"release_cycle":340000,"finish_cycle":344190,"deadline_cycle":345000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":69,"release_cycle":345000,"finish_cycle":349190,"deadline_cycle":350000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":70,"release_cycle":350000,"finish_cycle":354190,"deadline_cycle":355000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":71,"release_cycle":355000,"finish_cycle":359190,"deadline_cycle":360000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":72,"release_cycle":360000,"finish_cycle":364190,"deadline_cycle":365000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":73,"release_cycle":365000,"finish_cycle":369190,"deadline_cycle":370000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":74,"release_cycle":370000,"finish_cycle":374190,"deadline_cycle":375000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":75,"release_cycle":375000,"finish_cycle":379190,"deadline_cycle":380000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":76,"release_cycle":380000,"finish_cycle":384190,"deadline_cycle":385000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":77,"release_cycle":385000,"finish_cycle":389190,"deadline_cycle":390000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":78,"release_cycle":390000,"finish_cycle":394190,"deadline_cycle":395000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":79,"release_cycle":395000,"finish_cycle":399190,"deadline_cycle":400000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":80,"release_cycle":400000,"finish_cycle":404190,"deadline_cycle":405000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":81,"release_cycle":405000,"finish_cycle":409190,"deadline_cycle":410000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":82,"release_cycle":410000,"finish_cycle":414190,"deadline_cycle":415000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":83,"release_cycle":415000,"finish_cycle":419190,"deadline_cycle":420000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":84,"release_cycle":420000,"finish_cycle":424190,"deadline_cycle":425000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":85,"release_cycle":425000,"finish_cycle":429190,"deadline_cycle":430000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":86,"release_cycle":430000,"finish_cycle":434190,"deadline_cycle":435000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":87,"release_cycle":435000,"finish_cycle":439190,"deadline_cycle":440000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":88,"release_cycle":440000,"finish_cycle":444190,"deadline_cycle":445000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":89,"release_cycle":445000,"finish_cycle":449190,"deadline_cycle":450000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":90,"release_cycle":450000,"finish_cycle":454190,"deadline_cycle":455000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":91,"release_cycle":455000,"finish_cycle":459190,"deadline_cycle":460000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":92,"release_cycle":460000,"finish_cycle":464190,"deadline_cycle":465000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":93,"release_cycle":465000,"finish_cycle":469190,"deadline_cycle":470000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":94,"release_cycle":470000,"finish_cycle":474190,"deadline_cycle":475000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":95,"release_cycle":475000,"finish_cycle":479190,"deadline_cycle":480000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":96,"release_cycle":480000,"finish_cycle":484190,"deadline_cycle":485000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":97,"release_cycle":485000,"finish_cycle":489190,"deadline_cycle":490000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":98,"release_cycle":490000,"finish_cycle":494190,"deadline_cycle":495000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":99,"release_cycle":495000,"finish_cycle":499190,"deadline_cycle":500000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":100,"release_cycle":500000,"finish_cycle":504190,"deadline_cycle":505000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":101,"release_cycle":505000,"finish_cycle":509190,"deadline_cycle":510000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":102,"release_cycle":510000,"finish_cycle":514190,"deadline_cycle":515000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":103,"release_cycle":515000,"finish_cycle":519190,"deadline_cycle":520000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":104,"release_cycle":520000,"finish_cycle":524190,"deadline_cycle":525000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":105,"release_cycle":525000,"finish_cycle":529190,"deadline_cycle":530000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":106,"release_cycle":530000,"finish_cycle":534190,"deadline_cycle":535000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":107,"release_cycle":535000,"finish_cycle":539190,"deadline_cycle":540000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":108,"release_cycle":540000,"finish_cycle":544190,"deadline_cycle":545000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":109,"release_cycle":545000,"finish_cycle":549190,"deadline_cycle":550000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":110,"release_cycle":550000,"finish_cycle":554190,"deadline_cycle":555000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":111,"release_cycle":555000,"finish_cycle":559190,"deadline_cycle":560000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":112,"release_cycle":560000,"finish_cycle":564190,"deadline_cycle":565000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":113,"release_cycle":565000,"finish_cycle":569190,"deadline_cycle":570000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":114,"release_cycle":570000,"finish_cycle":574190,"deadline_cycle":575000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":115,"release_cycle":575000,"finish_cycle":579190,"deadline_cycle":580000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":116,"release_cycle":580000,"finish_cycle":584190,"deadline_cycle":585000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":117,"release_cycle":585000,"finish_cycle":589190,"deadline_cycle":590000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":118,"release_cycle":590000,"finish_cycle":594190,"deadline_cycle":595000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":119,"release_cycle":595000,"finish_cycle":599190,"deadline_cycle":600000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":120,"release_cycle":600000,"finish_cycle":604190,"deadline_cycle":605000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":121,"release_cycle":605000,"finish_cycle":609190,"deadline_cycle":610000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":122,"release_cycle":610000,"finish_cycle":614190,"deadline_cycle":615000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":123,"release_cycle":615000,"finish_cycle":619190,"deadline_cycle":620000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":124,"release_cycle":620000,"finish_cycle":624190,"deadline_cycle":625000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":125,"release_cycle":625000,"finish_cycle":629190,"deadline_cycle":630000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":126,"release_cycle":630000,"finish_cycle":634190,"deadline_cycle":635000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":127,"release_cycle":635000,"finish_cycle":639190,"deadline_cycle":640000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":128,"release_cycle":640000,"finish_cycle":644190,"deadline_cycle":645000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":129,"release_cycle":645000,"finish_cycle":649190,"deadline_cycle":650000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":130,"release_cycle":650000,"finish_cycle":654190,"deadline_cycle":655000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":131,"release_cycle":655000,"finish_cycle":659190,"deadline_cycle":660000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":132,"release_cycle":660000,"finish_cycle":664190,"deadline_cycle":665000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":133,"release_cycle":665000,"finish_cycle":669190,"deadline_cycle":670000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":134,"release_cycle":670000,"finish_cycle":674190,"deadline_cycle":675000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":135,"release_cycle":675000,"finish_cycle":679190,"deadline_cycle":680000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":136,"release_cycle":680000,"finish_cycle":684190,"deadline_cycle":685000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":137,"release_cycle":685000,"finish_cycle":689190,"deadline_cycle":690000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":138,"release_cycle":690000,"finish_cycle":694190,"deadline_cycle":695000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":139,"release_cycle":695000,"finish_cycle":699190,"deadline_cycle":700000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":140,"release_cycle":700000,"finish_cycle":704190,"deadline_cycle":705000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":141,"release_cycle":705000,"finish_cycle":709190,"deadline_cycle":710000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":142,"release_cycle":710000,"finish_cycle":714190,"deadline_cycle":715000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":143,"release_cycle":715000,"finish_cycle":719190,"deadline_cycle":720000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":144,"release_cycle":720000,"finish_cycle":724190,"deadline_cycle":725000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":145,"release_cycle":725000,"finish_cycle":729190,"deadline_cycle":730000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":146,"release_cycle":730000,"finish_cycle":734190,"deadline_cycle":735000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":147,"release_cycle":735000,"finish_cycle":739190,"deadline_cycle":740000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":148,"release_cycle":740000,"finish_cycle":744190,"deadline_cycle":745000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":149,"release_cycle":745000,"finish_cycle":749190,"deadline_cycle":750000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":150,"release_cycle":750000,"finish_cycle":754190,"deadline_cycle":755000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":151,"release_cycle":755000,"finish_cycle":759190,"deadline_cycle":760000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":152,"release_cycle":760000,"finish_cycle":764190,"deadline_cycle":765000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":153,"release_cycle":765000,"finish_cycle":769190,"deadline_cycle":770000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":154,"release_cycle":770000,"finish_cycle":774190,"deadline_cycle":775000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":155,"release_cycle":775000,"finish_cycle":779190,"deadline_cycle":780000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":156,"release_cycle":780000,"finish_cycle":784190,"deadline_cycle":785000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":157,"release_cycle":785000,"finish_cycle":789190,"deadline_cycle":790000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":158,"release_cycle":790000,"finish_cycle":794190,"deadline_cycle":795000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":159,"release_cycle":795000,"finish_cycle":799190,"deadline_cycle":800000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":160,"release_cycle":800000,"finish_cycle":804190,"deadline_cycle":805000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":161,"release_cycle":805000,"finish_cycle":809190,"deadline_cycle":810000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":162,"release_cycle":810000,"finish_cycle":814190,"deadline_cycle":815000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":163,"release_cycle":815000,"finish_cycle":819190,"deadline_cycle":820000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":164,"release_cycle":820000,"finish_cycle":824190,"deadline_cycle":825000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":165,"release_cycle":825000,"finish_cycle":829190,"deadline_cycle":830000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":166,"release_cycle":830000,"finish_cycle":834190,"deadline_cycle":835000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":167,"release_cycle":835000,"finish_cycle":839190,"deadline_cycle":840000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":168,"release_cycle":840000,"finish_cycle":844190,"deadline_cycle":845000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":169,"release_cycle":845000,"finish_cycle":849190,"deadline_cycle":850000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":170,"release_cycle":850000,"finish_cycle":854190,"deadline_cycle":855000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":171,"release_cycle":855000,"finish_cycle":859190,"deadline_cycle":860000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":172,"release_cycle":860000,"finish_cycle":864190,"deadline_cycle":865000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":173,"release_cycle":865000,"finish_cycle":869190,"deadline_cycle":870000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":174,"release_cycle":870000,"finish_cycle":874190,"deadline_cycle":875000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":175,"release_cycle":875000,"finish_cycle":879190,"deadline_cycle":880000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":176,"release_cycle":880000,"finish_cycle":884190,"deadline_cycle":885000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":177,"release_cycle":885000,"finish_cycle":889190,"deadline_cycle":890000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":178,"release_cycle":890000,"finish_cycle":894190,"deadline_cycle":895000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":179,"release_cycle":895000,"finish_cycle":899190,"deadline_cycle":900000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":180,"release_cycle":900000,"finish_cycle":904190,"deadline_cycle":905000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":181,"release_cycle":905000,"finish_cycle":909190,"deadline_cycle":910000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":182,"release_cycle":910000,"finish_cycle":914190,"deadline_cycle":915000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":183,"release_cycle":915000,"finish_cycle":919190,"deadline_cycle":920000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":184,"release_cycle":920000,"finish_cycle":924190,"deadline_cycle":925000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":185,"release_cycle":925000,"finish_cycle":929190,"deadline_cycle":930000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":186,"release_cycle":930000,"finish_cycle":934190,"deadline_cycle":935000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":187,"release_cycle":935000,"finish_cycle":939190,"deadline_cycle":940000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":188,"release_cycle":940000,"finish_cycle":944190,"deadline_cycle":945000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":189,"release_cycle":945000,"finish_cycle":949190,"deadline_cycle":950000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":190,"release_cycle":950000,"finish_cycle":954190,"deadline_cycle":955000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":191,"release_cycle":955000,"finish_cycle":959190,"deadline_cycle":960000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":192,"release_cycle":960000,"finish_cycle":964190,"deadline_cycle":965000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":193,"release_cycle":965000,"finish_cycle":969190,"deadline_cycle":970000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":194,"release_cycle":970000,"finish_cycle":974190,"deadline_cycle":975000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":195,"release_cycle":975000,"finish_cycle":979190,"deadline_cycle":980000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":196,"release_cycle":980000,"finish_cycle":984190,"deadline_cycle":985000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":197,"release_cycle":985000,"finish_cycle":989190,"deadline_cycle":990000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":198,"release_cycle":990000,"finish_cycle":994190,"deadline_cycle":995000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0},{"job":199,"release_cycle":995000,"finish_cycle":999190,"deadline_cycle":1000000,"deadline_miss":false,"skipped_periods":0,"n_accesses":20,"exec_cycles":4190,"mean_lat_ns":2.0,"max_lat_ns":2.0,"llc_misses":0,"l1_hits":20,"mean_dram_ns":0.0}]}</script>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------------- reference (planned) paths ---------------- */
+const PATHS = {
+  fig8:   u => { const t=u*2*Math.PI; return {x:Math.sin(t), y:Math.sin(2*t)*0.56}; },
+  circle: u => { const t=u*2*Math.PI; return {x:Math.cos(t), y:Math.sin(t)}; },
+  square: u => { const t=u*2*Math.PI, c=Math.cos(t), s=Math.sin(t), e=2/5;
+                 return {x:Math.sign(c)*Math.pow(Math.abs(c),e), y:Math.sign(s)*Math.pow(Math.abs(s),e)}; },
+  rose:   u => { const t=u*2*Math.PI, r=0.64+0.36*Math.cos(5*t); return {x:r*Math.cos(t), y:r*Math.sin(t)}; }
+};
+
+let LUT = null;            // {pts:[{x,y}], cum:[], total}
+function buildLUT(name){
+  const f = PATHS[name], N = 3000, pts = [], cum = [0];
+  for(let i=0;i<=N;i++) pts.push(f(i/N));
+  for(let i=1;i<=N;i++){
+    const a=pts[i-1], b=pts[i];
+    cum.push(cum[i-1] + Math.hypot(b.x-a.x, b.y-a.y));
+  }
+  LUT = {pts, cum, total: cum[N], N};
+}
+function atArc(s){
+  const {pts,cum,total,N} = LUT;
+  s = ((s % total) + total) % total;
+  let lo=0, hi=N;
+  while(lo<hi-1){ const m=(lo+hi)>>1; if(cum[m]<=s) lo=m; else hi=m; }
+  const seg = cum[hi]-cum[lo] || 1e-9, f = (s-cum[lo])/seg;
+  return {x: pts[lo].x+(pts[hi].x-pts[lo].x)*f, y: pts[lo].y+(pts[hi].y-pts[lo].y)*f};
+}
+
+/* ---------------- parameters (time unit = simulated cycle) ---------------- */
+const P = {
+  T: 5000,           // control period in cycles; overwritten by the data's manifest
+  lapPeriods: 100,   // one lap of the planned path = 100 control periods
+  vGain: 1.55,       // robot speed limit, x path speed
+  CM: 600,           // cm per normalised unit (the path spans ~12 m)
+  get lap(){ return this.T * this.lapPeriods; }
+};
+
+/* ---------------- Octopus data: three acts of per-job records ---------------- */
+const ACT_OF = {solo:"act1", interf:"act2", octopus:"act3"};
+/* live mode: demo/live_server.py tails a running simulation's JobReport and hands us the
+   records as they are produced; same record shape as the canned acts, so one replay path. */
+const LIVE = {jobs:[], running:true, cursor:-1, period:0, label:"", total:0, on:false, waiting:false, lastPoll:0};
+const DATA = {act1:null, act2:null, act3:null, manifest:{}};
+const $ = id => document.getElementById(id);
+
+function parseJsonl(text){ return text.split("\n").filter(l => l.trim()).map(l => JSON.parse(l)); }
+function haveData(){ return DATA.act1 && DATA.act2 && DATA.act3; }
+function dataReady(source){
+  const m = DATA.manifest.act1 || {};
+  if(m.period_cycles) P.T = m.period_cycles;
+  const p3 = DATA.manifest.act3 || {};
+  S.bound = p3.access_max_ns || 0;        // worst per-access latency measured under protection (cycles)
+  $("datasrc").textContent = source; $("datasrc").classList.add("live");
+  $("vExecSub").textContent = "period " + fmt(P.T) + " cycles";
+  writeCaptions();
+  resetRun();
+}
+function loadEmbedded(){
+  const el = $("octopus-data"); if(!el || !el.textContent.trim()) return false;
+  try{
+    const d = JSON.parse(el.textContent);
+    for(const a of ["act1","act2","act3"]){ DATA[a] = d[a]; DATA.manifest[a] = d.manifest[a]; }
+    dataReady("Octopus runs embedded · " + (d.built || ""));
+    return true;
+  }catch(e){ console.warn("embedded data unreadable", e); return false; }
+}
+async function loadFetched(){
+  try{
+    for(const a of ["act1","act2","act3"]){
+      const r = await fetch("data/" + a + ".jsonl"); if(!r.ok) throw new Error(a);
+      DATA[a] = parseJsonl(await r.text());
+      const m = await fetch("data/" + a + ".manifest.json"); DATA.manifest[a] = m.ok ? await m.json() : {};
+    }
+    dataReady("Octopus runs loaded from demo/data/");
+  }catch(e){
+    $("datasrc").textContent = "no Octopus data found — run demo/run_acts.sh, then build_page.py or drop the jsonl files here";
+  }
+}
+// file drop: act1/act2/act3 .jsonl (+ optional .manifest.json)
+const drop = $("drop");
+["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", async e => {
+  for(const f of e.dataTransfer.files){
+    const m = /^(act[123])(\.manifest)?\.(jsonl|json)$/.exec(f.name); if(!m) continue;
+    const txt = await f.text();
+    if(m[2]) DATA.manifest[m[1]] = JSON.parse(txt); else DATA[m[1]] = parseJsonl(txt);
+  }
+  if(haveData()) dataReady("Octopus runs from dropped files");
+});
+
+/* ---------------- replay state ---------------- */
+const S = {
+  t: 0, mode: "solo", running: true, speed: 12000,   // speed: cycles per real second
+  stream: null, job: null, set: null, poseT: 0,
+  jobs: [], lats: [],
+  eff: {x:0,y:0}, heading: 0,
+  trace: [], nJobs: 0, nMiss: 0, nSkip: 0, nPeriods: 0,
+  errPeak: 0, errNow: 0, latPeak: 0, bound: 0, lastExec: 0, lastLat: 0
+};
+
+// start (or restart) the current act's record stream at the current simulated time
+function actList(){ return S.mode === "live" ? LIVE.jobs : DATA[ACT_OF[S.mode]]; }
+function startStream(){
+  const list = actList();
+  if(!list || !list.length){ S.stream = null; S.job = null; return; }
+  S.stream = {list, i:0, t0: S.t - list[0].release_cycle};
+  nextJob();
+}
+function nextJob(){
+  const st = S.stream; if(!st){ S.job = null; return; }
+  if(st.i >= st.list.length){
+    // live and the simulator is still producing: hold here until the next record arrives
+    if(S.mode === "live" && LIVE.running){ S.job = null; LIVE.waiting = true; return; }
+    st.i = 0; st.t0 = S.t - st.list[0].release_cycle;                                // loop the act
+  }
+  LIVE.waiting = false;
+  const r = st.list[st.i++];
+  S.job = {rec:r, release: st.t0 + r.release_cycle, finish: st.t0 + r.finish_cycle, target:null, sampled:false};
+}
+function completeJob(){
+  const j = S.job, r = j.rec;
+  // the pose estimate this job computed was sensed at its release; it is applied now, at its finish
+  S.set = j.target || atArc(((j.release + P.T)/P.lap)*LUT.total); S.poseT = j.release;
+  S.nJobs++; S.nPeriods += 1 + r.skipped_periods; S.nSkip += r.skipped_periods;
+  if(r.deadline_miss) S.nMiss++;
+  S.jobs.push({c:r.exec_cycles, miss:r.deadline_miss, skip:false});
+  for(let k=0;k<r.skipped_periods;k++) S.jobs.push({c:P.T, miss:true, skip:true});
+  while(S.jobs.length > 64) S.jobs.shift();
+  S.lats.push({L:r.mean_lat_ns}); if(S.lats.length > 150) S.lats.shift();
+  S.latPeak = Math.max(S.latPeak, r.max_lat_ns);
+  S.lastExec = r.exec_cycles; S.lastLat = r.mean_lat_ns;
+  nextJob();
+}
+
+function step(dt){
+  // live: never run the playhead past the simulator. When we have caught up we freeze time
+  // (the robot holds its last commanded waypoint) until the next job is reported.
+  if(!S.job){ if(S.stream) nextJob(); if(!S.job) return; }
+  S.t += dt;
+  let guard = 0;
+  while(S.job && guard++ < 200){
+    if(!S.job.sampled && S.t >= S.job.release){ S.job.target = atArc(((S.job.release + P.T)/P.lap)*LUT.total); S.job.sampled = true; }   // waypoint planned for the end of the period
+    if(S.t >= S.job.finish) completeJob(); else break;
+  }
+  // the robot drives toward the goal point of its last pose estimate at a speed limit
+  const vmax = P.vGain * LUT.total / P.lap;
+  const tgt = S.set || atArc(0);
+  const dx = tgt.x - S.eff.x, dy = tgt.y - S.eff.y;
+  const d = Math.hypot(dx,dy), s = vmax*dt;
+  if(d > 1e-6) S.heading = Math.atan2(dy, dx);
+  if(d <= s){ S.eff = {x:tgt.x, y:tgt.y}; }
+  else { S.eff = {x:S.eff.x + dx/d*s, y:S.eff.y + dy/d*s}; }
+  // position error against where the planned path says the robot should be now
+  const ref = atArc((S.t/P.lap)*LUT.total);
+  S.errNow = Math.hypot(S.eff.x-ref.x, S.eff.y-ref.y) * P.CM;
+  S.errPeak = Math.max(S.errPeak, S.errNow);
+  const last = S.trace[S.trace.length-1];
+  if(!last || Math.hypot(S.eff.x-last.x, S.eff.y-last.y) > 0.006){
+    S.trace.push({x:S.eff.x, y:S.eff.y, m:S.mode});
+    if(S.trace.length > 780) S.trace.shift();
+  }
+}
+
+/* ---------------- drawing ---------------- */
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const sc = document.getElementById("scope"), sctx = sc.getContext("2d");
+let W=0,H=0,cx=0,cy=0,K=1;
+
+function css(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function fit(c){
+  const r = c.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio||1);
+  c.width = Math.max(1, Math.round(r.width*d)); c.height = Math.max(1, Math.round(r.height*d));
+  return {w:r.width, h:r.height, d};
+}
+function resize(){
+  const a = fit(cv); W=a.w; H=a.h; ctx.setTransform(a.d,0,0,a.d,0,0);
+  cx = W/2; cy = H/2; K = Math.min(W,H)*0.40;
+  const b = fit(sc); sctx.setTransform(b.d,0,0,b.d,0,0);
+}
+const MODE_COLOR = () => ({solo:css("--nominal"), interf:css("--alarm"), octopus:css("--octo"), live:css("--warn")});
+const fmt = n => Math.round(n).toLocaleString("en-US").replace(/,/g, " ");
+
+function draw(){
+  const col = MODE_COLOR();
+  ctx.clearRect(0,0,W,H);
+
+  // floor grid
+  ctx.strokeStyle = css("--grid"); ctx.lineWidth = 1; ctx.globalAlpha = .55;
+  const g = Math.max(22, K/5);
+  ctx.beginPath();
+  for(let x=cx%g; x<W; x+=g){ ctx.moveTo(x,0); ctx.lineTo(x,H); }
+  for(let y=cy%g; y<H; y+=g){ ctx.moveTo(0,y); ctx.lineTo(W,y); }
+  ctx.stroke(); ctx.globalAlpha = 1;
+
+  const px = p => ({x: cx + p.x*K, y: cy - p.y*K});
+
+  // planned path (ground truth)
+  ctx.strokeStyle = css("--refline"); ctx.lineWidth = 1.4; ctx.setLineDash([6,6]); ctx.globalAlpha=.75;
+  ctx.beginPath();
+  for(let i=0;i<=400;i++){ const p = px(atArc(i/400*LUT.total)); i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y); }
+  ctx.closePath(); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1;
+
+  // start / goal marker (one lap = start to goal)
+  const sp = px(atArc(0));
+  ctx.fillStyle = css("--refline"); ctx.font = '500 11px "IBM Plex Mono", monospace';
+  ctx.beginPath(); ctx.rect(sp.x-4, sp.y-4, 8, 8); ctx.fill();
+  ctx.fillText("START / GOAL", sp.x+8, sp.y+4);
+
+  // error corridor: shaded band between the actual trajectory and the planned path (recent part)
+  const n = S.trace.length;
+  if(n > 2){
+    ctx.fillStyle = col[S.mode]; ctx.globalAlpha = .10;
+    const from = Math.max(1, n-120);
+    ctx.beginPath();
+    for(let i=from;i<n;i++){ const p = px(S.trace[i]); i===from?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y); }
+    // back along the planned path over the same time window is not stored; close via current reference
+    const refNow = px(atArc((S.t/P.lap)*LUT.total)); ctx.lineTo(refNow.x, refNow.y); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // actual trajectory, coloured by the act it was driven in, fading with age
+  ctx.lineWidth = 2.6; ctx.lineCap="round"; ctx.lineJoin="round";
+  for(let i=1;i<n;i++){
+    const a = S.trace[i-1], b = S.trace[i];
+    const age = i/n;
+    ctx.globalAlpha = 0.07 + 0.93*Math.pow(age, 2.2);
+    ctx.strokeStyle = col[b.m] || col.solo;
+    const p1 = px(a), p2 = px(b);
+    ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // where the plan says the robot should be now, and the error segment
+  const refp = px(atArc((S.t/P.lap)*LUT.total)), effp = px(S.eff);
+  if(S.errNow > 6){
+    ctx.strokeStyle = col[S.mode]; ctx.globalAlpha=.55; ctx.lineWidth=1.2; ctx.setLineDash([3,4]);
+    ctx.beginPath(); ctx.moveTo(refp.x,refp.y); ctx.lineTo(effp.x,effp.y); ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha=1;
+  }
+  ctx.fillStyle = css("--refline");
+  ctx.beginPath(); ctx.arc(refp.x,refp.y,3.2,0,7); ctx.fill();
+
+  // the robot: a heading triangle
+  ctx.save(); ctx.translate(effp.x, effp.y); ctx.rotate(-S.heading);
+  ctx.fillStyle = col[S.mode]; ctx.strokeStyle = css("--paper"); ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(11,0); ctx.lineTo(-7,7); ctx.lineTo(-4,0); ctx.lineTo(-7,-7); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.restore();
+
+  // error callout when it is large
+  if(S.errNow > 30){
+    ctx.fillStyle = col[S.mode];
+    ctx.font = '500 13px "IBM Plex Mono", monospace';
+    ctx.fillText(S.errNow.toFixed(0)+" cm off", effp.x+13, effp.y-9);
+  }
+  drawScope();
+}
+
+function drawScope(){
+  const r = sc.getBoundingClientRect(), w=r.width, h=r.height;
+  sctx.clearRect(0,0,w,h);
+  const LMIN = 1, LMAX = 100000;                       // cycles, log scale
+  const yOf = L => h - 2 - (Math.log10(Math.max(LMIN, L)) - Math.log10(LMIN)) / (Math.log10(LMAX) - Math.log10(LMIN)) * (h - 4);
+  sctx.strokeStyle = css("--line"); sctx.lineWidth=1; sctx.globalAlpha=.8;
+  sctx.fillStyle = css("--dim"); sctx.font = '10px "IBM Plex Mono", monospace';
+  for(const L of [10,100,1000,10000]){ const y=yOf(L); sctx.beginPath(); sctx.moveTo(0,y); sctx.lineTo(w,y); sctx.stroke(); sctx.fillText(fmt(L), 3, y-2); }
+  sctx.globalAlpha=1;
+  const N = S.lats.length; if(!N) return;
+  const xs = i => (i/(150-1))*w;
+  sctx.strokeStyle = css("--text"); sctx.lineWidth=1.8; sctx.beginPath();
+  S.lats.forEach((p,i)=>{ const y = yOf(p.L); i?sctx.lineTo(xs(i),y):sctx.moveTo(xs(i),y); });
+  sctx.stroke();
+  if(S.bound>0 && S.mode==="octopus"){
+    const y = yOf(S.bound);
+    sctx.strokeStyle = css("--octo"); sctx.lineWidth=1.6; sctx.setLineDash([5,4]);
+    sctx.beginPath(); sctx.moveTo(0,y); sctx.lineTo(w,y); sctx.stroke(); sctx.setLineDash([]);
+  }
+}
+
+/* ---------------- readouts ---------------- */
+function refresh(){
+  $("clock").textContent = "t = " + fmt(S.t) + " cycles";
+  if(S.mode === "live"){
+    $("datasrc").textContent = (LIVE.running
+        ? (LIVE.waiting ? "live · waiting for the simulator · " : "live · simulating · ")
+        : "live · run finished · ") + LIVE.total + " jobs";
+    $("datasrc").classList.add("live");
+  }
+  $("vExec").textContent = S.nJobs ? fmt(S.lastExec) : "–";
+  $("vLat").textContent = S.nJobs ? (S.lastLat < 10 ? S.lastLat.toFixed(1) : fmt(S.lastLat)) : "–";
+  $("vLatMax").textContent = "peak " + (S.latPeak ? fmt(S.latPeak) + " cycles" : "–");
+  $("vMiss").textContent = S.nMiss + S.nSkip;
+  $("vMissRate").textContent = (S.nMiss + S.nSkip) + " of " + S.nPeriods + " periods";
+  $("vErr").textContent = S.errNow.toFixed(1);
+  const age = S.set ? S.t - S.poseT : 0;
+  $("vErrPk").textContent = "peak " + S.errPeak.toFixed(1) + " cm · pose age " + fmt(age) + " cyc";
+
+  const late = S.lastExec > P.T;
+  const prot = S.mode==="octopus", liv = S.mode==="live";
+  const tone = prot ? "prot" : (liv ? "livec" : "good");
+  $("roExec").className = "ro " + (late ? "hot" : tone);
+  $("roLat").className  = "ro " + (S.lastLat > 50 ? "hot" : tone);
+  $("roMiss").className = "ro " + ((S.nMiss + S.nSkip) ? "hot" : "good");
+  $("roErr").className  = "ro " + (S.errNow > 30 ? "hot" : tone);
+  $("noBound").style.display = (S.bound>0 && prot) ? "none" : "flex";
+
+  const strip = $("jobs");
+  if(strip.children.length !== S.jobs.length){
+    strip.innerHTML = S.jobs.map(()=>"<i></i>").join("");
+  }
+  S.jobs.forEach((j,i)=>{
+    const el = strip.children[i]; if(!el) return;
+    el.style.height = Math.max(8, Math.min(46, 46*Math.min(1, j.c/(P.T*2.6)))) + "px";
+    el.className = j.skip ? "skip" : (j.miss ? "miss" : "");
+  });
+}
+
+/* ---------------- live: poll the running simulation ---------------- */
+async function pollLive(){
+  try{
+    const r = await fetch("api/live?since=" + LIVE.cursor, {cache:"no-store"});
+    if(!r.ok) throw new Error("no live server");
+    const d = await r.json(); if(d.error) throw new Error(d.error);
+    if(!LIVE.on){                                    // first successful poll: offer the mode
+      LIVE.on = true; $("liveRow").style.display = "grid";
+      $("bLlabel").textContent = "Follow the running simulation — " + d.label;
+    }
+    LIVE.running = d.running; LIVE.total = d.total; LIVE.label = d.label;
+    if(d.period) LIVE.period = d.period;
+    if(d.jobs.length){
+      for(const j of d.jobs) LIVE.jobs.push(j);
+      LIVE.cursor = d.jobs[d.jobs.length-1].job;
+      if(S.mode === "live" && !S.stream) startStream();
+    }
+  }catch(e){
+    if(LIVE.on && S.mode !== "live"){ LIVE.on = false; $("liveRow").style.display = "none"; }
+  }
+}
+
+/* ---------------- acts ---------------- */
+const CAPTIONS = {solo:["Act 1 — alone",""], interf:["Act 2 — contention",""], octopus:["Act 3 — protected",""]};
+function writeCaptions(){
+  const m1 = DATA.manifest.act1 || {}, m2 = DATA.manifest.act2 || {}, m3 = DATA.manifest.act3 || {};
+  const T = fmt(P.T);
+  CAPTIONS.solo[1] = `Core 0 has the memory system to itself. Each localization job (an EKF step: ~4 150 compute cycles and 20 memory accesses over 9 cache lines) finishes in <strong>${fmt(m1.exec_mean||0)} cycles</strong> inside its ${T}-cycle period; every access is an L1 hit. Fresh pose every period: the robot hugs the planned path.`;
+  CAPTIONS.interf[1] = `Three cores start streaming through the shared cache with 8 outstanding requests each. They evict the task's lines (inclusion drops them from its L1 too) and their row-hit streams win the FR-FCFS DRAM scheduler, so the task's few DRAM reads wait <strong>thousands of cycles</strong>. Jobs overrun: mean ${fmt(m2.exec_mean||0)}, worst ${fmt(m2.exec_max||0)} cycles; ${m2.deadline_misses||0} of ${(m2.jobs||0)+0} periods missed or skipped. The robot steers on a stale pose and drifts off the plan.`;
+  CAPTIONS.octopus[1] = `Same three streaming cores. Octopus now arbitrates the bus <strong>Round-Robin</strong> and reserves one LLC way for core 0 (<code>way_partition</code>), so its working set can no longer be evicted and it never queues at DRAM. Jobs are back to <strong>${fmt(m3.exec_mean||0)} cycles</strong>, ${m3.deadline_misses||0} misses; the worst measured access is ${fmt(m3.access_max_ns||0)} cycles, an analysable bound. The robot re-converges onto the plan.`;
+  $("capText").innerHTML = CAPTIONS[S.mode][1];
+}
+function setMode(m, fromAuto){
+  const wasLive = S.mode === "live";
+  S.mode = m;
+  document.body.dataset.mode = m;
+  ["b1","b2","b3","bL"].forEach((id,i)=>{
+    $(id).setAttribute("aria-pressed", String(["solo","interf","octopus","live"][i]===m));
+  });
+  if(m === "live"){
+    P.T = LIVE.period || P.T;
+    CAPTIONS.live = ["Live", `Following a running Octopus simulation of <strong>${LIVE.label}</strong>. Each robot move replays a job the simulator has just finished; when the view catches up with the simulation it holds until the next job is reported.`];
+    $("vExecSub").textContent = "period " + fmt(P.T) + " cycles";
+    $("llcNote").textContent = "live run"; $("mcNote").textContent = "live run";
+    if(!wasLive) resetRun();
+  }
+  if(!CAPTIONS[m]) CAPTIONS[m] = ["Live",""];
+  $("capAct").textContent = CAPTIONS[m][0].split(" — ")[0];
+  $("capText").innerHTML = CAPTIONS[m][1];
+  $("llcNote").textContent = m==="octopus" ? "way 0 reserved for core 0" : (m==="interf" ? "polluted by the streams" : "unmanaged");
+  $("mcNote").textContent  = m==="octopus" ? "Round-Robin bus · FR-FCFS DRAM" : "FCFS bus · FR-FCFS DRAM";
+  startStream();
+  if(!fromAuto) stopAuto();
+}
+
+let autoTimers = [];
+function stopAuto(){ autoTimers.forEach(clearTimeout); autoTimers = []; $("auto").textContent = "Play all three acts"; }
+function runAuto(){
+  stopAuto(); resetRun(); S.running = true; $("pause").textContent = "Pause";
+  setMode("solo", true);
+  $("auto").textContent = "Restart the demo";
+  autoTimers.push(setTimeout(()=>setMode("interf", true), 12000));
+  autoTimers.push(setTimeout(()=>setMode("octopus", true), 30000));
+}
+
+function resetRun(){
+  S.t=0; S.trace=[]; S.jobs=[]; S.lats=[]; S.nJobs=0; S.nMiss=0; S.nSkip=0; S.nPeriods=0;
+  S.errPeak=0; S.latPeak=0; S.lastExec=0; S.lastLat=0; S.poseT=0;
+  const p0 = atArc(0); S.eff={x:p0.x,y:p0.y}; S.set={x:p0.x,y:p0.y}; S.heading=0;
+  startStream();
+}
+
+/* ---------------- wiring ---------------- */
+buildLUT("fig8"); resize(); resetRun(); setMode("solo", true);
+if(!loadEmbedded()) loadFetched();
+
+$("b1").onclick = ()=>setMode("solo");
+$("b2").onclick = ()=>setMode("interf");
+$("b3").onclick = ()=>setMode("octopus");
+$("bL").onclick = ()=>setMode("live");
+$("auto").onclick = runAuto;
+$("pause").onclick = e => { S.running = !S.running; e.target.textContent = S.running ? "Pause" : "Resume"; };
+$("clear").onclick = () => { S.trace=[]; S.errPeak=0; S.latPeak=0; S.nMiss=0; S.nSkip=0; S.nJobs=0; S.nPeriods=0; S.jobs=[]; S.lats=[]; };
+$("speed").oninput = e => { S.speed = +e.target.value; $("nSpeed").textContent = (S.speed/1000).toFixed(0)+"k"; };
+$("path").onchange = e => { buildLUT(e.target.value); resetRun(); };
+addEventListener("resize", resize);
+addEventListener("keydown", e=>{
+  if(e.key==="1") setMode("solo");
+  else if(e.key==="2") setMode("interf");
+  else if(e.key==="3") setMode("octopus");
+  else if(e.code==="Space"){ e.preventDefault(); $("pause").click(); }
+});
+
+pollLive(); setInterval(pollLive, 250);      // polling, not a socket: a missed poll just retries
+
+let last = performance.now(), acc = 0;
+function frame(now){
+  const dtReal = Math.min(64, now - last); last = now;
+  if(S.running && S.stream){
+    let cyc = dtReal * S.speed / 1000;
+    while(cyc > 0){ const dt = Math.min(P.T/20, cyc); step(dt); cyc -= dt; }
+  }
+  draw();
+  acc += dtReal; if(acc > 90){ refresh(); acc = 0; }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

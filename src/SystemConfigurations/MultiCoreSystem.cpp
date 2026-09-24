@@ -50,7 +50,15 @@ namespace octopus
         // iterate over each core
         for (int i = 0; i < num_cores; i++)
         {
-            string file_path = workload_path + "/trace_C" + std::to_string(i) + ".trc.shared";
+            // Workload per core: a periodic task program (docs/Tasks.md) if present, else the
+            // access trace, else nothing (an idle core).
+            string file_path = workload_path + "/task_C" + std::to_string(i) + ".task.csv";
+            if (!std::ifstream(file_path).good())
+            {
+                file_path = workload_path + "/trace_C" + std::to_string(i) + ".trc.shared";
+                if (!std::ifstream(file_path).good())
+                    file_path = "";
+            }
             BaseController *cache_controller;
             int cache_id = std::get<int>(getSubMap(STRINGIFY(cache_controller), i).at("m_id").value);
 

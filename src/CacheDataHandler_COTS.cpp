@@ -129,7 +129,7 @@ namespace octopus
     {
         int way;
         
-        m_replacement_policy->getReplacementCandidate(set, &way);
+        m_replacement_policy->getReplacementCandidate(set, &way, allowedWays());   // way partitioning (no-op when unconfigured)
         return way;
     }
 
