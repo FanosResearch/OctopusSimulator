@@ -93,15 +93,24 @@ configures it, see the annotated LLC:
 
 ![Detailed architecture of the Octopus last-level cache](imgs/llc_architecture.svg)
 
-It is a datapath drawing: the address splits into tag, set and offset; the set indexes the tag
-array; two comparators produce hit and way select; the way select steers the data array, which
-sits behind a single port that four kinds of access compete for through the round-robin arbiter
-and a 10-cycle busy timer. Control is drawn separately, dashed: the line's state and the decoded
-event enter the coherence FSM, whose next state is written back into the tag array and whose
-actions drive every port and interface. A miss allocates in the MSHR and leaves on the memory
-bus; a dirty victim goes to the write-back buffer; and because the cache is inclusive, evicting
-a line an L1 holds sends that L1 an invalidation on the service channel — the red path, and the
-reason a task whose working set fits in its own L1 can still be disturbed by other cores.
+It is a datapath drawing, and it follows the model rather than a textbook cache. The address
+splits into tag, set and offset, and the set indexes **one** array: in Octopus a line carries its
+coherence bits and its data together, so there is no separate tag array. That array is read two
+ways, and the difference matters for every latency the simulator reports. Reading a line's bits
+(the tag compare, the state the FSM needs) is **untimed** and claims nothing. Reading or writing
+its **data** goes through a single port, which demand reads, eviction reads and fill or
+write-back writes contend for through the round-robin arbiter, and which is then busy for
+`A_LLC` cycles. A line that currently sits in the MSHR or the write-back buffer is read without
+waiting for that port, because it is not in the array yet — the dotted bypass — but it still
+restarts the busy timer, which is why such accesses cut in ahead of one already in progress.
+
+Control is the dashed amber layer: the line state and the decoded event enter the coherence FSM,
+whose next state is written back into the line and whose actions become port claims, buffer
+allocations and messages. A miss allocates in the MSHR and leaves on the memory bus; a dirty
+victim moves to the write-back buffer and frees its way at once; and because the cache is
+inclusive, the FSM's `IssueInv` on an eviction invalidates the copy in whichever L1 holds the
+line — the red path, and the reason a task whose working set fits in its own private cache can
+still be disturbed by other cores.
 
 A `CacheController` (a `BaseController`) has **two `CommunicationInterface`s** — one
 facing the cores below, one facing the interconnect above. Incoming messages are

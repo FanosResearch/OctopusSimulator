@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1260 980" width="1260" height="980"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 1010" width="1280" height="1010"
      font-family="'IBM Plex Sans','Segoe UI',system-ui,sans-serif" role="img"
-     aria-label="Datapath of the Octopus last-level cache: bus interfaces, processing queue, coherence FSM, tag array with comparators, data array behind a single arbitrated port, MSHR and write-back buffer, and the memory bus">
+     aria-label="Datapath of the Octopus last-level cache: bus interfaces, processing queue with its admission gate, coherence FSM, one cache array read two ways (untimed state read and a timed single data port behind a round-robin arbiter), MSHR, write-back buffer, and the memory bus">
   <defs>
     <marker id="d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#14212A"/></marker>
     <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#9A6B12"/></marker>
@@ -17,194 +17,191 @@
     .wire { stroke:#14212A; stroke-width:2; fill:none }
     .cwire{ stroke:#9A6B12; stroke-width:1.4; fill:none; stroke-dasharray:5 3 }
     .iwire{ stroke:#BE3F24; stroke-width:1.8; fill:none }
+    .byp  { stroke:#14212A; stroke-width:1.4; fill:none; stroke-dasharray:2 3 }
     .wl   { font-size:9.5px; fill:#14212A; font-family:'IBM Plex Mono',monospace }
     .cl   { font-size:9.5px; fill:#9A6B12; font-family:'IBM Plex Mono',monospace }
   </style>
 
-  <rect width="1260" height="980" fill="#FBFAF7"/>
+  <rect width="1280" height="1010" fill="#FBFAF7"/>
   <text x="34" y="30" font-size="17" font-weight="700" fill="#14212A">Octopus LLC datapath</text>
-  <text x="34" y="48" class="sub">CacheController_End2End + CacheDataHandler_COTS · 32 KB, 2-way, 64 B lines · one 10-cycle array port · MESI_LLC coherence FSM</text>
+  <text x="34" y="48" class="sub">CacheController_End2End + CacheDataHandler_COTS · 32 KB, 2-way, 64 B lines · MESI_LLC coherence FSM · one timed data port (10 cycles)</text>
 
   <!-- ══════════ bus[0] interface ══════════ -->
-  <rect x="34" y="66" width="1192" height="62" rx="4" class="io"/>
+  <rect x="34" y="66" width="1212" height="62" rx="4" class="io"/>
   <text x="46" y="82" class="lbl mono" fill="#4B32A8">bus[0] — TripleBus interface</text>
   <rect x="210" y="88" width="150" height="30" rx="3" class="blk"/><text x="222" y="101" class="lbl">RX request</text><text x="222" y="113" class="sub mono">GetS GetM PutM</text>
   <rect x="384" y="88" width="150" height="30" rx="3" class="blk"/><text x="396" y="101" class="lbl">RX response</text><text x="396" y="113" class="sub mono">data in</text>
   <rect x="558" y="88" width="150" height="30" rx="3" class="blk"/><text x="570" y="101" class="lbl">TX response</text><text x="570" y="113" class="sub mono">data out</text>
-  <rect x="1020" y="88" width="180" height="30" rx="3" class="blk" stroke="#BE3F24"/><text x="1032" y="101" class="lbl" fill="#BE3F24">TX service</text><text x="1032" y="113" class="sub mono">INV to sharers</text>
+  <rect x="1040" y="88" width="180" height="30" rx="3" class="blk" stroke="#BE3F24"/><text x="1052" y="101" class="lbl" fill="#BE3F24">TX service</text><text x="1052" y="113" class="sub mono">INV to sharers</text>
 
   <!-- ══════════ processing queue ══════════ -->
-  <rect x="150" y="164" width="420" height="52" rx="4" class="blk"/>
-  <text x="162" y="182" class="lbl">processing queue — FR-FCFS, 64 entries</text>
+  <rect x="150" y="162" width="420" height="52" rx="4" class="blk"/>
+  <text x="162" y="180" class="lbl">processing queue — FR-FCFS, 64 entries</text>
   <g fill="#F2F7FB" stroke="#5A6B75" stroke-width=".9">
-    <rect x="162" y="190" width="30" height="18"/><rect x="194" y="190" width="30" height="18"/>
-    <rect x="226" y="190" width="30" height="18"/><rect x="258" y="190" width="30" height="18"/>
-    <rect x="290" y="190" width="30" height="18"/><rect x="322" y="190" width="30" height="18"/>
+    <rect x="162" y="188" width="30" height="18"/><rect x="194" y="188" width="30" height="18"/>
+    <rect x="226" y="188" width="30" height="18"/><rect x="258" y="188" width="30" height="18"/>
+    <rect x="290" y="188" width="30" height="18"/><rect x="322" y="188" width="30" height="18"/>
   </g>
-  <text x="360" y="204" class="sub mono">…</text>
-  <text x="150" y="232" class="sub">the head is chosen by readiness, not by age alone</text>
-  <line x1="285" y1="118" x2="285" y2="162" class="wire" marker-end="url(#d)"/>
-  <line x1="459" y1="118" x2="459" y2="162" class="wire" marker-end="url(#d)"/>
+  <text x="360" y="202" class="sub mono">…</text>
+  <text x="150" y="230" class="sub">requests and incoming data share this queue</text>
+  <line x1="285" y1="118" x2="285" y2="160" class="wire" marker-end="url(#d)"/>
+  <line x1="459" y1="118" x2="459" y2="160" class="wire" marker-end="url(#d)"/>
 
   <!-- admission -->
-  <path d="M230 236 L490 236 L462 268 L258 268 Z" class="ctl"/>
-  <text x="290" y="254" class="lbl" fill="#9A6B12">admission select</text>
-  <text x="250" y="284" class="sub">ready (FSM does not stall) AND no older demand queued to the same line</text>
-  <line x1="360" y1="216" x2="360" y2="234" class="wire" marker-end="url(#d)"/>
-  <line x1="360" y1="268" x2="360" y2="300" class="wire" marker-end="url(#d)"/>
-  <text x="366" y="292" class="wl">msg</text>
+  <path d="M230 240 L490 240 L462 272 L258 272 Z" class="ctl"/>
+  <text x="288" y="260" class="lbl" fill="#9A6B12">admission select</text>
+  <text x="180" y="288" class="sub">first READY entry (the FSM would not stall it), and for a demand request</text>
+  <text x="180" y="300" class="sub">no older demand to the same line is queued ahead — data is exempt</text>
+  <line x1="360" y1="214" x2="360" y2="238" class="wire" marker-end="url(#d)"/>
+  <line x1="360" y1="272" x2="360" y2="318" class="wire" marker-end="url(#d)"/>
+  <text x="366" y="314" class="wl">msg</text>
 
   <!-- ══════════ address decode ══════════ -->
   <g>
-    <rect x="150" y="302" width="420" height="34" rx="3" class="blk"/>
-    <line x1="392" y1="302" x2="392" y2="336" stroke="#5A6B75"/>
-    <line x1="500" y1="302" x2="500" y2="336" stroke="#5A6B75"/>
-    <text x="250" y="323" class="lbl mono">tag [63:14]</text>
-    <text x="414" y="323" class="lbl mono">set [13:6]</text>
-    <text x="510" y="323" class="lbl mono">off</text>
-    <text x="160" y="323" class="sub">addr</text>
+    <rect x="150" y="320" width="420" height="34" rx="3" class="blk"/>
+    <line x1="392" y1="320" x2="392" y2="354" stroke="#5A6B75"/>
+    <line x1="500" y1="320" x2="500" y2="354" stroke="#5A6B75"/>
+    <text x="250" y="341" class="lbl mono">tag [63:14]</text>
+    <text x="414" y="341" class="lbl mono">set [13:6]</text>
+    <text x="510" y="341" class="lbl mono">off</text>
+    <text x="160" y="341" class="sub">addr</text>
   </g>
+  <path d="M440 354 L440 392" class="wire" marker-end="url(#d)"/>
+  <text x="446" y="376" class="wl">set index</text>
 
-  <!-- tag → comparators, set → arrays -->
-  <path d="M300 336 L300 372 L610 372" class="wire" marker-end="url(#d)"/>
-  <text x="430" y="368" class="wl">tag</text>
-  <path d="M440 336 L440 396" class="wire" marker-end="url(#d)"/>
-  <text x="446" y="360" class="wl">set index</text>
-  <path d="M440 372 L880 372 L880 470" class="wire" marker-end="url(#d)"/>
-
-  <!-- ══════════ tag array ══════════ -->
-  <rect x="150" y="398" width="420" height="136" rx="4" class="mem"/>
-  <text x="162" y="416" class="lbl">tag array — 256 sets × 2 ways</text>
-  <g font-size="9.5" class="mono" fill="#5E6E76"><text x="162" y="434">way 0</text><text x="366" y="434">way 1</text></g>
+  <!-- ══════════ THE ARRAY (one structure: bits and data in the same line) ══════════ -->
+  <rect x="180" y="394" width="700" height="190" rx="4" class="mem"/>
+  <text x="192" y="414" class="lbl">cache array — 256 sets × 2 ways, one structure</text>
+  <text x="192" y="429" class="sub">a line holds its coherence bits and its data together (GenericCacheLine); there is no separate tag array</text>
+  <g font-size="9.5" class="mono" fill="#5E6E76"><text x="196" y="448">way 0</text><text x="544" y="448">way 1</text></g>
   <g fill="#FFFFFF" stroke="#8FB2C9" stroke-width=".9">
-    <rect x="162" y="440" width="196" height="22"/><rect x="366" y="440" width="192" height="22"/>
-    <rect x="162" y="466" width="196" height="22"/><rect x="366" y="466" width="192" height="22"/>
-    <rect x="162" y="492" width="196" height="22"/><rect x="366" y="492" width="192" height="22"/>
+    <rect x="196" y="454" width="330" height="24"/><rect x="544" y="454" width="322" height="24"/>
+    <rect x="196" y="482" width="330" height="24"/><rect x="544" y="482" width="322" height="24"/>
+    <rect x="196" y="510" width="330" height="24"/><rect x="544" y="510" width="322" height="24"/>
   </g>
   <g font-size="9.5" class="mono" fill="#14212A">
-    <text x="170" y="455">V · state · tag · owner</text><text x="374" y="455">V · state · tag · owner</text>
-    <text x="170" y="481">V · state · tag · owner</text><text x="374" y="481">V · state · tag · owner</text>
-    <text x="170" y="507">⋮</text><text x="374" y="507">⋮</text>
+    <text x="204" y="470">V · state · tag · owner ║ 64 B data</text><text x="552" y="470">V · state · tag · owner ║ 64 B data</text>
+    <text x="204" y="498">V · state · tag · owner ║ 64 B data</text><text x="552" y="498">V · state · tag · owner ║ 64 B data</text>
+    <text x="204" y="526">⋮</text><text x="552" y="526">⋮</text>
   </g>
-  <text x="162" y="526" class="sub">state is the MESI_LLC state of the line; owner names the L1 that holds it</text>
+  <text x="192" y="552" class="sub">state is the line's MESI_LLC state; owner names the L1 that holds it</text>
+  <text x="192" y="566" class="sub">a way may be reserved for one core (way_partition); LRU chooses the victim among the ways left</text>
 
-  <!-- comparators -->
+  <!-- left access path: untimed bits read -->
+  <path d="M180 470 L120 470 L120 620" class="cwire" marker-end="url(#c)"/>
+  <text x="34" y="452" class="cl">bits / state read</text>
+  <text x="34" y="464" class="cl">tag compare</text>
+  <text x="34" y="476" class="cl">UNTIMED —</text>
+  <text x="34" y="488" class="cl">claims no port</text>
+
+  <!-- comparators on the bits path -->
   <g>
-    <path d="M612 424 L664 438 L664 462 L612 476 Z" class="blk"/><text x="624" y="454" class="lbl">=</text>
-    <path d="M612 486 L664 500 L664 524 L612 538 Z" class="blk"/><text x="624" y="516" class="lbl">=</text>
-    <path d="M560 452 L610 452" class="wire" marker-end="url(#d)"/>
-    <path d="M560 502 L610 502" class="wire" marker-end="url(#d)"/>
-    <text x="572" y="444" class="wl">w0</text><text x="572" y="494" class="wl">w1</text>
+    <path d="M900 440 L952 454 L952 478 L900 492 Z" class="blk"/><text x="912" y="470" class="lbl">=</text>
+    <path d="M900 500 L952 514 L952 538 L900 552 Z" class="blk"/><text x="912" y="530" class="lbl">=</text>
+    <path d="M880 466 L898 466" class="wire" marker-end="url(#d)"/>
+    <path d="M880 526 L898 526" class="wire" marker-end="url(#d)"/>
+    <text x="884" y="460" class="wl">w0</text><text x="884" y="520" class="wl">w1</text>
+    <path d="M300 354 L300 380 L960 380 L960 438" class="wire" marker-end="url(#d)"/>
+    <text x="620" y="376" class="wl">tag</text>
   </g>
-  <rect x="686" y="452" width="86" height="48" rx="3" class="ctl"/>
-  <text x="698" y="472" class="lbl" fill="#9A6B12">hit / way</text>
-  <text x="698" y="488" class="sub">select</text>
-  <path d="M664 450 L684 462" class="wire" marker-end="url(#d)"/>
-  <path d="M664 512 L684 492" class="wire" marker-end="url(#d)"/>
+  <rect x="974" y="470" width="96" height="50" rx="3" class="ctl"/>
+  <text x="986" y="490" class="lbl" fill="#9A6B12">hit / way</text>
+  <text x="986" y="506" class="sub">select</text>
+  <path d="M952 466 L972 482" class="wire" marker-end="url(#d)"/>
+  <path d="M952 526 L972 508" class="wire" marker-end="url(#d)"/>
+  <path d="M974 512 L940 512 L940 596 L300 596 L300 620" class="cwire" marker-end="url(#c)"/>
+  <text x="560" y="592" class="cl">hit · way · line state → FSM</text>
 
-  <!-- hit/state to FSM (control) -->
-  <path d="M686 476 L620 476 L620 560 L200 560 L200 598" class="cwire" marker-end="url(#c)"/>
-  <text x="300" y="556" class="cl">hit, way, line state</text>
-
-  <!-- way select to data array -->
-  <path d="M772 476 L820 476 L820 470" class="cwire" marker-end="url(#c)"/>
-  <text x="784" y="468" class="cl">way_sel</text>
-
-  <!-- ══════════ coherence FSM (control) ══════════ -->
-  <rect x="80" y="600" width="300" height="96" rx="4" class="ctl"/>
-  <text x="92" y="620" class="lbl" fill="#9A6B12">coherence FSM — MESI_LLC.csv</text>
-  <text x="92" y="638" class="sub mono">state × event → next state + actions</text>
-  <text x="92" y="656" class="sub">events: GetS GetM Replacement PutM_from*</text>
-  <text x="92" y="668" class="sub">Data_from{Lower,Upper} Own_Invalidation</text>
-  <text x="92" y="686" class="sub">states: N I S EorM + NE_d NM_d IorS_a MN_d S_d I_d N_a</text>
-  <path d="M230 696 L230 724" class="cwire" marker-end="url(#c)"/>
-  <path d="M80 640 L50 640 L50 320 L148 320" class="cwire" marker-end="url(#c)"/>
-  <text x="56" y="314" class="cl">next state → tag array</text>
-
-  <!-- action sequencer -->
-  <rect x="80" y="726" width="300" height="74" rx="4" class="ctl"/>
-  <text x="92" y="746" class="lbl" fill="#9A6B12">action sequencer</text>
-  <text x="92" y="762" class="sub mono">HIT · SEND_BUS_MSG · WRITE_BACK</text>
-  <text x="92" y="774" class="sub mono">UPDATE_LINE · WRITE_LINE_DATA · SAVE_REQ</text>
-  <text x="92" y="792" class="sub">drives every port, buffer and interface below</text>
-
-  <!-- ══════════ array port arbiter ══════════ -->
-  <path d="M800 398 L1180 398 L1146 440 L834 440 Z" class="ctl"/>
-  <text x="860" y="418" class="lbl" fill="#9A6B12">array-port arbiter</text><text x="860" y="432" class="sub" fill="#9A6B12">round-robin over the four L1 slots, oldest first within a slot</text>
+  <!-- ══════════ the timed data port ══════════ -->
+  <path d="M1090 394 L1246 394 L1222 434 L1114 434 Z" class="ctl"/>
+  <text x="1108" y="412" class="lbl" fill="#9A6B12">array-port arbiter</text>
+  <text x="1104" y="426" class="sub" fill="#9A6B12">RR over the four L1 slots</text>
   <g class="wl">
-    <path d="M830 370 L845 396" class="wire" marker-end="url(#d)"/><text x="806" y="366">demand read</text>
-    <path d="M930 370 L935 396" class="wire" marker-end="url(#d)"/><text x="906" y="366">fill write</text>
-    <path d="M1030 370 L1025 396" class="wire" marker-end="url(#d)"/><text x="992" y="366">WB / supply read</text>
-    <path d="M1130 370 L1115 396" class="wire" marker-end="url(#d)"/><text x="1098" y="366">evict read</text>
+    <path d="M1120 366 L1132 392" class="wire" marker-end="url(#d)"/><text x="1064" y="360">demand read</text>
+    <path d="M1180 366 L1176 392" class="wire" marker-end="url(#d)"/><text x="1150" y="360">evict read</text>
+    <path d="M1230 366 L1216 392" class="wire" marker-end="url(#d)"/><text x="1188" y="348">fill / write-back</text>
+    <text x="1210" y="360">data write</text>
   </g>
-  <rect x="1094" y="452" width="132" height="40" rx="3" class="blk"/>
-  <text x="1104" y="468" class="lbl">busy timer</text>
-  <text x="1104" y="483" class="sub mono">A_LLC = 10 cycles</text>
-  <path d="M1040 440 L1040 452 L1092 470" class="cwire" marker-end="url(#c)"/>
+  <rect x="1090" y="450" width="156" height="42" rx="3" class="blk"/>
+  <text x="1100" y="466" class="lbl">port busy timer</text>
+  <text x="1100" y="481" class="sub mono">A_LLC = 10 cycles</text>
+  <path d="M1168 434 L1168 448" class="cwire" marker-end="url(#c)"/>
+  <text x="1090" y="512" class="sub">the arbiter is consulted only while</text>
+  <text x="1090" y="524" class="sub">the port is free</text>
 
-  <!-- ══════════ data array ══════════ -->
-  <rect x="800" y="470" width="380" height="120" rx="4" class="mem"/>
-  <text x="812" y="490" class="lbl">data array — 256 sets × 2 ways × 64 B</text>
-  <g fill="#FFFFFF" stroke="#8FB2C9" stroke-width=".9">
-    <rect x="812" y="500" width="176" height="24"/><rect x="996" y="500" width="172" height="24"/>
-    <rect x="812" y="528" width="176" height="24"/><rect x="996" y="528" width="172" height="24"/>
-  </g>
-  <g font-size="9.5" class="mono" fill="#14212A">
-    <text x="822" y="516">way 0 · 64 B line</text><text x="1006" y="516">way 1 · 64 B line</text>
-    <text x="822" y="544">⋮</text><text x="1006" y="544">⋮</text>
-  </g>
-  <text x="812" y="572" class="sub">a way may be reserved for one core (way_partition); LRU picks the victim</text>
-  <line x1="990" y1="440" x2="990" y2="468" class="wire" marker-end="url(#d)"/>
+  <!-- bypass: MSHR/PWB-resident accesses cut in -->
+  <path d="M1246 404 L1264 404" class="byp"/>
+  <path d="M1258 404 L1258 540 L1000 540 L1000 470 L884 470" class="byp" marker-end="url(#d)"/>
+  <text x="900" y="556" class="sub">a line held in the MSHR or the write-back buffer is read or</text>
+  <text x="900" y="568" class="sub">written without waiting for the port — it is not in the array —</text>
+  <text x="900" y="580" class="sub">but it still restarts the busy timer, so it cuts in ahead</text>
 
-  <!-- data out -->
-  <path d="M800 540 L640 540 L640 118" class="wire" marker-end="url(#d)"/>
+  <!-- data in/out of the array through the port -->
+  <path d="M1088 470 L1072 470" class="wire" marker-end="url(#d)"/>
+  <path d="M880 500 L700 500 L700 618 L640 618 L640 128" class="wire" marker-end="url(#d)"/>
   <text x="646" y="300" class="wl">line data → TX response</text>
 
+  <!-- ══════════ control: FSM + sequencer ══════════ -->
+  <rect x="80" y="622" width="330" height="96" rx="4" class="ctl"/>
+  <text x="92" y="642" class="lbl" fill="#9A6B12">coherence FSM — Protocols_FSM/MESI_LLC.csv</text>
+  <text x="92" y="659" class="sub mono">state × event → next state + actions</text>
+  <text x="92" y="675" class="sub">events: GetS GetM Replacement PutM_fromOwner</text>
+  <text x="92" y="687" class="sub">PutM_fromNonOwner Data_from{Lower,Upper} Own_Invalidation</text>
+  <text x="92" y="705" class="sub">states: N I S EorM · NE_d NM_d IorS_a MN_d S_d I_d N_a</text>
+  <path d="M410 660 L440 660 L440 470 L878 470" class="cwire" marker-end="url(#c)"/>
+  <text x="446" y="640" class="cl">next state → line bits</text>
+
+  <rect x="80" y="736" width="330" height="80" rx="4" class="ctl"/>
+  <text x="92" y="756" class="lbl" fill="#9A6B12">action sequencer</text>
+  <text x="92" y="772" class="sub">protocol actions: GetData · SendData · SaveData</text>
+  <text x="92" y="784" class="sub">SetOwner · ClearOwner · IssueInv · WriteBack · Stall</text>
+  <text x="92" y="802" class="sub">each becomes a port claim, a buffer allocation, or a message</text>
+  <path d="M245 718 L245 734" class="cwire" marker-end="url(#c)"/>
+
   <!-- ══════════ MSHR / PWB ══════════ -->
-  <rect x="420" y="726" width="330" height="74" rx="4" class="mem"/>
-  <text x="432" y="746" class="lbl">MSHR — 64 entries</text>
-  <text x="432" y="762" class="sub">one per line with a fetch outstanding; the line</text>
-  <text x="432" y="774" class="sub">lives here, not in the array, until its fill lands</text>
-  <text x="432" y="792" class="sub mono">alloc on miss · free on fill</text>
+  <rect x="440" y="736" width="330" height="80" rx="4" class="mem"/>
+  <text x="452" y="756" class="lbl">MSHR — 64 entries</text>
+  <text x="452" y="772" class="sub">a line being fetched lives here, not in the array,</text>
+  <text x="452" y="784" class="sub">until its fill is installed</text>
+  <text x="452" y="802" class="sub mono">allocate on miss · free on fill</text>
 
-  <rect x="790" y="726" width="330" height="74" rx="4" class="mem"/>
-  <text x="802" y="746" class="lbl">write-back buffer — 32 entries</text>
-  <text x="802" y="762" class="sub">a dirty victim waits here for its write to memory;</text>
-  <text x="802" y="774" class="sub">the array way is released immediately</text>
-  <text x="802" y="792" class="sub mono">alloc on eviction · free on write</text>
+  <rect x="800" y="736" width="330" height="80" rx="4" class="mem"/>
+  <text x="812" y="756" class="lbl">write-back buffer — 32 entries</text>
+  <text x="812" y="772" class="sub">a dirty victim waits here for its write to memory;</text>
+  <text x="812" y="784" class="sub">its way in the array is released at once</text>
+  <text x="812" y="802" class="sub mono">allocate on eviction · free on write</text>
 
-  <path d="M772 476 L772 700 L585 700 L585 724" class="wire" marker-end="url(#d)"/>
-  <text x="640" y="695" class="wl">miss</text>
-  <path d="M955 590 L955 724" class="wire" marker-end="url(#d)"/>
-  <text x="960" y="700" class="wl">victim line</text>
+  <path d="M1022 520 L1022 700 L605 700 L605 734" class="wire" marker-end="url(#d)"/>
+  <text x="660" y="696" class="wl">miss → allocate</text>
+  <path d="M965 584 L965 734" class="wire" marker-end="url(#d)"/>
+  <text x="970" y="700" class="wl">victim line</text>
 
-  <!-- eviction → INV (inclusion) -->
-  <path d="M1120 750 L1210 750 L1210 118" class="iwire" marker-end="url(#r)"/>
-  <text x="1150" y="742" class="wl" fill="#BE3F24">inclusion:</text>
-  <text x="1150" y="754" class="wl" fill="#BE3F24">evicting a line</text>
-  <text x="1150" y="766" class="wl" fill="#BE3F24">an L1 holds</text>
-  <text x="1150" y="778" class="wl" fill="#BE3F24">sends it an INV</text>
+  <!-- inclusion: IssueInv comes from the FSM, not from the write-back buffer -->
+  <path d="M410 770 L424 770 L424 660 L1268 660 L1268 128" class="iwire" marker-end="url(#r)"/>
+  <text x="1010" y="654" class="wl" fill="#BE3F24">IssueInv — inclusion: evicting a line</text>
+  <text x="1010" y="642" class="wl" fill="#BE3F24">an L1 holds invalidates its copy first</text>
 
   <!-- ══════════ bus[1] + memory ══════════ -->
-  <rect x="34" y="840" width="1192" height="62" rx="4" class="io"/>
-  <text x="46" y="856" class="lbl mono" fill="#4B32A8">bus[1] — point-to-point memory bus (full duplex)</text>
-  <rect x="420" y="862" width="150" height="30" rx="3" class="blk"/><text x="432" y="875" class="lbl">TX read / write</text><text x="432" y="887" class="sub mono">miss · dirty evict</text>
-  <rect x="600" y="862" width="150" height="30" rx="3" class="blk"/><text x="612" y="875" class="lbl">RX fill</text><text x="612" y="887" class="sub mono">data from DRAM</text>
-  <rect x="800" y="862" width="400" height="30" rx="3" class="blk"/><text x="812" y="882" class="lbl mono">MCsim DDR4-2400 · FR-FCFS scheduler</text>
-  <line x1="585" y1="800" x2="585" y2="860" class="wire" marker-end="url(#d)"/>
-  <line x1="955" y1="800" x2="955" y2="860" class="wire" marker-end="url(#d)"/>
-  <path d="M675 862 L675 620 L930 620 L930 592" class="wire" marker-end="url(#d)"/>
-  <text x="700" y="616" class="wl">fill → array write + MSHR free</text>
-  <line x1="750" y1="877" x2="798" y2="877" class="wire" marker-end="url(#d)"/>
+  <rect x="34" y="860" width="1212" height="62" rx="4" class="io"/>
+  <text x="46" y="876" class="lbl mono" fill="#4B32A8">bus[1] — point-to-point memory bus (full duplex)</text>
+  <rect x="440" y="882" width="160" height="30" rx="3" class="blk"/><text x="452" y="895" class="lbl">TX read / write</text><text x="452" y="907" class="sub mono">miss · dirty evict</text>
+  <rect x="624" y="882" width="150" height="30" rx="3" class="blk"/><text x="636" y="895" class="lbl">RX fill</text><text x="636" y="907" class="sub mono">data from DRAM</text>
+  <rect x="800" y="882" width="420" height="30" rx="3" class="blk"/><text x="812" y="902" class="lbl mono">MCsim DDR4-2400 · FR-FCFS scheduler</text>
+  <line x1="605" y1="816" x2="605" y2="880" class="wire" marker-end="url(#d)"/>
+  <line x1="965" y1="816" x2="965" y2="880" class="wire" marker-end="url(#d)"/>
+  <line x1="774" y1="897" x2="798" y2="897" class="wire" marker-end="url(#d)"/>
+  <path d="M699 882 L699 840 L1206 840 L1206 394" class="wire" marker-end="url(#d)"/>
+  <text x="820" y="836" class="wl">fill → array write, MSHR freed</text>
 
   <!-- ══════════ legend ══════════ -->
   <g>
-    <line x1="34" y1="928" x2="70" y2="928" class="wire"/><text x="78" y="932" class="sub">data path</text>
-    <line x1="150" y1="928" x2="186" y2="928" class="cwire"/><text x="194" y="932" class="sub">control</text>
-    <line x1="266" y1="928" x2="302" y2="928" class="iwire"/><text x="310" y="932" class="sub">back-invalidation (inclusion)</text>
-    <rect x="520" y="921" width="14" height="12" class="mem"/><text x="540" y="932" class="sub">storage</text>
-    <rect x="612" y="921" width="14" height="12" class="ctl"/><text x="632" y="932" class="sub">control logic</text>
-    <rect x="726" y="921" width="14" height="12" class="io"/><text x="746" y="932" class="sub">interconnect interface</text>
-    <text x="900" y="926" class="sub">observed by the Logger and the raw trace:</text><text x="900" y="938" class="sub">queue arrival · admission · port claim · data emitted</text>
+    <line x1="34" y1="952" x2="70" y2="952" class="wire"/><text x="78" y="956" class="sub">data path (timed)</text>
+    <line x1="196" y1="952" x2="232" y2="952" class="byp"/><text x="240" y="956" class="sub">register-resident access (bypasses the port)</text>
+    <line x1="500" y1="952" x2="536" y2="952" class="cwire"/><text x="544" y="956" class="sub">control (untimed in the model)</text>
+    <line x1="744" y1="952" x2="780" y2="952" class="iwire"/><text x="788" y="956" class="sub">back-invalidation (inclusion)</text>
+    <rect x="34" y="972" width="14" height="12" class="mem"/><text x="56" y="983" class="sub">storage</text>
+    <rect x="130" y="972" width="14" height="12" class="ctl"/><text x="152" y="983" class="sub">control logic</text>
+    <rect x="248" y="972" width="14" height="12" class="io"/><text x="270" y="983" class="sub">interconnect interface</text>
+    <text x="420" y="983" class="sub">observed by the Logger and the raw trace: queue arrival · admission · port claim · data emitted</text>
   </g>
 </svg>
