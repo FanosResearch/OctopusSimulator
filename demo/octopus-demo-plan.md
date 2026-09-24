@@ -265,8 +265,24 @@ clock for ~1 M cycles, which the page shows in ~84 s at 12k cycles/s), so live m
 arrives during the run and the view plays behind the write head*, not the page waiting on Octopus.
 A heavier workload (more jobs, SPLASH-scale aggressors) inverts that.
 
-Not done yet: a "Run" button in the page (the server would spawn the simulator itself) and the
-three-robot compare view; single act, started from the terminal, first.
+## 13. Compare view - the three acts at once (2026-09-24)
+
+The acts used to differ by an edit to the shared arbiter CSV, so only one could run at a time.
+The bus arbiter turns out to be settable per run (`-p bus[0].interconnect_controller.arbiter_type(s)=...`,
+verified by forcing TDM against an FCFS file and getting a different result), so each act now has
+its own workload directory and differs only by `-p` overrides. Consequences:
+
+- `run_acts.sh` runs the three **in parallel**: 4 s instead of ~20 s, same results to the byte.
+- `live.sh compare` starts all three simulations at once and serves them together;
+  `live_server.py` watches several runs (`--watch act1=dir --watch act2=dir ...`) and answers
+  `GET /api/live?since=act1:12,act2:8,act3:0` with each act's new records.
+- The page has a **Compare** button (canned or live): three robots, one map, one shared clock,
+  each with its own trail, plus a side-by-side table (job time, missed periods, error, peak).
+  The single-act view is unchanged. Because the clock is shared, the comparison is
+  time-aligned: if one act's simulator is behind, the whole view holds rather than letting the
+  others run ahead.
+
+Not done yet: a "Run" button in the page (the server would spawn the simulator itself).
 
 Open: a real profiled compute budget for the EKF (§10.1); browser check of the rebuilt page;
 optional export button.

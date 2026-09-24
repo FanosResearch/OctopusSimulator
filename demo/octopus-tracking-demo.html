@@ -133,6 +133,15 @@ body[data-mode="live"] .caption strong{color:var(--warn)}
 .ro.good .val{color:var(--nominal)}
 .ro.prot .val{color:var(--octo)}
 .ro.livec .val{color:var(--warn)}
+#cmpTable{border-collapse:collapse;width:100%;font-family:"IBM Plex Mono",monospace;font-size:12px}
+#cmpTable th{color:var(--dim);font-weight:400;text-align:right;padding:2px 4px;font-size:11px}
+#cmpTable td{padding:3px 4px;text-align:right;border-top:1px solid var(--line)}
+#cmpTable td:first-child,#cmpTable th:first-child{text-align:left}
+#cmpTable .k{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+#cmpTable td.bad{color:var(--alarm)}
+body[data-mode="compare"] .caption{border-left-color:var(--text)}
+body[data-mode="compare"] .caption strong{color:var(--text)}
+.striplab{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--dim);margin-top:5px}
 
 .scope{width:100%;height:96px;display:block;border-radius:5px;background:var(--panel2)}
 .jobs{display:flex;align-items:flex-end;gap:2px;height:46px;padding-top:4px}
@@ -263,8 +272,13 @@ kbd{font-family:"IBM Plex Mono",monospace;font-size:11.5px;border:1px solid var(
       </div>
     </div>
 
+    <div class="card" id="cmpCard" style="display:none">
+      <h2>Acts side by side</h2>
+      <table id="cmpTable"></table>
+    </div>
+
     <div class="card">
-      <h2>Last 64 control periods</h2>
+      <h2 id="jobsHead">Last 64 control periods</h2>
       <div class="jobs" id="jobs"></div>
       <div class="legend">
         <span><i class="sw" style="background:var(--nominal)"></i>job finished in time</span>
@@ -323,8 +337,11 @@ kbd{font-family:"IBM Plex Mono",monospace;font-size:11.5px;border:1px solid var(
     <button id="b2" aria-pressed="false"><span class="n">Act 2</span>Three streaming cores start</button>
     <button id="b3" aria-pressed="false"><span class="n">Act 3</span>Predictable arbitration + reserved cache way</button>
   </div>
+  <div class="acts" id="cmpRow" style="grid-template-columns:1fr;margin-top:1px">
+    <button id="bC" aria-pressed="false"><span class="n">Compare</span>All three at once - three robots, one map</button>
+  </div>
   <div class="acts" id="liveRow" style="display:none;grid-template-columns:1fr;margin-top:1px">
-    <button id="bL" aria-pressed="false"><span class="n">Live</span><span id="bLlabel">Follow a running Octopus simulation</span></button>
+    <button id="bL" aria-pressed="false"><span class="n">Live</span><span id="bLlabel">Follow the running simulation(s)</span></button>
   </div>
 
   <div class="knobs">
@@ -399,27 +416,320 @@ function atArc(s){
 /* ---------------- parameters (time unit = simulated cycle) ---------------- */
 const P = {
   T: 5000,           // control period in cycles; overwritten by the data's manifest
-  lapPeriods: 100,   // one lap of the planned path = 100 control periods
+  lapPeriods: 200,   // one traversal of the planned path = 200 control periods
   vGain: 1.55,       // robot speed limit, x path speed
   CM: 600,           // cm per normalised unit (the path spans ~12 m)
   get lap(){ return this.T * this.lapPeriods; }
 };
 
-/* ---------------- Octopus data: three acts of per-job records ---------------- */
+/* ---------------- the three acts ---------------- */
+const ACTS = [
+  {key:"act1", mode:"solo",    color:"--nominal", name:"Alone (FCFS)"},
+  {key:"act2", mode:"interf",  color:"--alarm",   name:"Contention (FCFS)"},
+  {key:"act3", mode:"octopus", color:"--octo",    name:"Protected (RR + way)"}
+];
 const ACT_OF = {solo:"act1", interf:"act2", octopus:"act3"};
-/* live mode: demo/live_server.py tails a running simulation's JobReport and hands us the
-   records as they are produced; same record shape as the canned acts, so one replay path. */
-const LIVE = {jobs:[], running:true, cursor:-1, period:0, label:"", total:0, on:false, waiting:false, lastPoll:0};
+const KEY_OF = {act1:"solo", act2:"interf", act3:"octopus"};
+
+/* canned data (embedded by demo/build_page.py, fetched from demo/data/, or dropped in) */
 const DATA = {act1:null, act2:null, act3:null, manifest:{}};
+/* live data: demo/live_server.py tails the JobReport of each running act */
+const LIVE = {jobs:{}, status:{}, acts:[], on:false, cursor:{}};
 const $ = id => document.getElementById(id);
 
+/* ---------------- one robot per act ---------------- */
+function makeRunner(act){
+  const p0 = atArc(0);
+  return {act:act.key, colorVar:act.color, name:act.name,
+          stream:null, job:null, set:{x:p0.x,y:p0.y}, poseT:0,
+          eff:{x:p0.x,y:p0.y}, heading:0, trace:[], jobs:[], lats:[],
+          nJobs:0, nMiss:0, nSkip:0, nPeriods:0,
+          errNow:0, errPeak:0, latPeak:0, lastExec:0, lastLat:0, waiting:false};
+}
+
+const S = {
+  t: 0, running: true, speed: 12000,     // cycles of simulated time per real second
+  src: "canned",                          // "canned" | "live"
+  view: "single",                         // "single" | "compare"
+  act: "act1",                            // which act when view === "single"
+  runners: [], bound: 0
+};
+const mode = () => S.view === "compare" ? "compare" : (S.src === "live" ? "live" : KEY_OF[S.act]);
+
+function recordsFor(act){ return S.src === "live" ? (LIVE.jobs[act] || []) : DATA[act]; }
+function stillRunning(act){ return S.src === "live" && !!(LIVE.status[act] && LIVE.status[act].running); }
+
+function startStream(r){
+  const list = recordsFor(r.act);
+  if(!list || !list.length){ r.stream = null; r.job = null; return; }
+  r.stream = {list, i:0, t0: S.t - list[0].release_cycle};
+  nextJob(r);
+}
+function nextJob(r){
+  const st = r.stream; if(!st){ r.job = null; return; }
+  if(st.i >= st.list.length){
+    // live and the simulator is still producing: hold here until the next record arrives
+    if(stillRunning(r.act)){ r.job = null; r.waiting = true; return; }
+    st.i = 0; st.t0 = S.t - st.list[0].release_cycle;                    // loop the act
+  }
+  r.waiting = false;
+  const rec = st.list[st.i++];
+  r.job = {rec, release: st.t0 + rec.release_cycle, finish: st.t0 + rec.finish_cycle, target:null, sampled:false};
+}
+function completeJob(r){
+  const j = r.job, rec = j.rec;
+  // the pose this job computed was sensed at its release and plans the waypoint for the end
+  // of its period; it is applied now, at the job's finish
+  r.set = j.target || atArc(((j.release + P.T)/P.lap)*LUT.total); r.poseT = j.release;
+  r.nJobs++; r.nPeriods += 1 + rec.skipped_periods; r.nSkip += rec.skipped_periods;
+  if(rec.deadline_miss) r.nMiss++;
+  r.jobs.push({c:rec.exec_cycles, miss:rec.deadline_miss, skip:false});
+  for(let k=0;k<rec.skipped_periods;k++) r.jobs.push({c:P.T, miss:true, skip:true});
+  while(r.jobs.length > 64) r.jobs.shift();
+  r.lats.push({L:rec.mean_lat_ns}); if(r.lats.length > 150) r.lats.shift();
+  r.latPeak = Math.max(r.latPeak, rec.max_lat_ns);
+  r.lastExec = rec.exec_cycles; r.lastLat = rec.mean_lat_ns;
+  nextJob(r);
+}
+
+function advance(r, dt){
+  let guard = 0;
+  while(r.job && guard++ < 200){
+    if(!r.job.sampled && S.t >= r.job.release){ r.job.target = atArc(((r.job.release + P.T)/P.lap)*LUT.total); r.job.sampled = true; }
+    if(S.t >= r.job.finish) completeJob(r); else break;
+  }
+  // the robot drives toward the waypoint of its last finished job at a speed limit
+  const vmax = P.vGain * LUT.total / P.lap;
+  const tgt = r.set;
+  const dx = tgt.x - r.eff.x, dy = tgt.y - r.eff.y;
+  const d = Math.hypot(dx,dy), s = vmax*dt;
+  if(d > 1e-6) r.heading = Math.atan2(dy, dx);
+  if(d <= s){ r.eff = {x:tgt.x, y:tgt.y}; }
+  else { r.eff = {x:r.eff.x + dx/d*s, y:r.eff.y + dy/d*s}; }
+  // position error against where the planned path says the robot should be now
+  const ref = atArc((S.t/P.lap)*LUT.total);
+  r.errNow = Math.hypot(r.eff.x-ref.x, r.eff.y-ref.y) * P.CM;
+  r.errPeak = Math.max(r.errPeak, r.errNow);
+  const last = r.trace[r.trace.length-1];
+  if(!last || Math.hypot(r.eff.x-last.x, r.eff.y-last.y) > 0.006){
+    r.trace.push({x:r.eff.x, y:r.eff.y});
+    if(r.trace.length > 900) r.trace.shift();
+  }
+}
+
+function step(dt){
+  // all robots share one clock so the comparison is time-aligned. If any of them is waiting
+  // on its simulator, the clock holds (nobody runs ahead of the data).
+  let holding = false;
+  for(const r of S.runners){
+    if(!r.job){ if(r.stream) nextJob(r); else startStream(r); if(!r.job) holding = true; }
+  }
+  if(holding) return;
+  S.t += dt;
+  for(const r of S.runners) advance(r, dt);
+}
+
+/* ---------------- drawing ---------------- */
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const sc = document.getElementById("scope"), sctx = sc.getContext("2d");
+let W=0,H=0,cx=0,cy=0,K=1;
+
+function css(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function fit(c){
+  const r = c.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio||1);
+  c.width = Math.max(1, Math.round(r.width*d)); c.height = Math.max(1, Math.round(r.height*d));
+  return {w:r.width, h:r.height, d};
+}
+function resize(){
+  const a = fit(cv); W=a.w; H=a.h; ctx.setTransform(a.d,0,0,a.d,0,0);
+  cx = W/2; cy = H/2; K = Math.min(W,H)*0.40;
+  const b = fit(sc); sctx.setTransform(b.d,0,0,b.d,0,0);
+}
+const fmt = n => Math.round(n).toLocaleString("en-US").replace(/,/g, " ");
+const colorOf = r => S.src === "live" && S.view === "single" ? css("--warn") : css(r.colorVar);
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+
+  // floor grid
+  ctx.strokeStyle = css("--grid"); ctx.lineWidth = 1; ctx.globalAlpha = .55;
+  const g = Math.max(22, K/5);
+  ctx.beginPath();
+  for(let x=cx%g; x<W; x+=g){ ctx.moveTo(x,0); ctx.lineTo(x,H); }
+  for(let y=cy%g; y<H; y+=g){ ctx.moveTo(0,y); ctx.lineTo(W,y); }
+  ctx.stroke(); ctx.globalAlpha = 1;
+
+  const px = p => ({x: cx + p.x*K, y: cy - p.y*K});
+
+  // planned path (ground truth)
+  ctx.strokeStyle = css("--refline"); ctx.lineWidth = 1.4; ctx.setLineDash([6,6]); ctx.globalAlpha=.75;
+  ctx.beginPath();
+  for(let i=0;i<=400;i++){ const p = px(atArc(i/400*LUT.total)); i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y); }
+  ctx.closePath(); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1;
+
+  // start / goal marker
+  const sp = px(atArc(0));
+  ctx.fillStyle = css("--refline"); ctx.font = '500 11px "IBM Plex Mono", monospace';
+  ctx.beginPath(); ctx.rect(sp.x-4, sp.y-4, 8, 8); ctx.fill();
+  ctx.fillText("START / GOAL", sp.x+8, sp.y+4);
+
+  const single = S.runners.length === 1;
+  for(const r of S.runners){
+    const col = colorOf(r), n = r.trace.length;
+    // error corridor (single act only: with three robots it would be soup)
+    if(single && n > 2){
+      ctx.fillStyle = col; ctx.globalAlpha = .10;
+      const from = Math.max(1, n-120);
+      ctx.beginPath();
+      for(let i=from;i<n;i++){ const p = px(r.trace[i]); i===from?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y); }
+      const refNow = px(atArc((S.t/P.lap)*LUT.total)); ctx.lineTo(refNow.x, refNow.y); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    // travelled trajectory, fading with age
+    ctx.lineWidth = single ? 2.6 : 2.0; ctx.lineCap="round"; ctx.lineJoin="round";
+    ctx.strokeStyle = col;
+    for(let i=1;i<n;i++){
+      const a = r.trace[i-1], b = r.trace[i];
+      ctx.globalAlpha = 0.07 + 0.93*Math.pow(i/n, 2.2);
+      const p1 = px(a), p2 = px(b);
+      ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // where the plan says the robot should be now
+  const refp = px(atArc((S.t/P.lap)*LUT.total));
+  if(single){
+    const r = S.runners[0], effp = px(r.eff);
+    if(r.errNow > 6){
+      ctx.strokeStyle = colorOf(r); ctx.globalAlpha=.55; ctx.lineWidth=1.2; ctx.setLineDash([3,4]);
+      ctx.beginPath(); ctx.moveTo(refp.x,refp.y); ctx.lineTo(effp.x,effp.y); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha=1;
+    }
+  }
+  ctx.fillStyle = css("--refline");
+  ctx.beginPath(); ctx.arc(refp.x,refp.y,3.2,0,7); ctx.fill();
+
+  // the robots, drawn last so they sit on top
+  for(const r of S.runners){
+    const effp = px(r.eff), col = colorOf(r);
+    ctx.save(); ctx.translate(effp.x, effp.y); ctx.rotate(-r.heading);
+    ctx.fillStyle = col; ctx.strokeStyle = css("--paper"); ctx.lineWidth = 2;
+    const k = single ? 1 : 0.85;
+    ctx.beginPath(); ctx.moveTo(11*k,0); ctx.lineTo(-7*k,7*k); ctx.lineTo(-4*k,0); ctx.lineTo(-7*k,-7*k); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+    if(!single){
+      ctx.fillStyle = col; ctx.font = '500 11px "IBM Plex Mono", monospace';
+      ctx.fillText(r.act, effp.x+12, effp.y-8);
+    }
+  }
+  if(single && S.runners[0].errNow > 30){
+    const r = S.runners[0], effp = px(r.eff);
+    ctx.fillStyle = colorOf(r); ctx.font = '500 13px "IBM Plex Mono", monospace';
+    ctx.fillText(r.errNow.toFixed(0)+" cm off", effp.x+13, effp.y-9);
+  }
+  drawScope();
+}
+
+function drawScope(){
+  const r = sc.getBoundingClientRect(), w=r.width, h=r.height;
+  sctx.clearRect(0,0,w,h);
+  const LMIN = 1, LMAX = 100000;                       // cycles, log scale
+  const yOf = L => h - 2 - (Math.log10(Math.max(LMIN, L)) - Math.log10(LMIN)) / (Math.log10(LMAX) - Math.log10(LMIN)) * (h - 4);
+  sctx.strokeStyle = css("--line"); sctx.lineWidth=1; sctx.globalAlpha=.8;
+  sctx.fillStyle = css("--dim"); sctx.font = '10px "IBM Plex Mono", monospace';
+  for(const L of [10,100,1000,10000]){ const y=yOf(L); sctx.beginPath(); sctx.moveTo(0,y); sctx.lineTo(w,y); sctx.stroke(); sctx.fillText(fmt(L), 3, y-2); }
+  sctx.globalAlpha=1;
+  const xs = i => (i/(150-1))*w;
+  for(const run of S.runners){
+    if(!run.lats.length) continue;
+    sctx.strokeStyle = S.runners.length === 1 ? css("--text") : colorOf(run);
+    sctx.lineWidth = 1.8; sctx.beginPath();
+    run.lats.forEach((p,i)=>{ const y = yOf(p.L); i?sctx.lineTo(xs(i),y):sctx.moveTo(xs(i),y); });
+    sctx.stroke();
+  }
+  if(S.bound>0 && S.runners.length===1 && S.act==="act3"){
+    const y = yOf(S.bound);
+    sctx.strokeStyle = css("--octo"); sctx.lineWidth=1.6; sctx.setLineDash([5,4]);
+    sctx.beginPath(); sctx.moveTo(0,y); sctx.lineTo(w,y); sctx.stroke(); sctx.setLineDash([]);
+  }
+}
+
+/* ---------------- readouts ---------------- */
+function strip(r, el){
+  if(el.children.length !== r.jobs.length) el.innerHTML = r.jobs.map(()=>"<i></i>").join("");
+  r.jobs.forEach((j,i)=>{
+    const c = el.children[i]; if(!c) return;
+    c.style.height = Math.max(8, Math.min(46, 46*Math.min(1, j.c/(P.T*2.6)))) + "px";
+    c.className = j.skip ? "skip" : (j.miss ? "miss" : "");
+  });
+}
+function refresh(){
+  $("clock").textContent = "t = " + fmt(S.t) + " cycles";
+  const cmp = S.runners.length > 1;
+
+  if(S.src === "live"){
+    const sts = S.runners.map(r => LIVE.status[r.act]).filter(Boolean);
+    const anyRunning = sts.some(s => s.running), waiting = S.runners.some(r => r.waiting);
+    const total = sts.reduce((a,s)=>a+s.total, 0);
+    $("datasrc").textContent = (anyRunning ? (waiting ? "live · waiting for the simulator · " : "live · simulating · ") : "live · run finished · ") + total + " jobs";
+    $("datasrc").classList.add("live");
+  }
+
+  $("cmpCard").style.display = cmp ? "" : "none";
+  $("jobsHead").textContent = cmp ? "Last 64 control periods, per act" : "Last 64 control periods";
+  document.querySelector(".readouts").style.display = cmp ? "none" : "";
+
+  if(cmp){
+    let h = "<tr><th>act</th><th>job time</th><th>missed</th><th>error</th><th>peak</th></tr>";
+    for(const r of S.runners){
+      const late = r.lastExec > P.T;
+      h += `<tr><td><span class="k" style="background:${colorOf(r)}"></span>${r.name}</td>` +
+           `<td class="${late?"bad":""}">${r.nJobs?fmt(r.lastExec):"–"}</td>` +
+           `<td class="${(r.nMiss+r.nSkip)?"bad":""}">${r.nMiss+r.nSkip} / ${r.nPeriods}</td>` +
+           `<td class="${r.errNow>30?"bad":""}">${r.errNow.toFixed(1)} cm</td>` +
+           `<td>${r.errPeak.toFixed(1)} cm</td></tr>`;
+    }
+    $("cmpTable").innerHTML = h;
+    const box = $("jobs");
+    if(box.dataset.mode !== "cmp"){
+      box.dataset.mode = "cmp"; box.style.display = "block"; box.style.height = "auto";
+      box.innerHTML = S.runners.map(r => `<div class="striplab">${r.name}</div><div class="jobs" id="strip_${r.act}" style="height:26px"></div>`).join("");
+    }
+    for(const r of S.runners){ const el = $("strip_"+r.act); if(el) strip(r, el); }
+    return;
+  }
+
+  const r = S.runners[0]; if(!r) return;
+  const box = $("jobs");
+  if(box.dataset.mode !== "one"){ box.dataset.mode = "one"; box.style.display = ""; box.style.height = "46px"; box.innerHTML = ""; }
+  strip(r, box);
+
+  $("vExec").textContent = r.nJobs ? fmt(r.lastExec) : "–";
+  $("vLat").textContent = r.nJobs ? (r.lastLat < 10 ? r.lastLat.toFixed(1) : fmt(r.lastLat)) : "–";
+  $("vLatMax").textContent = "peak " + (r.latPeak ? fmt(r.latPeak) + " cycles" : "–");
+  $("vMiss").textContent = r.nMiss + r.nSkip;
+  $("vMissRate").textContent = (r.nMiss + r.nSkip) + " of " + r.nPeriods + " periods";
+  $("vErr").textContent = r.errNow.toFixed(1);
+  $("vErrPk").textContent = "peak " + r.errPeak.toFixed(1) + " cm · pose age " + fmt(r.nJobs ? S.t - r.poseT : 0) + " cyc";
+
+  const late = r.lastExec > P.T, m = mode();
+  const tone = m === "octopus" ? "prot" : (m === "live" ? "livec" : "good");
+  $("roExec").className = "ro " + (late ? "hot" : tone);
+  $("roLat").className  = "ro " + (r.lastLat > 50 ? "hot" : tone);
+  $("roMiss").className = "ro " + ((r.nMiss + r.nSkip) ? "hot" : "good");
+  $("roErr").className  = "ro " + (r.errNow > 30 ? "hot" : tone);
+  $("noBound").style.display = (S.bound>0 && S.act==="act3") ? "none" : "flex";
+}
+
+/* ---------------- loading the canned acts ---------------- */
 function parseJsonl(text){ return text.split("\n").filter(l => l.trim()).map(l => JSON.parse(l)); }
 function haveData(){ return DATA.act1 && DATA.act2 && DATA.act3; }
 function dataReady(source){
   const m = DATA.manifest.act1 || {};
   if(m.period_cycles) P.T = m.period_cycles;
-  const p3 = DATA.manifest.act3 || {};
-  S.bound = p3.access_max_ns || 0;        // worst per-access latency measured under protection (cycles)
+  S.bound = (DATA.manifest.act3 || {}).access_max_ns || 0;
   $("datasrc").textContent = source; $("datasrc").classList.add("live");
   $("vExecSub").textContent = "period " + fmt(P.T) + " cycles";
   writeCaptions();
@@ -443,10 +753,9 @@ async function loadFetched(){
     }
     dataReady("Octopus runs loaded from demo/data/");
   }catch(e){
-    $("datasrc").textContent = "no Octopus data found — run demo/run_acts.sh, then build_page.py or drop the jsonl files here";
+    $("datasrc").textContent = "no Octopus data found — run demo/run_acts.sh, or drop the jsonl files here";
   }
 }
-// file drop: act1/act2/act3 .jsonl (+ optional .manifest.json)
 const drop = $("drop");
 ["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
 ["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
@@ -459,315 +768,104 @@ drop.addEventListener("drop", async e => {
   if(haveData()) dataReady("Octopus runs from dropped files");
 });
 
-/* ---------------- replay state ---------------- */
-const S = {
-  t: 0, mode: "solo", running: true, speed: 12000,   // speed: cycles per real second
-  stream: null, job: null, set: null, poseT: 0,
-  jobs: [], lats: [],
-  eff: {x:0,y:0}, heading: 0,
-  trace: [], nJobs: 0, nMiss: 0, nSkip: 0, nPeriods: 0,
-  errPeak: 0, errNow: 0, latPeak: 0, bound: 0, lastExec: 0, lastLat: 0
-};
-
-// start (or restart) the current act's record stream at the current simulated time
-function actList(){ return S.mode === "live" ? LIVE.jobs : DATA[ACT_OF[S.mode]]; }
-function startStream(){
-  const list = actList();
-  if(!list || !list.length){ S.stream = null; S.job = null; return; }
-  S.stream = {list, i:0, t0: S.t - list[0].release_cycle};
-  nextJob();
-}
-function nextJob(){
-  const st = S.stream; if(!st){ S.job = null; return; }
-  if(st.i >= st.list.length){
-    // live and the simulator is still producing: hold here until the next record arrives
-    if(S.mode === "live" && LIVE.running){ S.job = null; LIVE.waiting = true; return; }
-    st.i = 0; st.t0 = S.t - st.list[0].release_cycle;                                // loop the act
-  }
-  LIVE.waiting = false;
-  const r = st.list[st.i++];
-  S.job = {rec:r, release: st.t0 + r.release_cycle, finish: st.t0 + r.finish_cycle, target:null, sampled:false};
-}
-function completeJob(){
-  const j = S.job, r = j.rec;
-  // the pose estimate this job computed was sensed at its release; it is applied now, at its finish
-  S.set = j.target || atArc(((j.release + P.T)/P.lap)*LUT.total); S.poseT = j.release;
-  S.nJobs++; S.nPeriods += 1 + r.skipped_periods; S.nSkip += r.skipped_periods;
-  if(r.deadline_miss) S.nMiss++;
-  S.jobs.push({c:r.exec_cycles, miss:r.deadline_miss, skip:false});
-  for(let k=0;k<r.skipped_periods;k++) S.jobs.push({c:P.T, miss:true, skip:true});
-  while(S.jobs.length > 64) S.jobs.shift();
-  S.lats.push({L:r.mean_lat_ns}); if(S.lats.length > 150) S.lats.shift();
-  S.latPeak = Math.max(S.latPeak, r.max_lat_ns);
-  S.lastExec = r.exec_cycles; S.lastLat = r.mean_lat_ns;
-  nextJob();
-}
-
-function step(dt){
-  // live: never run the playhead past the simulator. When we have caught up we freeze time
-  // (the robot holds its last commanded waypoint) until the next job is reported.
-  if(!S.job){ if(S.stream) nextJob(); if(!S.job) return; }
-  S.t += dt;
-  let guard = 0;
-  while(S.job && guard++ < 200){
-    if(!S.job.sampled && S.t >= S.job.release){ S.job.target = atArc(((S.job.release + P.T)/P.lap)*LUT.total); S.job.sampled = true; }   // waypoint planned for the end of the period
-    if(S.t >= S.job.finish) completeJob(); else break;
-  }
-  // the robot drives toward the goal point of its last pose estimate at a speed limit
-  const vmax = P.vGain * LUT.total / P.lap;
-  const tgt = S.set || atArc(0);
-  const dx = tgt.x - S.eff.x, dy = tgt.y - S.eff.y;
-  const d = Math.hypot(dx,dy), s = vmax*dt;
-  if(d > 1e-6) S.heading = Math.atan2(dy, dx);
-  if(d <= s){ S.eff = {x:tgt.x, y:tgt.y}; }
-  else { S.eff = {x:S.eff.x + dx/d*s, y:S.eff.y + dy/d*s}; }
-  // position error against where the planned path says the robot should be now
-  const ref = atArc((S.t/P.lap)*LUT.total);
-  S.errNow = Math.hypot(S.eff.x-ref.x, S.eff.y-ref.y) * P.CM;
-  S.errPeak = Math.max(S.errPeak, S.errNow);
-  const last = S.trace[S.trace.length-1];
-  if(!last || Math.hypot(S.eff.x-last.x, S.eff.y-last.y) > 0.006){
-    S.trace.push({x:S.eff.x, y:S.eff.y, m:S.mode});
-    if(S.trace.length > 780) S.trace.shift();
-  }
-}
-
-/* ---------------- drawing ---------------- */
-const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
-const sc = document.getElementById("scope"), sctx = sc.getContext("2d");
-let W=0,H=0,cx=0,cy=0,K=1;
-
-function css(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
-function fit(c){
-  const r = c.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio||1);
-  c.width = Math.max(1, Math.round(r.width*d)); c.height = Math.max(1, Math.round(r.height*d));
-  return {w:r.width, h:r.height, d};
-}
-function resize(){
-  const a = fit(cv); W=a.w; H=a.h; ctx.setTransform(a.d,0,0,a.d,0,0);
-  cx = W/2; cy = H/2; K = Math.min(W,H)*0.40;
-  const b = fit(sc); sctx.setTransform(b.d,0,0,b.d,0,0);
-}
-const MODE_COLOR = () => ({solo:css("--nominal"), interf:css("--alarm"), octopus:css("--octo"), live:css("--warn")});
-const fmt = n => Math.round(n).toLocaleString("en-US").replace(/,/g, " ");
-
-function draw(){
-  const col = MODE_COLOR();
-  ctx.clearRect(0,0,W,H);
-
-  // floor grid
-  ctx.strokeStyle = css("--grid"); ctx.lineWidth = 1; ctx.globalAlpha = .55;
-  const g = Math.max(22, K/5);
-  ctx.beginPath();
-  for(let x=cx%g; x<W; x+=g){ ctx.moveTo(x,0); ctx.lineTo(x,H); }
-  for(let y=cy%g; y<H; y+=g){ ctx.moveTo(0,y); ctx.lineTo(W,y); }
-  ctx.stroke(); ctx.globalAlpha = 1;
-
-  const px = p => ({x: cx + p.x*K, y: cy - p.y*K});
-
-  // planned path (ground truth)
-  ctx.strokeStyle = css("--refline"); ctx.lineWidth = 1.4; ctx.setLineDash([6,6]); ctx.globalAlpha=.75;
-  ctx.beginPath();
-  for(let i=0;i<=400;i++){ const p = px(atArc(i/400*LUT.total)); i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y); }
-  ctx.closePath(); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1;
-
-  // start / goal marker (one lap = start to goal)
-  const sp = px(atArc(0));
-  ctx.fillStyle = css("--refline"); ctx.font = '500 11px "IBM Plex Mono", monospace';
-  ctx.beginPath(); ctx.rect(sp.x-4, sp.y-4, 8, 8); ctx.fill();
-  ctx.fillText("START / GOAL", sp.x+8, sp.y+4);
-
-  // error corridor: shaded band between the actual trajectory and the planned path (recent part)
-  const n = S.trace.length;
-  if(n > 2){
-    ctx.fillStyle = col[S.mode]; ctx.globalAlpha = .10;
-    const from = Math.max(1, n-120);
-    ctx.beginPath();
-    for(let i=from;i<n;i++){ const p = px(S.trace[i]); i===from?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y); }
-    // back along the planned path over the same time window is not stored; close via current reference
-    const refNow = px(atArc((S.t/P.lap)*LUT.total)); ctx.lineTo(refNow.x, refNow.y); ctx.closePath(); ctx.fill();
-    ctx.globalAlpha = 1;
-  }
-
-  // actual trajectory, coloured by the act it was driven in, fading with age
-  ctx.lineWidth = 2.6; ctx.lineCap="round"; ctx.lineJoin="round";
-  for(let i=1;i<n;i++){
-    const a = S.trace[i-1], b = S.trace[i];
-    const age = i/n;
-    ctx.globalAlpha = 0.07 + 0.93*Math.pow(age, 2.2);
-    ctx.strokeStyle = col[b.m] || col.solo;
-    const p1 = px(a), p2 = px(b);
-    ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-
-  // where the plan says the robot should be now, and the error segment
-  const refp = px(atArc((S.t/P.lap)*LUT.total)), effp = px(S.eff);
-  if(S.errNow > 6){
-    ctx.strokeStyle = col[S.mode]; ctx.globalAlpha=.55; ctx.lineWidth=1.2; ctx.setLineDash([3,4]);
-    ctx.beginPath(); ctx.moveTo(refp.x,refp.y); ctx.lineTo(effp.x,effp.y); ctx.stroke();
-    ctx.setLineDash([]); ctx.globalAlpha=1;
-  }
-  ctx.fillStyle = css("--refline");
-  ctx.beginPath(); ctx.arc(refp.x,refp.y,3.2,0,7); ctx.fill();
-
-  // the robot: a heading triangle
-  ctx.save(); ctx.translate(effp.x, effp.y); ctx.rotate(-S.heading);
-  ctx.fillStyle = col[S.mode]; ctx.strokeStyle = css("--paper"); ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(11,0); ctx.lineTo(-7,7); ctx.lineTo(-4,0); ctx.lineTo(-7,-7); ctx.closePath(); ctx.fill(); ctx.stroke();
-  ctx.restore();
-
-  // error callout when it is large
-  if(S.errNow > 30){
-    ctx.fillStyle = col[S.mode];
-    ctx.font = '500 13px "IBM Plex Mono", monospace';
-    ctx.fillText(S.errNow.toFixed(0)+" cm off", effp.x+13, effp.y-9);
-  }
-  drawScope();
-}
-
-function drawScope(){
-  const r = sc.getBoundingClientRect(), w=r.width, h=r.height;
-  sctx.clearRect(0,0,w,h);
-  const LMIN = 1, LMAX = 100000;                       // cycles, log scale
-  const yOf = L => h - 2 - (Math.log10(Math.max(LMIN, L)) - Math.log10(LMIN)) / (Math.log10(LMAX) - Math.log10(LMIN)) * (h - 4);
-  sctx.strokeStyle = css("--line"); sctx.lineWidth=1; sctx.globalAlpha=.8;
-  sctx.fillStyle = css("--dim"); sctx.font = '10px "IBM Plex Mono", monospace';
-  for(const L of [10,100,1000,10000]){ const y=yOf(L); sctx.beginPath(); sctx.moveTo(0,y); sctx.lineTo(w,y); sctx.stroke(); sctx.fillText(fmt(L), 3, y-2); }
-  sctx.globalAlpha=1;
-  const N = S.lats.length; if(!N) return;
-  const xs = i => (i/(150-1))*w;
-  sctx.strokeStyle = css("--text"); sctx.lineWidth=1.8; sctx.beginPath();
-  S.lats.forEach((p,i)=>{ const y = yOf(p.L); i?sctx.lineTo(xs(i),y):sctx.moveTo(xs(i),y); });
-  sctx.stroke();
-  if(S.bound>0 && S.mode==="octopus"){
-    const y = yOf(S.bound);
-    sctx.strokeStyle = css("--octo"); sctx.lineWidth=1.6; sctx.setLineDash([5,4]);
-    sctx.beginPath(); sctx.moveTo(0,y); sctx.lineTo(w,y); sctx.stroke(); sctx.setLineDash([]);
-  }
-}
-
-/* ---------------- readouts ---------------- */
-function refresh(){
-  $("clock").textContent = "t = " + fmt(S.t) + " cycles";
-  if(S.mode === "live"){
-    $("datasrc").textContent = (LIVE.running
-        ? (LIVE.waiting ? "live · waiting for the simulator · " : "live · simulating · ")
-        : "live · run finished · ") + LIVE.total + " jobs";
-    $("datasrc").classList.add("live");
-  }
-  $("vExec").textContent = S.nJobs ? fmt(S.lastExec) : "–";
-  $("vLat").textContent = S.nJobs ? (S.lastLat < 10 ? S.lastLat.toFixed(1) : fmt(S.lastLat)) : "–";
-  $("vLatMax").textContent = "peak " + (S.latPeak ? fmt(S.latPeak) + " cycles" : "–");
-  $("vMiss").textContent = S.nMiss + S.nSkip;
-  $("vMissRate").textContent = (S.nMiss + S.nSkip) + " of " + S.nPeriods + " periods";
-  $("vErr").textContent = S.errNow.toFixed(1);
-  const age = S.set ? S.t - S.poseT : 0;
-  $("vErrPk").textContent = "peak " + S.errPeak.toFixed(1) + " cm · pose age " + fmt(age) + " cyc";
-
-  const late = S.lastExec > P.T;
-  const prot = S.mode==="octopus", liv = S.mode==="live";
-  const tone = prot ? "prot" : (liv ? "livec" : "good");
-  $("roExec").className = "ro " + (late ? "hot" : tone);
-  $("roLat").className  = "ro " + (S.lastLat > 50 ? "hot" : tone);
-  $("roMiss").className = "ro " + ((S.nMiss + S.nSkip) ? "hot" : "good");
-  $("roErr").className  = "ro " + (S.errNow > 30 ? "hot" : tone);
-  $("noBound").style.display = (S.bound>0 && prot) ? "none" : "flex";
-
-  const strip = $("jobs");
-  if(strip.children.length !== S.jobs.length){
-    strip.innerHTML = S.jobs.map(()=>"<i></i>").join("");
-  }
-  S.jobs.forEach((j,i)=>{
-    const el = strip.children[i]; if(!el) return;
-    el.style.height = Math.max(8, Math.min(46, 46*Math.min(1, j.c/(P.T*2.6)))) + "px";
-    el.className = j.skip ? "skip" : (j.miss ? "miss" : "");
-  });
-}
-
-/* ---------------- live: poll the running simulation ---------------- */
+/* ---------------- live: poll the running simulation(s) ---------------- */
 async function pollLive(){
   try{
-    const r = await fetch("api/live?since=" + LIVE.cursor, {cache:"no-store"});
-    if(!r.ok) throw new Error("no live server");
-    const d = await r.json(); if(d.error) throw new Error(d.error);
-    if(!LIVE.on){                                    // first successful poll: offer the mode
+    const cur = (LIVE.acts.length ? LIVE.acts : ["act1","act2","act3"]).map(a => a + ":" + (LIVE.cursor[a] === undefined ? -1 : LIVE.cursor[a])).join(",");
+    const res = await fetch("api/live?since=" + cur, {cache:"no-store"});
+    if(!res.ok) throw new Error("no live server");
+    const d = await res.json(); if(d.error) throw new Error(d.error);
+    const all = d.all || {};
+    LIVE.acts = d.acts || Object.keys(all);
+    if(!LIVE.on){
       LIVE.on = true; $("liveRow").style.display = "grid";
-      $("bLlabel").textContent = "Follow the running simulation — " + d.label;
+      $("bLlabel").textContent = LIVE.acts.length > 1
+        ? "Follow all " + LIVE.acts.length + " running simulations"
+        : "Follow the running simulation — " + (all[LIVE.acts[0]] || {}).label;
     }
-    LIVE.running = d.running; LIVE.total = d.total; LIVE.label = d.label;
-    if(d.period) LIVE.period = d.period;
-    if(d.jobs.length){
-      for(const j of d.jobs) LIVE.jobs.push(j);
-      LIVE.cursor = d.jobs[d.jobs.length-1].job;
-      if(S.mode === "live" && !S.stream) startStream();
+    for(const a of LIVE.acts){
+      const st = all[a]; if(!st) continue;
+      LIVE.status[a] = st;
+      if(st.period) P.T = st.period;
+      if(st.jobs && st.jobs.length){
+        (LIVE.jobs[a] = LIVE.jobs[a] || []).push(...st.jobs);
+        LIVE.cursor[a] = st.jobs[st.jobs.length-1].job;
+        // a runner that had no data yet can start now
+        for(const r of S.runners) if(r.act === a && !r.stream) startStream(r);
+      }
     }
   }catch(e){
-    if(LIVE.on && S.mode !== "live"){ LIVE.on = false; $("liveRow").style.display = "none"; }
+    if(LIVE.on && S.src !== "live"){ LIVE.on = false; $("liveRow").style.display = "none"; }
   }
 }
 
-/* ---------------- acts ---------------- */
-const CAPTIONS = {solo:["Act 1 — alone",""], interf:["Act 2 — contention",""], octopus:["Act 3 — protected",""]};
+/* ---------------- acts and captions ---------------- */
+const CAPTIONS = {};
 function writeCaptions(){
   const m1 = DATA.manifest.act1 || {}, m2 = DATA.manifest.act2 || {}, m3 = DATA.manifest.act3 || {};
   const T = fmt(P.T);
-  CAPTIONS.solo[1] = `Core 0 has the memory system to itself. Each localization job (an EKF step: ~4 150 compute cycles and 20 memory accesses over 9 cache lines) finishes in <strong>${fmt(m1.exec_mean||0)} cycles</strong> inside its ${T}-cycle period; every access is an L1 hit. Fresh pose every period: the robot hugs the planned path.`;
-  CAPTIONS.interf[1] = `Three cores start streaming through the shared cache with 8 outstanding requests each. They evict the task's lines (inclusion drops them from its L1 too) and their row-hit streams win the FR-FCFS DRAM scheduler, so the task's few DRAM reads wait <strong>thousands of cycles</strong>. Jobs overrun: mean ${fmt(m2.exec_mean||0)}, worst ${fmt(m2.exec_max||0)} cycles; ${m2.deadline_misses||0} of ${(m2.jobs||0)+0} periods missed or skipped. The robot steers on a stale pose and drifts off the plan.`;
-  CAPTIONS.octopus[1] = `Same three streaming cores. Octopus now arbitrates the bus <strong>Round-Robin</strong> and reserves one LLC way for core 0 (<code>way_partition</code>), so its working set can no longer be evicted and it never queues at DRAM. Jobs are back to <strong>${fmt(m3.exec_mean||0)} cycles</strong>, ${m3.deadline_misses||0} misses; the worst measured access is ${fmt(m3.access_max_ns||0)} cycles, an analysable bound. The robot re-converges onto the plan.`;
-  $("capText").innerHTML = CAPTIONS[S.mode][1];
+  CAPTIONS.solo = ["Act 1 — alone",
+    `Core 0 has the memory system to itself. Each localization job (an EKF step: ~4 150 compute cycles and 20 memory accesses over 9 cache lines) finishes in <strong>${fmt(m1.exec_mean||0)} cycles</strong> inside its ${T}-cycle period; every access is an L1 hit. Fresh pose every period: the robot hugs the planned path.`];
+  CAPTIONS.interf = ["Act 2 — contention",
+    `Three cores start streaming through the shared cache with 8 outstanding requests each. They evict the task's lines (inclusion drops them from its L1 too) and their row-hit streams win the FR-FCFS DRAM scheduler, so the task's few DRAM reads wait <strong>thousands of cycles</strong>. Jobs overrun: mean ${fmt(m2.exec_mean||0)}, worst ${fmt(m2.exec_max||0)} cycles; ${m2.deadline_misses||0} periods missed or skipped. The robot steers on a stale pose and drifts off the plan.`];
+  CAPTIONS.octopus = ["Act 3 — protected",
+    `Same three streaming cores. Octopus now arbitrates the bus <strong>Round-Robin</strong> and reserves one LLC way for core 0 (<code>way_partition</code>), so its working set can no longer be evicted and it never queues at DRAM. Jobs are back to <strong>${fmt(m3.exec_mean||0)} cycles</strong>, ${m3.deadline_misses||0} misses; the worst measured access is ${fmt(m3.access_max_ns||0)} cycles, an analysable bound. The robot re-converges onto the plan.`];
+  CAPTIONS.compare = ["Compare",
+    `All three acts at once, one robot each, on the same clock and the same planned path — the difference between the traces is nothing but <strong>when the localization jobs finished</strong> in each configuration.`];
+  CAPTIONS.live = ["Live", `Following a running Octopus simulation. Each robot move replays a job the simulator has just finished; when the view catches up it holds until the next job is reported.`];
 }
-function setMode(m, fromAuto){
-  const wasLive = S.mode === "live";
-  S.mode = m;
+
+function setView(view, act, src){
+  S.view = view; S.src = src; if(act) S.act = act;
+  const m = mode();
   document.body.dataset.mode = m;
-  ["b1","b2","b3","bL"].forEach((id,i)=>{
-    $(id).setAttribute("aria-pressed", String(["solo","interf","octopus","live"][i]===m));
-  });
-  if(m === "live"){
-    P.T = LIVE.period || P.T;
-    CAPTIONS.live = ["Live", `Following a running Octopus simulation of <strong>${LIVE.label}</strong>. Each robot move replays a job the simulator has just finished; when the view catches up with the simulation it holds until the next job is reported.`];
-    $("vExecSub").textContent = "period " + fmt(P.T) + " cycles";
-    $("llcNote").textContent = "live run"; $("mcNote").textContent = "live run";
-    if(!wasLive) resetRun();
-  }
-  if(!CAPTIONS[m]) CAPTIONS[m] = ["Live",""];
-  $("capAct").textContent = CAPTIONS[m][0].split(" — ")[0];
-  $("capText").innerHTML = CAPTIONS[m][1];
-  $("llcNote").textContent = m==="octopus" ? "way 0 reserved for core 0" : (m==="interf" ? "polluted by the streams" : "unmanaged");
-  $("mcNote").textContent  = m==="octopus" ? "Round-Robin bus · FR-FCFS DRAM" : "FCFS bus · FR-FCFS DRAM";
-  startStream();
+  ["b1","b2","b3"].forEach((id,i)=>$(id).setAttribute("aria-pressed", String(S.view==="single" && S.src==="canned" && S.act===ACTS[i].key)));
+  $("bC").setAttribute("aria-pressed", String(S.view==="compare" && S.src==="canned"));
+  $("bL").setAttribute("aria-pressed", String(S.src==="live"));
+  const cap = CAPTIONS[m] || CAPTIONS.live || ["",""];
+  $("capAct").textContent = cap[0].split(" — ")[0];
+  $("capText").innerHTML = cap[1];
+  $("llcNote").textContent = S.src==="live" ? "live run" : (m==="octopus" ? "way 0 reserved for core 0" : (m==="interf" ? "polluted by the streams" : (m==="compare" ? "per act" : "unmanaged")));
+  $("mcNote").textContent  = S.src==="live" ? "live run" : (m==="octopus" ? "Round-Robin bus · FR-FCFS DRAM" : (m==="compare" ? "per act" : "FCFS bus · FR-FCFS DRAM"));
+  resetRun();
+}
+function setMode(m, fromAuto){                       // act buttons and keys 1/2/3
+  setView("single", ACT_OF[m], "canned");
   if(!fromAuto) stopAuto();
 }
 
 let autoTimers = [];
 function stopAuto(){ autoTimers.forEach(clearTimeout); autoTimers = []; $("auto").textContent = "Play all three acts"; }
 function runAuto(){
-  stopAuto(); resetRun(); S.running = true; $("pause").textContent = "Pause";
+  stopAuto(); S.running = true; $("pause").textContent = "Pause";
   setMode("solo", true);
   $("auto").textContent = "Restart the demo";
   autoTimers.push(setTimeout(()=>setMode("interf", true), 12000));
   autoTimers.push(setTimeout(()=>setMode("octopus", true), 30000));
+  autoTimers.push(setTimeout(()=>{ setView("compare", null, "canned"); }, 48000));
 }
 
 function resetRun(){
-  S.t=0; S.trace=[]; S.jobs=[]; S.lats=[]; S.nJobs=0; S.nMiss=0; S.nSkip=0; S.nPeriods=0;
-  S.errPeak=0; S.latPeak=0; S.lastExec=0; S.lastLat=0; S.poseT=0;
-  const p0 = atArc(0); S.eff={x:p0.x,y:p0.y}; S.set={x:p0.x,y:p0.y}; S.heading=0;
-  startStream();
+  S.t = 0;
+  const acts = S.view === "compare"
+      ? (S.src === "live" && LIVE.acts.length ? LIVE.acts : ACTS.map(a=>a.key))
+      : [S.src === "live" ? (LIVE.acts.includes(S.act) ? S.act : (LIVE.acts[0] || S.act)) : S.act];
+  S.runners = acts.map(k => makeRunner(ACTS.find(a=>a.key===k) || {key:k, color:"--warn", name:k}));
+  for(const r of S.runners) startStream(r);
 }
 
 /* ---------------- wiring ---------------- */
-buildLUT("fig8"); resize(); resetRun(); setMode("solo", true);
+buildLUT("fig8"); resize(); writeCaptions(); setView("single", "act1", "canned");
 if(!loadEmbedded()) loadFetched();
 
 $("b1").onclick = ()=>setMode("solo");
 $("b2").onclick = ()=>setMode("interf");
 $("b3").onclick = ()=>setMode("octopus");
-$("bL").onclick = ()=>setMode("live");
+$("bC").onclick = ()=>{ stopAuto(); setView("compare", null, "canned"); };
+$("bL").onclick = ()=>{ stopAuto(); setView(LIVE.acts.length > 1 ? "compare" : "single", LIVE.acts[0], "live"); };
 $("auto").onclick = runAuto;
 $("pause").onclick = e => { S.running = !S.running; e.target.textContent = S.running ? "Pause" : "Resume"; };
-$("clear").onclick = () => { S.trace=[]; S.errPeak=0; S.latPeak=0; S.nMiss=0; S.nSkip=0; S.nJobs=0; S.nPeriods=0; S.jobs=[]; S.lats=[]; };
+$("clear").onclick = () => { for(const r of S.runners){ r.trace=[]; r.errPeak=0; r.latPeak=0; r.nMiss=0; r.nSkip=0; r.nJobs=0; r.nPeriods=0; r.jobs=[]; r.lats=[]; } };
 $("speed").oninput = e => { S.speed = +e.target.value; $("nSpeed").textContent = (S.speed/1000).toFixed(0)+"k"; };
 $("path").onchange = e => { buildLUT(e.target.value); resetRun(); };
 addEventListener("resize", resize);
@@ -775,6 +873,7 @@ addEventListener("keydown", e=>{
   if(e.key==="1") setMode("solo");
   else if(e.key==="2") setMode("interf");
   else if(e.key==="3") setMode("octopus");
+  else if(e.key==="4"||e.key.toLowerCase()==="c"){ stopAuto(); setView("compare", null, "canned"); }
   else if(e.code==="Space"){ e.preventDefault(); $("pause").click(); }
 });
 
@@ -783,7 +882,7 @@ pollLive(); setInterval(pollLive, 250);      // polling, not a socket: a missed 
 let last = performance.now(), acc = 0;
 function frame(now){
   const dtReal = Math.min(64, now - last); last = now;
-  if(S.running && S.stream){
+  if(S.running && S.runners.length){
     let cyc = dtReal * S.speed / 1000;
     while(cyc > 0){ const dt = Math.min(P.T/20, cyc); step(dt); cyc -= dt; }
   }
