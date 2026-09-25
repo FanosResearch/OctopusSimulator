@@ -1,0 +1,7 @@
+kind,a,b,c,d,comment
+# single-core DRAM exerciser: one core, no contention, guaranteed LLC misses
+attr,period,200000,,,generous period so nothing overruns
+attr,jobs,20,,,
+attr,ooo,1,,,in-order
+LINEAR,0x800000,512,64,1.0,sweep 32 KB (> the 32 KB 2-way LLC once the stream wraps)
+RANDOM,0x800000,0x400000,256,1.0,random over 4 MB to force DRAM
