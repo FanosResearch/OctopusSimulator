@@ -24,7 +24,8 @@
 #   PORT=<n>          server port (default 8765)
 #   TIMEOUT=<sec>     wall-clock cap for the simulation (default 0 = run to completion)
 #   BIN=<path>        simulator executable (default build/Octopus_Simulator[.exe])
-#   PY=<python>       interpreter (default python; needs: pip install duckdb numpy)
+#   PY=<python>       interpreter (default: the first of python3/python/py that runs;
+#                     needs: pip install duckdb numpy)
 #
 # Examples:
 #   ./octoviz.sh view BMs/eembc-traces/a2time01-trace
@@ -34,7 +35,16 @@
 set -u
 OCTOPUS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SYSTEM="${SYSTEM:-MultiCoreSystem}"; TRACE="${TRACE:-1}"; WINDOW="${WINDOW:-}"; KEEP_TRACE="${KEEP_TRACE:-0}"
-PORT="${PORT:-8765}"; TIMEOUT="${TIMEOUT:-0}"; PY="${PY:-python}"
+PORT="${PORT:-8765}"; TIMEOUT="${TIMEOUT:-0}"
+# Python: many Linux distributions ship only python3, not python.
+if [ -z "${PY:-}" ]; then
+  # first candidate that actually RUNS: many Linux distributions have no `python`,
+  # and on Windows `python3` can be the Store stub that exits without running anything.
+  for _p in python3 python py; do
+    if "$_p" -c "import sys" >/dev/null 2>&1; then PY="$_p"; break; fi
+  done
+  PY="${PY:-python3}"
+fi
 BIN="${BIN:-$OCTOPUS_ROOT/build/Octopus_Simulator.exe}"; [ -f "$BIN" ] || BIN="$OCTOPUS_ROOT/build/Octopus_Simulator"
 TOOLS="$OCTOPUS_ROOT/tools/octoviz"
 # MinGW runtime DLLs next to the simulator (Windows builds); harmless elsewhere

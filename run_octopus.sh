@@ -81,7 +81,7 @@ run_one(){
   local start rc wall flt done_cores ncore status
   log "[start] $b @ $(date +%H:%M:%S)"
   start=$(date +%s)
-  timeout "${SAFETY}s" "$BIN" -s MultiCoreSystem -p "workload_path(s)=$(cygpath -m "$wp")/" \
+  timeout "${SAFETY}s" "$BIN" -s MultiCoreSystem -p "workload_path(s)=$(cygpath -m "$wp" 2>/dev/null || printf '%s' "$wp")/" \
       >/dev/null 2>"$OUT/rows/$b.stderr"
   rc=$?; wall=$(( $(date +%s) - start ))
   # per-core completion: each core drained its OWN trace + wrote the end-of-sim footer

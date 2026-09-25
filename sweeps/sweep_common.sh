@@ -33,6 +33,23 @@ SBC="$SWEEP_ROOT/configuration/Interconnect/SplitBusController.csv"
 MINGW="/c/Users/moham/AppData/Local/Microsoft/WinGet/Packages/BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe/mingw64/bin"
 [ -d "$MINGW" ] && export PATH="$MINGW:$SWEEP_ROOT/build:$PATH"
 
+# Path the simulator will open. On Windows (MSYS/git-bash) the binary is a native
+# program, so a /c/... path must be converted; on Linux cygpath does not exist and the
+# path is already right. Without the fallback the substitution is EMPTY on Linux and
+# every run is handed "workload_path(s)=/".
+winpath(){ cygpath -m "$1" 2>/dev/null || printf '%s' "$1"; }
+
+# Python: many distributions ship only python3.
+if [ -z "${PY:-}" ]; then
+  # first candidate that actually RUNS: many Linux distributions have no `python`,
+  # and on Windows `python3` can be the Store stub that exits without running anything.
+  for _p in python3 python py; do
+    if "$_p" -c "import sys" >/dev/null 2>&1; then PY="$_p"; break; fi
+  done
+  PY="${PY:-python3}"
+fi
+export PY
+
 SUITE="${SUITE:-eembc}"
 SAFETY="${SAFETY:-300}"
 # Parallel fan-out: within one (fixed) config, benches are independent processes
@@ -138,7 +155,7 @@ run_bench(){
   [ -f "$wp/trace_C0.trc.shared" ] && { echo -n; } || { echo "SKIP,NA,NA,NA,NA,NA,NA"; return; }
   mkdir -p "$wp/newLogger"; rm -f "$wp/newLogger"/*.csv 2>/dev/null
   timeout "${SAFETY}s" "$BIN" -s MultiCoreSystem \
-      -p "workload_path(s)=$(cygpath -m "$wp")/" >/dev/null 2>"$wp/.sweep.stderr"
+      -p "workload_path(s)=$(winpath "$wp")/" >/dev/null 2>"$wp/.sweep.stderr"
   local rc=$? flt d=0 nc=0 c refs rows fin
   flt=$(grep -aoiE 'fault|invalid|segmentation|abort|unfound|not found|bad_function|full buffer|wrong destination' "$wp/.sweep.stderr" 2>/dev/null | head -1)
   for c in 0 1 2 3; do

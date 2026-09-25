@@ -142,3 +142,20 @@ CSVs, for readers who want the other axes.
   *and* carry the end-of-simulation summary footer (SPLASH distributes work
   unevenly across cores).
 - Developed and tested on Ubuntu 18.04 / 20.04 and Windows (MinGW).
+
+### If a script works on Windows but not on Linux
+Two differences account for almost every case, and both are handled by the scripts now:
+
+- **`cygpath`.** On Windows the simulator is a native binary, so a `/c/...` shell path has to be
+  converted before it is passed as `workload_path`. On Linux that command does not exist. Every
+  call is now guarded (`cygpath -m "$p" 2>/dev/null || printf '%s' "$p"`, or `winpath` from
+  `sweeps/sweep_common.sh`); an unguarded one leaves the path **empty**, and the run is handed
+  `workload_path(s)=/` — it starts and then finds no traces. If you add a script, use `winpath`.
+- **`python` vs `python3`.** Many distributions ship only `python3`. The scripts pick the first of
+  `python3`, `python`, `py` that actually runs, so nothing needs to be set; `PY=/path/to/python`
+  still overrides.
+
+Everything else the scripts use (`sed -i`, `stat -c`, `timeout`, `nproc`, `mktemp`, `wait -n`,
+`md5sum`) is GNU coreutils and present on Linux. Run them with `bash script.sh`, not `sh`.
+If a run still fails on Linux, the first thing to look at is `<workload>/.sweep.stderr` (or
+`.out`/`.stderr` next to the workload), which holds the simulator's own message.

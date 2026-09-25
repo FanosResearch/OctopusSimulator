@@ -26,7 +26,6 @@ SAFETY="${SAFETY:-1800}"
 KEEP_TRACE="${KEEP_TRACE:-0}"
 TRACE_WINDOW="${TRACE_WINDOW:-}"
 PART_ROWS="${PART_ROWS:-2000000}"
-PY="${PY:-python}"
 OUT="$SWEEP_ROOT/results/pcc_par"; WL="$OUT/wl_trace_$SUITE"; STATUS="$OUT/trace_$SUITE.csv"
 mkdir -p "$WL"
 

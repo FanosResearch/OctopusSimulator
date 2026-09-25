@@ -74,7 +74,7 @@ gen_config(){  # family proto base L1p L1f LLCp LLCf -> writes config, echoes pa
 run_bench(){
   local fam="$1" proto="$2" suite="$3" wp="$4" safety="$5"
   local bench; bench="$(basename "$wp")"
-  local nwp; nwp="$(cygpath -m "$wp")/"
+  local nwp; nwp="$(cygpath -m "$wp" 2>/dev/null || printf '%s' "$wp")/"
   local logf="$OUT/logs/${fam}_${proto}_${suite}_${bench}.log"
   mkdir -p "$wp/newLogger"; rm -f "$wp/newLogger"/*.csv 2>/dev/null
   local s rc wall done_cores c refs rows fin r0 status

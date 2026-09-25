@@ -21,7 +21,7 @@
 #        SEQ=1 (run the acts one after another instead of together)
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../sweeps" && pwd)/sweep_common.sh"
 DEMO="$SWEEP_ROOT/demo"; DATA="$DEMO/data"; mkdir -p "$DATA"
-CYCLE_NS="${CYCLE_NS:-1.0}"; PY="${PY:-python}"
+CYCLE_NS="${CYCLE_NS:-1.0}"                        # PY is chosen by sweep_common.sh (python3 first)
 
 _sbc_bak="$(mktemp)"; cp "$SBC" "$_sbc_bak"; _cfg_bak="$(mktemp)"; cp "$CFG" "$_cfg_bak"
 trap 'cp "$_sbc_bak" "$SBC"; cp "$_cfg_bak" "$CFG"; rm -f "$_sbc_bak" "$_cfg_bak"' EXIT

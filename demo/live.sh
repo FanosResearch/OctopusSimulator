@@ -15,7 +15,7 @@
 # directory, so running them together is safe: no shared file is edited while they run.
 # Env: PORT (8770), PY (python).
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../sweeps" && pwd)/sweep_common.sh"
-DEMO="$SWEEP_ROOT/demo"; PORT="${PORT:-8770}"; PY="${PY:-python}"
+DEMO="$SWEEP_ROOT/demo"; PORT="${PORT:-8770}"     # PY is chosen by sweep_common.sh (python3 first)
 WHAT="${1:-compare}"
 
 case "$WHAT" in
