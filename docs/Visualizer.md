@@ -52,6 +52,21 @@ Dependency: Python 3 + `duckdb` (`python -m pip install duckdb`).
   (coalescing / transient context); click one to jump to it.
 - **Minimap** — request density over the whole run; click to move the window.
 
+## One page or many windows
+The views share one page, which gets busy. Two controls sit in the bar under the filters:
+
+- **click a view's name** to hide or show it on this page;
+- **click its ⧉** to open it in a **window of its own**, where it fills the screen. Opening a
+  view this way hides it on the main page, so the two together act as a layout: keep the pipeline
+  in the main window, put the lanes on a second monitor, and open the transition table beside it.
+
+Every window shows the same page with `?solo=<view>` added, so a popped‑out window is also a
+shareable link and keeps its own URL hash. Windows of the same run talk over a `BroadcastChannel`:
+panning or zooming, changing any filter, switching run, or clicking a request in one window moves
+all the others to match, so the comparison is always of the same cycles. The header of a
+popped‑out window says whether it is linked (a browser without `BroadcastChannel` still works,
+just unlinked).
+
 ## Level of detail (billions of cycles)
 The UI only ever holds one window. Below `--lod-cycles` (default 40 000) the server returns rows;
 above it, per‑bin aggregates (requests issued, coalesced, misses, max Total, and per‑resource

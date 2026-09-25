@@ -39,6 +39,26 @@
   #inspector td { padding:2px 4px; border-bottom:1px solid var(--line); } #inspector tr.sel { background:#2b2f37; }
   #inspector .close { float:right; cursor:pointer; color:var(--muted); } #inspector tr.jump { cursor:pointer; } #inspector tr.jump:hover { background:#262a31; }
   #inspector .why { background:#0f1114; border-left:3px solid var(--accent); padding:6px 8px; margin:6px 0; font-size:12px; }
+  /* ---- views: each one can be hidden, or popped out into its own window ---- */
+  #views { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:6px 14px; border-bottom:1px solid var(--line); background:var(--panel); font-size:12px; color:var(--muted); }
+  #views .vb { display:flex; align-items:center; gap:5px; background:var(--panel2); border:1px solid var(--line); border-radius:999px; padding:3px 9px; cursor:pointer; color:var(--ink); }
+  #views .vb[aria-pressed="false"] { color:var(--muted); opacity:.6; }
+  #views .vb .pop { color:var(--muted); padding:0 2px; border-radius:3px; }
+  #views .vb .pop:hover { color:var(--accent); background:#0f1114; }
+  .view > .vhead { display:none; }
+  body.solo #top label:not(.keep), body.solo #views { display:none; }
+  body.solo .view { display:none !important; }
+  body.solo .view.on { display:block !important; }
+  body.solo .view > .vhead { display:flex; gap:10px; align-items:center; padding:6px 14px; background:var(--panel); border-bottom:1px solid var(--line); font-size:12.5px; }
+  body.solo .view > .vhead b { color:var(--ink); font-weight:500; }
+  body.solo .view > .vhead .link { margin-left:auto; color:var(--muted); font-size:11.5px; }
+  body.solo #gantt { height:calc(100vh - 210px); }
+  body.solo #lanes { height:calc(100vh - 210px); border-top:0; }
+  body.solo #minimap { height:34px; }
+  body.solo .panel canvas { height:calc(100vh - 230px); }
+  body.solo #hot, body.solo #fsm { max-height:calc(100vh - 230px); height:calc(100vh - 230px); }
+  body.solo #bottom { grid-template-columns:1fr; padding-top:0; }
+  body.solo #legend, body.solo #legend2 { padding-bottom:8px; }
   /* transition table: wide (one column per agent), so it scrolls sideways with an always-visible bar and a sticky header */
   #fsm { height:340px; resize:vertical; overflow-y:auto; overflow-x:scroll; border:1px solid var(--line); }
   #fsm table { width:max-content; min-width:100%; white-space:nowrap; }
@@ -71,10 +91,19 @@
   <label>more <span class="chk"><label><input type="checkbox" id="oldest">oldest only</label><label>resp-ahead ≥ <input id="ahead" type="number" style="min-width:50px;width:50px"></label><label><input type="checkbox" id="context" checked>context lanes</label></span></label>
   <button id="go">Apply</button>
 </div>
+<div id="views">views
+  <span class="vb" data-view="pipeline" aria-pressed="true">pipeline<span class="pop" title="open in a new window">⧉</span></span>
+  <span class="vb" data-view="lanes" aria-pressed="true">resource lanes<span class="pop" title="open in a new window">⧉</span></span>
+  <span class="vb" data-view="dist" aria-pressed="true">distribution<span class="pop" title="open in a new window">⧉</span></span>
+  <span class="vb" data-view="hot" aria-pressed="true">hot lines<span class="pop" title="open in a new window">⧉</span></span>
+  <span class="vb" data-view="fsm" aria-pressed="true">coherence transitions<span class="pop" title="open in a new window">⧉</span></span>
+  <span style="margin-left:auto">click a name to hide it here · ⧉ opens it in its own window, kept in sync</span>
+</div>
 <div id="status">loading…</div>
+<section class="view" id="v-pipeline" data-view="pipeline">
+  <div class="vhead"><b>Pipeline</b> — request × cycle<span class="link" id="link-pipeline"></span></div>
 <canvas id="minimap"></canvas>
 <canvas id="gantt"></canvas>
-<canvas id="lanes"></canvas>
 <div id="legend">
   <b style="color:var(--ink)">Pipeline</b> — stages:
   <span style="--sw:var(--l1s)">L1 stall</span><span style="--sw:var(--reqb)">req bus</span><span style="--sw:var(--l2s)">L2 stall (LLC queue)</span>
@@ -82,22 +111,27 @@
   <span style="--sw:var(--resp)">resp bus</span><span style="--sw:var(--l1a)">L1 access</span><span style="--sw:var(--accent)">▲ became oldest</span> <span style="--sw:repeating-linear-gradient(135deg,var(--muted) 0 2px,transparent 2px 5px)">hatched = waiting</span> <span style="--sw:var(--muted)">solid = being served (broadcast, array read, mem bus, DRAM, transfer, L1 access)</span>
   <span style="margin-left:auto">wheel = zoom · drag = pan · click a bar = inspect &amp; "why did I wait"</span>
 </div>
+</section>
+<section class="view" id="v-lanes" data-view="lanes">
+  <div class="vhead"><b>Resource lanes</b> — what occupied each resource<span class="link" id="link-lanes"></span></div>
+<canvas id="lanes"></canvas>
 <div id="legend2"><b style="color:var(--ink)">Resource lanes</b> — one segment = one request occupying the resource, coloured by
   <span class="lc-core"><span style="--sw:var(--c0)">core 0</span> <span style="--sw:var(--c1)">core 1</span> <span style="--sw:var(--c2)">core 2</span> <span style="--sw:var(--c3)">core 3</span></span>
   <span class="lc-cls" style="display:none"><span style="--sw:var(--k-stable)">stable hit</span> <span style="--sw:var(--k-transient)">transient hit</span> <span style="--sw:var(--k-coalesced)">coalesced hit</span> <span style="--sw:var(--k-miss)">miss</span></span>
   <span class="lc-kind" style="display:none"><span style="--sw:var(--kd-GETS)">GetS</span> <span style="--sw:var(--kd-GETM)">GetM</span> <span style="--sw:var(--kd-PUTM)">PutM</span> <span style="--sw:var(--kd-INV)">INV</span> <span style="--sw:var(--kd-RESP)">response</span> <span style="--sw:var(--kd-SUPPLY)">supply</span> <span style="--sw:var(--kd-SUPPLY_DEFERRED)">deferred supply</span> <span style="--sw:var(--kd-WB_DATA)">write-back</span> <span style="--sw:var(--kd-WB_INV)">INV-forced WB</span> <span style="--sw:var(--kd-MEM_READ)">mem read</span> <span style="--sw:var(--kd-FILL)">fill</span> <span style="--sw:var(--kd-MEM_WRITE)">mem write</span> <span style="--sw:repeating-linear-gradient(135deg,#fff 0 1px,transparent 1px 4px)">dashed = array cut-in (admitted while the port was busy)</span></span>
   <span style="--sw:#3b4250">context (not in the filtered set)</span> <span style="--sw:var(--hl)">occupant AHEAD of the selected request (white outline)</span> <span style="--sw:repeating-linear-gradient(135deg,var(--wait) 0 2px,transparent 2px 5px)">selected request's WAIT window (magenta hatching)</span> <span style="--sw:var(--accent)">selected request's OWN service slot (orange outline)</span></div>
+</section>
 <div id="bottom">
-  <div class="panel"><h4>Distribution of <select id="histcol"><option value="total">Total</option><option value="oldest">Oldest</option><option value="l2s">L2 stall</option><option value="l2a">L2 access</option><option value="resp">Resp bus</option><option value="dram">DRAM</option><option value="l1s">L1 stall</option><option value="resp_ahead">Resp ahead</option><option value="array_ahead">Array ahead</option></select>
+  <section class="view panel" id="v-dist" data-view="dist"><div class="vhead"><b>Distribution</b><span class="link" id="link-dist"></span></div><h4>Distribution of <select id="histcol"><option value="total">Total</option><option value="oldest">Oldest</option><option value="l2s">L2 stall</option><option value="l2a">L2 access</option><option value="resp">Resp bus</option><option value="dram">DRAM</option><option value="l1s">L1 stall</option><option value="resp_ahead">Resp ahead</option><option value="array_ahead">Array ahead</option></select>
     <label style="text-transform:none"><input type="checkbox" id="histpos" checked> only rows &gt; 0</label> <label style="text-transform:none"><input type="checkbox" id="histwin" checked> current window only</label> <span id="histstats" style="margin-left:auto;font-family:ui-monospace,Consolas,monospace"></span></h4>
-    <canvas id="hist"></canvas></div>
-  <div class="panel"><h4>Hot lines by <select id="hotby"><option value="coalesced">coalesced hits</option><option value="transient">transient hits</option><option value="miss">misses</option><option value="all">all requests</option></select>
+    <canvas id="hist"></canvas></section>
+  <section class="view panel" id="v-hot" data-view="hot"><div class="vhead"><b>Hot lines</b><span class="link" id="link-hot"></span></div><h4>Hot lines by <select id="hotby"><option value="coalesced">coalesced hits</option><option value="transient">transient hits</option><option value="miss">misses</option><option value="all">all requests</option></select>
     <label style="text-transform:none"><input type="checkbox" id="hotwin"> current window only</label> <span style="margin-left:auto;color:var(--muted)">click a line to filter on it</span></h4>
-    <div id="hot" style="max-height:170px;overflow:auto"></div></div>
-  <div class="panel" style="grid-column:1 / -1"><h4>Coherence transitions on line <span id="fsmline" style="font-family:ui-monospace,Consolas,monospace;text-transform:none;color:var(--ink)">—</span>
+    <div id="hot" style="max-height:170px;overflow:auto"></div></section>
+  <section class="view panel" id="v-fsm" data-view="fsm" style="grid-column:1 / -1"><div class="vhead"><b>Coherence transitions</b><span class="link" id="link-fsm"></span></div><h4>Coherence transitions on line <span id="fsmline" style="font-family:ui-monospace,Consolas,monospace;text-transform:none;color:var(--ink)">—</span>
     <label style="text-transform:none"><input type="checkbox" id="fsmwin"> current window only</label> <span id="fsmstats" style="margin-left:auto;font-family:ui-monospace,Consolas,monospace"></span></h4>
     <div style="color:var(--muted);font-size:11px;margin-bottom:4px">One row per event a controller's FSM processed on the line (from the raw trace). The acting agent shows <b>old → new</b>; the other columns carry the state each agent held at that moment. Rows of the selected request are highlighted; click a row to move the view there. Set the address filter or click a request to choose the line.</div>
-    <div id="fsm"></div></div>
+    <div id="fsm"></div></section>
 </div>
 <div id="tip"></div>
 <div id="inspector"><span class="close" onclick="document.getElementById('inspector').style.display='none'; document.body.classList.remove('ins'); selected=null; draw(); refreshFsm();">✕</span><h3 id="insTitle"></h3><div id="insBody"></div></div>
@@ -114,6 +148,14 @@ const A_RES = 5, A_LLC = 10;
 const TRES = [["REQ_BUS",0,"request bus","reqbus"],["SVC_BUS",0,"service bus (INV)",null],["ARRAY",10,"LLC array port","array"],["MEM_BUS",0,"mem bus → DRAM",null],["MEM_BUS",1,"mem bus → LLC",null],["DRAM",100,"DRAM (banks overlap)",null],["RESP_BUS",0,"response bus","respbus"]];
 const KIND_TXT = { DEMAND:"CPU request", GETS:"GetS", GETM:"GetM", PUTM:"PutM", INV:"back-invalidation", EVICT:"L1 replacement", WB_DATA:"eviction write-back", WB_INV:"INV-forced write-back", SUPPLY:"cache-to-cache supply", SUPPLY_DEFERRED:"deferred supply (parked request)", RESP:"LLC/L1 data response", FILL:"DRAM fill", FILL_ROLLBACK:"fill (rollback)", MEM_READ:"memory read", MEM_WRITE:"LLC eviction to memory", UNKNOWN:"untagged" };
 let runs = [], run = null, view = { t0: 0, t1: 0 }, data = null, ctxData = null, occData = null, mini = null, hover = null, timer = null, selected = null, laneHover = null;
+/* ---- views: hide/show here, or pop one out into its own window.
+   Windows of the same origin share a BroadcastChannel, so the cycle window, the
+   filters and the selected request stay in step across all of them. ---- */
+const VIEWS = ["pipeline", "lanes", "dist", "hot", "fsm"];
+const SOLO = new URLSearchParams(location.search).get("solo");
+const ME = Math.random().toString(36).slice(2);
+const BUS = ("BroadcastChannel" in window) ? new BroadcastChannel("octoviz") : null;
+let applying = false;                 // set while applying a peer's state, so we do not echo it back
 const traceMode = () => run && run.trace && $("#lanesrc").value === "trace";
 
 async function api(path, q) { const u = new URL(path, location.href); Object.entries(q).forEach(([k, v]) => v !== "" && v != null && u.searchParams.set(k, v)); const r = await fetch(u); return r.json(); }
@@ -131,6 +173,50 @@ function loadHash() { const h = new URLSearchParams(location.hash.slice(1)); if 
   const res = (h.get("res") || "").split(","); $$(".res").forEach(c => c.checked = res.includes(c.value));
   $("#oldest").checked = h.get("oldest") === "1"; view.t0 = +h.get("t0"); view.t1 = +h.get("t1"); return h.get("run"); }
 
+function sendState(kind) {
+  if (!BUS || applying) return;
+  BUS.postMessage({ from: ME, kind, run: run && run.run, t0: view.t0, t1: view.t1,
+                    filters: filters(), selected: selected ? { id: selected.id, core: selected.core } : null,
+                    ui: { layout: $("#layout").value, lanesrc: $("#lanesrc").value, lanecolor: $("#lanecolor").value } });
+}
+if (BUS) BUS.onmessage = async e => {
+  const m = e.data; if (!m || m.from === ME) return;
+  applying = true;
+  try {
+    if (m.run && run && m.run !== run.run) { await selectRun(m.run); }
+    if (m.filters) {
+      const f = m.filters;
+      $("#addr").value = f.addr || ""; $("#mask").value = f.mask || ""; $("#id").value = f.id || "";
+      $("#ids").value = f.ids || ""; $("#stall").value = f.stall || ""; $("#ahead").value = f.ahead_min || "";
+      $("#oldest").checked = f.oldest === "1";
+      const cores = (f.core || "").split(","); $$(".core").forEach(c => c.checked = cores.includes(c.value));
+      const cls = (f.cls || "").split(","); $$(".cls").forEach(c => c.checked = cls.includes(c.value));
+      const res = (f.res || "").split(","); $$(".res").forEach(c => c.checked = res.includes(c.value));
+    }
+    if (m.ui) { $("#layout").value = m.ui.layout; $("#lanesrc").value = m.ui.lanesrc; $("#lanecolor").value = m.ui.lanecolor; }
+    view.t0 = m.t0; view.t1 = m.t1;
+    await refresh();
+    if (m.selected) {
+      if (!selected || selected.id != m.selected.id || selected.core != m.selected.core) {
+        const C = data && data.cols, row = data && data.mode === "rows" && data.rows.find(r => get(r, C, "id") == m.selected.id && get(r, C, "core") == m.selected.core);
+        if (row) { selected = { row, C, id: m.selected.id, core: m.selected.core }; draw(); inspect(); refreshFsm(); }
+      }
+    } else if (selected) { selected = null; draw(); refreshFsm(); }
+  } finally { applying = false; }
+};
+
+function showView(v, on) {
+  const el = $("#v-" + v); if (!el) return;
+  el.style.display = on ? "" : "none";
+  const b = document.querySelector(`.vb[data-view="${v}"]`); if (b) b.setAttribute("aria-pressed", String(on));
+  resize(); draw();
+}
+function popOut(v) {
+  const u = new URL(location.href); u.searchParams.set("solo", v); u.hash = location.hash;
+  window.open(u.toString(), "octoviz_" + v, "width=1200,height=760");
+  showView(v, false);                                   // it now lives in its own window
+}
+
 async function refresh() {
   if (!run) return; view.t0 = Math.max(run.tmin, Math.floor(view.t0)); view.t1 = Math.min(run.tmax, Math.ceil(view.t1)); if (view.t1 <= view.t0) view.t1 = view.t0 + 1000;
   $("#t0").value = view.t0; $("#t1").value = view.t1; saveHash();
@@ -138,7 +224,7 @@ async function refresh() {
   const [d, c, o] = await Promise.all([api("/api/window", { ...f, t0: view.t0, t1: view.t1 }),
                                     ($("#context").checked || selected) ? api("/api/window", { run: run.run, t0: view.t0, t1: view.t1, limit: 20000 }) : Promise.resolve(null),
                                     traceMode() ? api("/api/occupancy", { run: run.run, t0: view.t0, t1: view.t1, core: f.core, addr: f.addr, mask: f.addr ? f.mask : "" }) : Promise.resolve(null)]);
-  data = d; ctxData = c; occData = o; draw(); refreshHist(); refreshHot(); refreshFsm();
+  data = d; ctxData = c; occData = o; draw(); refreshHist(); refreshHot(); refreshFsm(); sendState("state");
   setStatus(d.mode === "rows" ? `${run.run} · cycles ${view.t0}–${view.t1} (${view.t1 - view.t0}) · ${d.rows.length} of ${d.total} matching requests shown` :
             `${run.run} · cycles ${view.t0}–${view.t1} (${view.t1 - view.t0}) · aggregated view, ${d.bins.length} bins of ${d.bw} cycles — zoom in below 40 000 cycles for individual requests`);
 }
@@ -313,7 +399,7 @@ gantt.addEventListener("mousemove", e => { const W = gantt.getBoundingClientRect
   $("#tip").style.display = "block"; $("#tip").style.left = Math.min(e.clientX + 14, window.innerWidth - 660) + "px"; $("#tip").style.top = (e.clientY + 14) + "px";
   $("#tip").textContent = `core ${a("core")}  id ${a("id")}  addr ${a("addr_hex")}  ${a("cls")}\nissue ${a("issue")}  retire ${a("retire")}  total ${a("total")}  oldest ${a("oldest")}\nL1s ${a("e_l1s")-a("s_l1s")}  reqB ${a("e_reqb")-a("s_reqb")}  L2s ${a("e_l2s")-a("s_l2s")}  memB ${a("e_membus")-a("s_membus")}  DRAM ${a("e_dram")-a("s_dram")}  L2a ${a("e_l2a")-a("s_l2a")}  resp ${a("e_resp")-a("s_resp")}  L1a ${a("e_l1a")-a("s_l1a")}\n` + reasons(r, C).map(s => "• " + s).join("\n"); });
 gantt.addEventListener("click", e => { if (drag && drag.moved) return; if (!data || data.mode !== "rows" || hover == null) return; const C = data.cols, r = data.rows[hover]; if (!r) return; select(r, C); });
-function select(r, C) { selected = { row: r, C, id: get(r, C, "id"), core: get(r, C, "core"), key: get(r, C, "core") + ":" + get(r, C, "id") }; if (!ctxData) { refresh().then(() => { draw(); inspect(); }); } else { draw(); inspect(); refreshFsm(); } }
+function select(r, C) { selected = { row: r, C, id: get(r, C, "id"), core: get(r, C, "core"), key: get(r, C, "core") + ":" + get(r, C, "id") }; if (!ctxData) { refresh().then(() => { draw(); inspect(); }); } else { draw(); inspect(); refreshFsm(); } sendState("select"); }
 $("#minimap").addEventListener("click", e => { const W = $("#minimap").getBoundingClientRect().width, t = mini.tmin + e.offsetX / W * (mini.tmax - mini.tmin), span = view.t1 - view.t0; view.t0 = t - span / 2; view.t1 = t + span / 2; schedule(); });
 function schedule() { draw(); clearTimeout(timer); timer = setTimeout(refresh, 180); }
 // ---- trace-lane hover / click: any message, not only requests ----
@@ -413,6 +499,18 @@ $("#fsmwin").onchange = refreshFsm;
 
 async function selectRun(name) { run = runs.find(r => r.run === name) || runs[0]; $("#run").value = run.run; mini = await api("/api/minimap", { run: run.run }); selected = null;
   if (!(view.t1 > view.t0)) { view.t0 = run.tmin; view.t1 = Math.min(run.tmax, run.tmin + 20000); } refresh(); }
+// view toggles and pop-out buttons
+$$("#views .vb").forEach(b => {
+  const v = b.dataset.view;
+  b.onclick = e => { if (e.target.classList.contains("pop")) { popOut(v); return; } showView(v, b.getAttribute("aria-pressed") !== "true"); };
+});
+if (SOLO) {                                    // this window shows one view only
+  document.body.classList.add("solo");
+  const el = $("#v-" + SOLO); if (el) el.classList.add("on");
+  const link = $("#link-" + SOLO); if (link) link.textContent = BUS ? "linked to the main window" : "not linked (this browser has no BroadcastChannel)";
+  document.title = "Octoviz — " + SOLO;
+}
+
 (async () => { runs = await api("/api/runs", {}); $("#run").innerHTML = runs.map(r => `<option>${r.run}</option>`).join(""); const fromHash = loadHash(); await selectRun(fromHash || runs[0].run);
   $("#run").onchange = () => { view = { t0: 0, t1: 0 }; selectRun($("#run").value); };
   $("#go").onclick = () => { view.t0 = +$("#t0").value; view.t1 = +$("#t1").value; refresh(); };
