@@ -8,8 +8,16 @@
 
 #include "../header/ClockManager.h"
 
-#include <io.h>
 #include <cstdio>
+#ifdef _WIN32
+#  include <io.h>          // _isatty / _fileno
+#  define OCTOPUS_ISATTY(fd) _isatty(fd)
+#  define OCTOPUS_FILENO(f)  _fileno(f)
+#else
+#  include <unistd.h>      // isatty
+#  define OCTOPUS_ISATTY(fd) isatty(fd)
+#  define OCTOPUS_FILENO(f)  fileno(f)
+#endif
 
 using namespace std;
 namespace octopus
@@ -18,7 +26,7 @@ namespace octopus
     // redirected to a file (batch/sweep runs) it appends forever (hundreds of MB over
     // billions of cycles) and, with many concurrent sims, saturates disk I/O -- which was
     // the real throughput killer under concurrency. Emit it only to an interactive TTY.
-    static const bool s_stdout_is_tty = (_isatty(_fileno(stdout)) != 0);
+    static const bool s_stdout_is_tty = (OCTOPUS_ISATTY(OCTOPUS_FILENO(stdout)) != 0);
 
     ClockedObj::ClockedObj(uint64_t clk_period)
     {
