@@ -33,6 +33,8 @@ namespace MCsim
 				  unsigned col, unsigned rw, unsigned bank, unsigned rank, unsigned sa, void *data, unsigned time) : busPacketType(packetType),
 																													 requestorID(id),
 																													 address(addr),
+																													 reqID(0),
+																													 size(0),
 																													 column(col),
 																													 row(rw),
 																													 subArray(sa),
@@ -41,7 +43,8 @@ namespace MCsim
 																													 data(data),
 																													 arriveTime(time)
 		{
-			postCommand = false;
+			bankGroup = 0;   // never assigned anywhere; leaving it uninitialised made two
+			postCommand = false;   // builds of the same model read different values
 			postCounter = 0;
 		}
 
@@ -59,7 +62,8 @@ namespace MCsim
 																													 data(data),
 																													 arriveTime(time)
 		{
-			postCommand = false;
+			bankGroup = 0;   // never assigned anywhere; leaving it uninitialised made two
+			postCommand = false;   // builds of the same model read different values
 			postCounter = 0;
 		}
 		BusPacketType busPacketType;

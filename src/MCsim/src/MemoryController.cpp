@@ -2,8 +2,28 @@
 #include <iostream>
 #include <sstream>
 #include "MemoryController.h"
+#include <cstdio>
+#include <cstdlib>
 #include "MemorySystem.h"
 #include "Request.h"
+
+// ---- opt-in divergence probe (MCSIM_PROBE=<file>) ------------------------------------
+// Logs, in DRAM clock cycles, every request the controller accepts, every command it
+// issues and every completion, so two builds can be diffed line by line to find the
+// first decision that differs. Off (and free) when the variable is unset.
+static FILE *mcsim_probe()
+{
+    static FILE *f = nullptr;
+    static bool checked = false;
+    if (!checked)
+    {
+        checked = true;
+        const char *p = getenv("MCSIM_PROBE");
+        if (p && *p) f = fopen(p, "w");
+    }
+    return f;
+}
+
 
 using namespace MCsim;
 
@@ -145,6 +165,13 @@ void MemoryController::connectMemoryDevice(MemoryDevice *memDev)
 	memTable[Rank] = memoryDevice->get_Rank();
 	memTable[BankGroup] = memoryDevice->get_BankGroup();
 	memTable[Bank] = memoryDevice->get_Bank();
+	// No device model exposes a sub-array count, and this entry used to be left
+	// uninitialised: AddressMapping takes log2 of it to size the sub-array field of the
+	// address decode, so whatever happened to be in that memory decided how many bits the
+	// row and bank-group fields were shifted by. It read 0 on one toolchain and 1986622325
+	// on another, which silently changed every DRAM row hit and made results differ between
+	// platforms. One sub-array means zero bits, which is the intended behaviour.
+	memTable[SubArray] = 1;
 	memTable[Row] = memoryDevice->get_Row();
 	memTable[Column] = memoryDevice->get_Column();
 
@@ -193,6 +220,9 @@ void MemoryController::connectMemoryDevice(MemoryDevice *memDev)
 
 bool MemoryController::addRequest(unsigned int requestorID, unsigned long long address, bool R_W, unsigned int size)
 {
+	if (FILE *pf = mcsim_probe())
+		fprintf(pf, "%llu ADD4 req=%u addr=%llu rw=%d\n", (unsigned long long)clockCycle,
+		        requestorID, (unsigned long long)address, (int)R_W);
 	string type = "write";
 	if (R_W)
 	{
@@ -233,6 +263,9 @@ bool MemoryController::addRequest(unsigned int requestorID, unsigned long long a
 
 bool MemoryController::addRequest(unsigned int requestorID, unsigned long long address, bool R_W, unsigned int size, unsigned long long reqID)
 {
+	if (FILE *pf = mcsim_probe())
+		fprintf(pf, "%llu ADD req=%u addr=%llu rw=%d id=%llu\n", (unsigned long long)clockCycle,
+		        requestorID, (unsigned long long)address, (int)R_W, (unsigned long long)reqID);
 	if (hitRequest != NULL)
 	{
 		//callback(*hitRequest); // return read data
@@ -374,6 +407,11 @@ void MemoryController::update()
 		{
 		}
 		// outgoingCmd->rank instead of zero
+		if (FILE *pf = mcsim_probe())
+			fprintf(pf, "%llu CMD type=%d req=%u addr=%llu rank=%u bg=%u bank=%u row=%u\n",
+			        (unsigned long long)clockCycle, (int)outgoingCmd->busPacketType,
+			        outgoingCmd->requestorID, (unsigned long long)outgoingCmd->address,
+			        outgoingCmd->rank, outgoingCmd->bankGroup, outgoingCmd->bank, outgoingCmd->row);
 		if (outgoingCmd->busPacketType == WR || outgoingCmd->busPacketType == WRA)
 		{
 			sendDataBuffer.push_back(new BusPacket(DATA, outgoingCmd->requestorID, outgoingCmd->address, outgoingCmd->column,
@@ -516,6 +554,8 @@ void MemoryController::sendData(BusPacket *bpacket)
 }
 void MemoryController::returnReadData(const Request *req)
 {
+	if (FILE *pf = mcsim_probe())
+		fprintf(pf, "%llu DONE addr=%llu\n", (unsigned long long)clockCycle, (unsigned long long)req->address);
 	if (parentMemorySystem->ReturnReadData != NULL)
 	{
 		(*parentMemorySystem->ReturnReadData)(parentMemorySystem->systemID, req->address, clockCycle);

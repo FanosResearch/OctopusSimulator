@@ -49,6 +49,20 @@ Data2Req/Data2Both cases, `LLCMSIProtocol` SendData/GetData/IssueInv/WriteBack, 
 `CacheController_End2End`, RESP at `hitAction` and at the pending‑request response). The encoding
 they are derived from is validated in `docs/MessageEncoding.md`.
 
+## Diffing the DRAM model across builds (`MCSIM_PROBE`)
+`MCSIM_PROBE=<file>` makes MCsim log every request it accepts, every command it issues and every
+completion, with its own DRAM clock cycle:
+
+```
+3 ADD4 req=0 addr=8388608 rw=1
+3 CMD type=6 req=0 addr=8388608 rank=0 bg=0 bank=0 row=64
+43 DONE addr=8388608
+```
+Two builds can then be diffed line by line: stripping the leading cycle shows whether the
+*decisions* differ, keeping it shows where the *timing* first diverges. This is how the
+uninitialised sub-array entry of the address-decode table was found — it made the same address
+decode to a different row on two platforms. Off, and free, when the variable is unset.
+
 ## Giant runs: trace window and streamed conversion
 A record is 32 B, so a billion-cycle SPLASH run would write tens of GB. Two levers:
 - **`OCTOPUS_TRACE_WINDOW=t0:t1`** (core cycles) makes the writer keep only events inside that
