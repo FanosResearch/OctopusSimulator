@@ -6,6 +6,7 @@
  * Created On August 4, 2022
  */
 
+#include <cstdlib>
 #include "../header/MCsimInterface.h"
 
 using namespace std;
@@ -63,6 +64,17 @@ namespace octopus
     {
     }
 
+    static uint64_t mcsimTraceAddr()
+    {
+        static uint64_t v = [](){ const char *t = getenv("OCTOPUS_TRACE_ADDR"); return t ? strtoull(t, NULL, 0) : 0ULL; }();
+        return v;
+    }
+    static bool mcsimTraced(uint64_t addr)
+    {
+        uint64_t t = mcsimTraceAddr();
+        return t == 1 || (t != 0 && (addr & ~63ULL) == (t & ~63ULL));
+    }
+
     void MCsimInterface::processLogic()
     {
         addRequests2ProcessingQueue(*m_processing_queue);
@@ -70,6 +82,9 @@ namespace octopus
         Message ready_msg;
         if (m_processing_queue->getFirstReady(&ready_msg))
         {
+            if (mcsimTraced(ready_msg.addr))
+                cout << "[mcsim] cyc " << m_clk_cycle << " request addr 0x" << std::hex << ready_msg.addr << std::dec << " msg " << ready_msg.msg_id
+                     << " owner " << ready_msg.owner << (ready_msg.data == NULL ? " READ" : " WRITE") << " pending " << m_pending_requests.size() << endl;
             if (m_mcsim->addRequest(ready_msg.owner, ready_msg.addr, ready_msg.data == NULL, m_llc_line_size)) // 1 -> Read, 0 -> Write
             {
                 if (ready_msg.data == NULL) // Add read requests only (writes are fire-and-forget)
@@ -114,6 +129,8 @@ namespace octopus
     void MCsimInterface::read_callback(unsigned id, uint64_t address, uint64_t clock_cycle)
     {
         bool found = false;
+        if (mcsimTraced(address))
+            cout << "[mcsim] cyc " << m_clk_cycle << " read_callback addr 0x" << std::hex << address << std::dec << " id " << id << " pending " << m_pending_requests.size() << endl;
         for (int i = 0; i < (int)m_pending_requests.size(); i++)
         {
             if (m_pending_requests[i].addr == address)

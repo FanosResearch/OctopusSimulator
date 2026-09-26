@@ -73,7 +73,7 @@ namespace octopus
             switch (static_cast<ActionId>(action))
             {
             case ActionId::Stall:
-                std::cout << " LLCMSIProtocol: Stall Transaction is detected" << std::endl;
+                std::cout << " LLCMSIProtocol: Stall Transaction is detected (controller " << this->m_id << ", line state " << cache_line.state << ", addr 0x" << std::hex << msg.addr << std::dec << ", msg " << msg.msg_id << ", source " << (int)msg.source << ", owner " << msg.owner << ", type " << msg.complementary_value << ", data " << (msg.data != NULL) << ")" << std::endl;
                 exit(0);
                 break;
 
@@ -149,7 +149,7 @@ namespace octopus
                 break;
 
             case ActionId::Fault:
-                std::cout << " LLCMSIProtocol: Fault Transaction is detected" << std::endl;
+                std::cout << " LLCMSIProtocol: Fault Transaction is detected (controller " << this->m_id << ", line state " << cache_line.state << ", addr 0x" << std::hex << msg.addr << std::dec << ", msg " << msg.msg_id << ", source " << (int)msg.source << ", owner " << msg.owner << ", type " << msg.complementary_value << ", data " << (msg.data != NULL) << ")" << std::endl;
                 exit(0);
                 break;
             }

@@ -82,9 +82,11 @@ namespace octopus
             Message ready_msg;
             if (m_processing_queue->getFirstReady(&ready_msg) == false)
                 return;
+            traceMsg("popped", ready_msg);
 
             if (!canAdmitRequest(ready_msg))
             {
+                traceMsg("admit-fail", ready_msg);
                 // Structural stall (e.g., MSHR/PWB full): put the request back
                 // and retry next cycle. A slot is guaranteed to be free because
                 // getFirstReady just removed this element.
@@ -118,6 +120,7 @@ namespace octopus
         if (m_upper_interface->peekMessage(&msg))
         {
             msg.source = Message::Source::UPPER_INTERCONNECT;
+            traceMsg("intake-upper", msg);
             if (buf.pushFrontOrdered(msg))
                 m_upper_interface->popFrontMessage();
         }
@@ -125,6 +128,7 @@ namespace octopus
         if (m_lower_interface->peekMessage(&msg))
         {
             msg.source = Message::Source::LOWER_INTERCONNECT;
+            traceMsg("intake-lower", msg);
             // Only demand requests are subject to the queue bound. Responses and
             // service traffic (data fills, write-backs, invalidations) must always
             // be admitted: a full queue of stalled demand requests would otherwise

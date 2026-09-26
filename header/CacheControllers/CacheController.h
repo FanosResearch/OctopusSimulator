@@ -16,6 +16,7 @@
 #include "RRArbiter.h"
 #include "FCFSArbiter.h"
 #include <deque>
+#include <set>
 
 namespace octopus
 {
@@ -72,6 +73,11 @@ namespace octopus
         bool messageTouchesArray(const Message &msg); // this model's rule for "the transition reads or writes the array"
         uint64_t m_pipe_requeues = 0;               // fired ops whose row had become a Stall: sent back to the queue
         int m_line_interlock = 1;                   // config `line_interlock`: 0 disables the address interlock (A/B testing)
+        uint64_t m_trace_addr = 0;                  // env OCTOPUS_TRACE_ADDR: print this line's events (0 = off)
+        void traceMsg(const char *what, const Message &msg) override;
+        uint64_t m_dump_at = 0;                     // env OCTOPUS_DUMP_AT: dump queue and pipeline state at this cycle
+        void dumpState();
+        std::set<uint64_t> m_trace_held;            // msg ids already reported as held (trace only)
 
         bool pipelinedArray() const;
         void arrayEnqueue(DataArrayOp &&op);                // level-2 entry, both models

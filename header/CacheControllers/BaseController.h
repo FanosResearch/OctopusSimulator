@@ -74,6 +74,7 @@ namespace octopus
         // message off the FSM path and apply its event only once the array
         // has absorbed its bytes. Default: never.
         virtual bool deferForDataArray(Message &msg) { return false; }
+        virtual void traceMsg(const char *what, const Message &msg) {}   // debug trace hook (CacheController)
 
         virtual uint64_t getAddressKey(uint64_t addr);
 
