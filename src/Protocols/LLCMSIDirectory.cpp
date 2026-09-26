@@ -225,6 +225,15 @@ namespace octopus
         return controller_actions;
     }
 
+    bool LLCMSIDirectory::isLastFromSender(uint64_t addr_key, int sender)
+    {
+        auto it = protocol_counters->find(addr_key);
+        if (it == protocol_counters->end())
+            return false;
+        auto &list = it->second;
+        return list.size() == 1 && find(list.begin(), list.end(), sender) != list.end();
+    }
+
     void LLCMSIDirectory::readEvent(Message &msg, GenericCacheLine &cache_line, EventId *out_id)
     {
         switch (msg.source)
@@ -266,7 +275,14 @@ namespace octopus
                 {
                     uint64_t addr_key = msg.addr & ~uint64_t(m_data_handler->getBlockSize() -1);
 
-                    if((protocol_counters->find(addr_key) != protocol_counters->end()) && ((protocol_counters->at(addr_key).size() - 1) == 0))
+                    // "last" only if the sender is still a sharer and the only one. The size-only
+                    // test assumed a PutS / InvAck is processed before a later request's
+                    // invalidation could remove its sender from the list; with the address
+                    // interlock a PutS can wait behind the line's array accesses, arrive
+                    // after that removal, and a size-only test then drove the line to I
+                    // with another sharer still in the list (its next GetM was answered
+                    // with an ack count from that stale list and no invalidation: deadlock).
+                    if(isLastFromSender(addr_key, msg.owner))
                         *out_id = EventId::last_PutS;
                     else
                         *out_id = EventId::PutS;
@@ -277,7 +293,14 @@ namespace octopus
                 {
                     uint64_t addr_key = msg.addr & ~uint64_t(m_data_handler->getBlockSize() -1);
 
-                    if((protocol_counters->find(addr_key) != protocol_counters->end()) && ((protocol_counters->at(addr_key).size() - 1) == 0))
+                    // "last" only if the sender is still a sharer and the only one. The size-only
+                    // test assumed a PutS / InvAck is processed before a later request's
+                    // invalidation could remove its sender from the list; with the address
+                    // interlock a PutS can wait behind the line's array accesses, arrive
+                    // after that removal, and a size-only test then drove the line to I
+                    // with another sharer still in the list (its next GetM was answered
+                    // with an ack count from that stale list and no invalidation: deadlock).
+                    if(isLastFromSender(addr_key, msg.owner))
                         *out_id = EventId::last_InvAck;
                     else
                         *out_id = EventId::InvAck;

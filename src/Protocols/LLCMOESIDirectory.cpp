@@ -152,7 +152,14 @@ namespace octopus
                 {
                     if (msg.owner == cache_line.owner_id)
                     {
-                        if((protocol_counters->find(addr_key) != protocol_counters->end()) && ((protocol_counters->at(addr_key).size() - 1) == 0))
+                        // "last" only if the sender is still a sharer and the only one. The size-only
+                    // test assumed a PutS / InvAck is processed before a later request's
+                    // invalidation could remove its sender from the list; with the address
+                    // interlock a PutS can wait behind the line's array accesses, arrive
+                    // after that removal, and a size-only test then drove the line to I
+                    // with another sharer still in the list (its next GetM was answered
+                    // with an ack count from that stale list and no invalidation: deadlock).
+                    if(isLastFromSender(addr_key, msg.owner))
                             *out_id = (LLCMSIDirectory::EventId)EventId::last_PutO_fromOwner;
                         else
                             *out_id = (LLCMSIDirectory::EventId)EventId::PutO_Data_fromOwner;
@@ -163,7 +170,14 @@ namespace octopus
                 }
                 else if(msg.complementary_value == MOESIDirectory::REQUEST_TYPE_INV_ACK)
                 {
-                    if((protocol_counters->find(addr_key) != protocol_counters->end()) && ((protocol_counters->at(addr_key).size() - 1) == 0))
+                    // "last" only if the sender is still a sharer and the only one. The size-only
+                    // test assumed a PutS / InvAck is processed before a later request's
+                    // invalidation could remove its sender from the list; with the address
+                    // interlock a PutS can wait behind the line's array accesses, arrive
+                    // after that removal, and a size-only test then drove the line to I
+                    // with another sharer still in the list (its next GetM was answered
+                    // with an ack count from that stale list and no invalidation: deadlock).
+                    if(isLastFromSender(addr_key, msg.owner))
                     {
                         *out_id = (LLCMSIDirectory::EventId)EventId::Data_fromLowerInterface_lastAck;
                         return;

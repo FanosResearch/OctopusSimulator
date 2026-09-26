@@ -51,6 +51,7 @@ namespace octopus
         };
 
         virtual void readEvent(Message &msg, GenericCacheLine &cache_line, EventId *out_id);
+        bool isLastFromSender(uint64_t addr_key, int sender);   // sender is the only remaining sharer
 
         virtual std::vector<ControllerAction> handleAction(std::vector<int> &actions, Message &msg,
                                                             GenericCacheLine &cache_line, int next_state);
