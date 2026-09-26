@@ -71,8 +71,10 @@ namespace octopus
             if(!checkReadinessOfCache(*msg, ControllerAction::Type::WRITE_BACK, data_ptr))
                 return;
             GenericCacheLine cache_line;
-            m_data_handler->readCacheLine(msg->addr, &cache_line);
-            msg->copy(cache_line.m_data);
+            if (m_data_handler->readCacheLine(msg->addr, &cache_line) && cache_line.m_data != NULL)
+                msg->copy(cache_line.m_data);
+            else
+                dataArrayReadFailed("performWriteBack", msg);
         }
 
         msg->owner = (m_owner_of_latest_data > -1) ? m_owner_of_latest_data : this->m_id;

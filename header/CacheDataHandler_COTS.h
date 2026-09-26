@@ -69,6 +69,7 @@ namespace octopus
         virtual bool updateLineBits(uint64_t address, GenericCacheLine *line) override;
 
         virtual bool isReady(uint64_t address) override;
+        virtual LineLocation lineLocation(uint64_t address) override;
 
         bool addressOfLinePendingWB(bool clear_flag, uint64_t *address);
 

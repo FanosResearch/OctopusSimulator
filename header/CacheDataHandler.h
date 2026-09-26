@@ -99,6 +99,13 @@ namespace octopus
         uint64_t getCycle() { return m_cycle; }
         virtual bool isReady();
         virtual bool isReady(uint64_t address);
+
+        // Where a block's bytes live. Anything other than the array (the
+        // MSHR and write-back buffer of a derived handler) is a register
+        // file read and written in place: an access to it never enters the
+        // data array pipeline. The base handler has only the array.
+        enum class LineLocation { NONE, ARRAY, MSHR, PWB };
+        virtual LineLocation lineLocation(uint64_t address);
     };
 }
 

@@ -251,4 +251,11 @@ namespace octopus
     {
         return isReady();
     }
+
+    CacheDataHandler::LineLocation CacheDataHandler::lineLocation(uint64_t address)
+    {
+        uint64_t set;
+        int way;
+        return CacheDataHandler::findline(address, &set, &way) ? LineLocation::ARRAY : LineLocation::NONE;
+    }
 }

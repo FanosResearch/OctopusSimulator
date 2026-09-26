@@ -153,4 +153,17 @@ namespace octopus
             return true;
         return CacheDataHandler::isReady(address);
     }
+
+    CacheDataHandler::LineLocation CacheDataHandler_COTS::lineLocation(uint64_t address)
+    {
+        uint64_t set;
+        int way;
+        if (CacheDataHandler::findline(address, &set, &way))
+            return LineLocation::ARRAY;
+        if (checkMSHR(mask_offset(address)))
+            return LineLocation::MSHR;
+        if (checkPWB(mask_offset(address)))
+            return LineLocation::PWB;
+        return LineLocation::NONE;
+    }
 }

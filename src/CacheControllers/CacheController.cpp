@@ -365,6 +365,15 @@ namespace octopus
             // Completing an op: its array accesses are the op itself.
             if (m_pipe_firing)
                 return true;
+            // A line held in the MSHR or the write-back buffer is not in the
+            // array: it is read or written in place, as the occupancy model
+            // does through isReady(address). Parking such an access raced
+            // with the buffer entry's release: an eviction's WriteBack reads
+            // the buffered line and the state change that follows it (to N)
+            // erases the entry at once, so the parked read found nothing.
+            CacheDataHandler::LineLocation loc = m_data_handler->lineLocation(msg.addr);
+            if (loc == CacheDataHandler::LineLocation::MSHR || loc == CacheDataHandler::LineLocation::PWB)
+                return true;
         }
         else if (m_data_handler->isReady(msg.addr))
             return true;    // array free, or the line is in a side buffer: run inline
@@ -655,6 +664,12 @@ namespace octopus
         // first. Messages that carry bytes from below (fills, peer data) are
         // array writes whatever the table says; a CPU store's bytes are
         // written by its Hit, which the table reports.
+        // A line in the write-back buffer has left the array for good: a
+        // request served from it, its write-back trigger, or an owner's bytes
+        // merged into it touch the buffer only. (A line in the MSHR is
+        // different: the data message for it is the fill, an array write.)
+        if (m_data_handler->lineLocation(msg.addr) == CacheDataHandler::LineLocation::PWB)
+            return false;
         if (!messageTouchesArray(msg))
             return false;
 
