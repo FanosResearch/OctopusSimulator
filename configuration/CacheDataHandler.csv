@@ -3,3 +3,5 @@ m_block_size(i),64,,,#Block size in bytes
 m_ways_count(i),1,,,#Number of ways. If the number is 1 this will make the cache a direct-mapped cache
 m_data_access_latency(i),0,,,#The latency of reading or writing data. This latency does not apply on reading or writing cache lines bits
 replacement_policy_name(s),LRU,,,#Choose out of LRU or RANDOM
+m_data_array_pipelined(i),0,,,#0: occupancy model (one access per latency window, latency not charged). 1: pipelined (ports accesses admitted per cycle, each completes latency cycles later)
+m_data_array_ports(i),1,,,#Pipelined model only: accesses admitted per cycle

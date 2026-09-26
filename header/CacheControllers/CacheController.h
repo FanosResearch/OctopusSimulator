@@ -62,15 +62,21 @@ namespace octopus
         // arbiter (FCFS / RR / TDM, keyed on the requesting core) or oldest
         // first, within the array's ports and latency.
         std::deque<DataArrayOp> m_array_ops;
+        uint32_t m_array_admitted_this_cycle = 0;   // pipelined: admissions so far this cycle
         uint64_t m_array_op_seq = 0;
         std::vector<int> m_arbiter_candidates;      // cores the arbiter schedules; others go oldest first
+        bool m_pipe_firing = false;                 // completing an op: its array calls run inline
         uint64_t m_pipe_ops = 0;
         uint64_t m_pipe_early_fires = 0;            // completed early: their line was evicted
+        bool messageTouchesArray(const Message &msg); // this model's rule for "the transition reads or writes the array"
 
+        bool pipelinedArray() const;
         void arrayEnqueue(DataArrayOp &&op);                // level-2 entry, both models
         std::deque<DataArrayOp>::iterator arrayElect();     // next waiting access by policy, or end()
         bool arbitrated(int owner) const;
+        void arrayAdmit();                                  // pipelined: admit up to the ports this cycle
         void pipelineFire(DataArrayOp &op);
+        void pipelineStep();                                // pipelined scheduler
         void pipelineFlushLine(uint64_t address);           // the line leaves the array: complete its ops now
         virtual bool deferForDataArray(Message &msg) override;
         virtual void removePendingAndRespond(void *) override;

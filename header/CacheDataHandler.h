@@ -34,7 +34,15 @@ namespace octopus
 
         uint64_t m_cycle;          // 64-bit: giant traces exceed 2^32 cycles; a
         uint32_t m_data_access_latency;
-        uint64_t m_ready_cycle;    // uint32_t here wrapped -> isReady() stuck ~4.29B cyc
+        uint64_t m_ready_cycle;
+        // Data-array model. 0 (default): occupancy -- an access returns at once
+        // and closes the array for m_data_access_latency cycles, so one access
+        // starts per latency window and none pays the latency. 1: pipelined --
+        // the controller admits up to m_data_array_ports accesses per cycle and
+        // completes each one m_data_access_latency cycles later, so every
+        // access pays the latency and the array never closes.
+        bool m_data_array_pipelined;
+        uint32_t m_data_array_ports;    // uint32_t here wrapped -> isReady() stuck ~4.29B cyc
 
         virtual inline void *getLine(uint64_t set, int way)
         {
@@ -71,6 +79,8 @@ namespace octopus
 
         virtual uint32_t getBlockSize();
         virtual uint32_t getDataAccessLatency();
+        bool isPipelined() const { return m_data_array_pipelined; }
+        uint32_t getDataArrayPorts() const { return m_data_array_ports; }
 
         virtual bool writeCacheLine_bypassLatency(uint64_t address, GenericCacheLine *line, bool soft_write = false);
         virtual bool writeCacheLine(uint64_t address, GenericCacheLine *line);
