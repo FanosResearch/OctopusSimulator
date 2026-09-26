@@ -118,7 +118,7 @@ namespace octopus
         if (m_upper_interface->peekMessage(&msg))
         {
             msg.source = Message::Source::UPPER_INTERCONNECT;
-            if (buf.pushFront(msg))
+            if (buf.pushFrontOrdered(msg))
                 m_upper_interface->popFrontMessage();
         }
 

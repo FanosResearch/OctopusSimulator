@@ -27,6 +27,8 @@ namespace octopus
         // Optional MSHR depth (max concurrent outstanding misses). Read from
         // config when present, otherwise a finite realistic default. -1 = off.
         m_num_mshr = DEFAULT_NUM_MSHR;
+        if (parameters.find(STRINGIFY(line_interlock)) != parameters.end())
+            m_line_interlock = std::get<int>(parameters.at(STRINGIFY(line_interlock)).value);
         if (parameters.find(STRINGIFY(num_mshr)) != parameters.end())
             m_num_mshr = std::get<int>(parameters.at(STRINGIFY(num_mshr)).value);
 
@@ -63,6 +65,24 @@ namespace octopus
         action_functions[ControllerAction::Type::NO_ACTION] = [&](void* ptr) {noAction(ptr);};
         action_functions[ControllerAction::Type::STALL] = [&](void* ptr) {stall(ptr);};
         action_functions[ControllerAction::Type::SEND_INV_MSG] = [&](void* ptr) {sendInvalidationMessage(ptr);};
+
+        // Address interlock. A message to a line that has a deferred data-array
+        // access waiting or in flight stays in the processing queue, in place,
+        // until that access completes (pipelineFire marks the queue dirty).
+        // Younger demand requests to the line stay behind it through the
+        // per-line gate, so same-line traffic runs in arrival order against the
+        // state the older access leaves. Hardware: a snoop arbitrates for the
+        // same tag pipeline as the demand access and cannot pass an older
+        // access to the line; classic gem5 has no such window, its hits are
+        // atomic. Without this a state-only snoop (S -> I) ran ahead of a
+        // deferred load hit on the line, which then re-ran as a miss. Held in
+        // the queue rather than popped and parked: a parked request that fired
+        // into a Stall row had to be re-queued behind younger requests, which
+        // broke bus order at the LLC (a GetS served from IorS after the L1 that
+        // won the bus for its GetM had already answered it: two data copies).
+        m_processing_queue->setHold([this](const Message &m) {
+            bool held = m_line_interlock != 0 && lineHasDeferredOp(m.addr);
+            return held; });
     }
 
     CacheController::~CacheController()
@@ -548,6 +568,20 @@ namespace octopus
 
         if (op.kind == DataArrayOp::MESSAGE)
         {
+            // The line's state may have moved while this message waited (an
+            // older op on the line completed first). If its row now stalls,
+            // executing here would bypass the queue's readiness filter, which
+            // the LLC protocol treats as fatal; the message goes back to the
+            // processing queue and is popped again when its row is ready,
+            // like any other stalled request (the MSHR-target semantics).
+            if (m_protocol->getRequestState(op.msg, FRFCFS_State::NonReady) != FRFCFS_State::Ready)
+            {
+                m_pipe_requeues++;
+                m_processing_queue->pushBack(op.msg, FRFCFS_State::NonReady, /*force=*/true);
+                m_pipe_firing = was_firing;
+                m_processing_queue->markDirty();
+                return;
+            }
             // The bytes have been written: apply the FSM event now, against
             // the line's current state, exactly as processLogic would have.
             if (op.msg.source == Message::Source::LOWER_INTERCONNECT)
@@ -615,6 +649,14 @@ namespace octopus
 
 
 
+    bool CacheController::lineHasDeferredOp(uint64_t address)
+    {
+        uint64_t key = getAddressKey(address);
+        for (const DataArrayOp &op : m_array_ops)
+            if (getAddressKey(op.msg.addr) == key)
+                return true;
+        return false;
+    }
 
     bool CacheController::messageTouchesArray(const Message &msg)
     {

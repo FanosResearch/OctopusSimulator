@@ -68,7 +68,10 @@ namespace octopus
         bool m_pipe_firing = false;                 // completing an op: its array calls run inline
         uint64_t m_pipe_ops = 0;
         uint64_t m_pipe_early_fires = 0;            // completed early: their line was evicted
+        bool lineHasDeferredOp(uint64_t address);   // address interlock: a deferred op is waiting or in flight on this line (queue hold)
         bool messageTouchesArray(const Message &msg); // this model's rule for "the transition reads or writes the array"
+        uint64_t m_pipe_requeues = 0;               // fired ops whose row had become a Stall: sent back to the queue
+        int m_line_interlock = 1;                   // config `line_interlock`: 0 disables the address interlock (A/B testing)
 
         bool pipelinedArray() const;
         void arrayEnqueue(DataArrayOp &&op);                // level-2 entry, both models

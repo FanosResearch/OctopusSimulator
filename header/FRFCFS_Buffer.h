@@ -10,6 +10,7 @@
 #define _FRFCFS_BUFFER_H
 
 #include <vector>
+#include <functional>
 #include <string>
 #include <cstdint>
 
@@ -109,6 +110,32 @@ namespace octopus
             return true;
         }
 
+        // Interconnect-side intake. Ahead of everything queued from the other
+        // side (a bus message keeps the priority upstream's pushFront gave it
+        // over the core's own requests) but BEHIND every older message from
+        // the same side, so the interconnect's delivery order is preserved
+        // while a message waits in the queue. Upstream processed every snoop
+        // the cycle it arrived, so their order was never at stake; the address
+        // interlock can hold a snoop for a few cycles, and a younger snoop to
+        // the same line pushed in front of it made the owner answer the wrong
+        // requester (the older GetM then found the line in S, sent no data,
+        // and its requester waited forever).
+        bool pushFrontOrdered(const TItem &item)
+        {
+            Element element = {.state = FRFCFS_State::Ready};
+            element.item = item;
+            int pos = 0;
+            for (int i = (int)m_buffer.size() - 1; i >= 0; i--)
+                if (m_buffer[i].item.source == item.source)
+                {
+                    pos = i + 1;
+                    break;
+                }
+            this->m_buffer.insert(this->m_buffer.begin() + pos, element);
+            this->m_dirty = true;
+            return true;
+        }
+
         bool pushFront(const TItem &item)
         {
             Element element = {.state = FRFCFS_State::Ready};
@@ -117,6 +144,15 @@ namespace octopus
             this->m_dirty = true;   // new work may be ready or may unblock others
             return true;
         }
+
+        // Optional hold: an item for which this returns true is not ready,
+        // whatever its state, and keeps its place in the queue (younger demand
+        // requests to its line stay behind it through the per-line gate). The
+        // cache controller uses it as an address interlock: a line with a
+        // deferred data-array access waiting or in flight is busy. The owner
+        // must mark the buffer dirty when the hold can have lifted.
+        std::function<bool(const TItem &)> m_hold;
+        void setHold(std::function<bool(const TItem &)> hold) { m_hold = std::move(hold); }
 
         bool getFirstReady(TItem *out_item)
         {
@@ -134,6 +170,11 @@ namespace octopus
 
             for (int i = 0; i < (int)m_buffer.size(); i++)
             {
+                // Address interlock (see m_hold): the item waits in place. It is
+                // still an "older demand request" for the gate below.
+                if (m_hold && m_hold(m_buffer[i].item))
+                    continue;
+
                 // Per-line FCFS gate: a demand request (CPU Load/Store, or GetS/GetM
                 // from an L1) may not overtake an OLDER demand request to the same cache
                 // line. Only demand requests are ordered -- data responses, writebacks,
