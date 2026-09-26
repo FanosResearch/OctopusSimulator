@@ -16,6 +16,7 @@
 #include "CacheXml.h"
 #include "Logger.h"
 #include "IdGenerator.h"
+#include "RequestType.h"
 
 #include <map>
 #include <string>
@@ -23,13 +24,6 @@
 
 namespace octopus
 {
-    enum RequestType
-    {
-        READ = 0,
-        WRITE = 1,
-        SETUP_WRITE = 2,
-        SETUP_READ = 3,
-    };
 
     class CPU : public ClockedObj, Configurable
     {

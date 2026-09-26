@@ -7,18 +7,24 @@
  */
 
 #include "../header/CacheSim.h"
+#include "../header/Configurable.h"
+#include "../header/SystemConfigurations/MultiCoreSystem.h"
+#include "../header/SystemConfigurations/MultiCoreSystem_Mesh.h"
+#include "../header/ClockManager.h"
 
 using namespace std;
 
 namespace octopus
 {
-    CacheSim::CacheSim(string system_name, vector<string> cl_params, bool print_config)
+    CacheSim::CacheSim(string system_name, vector<string> cl_params, bool print_config,
+                       string config_name)
     {
         Configurable::print_config_global = print_config;
-        
+
         // setup simulation environment
         if(system_name == STRINGIFY(MultiCoreSystem))
-            system_config = new MultiCoreSystem(cl_params);
+            system_config = new MultiCoreSystem(cl_params,
+                                                config_name.empty() ? string(STRINGIFY(MultiCoreSystem)) : config_name);
         else if(system_name == STRINGIFY(MultiCoreSystem_Mesh))
             system_config = new MultiCoreSystem_Mesh(cl_params);
         else
@@ -43,5 +49,20 @@ namespace octopus
     void CacheSim::step()
     {
         ClockManager::getClockManager()->clkStep();
+    }
+
+    uint64_t CacheSim::now() const
+    {
+        return ClockManager::getClockManager()->getCurrentTime();
+    }
+
+    uint64_t CacheSim::stepGranularity() const
+    {
+        return ClockManager::getClockManager()->getStepGranularity();
+    }
+
+    uint64_t CacheSim::minPeriod() const
+    {
+        return ClockManager::getClockManager()->getMinPeriod();
     }
 }
