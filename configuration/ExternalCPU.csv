@@ -1,0 +1,2 @@
+Extends,CPU
+#The adaptor for an external core model (gem5). Same clock as the trace CPU; the request rate comes from the core.
