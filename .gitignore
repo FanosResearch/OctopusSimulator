@@ -10,3 +10,11 @@ __pycache__
 
 Rename_results.sh
 Run_testcases.sh
+
+# gem5 integration: harness build products, python cache, stale copies kept for reference
+gem5/harness/*
+!gem5/harness/*.cc
+!gem5/harness/build.sh
+gem5/configs/__pycache__/
+gem5/attic/
+build_asan/

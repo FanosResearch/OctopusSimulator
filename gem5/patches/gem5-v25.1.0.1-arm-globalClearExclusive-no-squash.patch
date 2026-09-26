@@ -1,0 +1,32 @@
+diff --git a/src/arch/arm/isa.cc b/src/arch/arm/isa.cc
+index a08c65ff18..eb05699368 100644
+--- a/src/arch/arm/isa.cc
++++ b/src/arch/arm/isa.cc
+@@ -1955,10 +1955,25 @@ ISA::globalClearExclusive()
+     // is automatically generated when clearing the exclusive monitor
+     // to wake up the processor in WFE.
+     DPRINTF(LLSC, "Clearing lock and signaling sev\n");
+-    tc->setMiscReg(MISCREG_LOCKFLAG, false);
++    // This variant is reached from outside the thread's own pipeline: in a
++    // cacheless topology AbstractMemory::checkLockedAddrList() calls it on
++    // *another* context when a store hits that context's reservation.
++    // Writing through the ThreadContext would end in
++    // o3::ThreadContext::conditionalSquash() and squash the target's whole
++    // pipeline, ROB head included -- which can land on a non-speculative
++    // instruction (e.g. WFE) that commit has already scheduled.
++    //
++    // LSQUnit::checkSnoop() brackets these same two writes with
++    // noSquashFromTC for exactly this reason: LOCKFLAG and SEV_MAILBOX are
++    // read at execute time by their consumers (STXR, WFE), so the write
++    // always lands before the read and there is no stale in-flight copy for
++    // a squash to recover. Write the ISA's own register file directly. That
++    // is what tc->setMiscReg() resolves to for every CPU model, minus the
++    // reflexive squash.
++    setMiscReg(MISCREG_LOCKFLAG, false);
+     // Implement ARMv8 WFE/SEV semantics
+     sendEvent(tc);
+-    tc->setMiscReg(MISCREG_SEV_MAILBOX, true);
++    setMiscReg(MISCREG_SEV_MAILBOX, true);
+ }
+ 
+ void
