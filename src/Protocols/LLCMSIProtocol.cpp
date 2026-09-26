@@ -236,4 +236,21 @@ namespace octopus
         cache_line->state = state;
         cache_line->valid = true;
     }
+
+    bool LLCMSIProtocol::needsDataArray(const Message &msg)
+    {
+        // The rows whose actions read the line for a response or write the
+        // arriving bytes into it. A message on such a row is one array access:
+        // the controller defers it whole and runs the FSM when the access
+        // runs, so state and data change together (the L1 rule, applied here).
+        GenericCacheLine cache_line;
+        EventId event_id;
+        Message message = msg;   // readEvent may clear a one-shot flag; work on a copy
+        m_data_handler->readLineBits(message.addr, &cache_line);
+        this->readEvent(message, cache_line, &event_id);
+        int ev = (int)event_id;
+        return this->m_fsm->hasAction(cache_line.state, ev, "SendData") ||
+               this->m_fsm->hasAction(cache_line.state, ev, "SendExeclusiveData") ||
+               this->m_fsm->hasAction(cache_line.state, ev, "SaveData");
+    }
 }
