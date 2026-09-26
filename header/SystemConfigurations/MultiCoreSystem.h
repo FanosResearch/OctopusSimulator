@@ -13,6 +13,7 @@
 #include "DebugPrint.h"
 
 #include "CPU.h"
+#include "ExternalCPU.h"
 
 #include "Bus.h"
 #include "TripleBus.h"

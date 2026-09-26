@@ -185,6 +185,23 @@ namespace octopus
         {
             this->m_check_state_callback = callback;
         }
+
+        /* Occupancy, all states. This is the quantity the pushBack() bound
+         * compares against m_max_size. */
+        int size() const { return (int)this->m_buffer.size(); }
+
+        int maxSize() const { return this->m_max_size; }
+
+        /* Number of queued items satisfying pred(item). */
+        template <typename Pred>
+        int countIf(Pred pred) const
+        {
+            int n = 0;
+            for (const Element &e : this->m_buffer)
+                if (pred(e.item))
+                    n++;
+            return n;
+        }
     };
 }
 

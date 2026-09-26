@@ -29,6 +29,7 @@
 
 namespace octopus
 {
+    class ExternalCPU;
     class BaseController : public ClockedObj, public Initializable, public Configurable
     {
     protected:
@@ -45,6 +46,11 @@ namespace octopus
 
         // This queue is used mainly to serialize messages that come from different sources
         FRFCFS_Buffer<Message, CoherenceProtocolHandler> *m_processing_queue;
+        int m_processing_queue_size;   // demand admission bound of that queue (-1 = none)
+        // Set when an external core model (the gem5 bridge) drives this L1.
+        // Receives the commit of each CPU request and the loss of any
+        // readable line; NULL in the standalone simulator.
+        ExternalCPU *m_cpu_port = NULL;
 
         // key is the msg.addr & mask(nbits of CacheLineSize) and the value is vector of Messages
         // to ensure order of requests of the same cache line
@@ -81,6 +87,18 @@ namespace octopus
         ~BaseController();
 
         virtual void init();
+        void setCpuPort(ExternalCPU *port) { m_cpu_port = port; }
+        // Mirror of a classic cache's blocked CPU port. `outstanding` is the
+        // number of the external core's requests accepted and not yet
+        // answered. The queue bound is read as the total the core is credited
+        // with: an accepted request holds a credit until its response,
+        // whether it waits in this queue, in the pending table, or on its way
+        // back, so every buffer between the core and this controller is
+        // bounded by that same number. The L1 controller adds its MSHR and
+        // write-back-buffer bounds.
+        virtual bool demandAdmissionBlocked(int outstanding) const;
+        // longer holds (replaces a memcpy from NULL).
+        int demandQueueSize() const { return m_processing_queue_size; }
 
         virtual void initialize(uint64_t address, const uint8_t* data, int size) {} //for Initializable
         virtual void read(uint64_t address, uint8_t* data) {} //for Initializable

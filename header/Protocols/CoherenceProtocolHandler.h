@@ -40,6 +40,11 @@ namespace octopus
         virtual FRFCFS_State getRequestState(const Message &, FRFCFS_State) = 0;
         virtual void initializeCacheStates();
         virtual void createDefaultCacheLine(uint64_t address, GenericCacheLine *cache_line) {};
+        // Whether a line in this state still gives the core a readable copy.
+        // Drives the invalidation an external core model receives when a
+        // line leaves such a state. Default: no state is readable, which
+        // makes the L1 report nothing.
+        virtual bool isReadableState(int state) { return false; }
     };
 }
 

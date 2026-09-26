@@ -7,6 +7,7 @@
  */
 
 #include "../../header/CacheControllers/BaseController.h"
+#include "../../header/ExternalCPU.h"
 
 namespace octopus
 {
@@ -22,6 +23,7 @@ namespace octopus
         m_shared_memory_id = std::get<int>(parameters.at(STRINGIFY(m_shared_memory_id)).value);
         m_clk_period = std::get<int>(parameters.at(STRINGIFY(m_clk_period)).value);
         int processing_queue_size = std::get<int>(parameters.at(STRINGIFY(processing_queue_size)).value);
+        m_processing_queue_size = processing_queue_size;
         string protocol_type = std::get<string>(parameters.at(STRINGIFY(protocol_type)).value);
         string fsm_filename = std::get<string>(parameters.at(STRINGIFY(fsm_filename)).value);
         string fsm_path = string(FSM_PATH) + fsm_filename + ".csv";
@@ -131,6 +133,10 @@ namespace octopus
         }
     }
 
+    bool BaseController::demandAdmissionBlocked(int outstanding) const
+    {
+        return m_processing_queue_size >= 0 && outstanding >= m_processing_queue_size;
+    }
     uint64_t BaseController::getAddressKey(uint64_t addr)
     {
         return (addr & ~uint64_t(m_data_handler->getBlockSize() - 1));
@@ -176,6 +182,10 @@ namespace octopus
                     exit(0);
                 }
 
+                // Serialisation point of this CPU request.
+                if (m_cpu_port != NULL)
+                    m_cpu_port->commit(pending_messages.front().msg_id, pending_messages.front().addr);
+
                 if (!m_lower_interface->pushMessage(pending_messages.front(), this->m_cache_cycle, MessageType::DATA_RESPONSE))
                 {
                     cout << "CacheController: Cannot insert the Msg into lower interface." << endl;
@@ -204,6 +214,10 @@ namespace octopus
             if (m_data_handler->readCacheLine(msg->addr, &cache_line) && cache_line.m_data != NULL)
                 msg->copy(cache_line.m_data);
         }
+
+        // Serialisation point of this CPU request.
+        if (m_cpu_port != NULL)
+            m_cpu_port->commit(msg->msg_id, msg->addr);
 
         if (!m_lower_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::DATA_RESPONSE))
         {

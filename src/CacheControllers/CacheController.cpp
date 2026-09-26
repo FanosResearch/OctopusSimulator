@@ -7,6 +7,7 @@
  */
 
 #include "../../header/CacheControllers/CacheController.h"
+#include "../../header/ExternalCPU.h"
 
 namespace octopus
 {
@@ -174,6 +175,19 @@ namespace octopus
         Message *msg = (Message *)data_ptr;
         GenericCacheLine *cache_line = (GenericCacheLine *)((uint8_t *)data_ptr + sizeof(Message));
 
+        // L1 only: the core loses its readable copy of this line (remote
+        // ownership request, LLC invalidation, or replacement). The stored
+        // bits are still the old ones at this point, whichever branch below
+        // writes the new ones.
+        if (m_cpu_port != NULL)
+        {
+            GenericCacheLine old_line;
+            if (m_data_handler->readLineBits(msg->addr, &old_line) &&
+                m_protocol->isReadableState(old_line.state) &&
+                !m_protocol->isReadableState(cache_line->state))
+                m_cpu_port->invalidate(msg->addr);
+        }
+
         bool has_data = (msg->data != NULL);
         if (!has_data || !cache_line->valid || msg->data_size < m_data_handler->getBlockSize())
         {
@@ -293,6 +307,20 @@ namespace octopus
             }
             file.close();
         }
+    }
+
+    bool CacheController::demandAdmissionBlocked(int outstanding) const
+    {
+        if (BaseController::demandAdmissionBlocked(outstanding))
+            return true;
+        // MSHR full: a brand-new miss could not be admitted (canAdmitRequest).
+        if (m_num_mshr >= 0 && (int)m_pending_requests.size() >= m_num_mshr)
+            return true;
+        // Write-back buffer full: a fill that must evict would stall.
+        CacheDataHandler_COTS *cots = (CacheDataHandler_COTS *)m_data_handler;
+        if (!cots->pwbHasSpace())
+            return true;
+        return false;
     }
 
     bool CacheController::canAdmitRequest(Message &msg)

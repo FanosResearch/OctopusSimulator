@@ -68,6 +68,8 @@ namespace octopus
         // Stall a brand-new demand miss when the MSHR is full (outstanding-miss
         // limit reached) or the write-back buffer (PWB) has no headroom.
         virtual bool canAdmitRequest(Message &msg) override;
+        // Adds the MSHR and write-back-buffer bounds to the queue bound.
+        virtual bool demandAdmissionBlocked(int outstanding) const override;
 
     public:
         CacheController(ParametersMap map, CommunicationInterface *upper_interface, 

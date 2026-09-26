@@ -27,6 +27,11 @@ namespace octopus
         string llc_controller_type = cache_controller_type;
         if (parameters.count(STRINGIFY(llc_controller_type)))
             llc_controller_type = std::get<string>(parameters.at(STRINGIFY(llc_controller_type)).value);
+        // Core model: the trace-driven CPU by default, or ExternalCPU when an
+        // embedder (the gem5 bridge) injects the requests itself.
+        string cpu_type = STRINGIFY(CPU);
+        if (parameters.count(STRINGIFY(cpu_type)))
+            cpu_type = std::get<string>(parameters.at(STRINGIFY(cpu_type)).value);
 
         //Constructor
         Bus *bus[bus_type.size()];
@@ -52,12 +57,25 @@ namespace octopus
 
             DirectInterconnect *cpu_interconnect = new DirectInterconnect(getSubMap(STRINGIFY(cpu_interconnect), i), cache_id, -1, name);
 
-            CPU *cpu = new CPU(getSubMap(STRINGIFY(cpu), i), cache_id, cpu_interconnect->getInterfaceFor(-1), file_path, name);
+            ExternalCPU *external_cpu = NULL;
+            if (cpu_type == STRINGIFY(ExternalCPU))
+            {
+                external_cpu = new ExternalCPU(getSubMap(STRINGIFY(cpu), i), cache_id,
+                                               cpu_interconnect->getInterfaceFor(-1), name);
+                ExternalCPU::getExtCPUs()->emplace(cache_id, external_cpu);
+            }
+            else
+                new CPU(getSubMap(STRINGIFY(cpu), i), cache_id, cpu_interconnect->getInterfaceFor(-1), file_path, name);
 
             cache_controller = createController(cache_controller_type, 
                                                 getSubMap(STRINGIFY(cache_controller), i),
                                                 bus[0]->getInterfaceFor(cache_id),
                                                 cpu_interconnect->getInterfaceFor(cache_id), name);
+            if (external_cpu != NULL)
+            {
+                cache_controller->setCpuPort(external_cpu);
+                external_cpu->attachCache(cache_controller);
+            }
         }
 
         BaseController *llc_controller;
