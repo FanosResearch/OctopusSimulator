@@ -54,8 +54,12 @@ namespace octopus
     public:
         // mem_system names the scheduler config dir under src/MCsim/system/<name>/<name>.ini
         // (e.g. "FRFCFS"). Device is configured for DDR4-2400U, 8Gb x8.
+        // clk_period: how often update() is driven, in Octopus ns. MCsim
+        // expects one update() per CPU cycle (setCPUClockSpeed) and crosses
+        // to the DRAM clock internally, so this should equal the core period.
         MCsimInterface(CommunicationInterface *lower_interface, int dram_id, int llc_id,
-                       int num_cores, int block_size, const std::string &mem_system = "FRFCFS");
+                       int num_cores, int block_size, const std::string &mem_system = "FRFCFS",
+                       uint64_t clk_period = 1);
         ~MCsimInterface();
 
         virtual void init();

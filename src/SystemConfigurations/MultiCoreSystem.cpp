@@ -79,8 +79,13 @@ namespace octopus
             string mem_system = "FRFCFS";
             if (parameters.count(STRINGIFY(mcsim_scheduler)))
                 mem_system = std::get<string>(parameters.at(STRINGIFY(mcsim_scheduler)).value);
+            // Period on which MCsim's update() is driven; MCsim expects one call
+            // per core cycle. Optional: the legacy value (1 ns) applies when unset.
+            int mcsim_clk_period = 1;
+            if (parameters.count(STRINGIFY(mcsim_clk_period)))
+                mcsim_clk_period = std::get<int>(parameters.at(STRINGIFY(mcsim_clk_period)).value);
             new MCsimInterface(bus[1]->getInterfaceFor(main_memory_id), main_memory_id, llc_id,
-                               num_cores, /*block_size=*/64, mem_system);
+                               num_cores, /*block_size=*/64, mem_system, (uint64_t)mcsim_clk_period);
         }
         else
         {

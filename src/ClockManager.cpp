@@ -8,8 +8,9 @@
 
 #include "../header/ClockManager.h"
 
-#include <io.h>
+#include <unistd.h>
 #include <cstdio>
+#include <numeric>
 
 using namespace std;
 namespace octopus
@@ -18,7 +19,7 @@ namespace octopus
     // redirected to a file (batch/sweep runs) it appends forever (hundreds of MB over
     // billions of cycles) and, with many concurrent sims, saturates disk I/O -- which was
     // the real throughput killer under concurrency. Emit it only to an interactive TTY.
-    static const bool s_stdout_is_tty = (_isatty(_fileno(stdout)) != 0);
+    static const bool s_stdout_is_tty = (isatty(fileno(stdout)) != 0);
 
     ClockedObj::ClockedObj(uint64_t clk_period)
     {
@@ -73,6 +74,65 @@ namespace octopus
 
         for (itr = events.begin(); itr != events.end(); itr++)
             itr->second->init();
+
+        // Every ClockedObj registers with its base-class period (often 0) and
+        // fixes m_clk_period in its own constructor. By init() all constructors
+        // have run, so a period that is still 0 would make clkStep() reschedule
+        // that object at the same timestamp forever.
+        for (itr = events.begin(); itr != events.end(); itr++)
+        {
+            if (itr->second->getClkPeriod() == 0)
+            {
+                cout << "ClockManager: a clocked object still has period 0 at init(); "
+                        "its configuration did not set m_clk_period." << endl;
+                exit(0);
+            }
+        }
+        reportClocks();
+    }
+
+    uint64_t ClockManager::getMinPeriod() const
+    {
+        uint64_t min_period = 0;
+        for (map<EventKey, ClockedObj *>::const_iterator itr = events.begin();
+             itr != events.end(); itr++)
+        {
+            uint64_t p = itr->second->getClkPeriod();
+            if (p != 0 && (min_period == 0 || p < min_period))
+                min_period = p;
+        }
+        return min_period;
+    }
+
+    uint64_t ClockManager::getStepGranularity() const
+    {
+        uint64_t g = 0;
+        for (map<EventKey, ClockedObj *>::const_iterator itr = events.begin();
+             itr != events.end(); itr++)
+            g = std::gcd(g, itr->second->getClkPeriod());
+        return g;
+    }
+
+    void ClockManager::reportClocks() const
+    {
+        map<uint64_t, int> period_count;
+        for (map<EventKey, ClockedObj *>::const_iterator itr = events.begin();
+             itr != events.end(); itr++)
+            period_count[itr->second->getClkPeriod()]++;
+
+        cout << "ClockManager: registered clock periods (ns):";
+        for (map<uint64_t, int>::const_iterator itr = period_count.begin();
+             itr != period_count.end(); itr++)
+            cout << " " << itr->first << "x" << itr->second;
+        cout << endl;
+
+        uint64_t min_period = getMinPeriod();
+        uint64_t granularity = getStepGranularity();
+        cout << "ClockManager: min period = " << min_period
+             << " ns, clkStep() granularity = " << granularity << " ns" << endl;
+        if (granularity != 0 && min_period != granularity)
+            cout << "ClockManager: WARNING periods are not multiples of the finest one; "
+                    "an embedder advancing by a fixed step count will be dilated." << endl;
     }
 
     void ClockManager::run()

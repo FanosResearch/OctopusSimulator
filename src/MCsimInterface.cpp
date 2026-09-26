@@ -13,8 +13,9 @@ using namespace std;
 namespace octopus
 {
     MCsimInterface::MCsimInterface(CommunicationInterface *lower_interface, int dram_id, int llc_id,
-                                   int num_cores, int block_size, const std::string &mem_system)
-        : ClockedObj(1) // period MUST be non-zero: ClockManager reschedules at current_time+period,
+                                   int num_cores, int block_size, const std::string &mem_system,
+                                   uint64_t clk_period)
+        : ClockedObj(clk_period == 0 ? 1 : clk_period) // period MUST be non-zero: ClockManager reschedules at current_time+period,
                         // so period 0 self-reschedules at the same timestamp forever and starves the
                         // whole clock (CPUs never advance). Period 1 = tick every cycle to drive update().
     {
