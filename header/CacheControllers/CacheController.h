@@ -15,6 +15,7 @@
 #include "Arbiter.h"
 #include "RRArbiter.h"
 #include "FCFSArbiter.h"
+#include <deque>
 
 namespace octopus
 {
@@ -37,9 +38,42 @@ namespace octopus
         // key is the msg.m_id and the value is the Message that contains the data
         std::map<uint64_t, Message> m_modifying_data_messages;
 
-        std::vector<Message> m_data_access_buffer;
-        std::map<int, ControllerAction> m_data_access_action; // The map holds the action is required by the entry in m_data_array_queue (Key is the message id)
         Arbiter *m_data_access_arbiter;
+
+        // ---- pipelined data array (m_data_handler->isPipelined(), latency > 0) ----
+        // One array operation in flight. Either a message carrying bytes, whose
+        // FSM event is applied only once the bytes have been written (the line
+        // keeps its transient state meanwhile, so loads stall and snoops take
+        // the table's SaveReq path), or an action list that must read or write
+        // the array before it can run (a hit, a write-back, a store).
+        struct DataArrayOp
+        {
+            enum Kind { MESSAGE, ACTIONS } kind;
+            Message msg;                            // the message, or the parked action's message
+            std::vector<ControllerAction> actions;  // ACTIONS: run in order on completion
+            uint64_t op_id = 0;                     // unique; the arbiter elects a message copy carrying it
+            bool admitted = false;                  // pipelined: inside the array, completes at ready_cycle
+            uint64_t ready_cycle = 0;
+        };
+        // Level 2: every access that needs the data array, in arrival order,
+        // whole deferred messages and parked single actions alike. Level 1
+        // (the processing queue's hold) releases at most one access per line,
+        // so this list is scheduled purely as a resource: the configured
+        // arbiter (FCFS / RR / TDM, keyed on the requesting core) or oldest
+        // first, within the array's ports and latency.
+        std::deque<DataArrayOp> m_array_ops;
+        uint64_t m_array_op_seq = 0;
+        std::vector<int> m_arbiter_candidates;      // cores the arbiter schedules; others go oldest first
+        uint64_t m_pipe_ops = 0;
+        uint64_t m_pipe_early_fires = 0;            // completed early: their line was evicted
+
+        void arrayEnqueue(DataArrayOp &&op);                // level-2 entry, both models
+        std::deque<DataArrayOp>::iterator arrayElect();     // next waiting access by policy, or end()
+        bool arbitrated(int owner) const;
+        void pipelineFire(DataArrayOp &op);
+        void pipelineFlushLine(uint64_t address);           // the line leaves the array: complete its ops now
+        virtual bool deferForDataArray(Message &msg) override;
+        virtual void removePendingAndRespond(void *) override;
 
         virtual void cycleProcess() override;
         virtual void addRequests2ProcessingQueue(FRFCFS_Buffer<Message, CoherenceProtocolHandler> &) override;

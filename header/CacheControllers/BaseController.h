@@ -51,6 +51,7 @@ namespace octopus
         // Receives the commit of each CPU request and the loss of any
         // readable line; NULL in the standalone simulator.
         ExternalCPU *m_cpu_port = NULL;
+        uint64_t m_data_read_failures = 0;   // responses built without line data
 
         // key is the msg.addr & mask(nbits of CacheLineSize) and the value is vector of Messages
         // to ensure order of requests of the same cache line
@@ -69,6 +70,10 @@ namespace octopus
         // held back (e.g., the derived controller has no free MSHR/PWB entry for
         // a new miss). Default: always admit. Overridden by CacheController.
         virtual bool canAdmitRequest(Message &msg) { return true; }
+        // Pipelined data array: lets the derived controller take a ready
+        // message off the FSM path and apply its event only once the array
+        // has absorbed its bytes. Default: never.
+        virtual bool deferForDataArray(Message &msg) { return false; }
 
         virtual uint64_t getAddressKey(uint64_t addr);
 
@@ -97,7 +102,9 @@ namespace octopus
         // bounded by that same number. The L1 controller adds its MSHR and
         // write-back-buffer bounds.
         virtual bool demandAdmissionBlocked(int outstanding) const;
+        // Fatal diagnostic for a response that needs line data the array no
         // longer holds (replaces a memcpy from NULL).
+        void dataArrayReadFailed(const char *where, const Message *msg);
         int demandQueueSize() const { return m_processing_queue_size; }
 
         virtual void initialize(uint64_t address, const uint8_t* data, int size) {} //for Initializable

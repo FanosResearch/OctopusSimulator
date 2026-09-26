@@ -112,6 +112,17 @@ namespace octopus
         return false;
     }
 
+    bool FSMReader::hasAction(int state, int Event, const std::string &action_name)
+    {
+        auto it = this->m_actionIds.find(action_name);
+        if (it == this->m_actionIds.end())
+            return false;
+        for (int action : this->m_states[state].getActions(Event))
+            if (action == it->second)
+                return true;
+        return false;
+    }
+
     bool FSMReader::isStable(int state)
     {
         return this->m_states[state].stable;

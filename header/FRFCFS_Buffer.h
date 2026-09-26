@@ -190,6 +190,11 @@ namespace octopus
          * compares against m_max_size. */
         int size() const { return (int)this->m_buffer.size(); }
 
+        /* Readiness here is a pure function of cache state, and normally that
+         * state only changes through this buffer's own push/pop. A state
+         * change made elsewhere (a data-array operation completing) must call
+         * this, or a stalled item would never be rescanned. */
+        void markDirty() { this->m_dirty = true; }
         int maxSize() const { return this->m_max_size; }
 
         /* Number of queued items satisfying pred(item). */
