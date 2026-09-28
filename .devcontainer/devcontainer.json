@@ -1,0 +1,30 @@
+{
+  "name": "Octopus tutorial",
+  "image": "mcr.microsoft.com/devcontainers/cpp:1-ubuntu-24.04",
+
+  "hostRequirements": { "cpus": 4, "memory": "8gb", "storage": "32gb" },
+
+  // The visualizer serves on 8765 (octoviz.sh). openPreview means the tab opens by
+  // itself, so nobody has to be told to browse to a port that is not on their machine.
+  "forwardPorts": [8765],
+  "portsAttributes": {
+    "8765": { "label": "octoviz", "onAutoForward": "openPreview" }
+  },
+
+  // onCreate: the slow, network-bound part (packages, benchmark traces). It runs
+  // during a prebuild, so an attendee creating a codespace never pays for it.
+  "onCreateCommand": "bash .devcontainer/on-create.sh",
+  // postCreate: the cheap part that depends on the checked-out source.
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "waitFor": "postCreateCommand",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "ms-python.python",
+        "ms-vscode.cmake-tools"
+      ]
+    }
+  }
+}

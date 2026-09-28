@@ -98,6 +98,48 @@ Hossam, Mohamed, Salah Hessien, and Mohamed Hassan. "Octopus: a Cycle-Accurate C
 * Directory `$Octopus/Protocols_FSM/` contains the CSV files that defines the coherency protocols' finite state machines.
 * Directory `$Octopus/configuration/` contains the CSV files that contains the configuratable parameters of the simulation components.
 
+## Zero-install: run Octopus in a browser (GitHub Codespaces)
+
+The `esweek-tutorial` branch carries a dev container, so you can get a working
+simulator without installing anything locally. On GitHub: **Code → Codespaces →
+Create codespace on esweek-tutorial**. The container installs the toolchain and the
+Python packages, fetches the EEMBC traces, builds the simulator and runs the
+environment check; port 8765 is forwarded so the visualizer opens by itself.
+
+Everything lives in two files you can also read as documentation of the
+dependencies: `.devcontainer/on-create.sh` (packages and benchmark traces) and
+`.devcontainer/post-create.sh` (build and check).
+
+## Checking an environment
+
+On any machine — a codespace, a laptop, a cluster node — one command says whether
+the environment is usable:
+
+```shell
+bash scripts/check_environment.sh
+```
+
+It prints one line per component and finishes with a short simulation whose result
+is fixed: **15364 requests, worst-case DRAM latency 359 cycles**. The simulator is
+deterministic and platform-independent, so those numbers are an equality check, not
+a smoke test — a mismatch means a stale build, an edited configuration, or a bug.
+It also catches the one portability trap in the tree: a working copy checked out on
+Windows and then copied to Linux carries CRLF line endings, and MCsim's `.ini`
+parser rejects them with `Malformed Line N (missing equals)`.
+
+## Fetching only part of the benchmark suite
+
+`get_benchmarks.sh` clones the whole benchmark repository (~710 MB). The SPLASH
+archives are ~651 MB of that, so an environment that only runs EEMBC can ask for
+a sparse clone — about 61 MB, and a few seconds instead of a few minutes:
+
+```shell
+BMS_SPARSE="eembc-traces" ./get_benchmarks.sh
+```
+
+This affects only a first clone. To add the rest later, remove `BMs/` and run
+`./get_benchmarks.sh` again.
+
 ## Building Octopus
 Octopus uses CMake to manage the build system of the simulator. In order to build Octopus, you need to install the following:
 
