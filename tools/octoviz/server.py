@@ -231,6 +231,11 @@ class H(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(); ap.add_argument("--root", required=True); ap.add_argument("--port", type=int, default=8765); ap.add_argument("--lod-cycles", type=int, default=40000)
+    # Loopback by default, so a laptop does not put the viewer on its local network.
+    # OCTOVIZ_HOST=0.0.0.0 is for a container published with `docker run -p 8765:8765`,
+    # where a loopback bind is unreachable from the host. Codespaces forwards a
+    # loopback bind on its own, so it needs no override.
     a = ap.parse_args(); ROOT = os.path.abspath(a.root); LOD = a.lod_cycles
+    host = os.environ.get("OCTOVIZ_HOST", "127.0.0.1")
     print(f"octoviz: root={ROOT} runs={len(runs())}  ->  http://localhost:{a.port}/")
-    ThreadingHTTPServer(("127.0.0.1", a.port), H).serve_forever()
+    ThreadingHTTPServer((host, a.port), H).serve_forever()

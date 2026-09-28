@@ -4,11 +4,16 @@
 
   "hostRequirements": { "cpus": 4, "memory": "8gb", "storage": "32gb" },
 
-  // The visualizer serves on 8765 (octoviz.sh). openPreview means the tab opens by
-  // itself, so nobody has to be told to browse to a port that is not on their machine.
+  // The visualizer serves on 8765 (octoviz.sh).
+  //
+  // openBrowser, not openPreview: a forwarded port is private, so the first request
+  // is redirected to github.com to pick up an auth cookie. The editor's preview pane
+  // is an iframe, and github.com sends X-Frame-Options: DENY -- which the viewer sees
+  // as "github.com refused to connect". A real browser tab already has the session,
+  // so the redirect succeeds and the visualizer loads.
   "forwardPorts": [8765],
   "portsAttributes": {
-    "8765": { "label": "octoviz", "onAutoForward": "openPreview" }
+    "8765": { "label": "octoviz", "onAutoForward": "openBrowser" }
   },
 
   // onCreate: the slow, network-bound part (packages, benchmark traces). It runs
