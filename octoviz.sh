@@ -56,6 +56,19 @@ need_py(){ "$PY" -c "import duckdb, numpy" 2>/dev/null || die "python needs duck
 winpath(){ cygpath -m "$1" 2>/dev/null || echo "$1"; }
 open_url(){ local u="$1"; (command -v start >/dev/null && start "" "$u") 2>/dev/null || cmd.exe /c start "" "$u" 2>/dev/null || xdg-open "$u" 2>/dev/null || open "$u" 2>/dev/null || echo "open $u in a browser"; }
 
+# The address to give a human. In a Codespace the server's own localhost URL is useless
+# -- the browser is on another machine -- and the forwarded one has to be built from the
+# environment. Auto-opening cannot be relied on there either: the editor's popup is
+# blocked as often as not, so print the URL and let the terminal make it clickable.
+viewer_url(){
+  if [ -n "${CODESPACE_NAME:-}" ] && [ -n "${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN:-}" ]; then
+    printf 'https://%s-%s.%s/' "$CODESPACE_NAME" "$PORT" "$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN"
+  else
+    printf 'http://localhost:%s/' "$PORT"
+  fi
+}
+in_codespace(){ [ -n "${CODESPACE_NAME:-}" ]; }
+
 cmd_run(){
   local d="$1"; shift; [ -d "$d" ] || die "no such workload dir: $d"
   [ -f "$BIN" ] || die "simulator not built ($BIN); see README.md 'Building Octopus'"
@@ -89,8 +102,17 @@ cmd_serve(){
   local root="$1"; [ -d "$root" ] || die "no such dir: $root"
   need_py
   find "$root" -maxdepth 5 -name octoviz.parquet 2>/dev/null | grep -q . || die "no converted run (octoviz.parquet) under $root"
-  echo "== serving $root at http://localhost:$PORT/  (Ctrl-C to stop)"
-  open_url "http://localhost:$PORT/" &
+  local url; url="$(viewer_url)"
+  echo "== serving $root  (Ctrl-C to stop)"
+  echo "==   $url"
+  if in_codespace; then
+    # Ctrl-click (or Cmd-click) the line above. The first load redirects through
+    # github.com to authenticate the forwarded port, which is why the editor's
+    # embedded preview pane cannot show it -- use a real browser tab.
+    echo "==   ctrl-click the URL, or use the Ports panel (port $PORT, globe icon)"
+  else
+    open_url "$url" &
+  fi
   exec "$PY" "$TOOLS/server.py" --root "$root" --port "$PORT"
 }
 
