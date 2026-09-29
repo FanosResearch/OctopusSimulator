@@ -25,7 +25,8 @@ namespace octopus
         Configurable* system_config;
 
     public:
-        CacheSim(std::string system_name, std::vector<std::string> cl_params, bool print_config = false);
+        CacheSim(std::string system_name, std::vector<std::string> cl_params, bool print_config = false,
+                 std::string output_dir = "");
         ~CacheSim();
 
         void run();

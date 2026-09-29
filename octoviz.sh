@@ -6,7 +6,7 @@
 #
 # Usage:
 #   ./octoviz.sh run     <workload_dir> [-- <extra simulator args>]   # simulate with OCTOPUS_TRACE
-#   ./octoviz.sh convert <workload_dir>                                # newLogger/ (+ trace.bin) -> Parquet
+#   ./octoviz.sh convert <root_dir>                                    # recursively find latency CSVs -> Parquet
 #   ./octoviz.sh serve   <root_dir>                                     # serve every converted run under root
 #   ./octoviz.sh view    <workload_dir> [-- <extra simulator args>]    # run + convert + serve + open browser
 #
@@ -88,20 +88,38 @@ cmd_run(){
 }
 
 cmd_convert(){
-  local d="$1"; [ -d "$d/newLogger" ] || die "no newLogger/ under $d (run first)"
+  local root="$1"; [ -d "$root" ] || die "no such dir: $root"
   need_py
+  local report d trace count=0
+  local -A seen=()
   local args=()
-  [ -f "$d/trace.bin" ] && args+=(--trace "$d/trace.bin")
-  [ -n "$WINDOW" ] && [ -f "$d/trace.bin" ] && args+=(--t0 "${WINDOW%%:*}" --t1 "${WINDOW##*:}")
-  echo "== converting $d/newLogger ${args[*]:-}"
-  "$PY" "$TOOLS/convert.py" "$d/newLogger" "${args[@]}" || die "conversion failed"
-  [ "$KEEP_TRACE" = "1" ] || rm -f "$d/trace.bin"
+  while IFS= read -r -d '' report; do
+    d="$(dirname "$report")"
+    [ -n "${seen[$d]:-}" ] && continue
+    seen["$d"]=1
+    args=(); trace=""
+    # Custom output directories keep traces beside the CSVs. Legacy runs
+    # put trace.bin one level above newLogger/.
+    if [ -f "$d/trace.bin" ]; then
+      trace="$d/trace.bin"
+    elif [ "$(basename "$d")" = "newLogger" ] && [ -f "$d/../trace.bin" ]; then
+      trace="$d/../trace.bin"
+    fi
+    [ -n "$trace" ] && args+=(--trace "$trace")
+    [ -n "$WINDOW" ] && [ -n "$trace" ] && args+=(--t0 "${WINDOW%%:*}" --t1 "${WINDOW##*:}")
+    echo "== converting $d ${args[*]:-}"
+    "$PY" "$TOOLS/convert.py" "$d" "${args[@]}" || die "conversion failed: $d"
+    if [ "$KEEP_TRACE" != "1" ] && [ -n "$trace" ]; then rm -f "$trace"; fi
+    count=$((count+1))
+  done < <(find "$root" -type f -name 'LatencyReport_C*.csv' -print0 | sort -z)
+  [ "$count" -gt 0 ] || die "no LatencyReport_C*.csv found under $root"
+  echo "== converted $count run(s)"
 }
 
 cmd_serve(){
   local root="$1"; [ -d "$root" ] || die "no such dir: $root"
   need_py
-  find "$root" -maxdepth 5 -name octoviz.parquet 2>/dev/null | grep -q . || die "no converted run (octoviz.parquet) under $root"
+  find "$root" -name octoviz.parquet 2>/dev/null | grep -q . || die "no converted run (octoviz.parquet) under $root"
   local url; url="$(viewer_url)"
   echo "== serving $root  (Ctrl-C to stop)"
   echo "==   $url"
@@ -118,7 +136,7 @@ cmd_serve(){
 
 case "${1:-}" in
   run)     shift; d="${1:?workload_dir}"; shift; [ "${1:-}" = "--" ] && shift; cmd_run "$d" "$@";;
-  convert) shift; cmd_convert "${1:?workload_dir}";;
+  convert) shift; cmd_convert "${1:?root_dir}";;
   serve)   shift; cmd_serve "${1:?root_dir}";;
   view)    shift; d="${1:?workload_dir}"; shift; [ "${1:-}" = "--" ] && shift; cmd_run "$d" "$@"; cmd_convert "$d"; cmd_serve "$d";;
   *) sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'; exit 1;;

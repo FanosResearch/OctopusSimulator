@@ -56,3 +56,6 @@ results_kept_fixedfsm/
 results/**/.*/
 demo/workloads/*/newLogger/
 demo/workloads/*/.out*
+
+.venv/
+tutorial/

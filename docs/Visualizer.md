@@ -27,6 +27,19 @@ raw event trace (phase 3) will fill those in and give per‑bank DRAM lanes.
 Prerequisites: Python 3.9+ with `pip install duckdb numpy` (nothing else; the UI has no build
 step and needs no network) and a browser. Everything runs on the user's machine.
 
+`./octoviz.sh convert <folder>` recursively finds every directory containing
+`LatencyReport_C*.csv`, including the supplied folder itself, and converts each
+run once. Neither a `newLogger` directory name nor `Summary.csv` is required.
+Parquet files are written beside the latency reports. An optional `trace.bin`
+is read from the same directory, or from the parent of a legacy `newLogger/`
+directory. For example, after simulator runs using `-o tutorial/Arbiter/FCFS/`
+and `-o tutorial/Arbiter/RR/`:
+
+```bash
+./octoviz.sh convert tutorial/Arbiter
+./octoviz.sh serve tutorial/Arbiter
+```
+
 The one‑command way is the root script: `./octoviz.sh view <workload_dir>` simulates the
 workload with the trace on, converts it and opens the viewer; `run`, `convert` and `serve` are
 the same steps separately (`./octoviz.sh` prints the options: `WINDOW=t0:t1` for giant runs,

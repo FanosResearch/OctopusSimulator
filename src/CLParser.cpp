@@ -21,7 +21,7 @@ namespace octopus
             //Rearrange lines
             for (int i = 0; i < vec.size(); i++)
             {
-                if(vec[i].size() < 3)   //if the string is just '-' + a character
+                if(vec[i].size() == 2 && vec[i][0] == '-' && i + 1 < vec.size())
                 {    
                     lines.push_back(vec[i] + " " + vec[i + 1]);
                     i++;
@@ -42,10 +42,11 @@ namespace octopus
         for(auto line : lines)
         {
             int pos;
-            if((pos = line.find(identifier)) == string::npos) //find parameter identifier
+            if(line.compare(0, identifier.size(), identifier) != 0 ||
+               (line.size() > identifier.size() && line[identifier.size()] != ' '))
                 continue;
             
-            line = line.substr(pos + 2); //remove parameter identifier
+            line = line.substr(identifier.size()); //remove parameter identifier
 
             //Trim leading spaces
             pos = 0;

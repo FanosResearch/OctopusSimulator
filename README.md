@@ -192,6 +192,20 @@ A worked end-to-end example of the simulator driving something visible is
 job timings steer a robot along a planned path, showing what shared-cache and DRAM interference
 cost a real-time task, and what a reserved cache way recovers.
 
+When running the binary directly, use `-o <directory>` to write the logger CSVs
+(`LatencyReport_C*.csv`, `Summary.csv`, and task `JobReport_C*.csv`) to a separate
+directory. Missing directories are created; relative paths resolve from the current
+working directory. Without `-o`, reports still go to `<workload_path>/newLogger`.
+Reusing an output directory overwrites reports with matching names. For example:
+
+```bash
+./build/Octopus_Simulator -s MultiCoreSystem -o results/rr \
+  -p "bus[0].interconnect_controller.arbiter_type(s)=RRArbiter"
+```
+
+This also works with `-s MultiCoreSystem_Mesh`. Raw event traces remain controlled
+separately by `OCTOPUS_TRACE`.
+
 To *see* a run rather than read its reports, `./octoviz.sh view <workload_dir>` simulates it with
 the raw event trace on, converts the run and opens the timeline viewer in the browser (per-request
 pipeline, resource lanes for every message, a "why did I wait" view and a per-line coherence
