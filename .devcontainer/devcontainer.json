@@ -19,8 +19,13 @@
   // onCreate: the slow, network-bound part (packages, benchmark traces). It runs
   // during a prebuild, so an attendee creating a codespace never pays for it.
   "onCreateCommand": "bash .devcontainer/on-create.sh",
-  // postCreate: the cheap part that depends on the checked-out source.
+  // postCreate: the part that depends on the checked-out source. Runs once, on create
+  // or on a container rebuild.
   "postCreateCommand": "bash .devcontainer/post-create.sh",
+  // postStart: runs on every start, including after a stop/resume where postCreate does
+  // not. It rebuilds only if the binary is missing, so an interrupted create or a
+  // cancelled build repairs itself instead of failing later with "No such file".
+  "postStartCommand": "bash .devcontainer/post-start.sh",
   "waitFor": "postCreateCommand",
 
   "customizations": {
