@@ -52,6 +52,12 @@ namespace octopus
         virtual void hitAction(void *) override;
         virtual void addtoPendingRequests(void *) override;
         virtual void performWriteBack(void *) override;
+
+        // Whether a deferred supply also sends the LLC a copy when the parked head is a
+        // GetS. True for snooping, where the LLC is waiting on that data and otherwise
+        // parks in MN_d for ever. False under a directory: the home learns of the transfer
+        // from the protocol, and an unsolicited copy faults its FSM. See performWriteBack.
+        virtual bool deferredSupplyCopiesToLLC() const { return true; }
         virtual void updateCacheLine(void *) override;
 
         virtual void writeCacheLineData(void *);

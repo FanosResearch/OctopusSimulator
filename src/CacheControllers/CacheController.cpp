@@ -167,9 +167,13 @@ namespace octopus
             // Data2Req for "parked GetS, then invalidated before our data arrived" --
             // without this the LLC parks in MN_d forever (seen on water_nsquared/ocean
             // under a perfect LLC with OoO=8).
+            // Snooping only: see deferredSupplyCopiesToLLC(). Under a directory the home
+            // is told about the transfer by the protocol itself, and an extra unsolicited
+            // data copy is a transaction its FSM has no row for.
             bool has_llc = false;
             for (uint16_t t : msg->to) if (t == (uint16_t)m_shared_memory_id) has_llc = true;
-            if (saved.front().complementary_value == MSIProtocol::REQUEST_TYPE_GETS && !has_llc)
+            if (deferredSupplyCopiesToLLC() &&
+                saved.front().complementary_value == MSIProtocol::REQUEST_TYPE_GETS && !has_llc)
                 msg->to.push_back((uint16_t)m_shared_memory_id);
             for (size_t i = 1; i < saved.size(); i++)
             {
