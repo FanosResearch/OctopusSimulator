@@ -136,6 +136,11 @@ namespace octopus
         std::map<uint32_t, std::pair<std::vector<std::string>, std::vector<std::string>>> m_trace_names;   // comp -> (states, events)
         void traceOpen(); void traceFlush(); void traceClose();
     public:
+        // Called from the hang dump: write the buffered records AND the chunk index now,
+        // so the events leading into a stall are readable after the run is killed.
+        // Without this the chunk holding the stall never fills, is never flushed, and a
+        // hung run's trace ends tens of thousands of cycles before the interesting part.
+        void traceFinalize() { traceClose(); }
         static void traceAtExit();
         void addRequest(uint64_t cpu_id, Message&);
         void registerReportPath(std::string file_path);

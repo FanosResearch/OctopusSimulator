@@ -95,6 +95,9 @@ namespace octopus
                 {
                     m_hang_dumped = true;
                     dumpState();
+                    // The run is wedged: finalize the raw trace now (records + chunk
+                    // index) so the cycles leading into the stall survive the kill.
+                    Logger::getLogger()->traceFinalize();
                 }
                 return;
             }
