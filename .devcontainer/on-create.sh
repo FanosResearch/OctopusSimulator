@@ -10,9 +10,21 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 echo "== system packages"
 sudo apt-get update -qq
-# xz-utils: BMs/prepare_traces.sh inflates the compressed SPLASH archives with it.
-# python3-pip: the analysis and visualizer scripts.
-sudo apt-get install -y -qq --no-install-recommends xz-utils python3-pip >/dev/null
+# Install the toolchain explicitly rather than trusting the base image to carry it.
+# The C++ dev container image does not ship cmake, and the failure mode is horrible:
+# post-create.sh dies on its first line, and the attendee meets it much later as
+# "No such file or directory" from whatever script they ran next.
+#   build-essential, cmake : the simulator build
+#   xz-utils               : BMs/prepare_traces.sh inflates the SPLASH archives
+#   python3-pip            : the analysis and visualizer scripts
+sudo apt-get install -y -qq --no-install-recommends \
+     build-essential cmake xz-utils python3-pip >/dev/null
+
+# Fail here, loudly, rather than three scripts later.
+for t in g++ cmake make xz python3; do
+  command -v "$t" >/dev/null || { echo "on-create: '$t' still missing after apt-get" >&2; exit 1; }
+done
+echo "   toolchain: $(cmake --version | head -1), $(g++ --version | head -1)"
 
 echo "== python packages"
 # Ubuntu 24.04 marks the system interpreter externally managed (PEP 668). This is a
