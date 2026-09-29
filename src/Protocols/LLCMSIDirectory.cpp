@@ -265,7 +265,16 @@ namespace octopus
                 {
                     uint64_t addr_key = msg.addr & ~uint64_t(m_data_handler->getBlockSize() -1);
 
-                    if((protocol_counters->find(addr_key) != protocol_counters->end()) && ((protocol_counters->at(addr_key).size() - 1) == 0))
+                    // "Last" only if the SENDER is the one remaining sharer. A PutS can arrive
+                    // from a core that is no longer a sharer: it left S (PutS in flight) and was
+                    // then invalidated by a GetM, which reset the sharer set. Judging by size
+                    // alone, that stale PutS looked like the last sharer leaving whenever exactly
+                    // one OTHER core still held the line: S -> I with a live sharer, then the next
+                    // GetM was granted from I with a non-zero ack count and no Inv sent to that
+                    // sharer -- a requester waiting for an ack nobody will send (iirflt01, bus).
+                    // A stale PutS is a plain PutS: PutAck, and DecSharers finds nothing to erase.
+                    auto it = protocol_counters->find(addr_key);
+                    if (it != protocol_counters->end() && it->second.size() == 1 && it->second.front() == msg.owner)
                         *out_id = EventId::last_PutS;
                     else
                         *out_id = EventId::PutS;
