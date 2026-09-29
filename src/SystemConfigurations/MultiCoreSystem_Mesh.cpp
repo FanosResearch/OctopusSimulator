@@ -47,12 +47,17 @@ namespace octopus
         }
 
         Bus *bus = new Bus(getSubMap(STRINGIFY(bus)), NULL, name);
+        bus->setMemBus();   // the LLC<->memory link: its crossings log as MEM_BUS (as in MultiCoreSystem)
         BaseController *llc_controller;
         int llc_id = std::get<int>(getSubMap(STRINGIFY(llc_controller)).at("m_id").value);
-        llc_controller = createController(cache_controller_type, 
-                                          getSubMap(STRINGIFY(llc_controller)), 
-                                          bus->getInterfaceFor(llc_id), 
+        llc_controller = createController(cache_controller_type,
+                                          getSubMap(STRINGIFY(llc_controller)),
+                                          bus->getInterfaceFor(llc_id),
                                           interconnect->getInterfaceFor(llc_id), name);
+        // Without this the LLC's events carry no role: the LatencyReport's DRAM and LLC
+        // stages read 0 on Mesh/NoC and the event-path validator reports thousands of rows
+        // whose stages do not sum to Total. Mirrors MultiCoreSystem.
+        llc_controller->setLogRole(Logger::Role::LLC);
 
         MainMemoryController *m_main_memory;
         int main_memory_id = std::get<int>(getSubMap(STRINGIFY(m_main_memory)).at("m_id").value);
