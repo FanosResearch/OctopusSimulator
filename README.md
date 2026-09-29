@@ -203,8 +203,23 @@ Reusing an output directory overwrites reports with matching names. For example:
   -p "bus[0].interconnect_controller.arbiter_type(s)=RRArbiter"
 ```
 
-This also works with `-s MultiCoreSystem_Mesh`. Raw event traces remain controlled
-separately by `OCTOPUS_TRACE`.
+This also works with `-s MultiCoreSystem_Mesh`. Add `--trace` to record raw events
+as `trace.bin` (plus `trace.bin.names`) in the same output directory:
+
+```bash
+# From tutorial/, using the workload configured in the system CSV:
+../build/Octopus_Simulator -s MultiCoreSystem -o Arbiter/FCFS --trace \
+  -p "bus[0].interconnect_controller.arbiter_type(s)=FCFSArbiter"
+```
+
+Relative `workload_path` values from system CSVs resolve against the project root
+(derived from the compiled-in configuration directory). Explicit
+`-p "workload_path(s)=..."` overrides and `-o` paths resolve against the current
+working directory; absolute paths are unchanged. Without `-o`, `--trace` writes
+into `<workload_path>/newLogger/`. Without `--trace`, tracing stays off unless
+`OCTOPUS_TRACE` is set. That environment variable remains supported and takes
+precedence as an explicit trace filename, including when `--trace` is supplied.
+`OCTOPUS_TRACE_WINDOW` still controls the recorded cycle range.
 
 To *see* a run rather than read its reports, `./octoviz.sh view <workload_dir>` simulates it with
 the raw event trace on, converts the run and opens the timeline viewer in the browser (per-request

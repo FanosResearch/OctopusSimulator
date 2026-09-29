@@ -144,6 +144,7 @@ namespace octopus
         static void traceAtExit();
         void addRequest(uint64_t cpu_id, Message&);
         void registerReportPath(std::string file_path);
+        void enableTrace();
         void traceEnd(uint64_t core_id);
         void setClkCount(uint64_t core_id, uint64_t clk);
         // periodic task mode (docs/Tasks.md): one row per job in JobReport_C<n>.csv

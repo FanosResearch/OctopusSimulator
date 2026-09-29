@@ -1,4 +1,11 @@
-# Raw event trace (`OCTOPUS_TRACE`)
+# Raw event trace (`--trace` / `OCTOPUS_TRACE`)
+
+Use `--trace` with the simulator to write `trace.bin` and `trace.bin.names`
+alongside the logger CSVs: in the directory selected by `-o`, or in
+`<workload_path>/newLogger/` by default. The directory is created if needed.
+`OCTOPUS_TRACE=<file>` remains supported as an explicit filename override and
+takes precedence over the default chosen by `--trace`. `OCTOPUS_TRACE_WINDOW`
+works with either method. Without either opt-in, no raw trace is recorded.
 
 Opt‑in, zero cost when unset. Set `OCTOPUS_TRACE=<file>` and every resource event of **every**
 message — CPU requests and the non‑request traffic the per‑request report cannot see

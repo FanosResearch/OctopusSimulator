@@ -29,15 +29,16 @@ int main (int argc, char *argv[])
     vector<string> sys_names = cl_parser.getParam("-s");
     vector<string> print_config = cl_parser.getParam("--PrintConfig");
     vector<string> output_dirs = cl_parser.getParam("-o");
+    bool trace = !cl_parser.getParam("--trace").empty();
 
     if (sys_names.empty())
     {
-        cerr << "Usage: " << argv[0] << " -s <system> [-o <logger-output-directory>] [-p <override>]" << endl;
+        cerr << "Usage: " << argv[0] << " -s <system> [-o <logger-output-directory>] [--trace] [-p <override>]" << endl;
         return 1;
     }
 
     CacheSim cache_sim(sys_names.back(), cl_params, !print_config.empty(),
-                       output_dirs.empty() ? "" : output_dirs.back());
+                       output_dirs.empty() ? "" : output_dirs.back(), trace);
     cache_sim.run();
     
     return 0;

@@ -59,3 +59,4 @@ demo/workloads/*/.out*
 
 .venv/
 tutorial/
+*.csv#

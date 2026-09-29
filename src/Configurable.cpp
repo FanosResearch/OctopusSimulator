@@ -7,6 +7,7 @@
  */
 
 #include "../header/Configurable.h"
+#include <filesystem>
 
 using namespace std;
 
@@ -34,10 +35,26 @@ namespace octopus
     Configurable::Configurable(vector<string> cl_params, string config_path, string name, string pname) :
                     Configurable(config_path, name, pname, true)
     {
+        bool explicit_workload = false;
         for(auto line : cl_params)
         {
             Parameter p = parseCLparam(line.c_str());
+            if (p.name == "workload_path") explicit_workload = true;
             addParameter2Map(p);
+        }
+
+        // System CSV paths are project-relative; explicit CLI paths retain
+        // normal current-working-directory semantics. Absolute paths stay intact.
+        if (parameters.count("workload_path"))
+        {
+            std::filesystem::path path(std::get<string>(parameters.at("workload_path").value));
+            if (path.is_relative())
+            {
+                const auto base = explicit_workload ? std::filesystem::current_path()
+                    : (std::filesystem::path(CONFIGURATION_PATH) / "..").lexically_normal();
+                path = base / path;
+            }
+            addParameter2Map(Parameter("workload_path", Parameter::Type::String, path.lexically_normal().string()));
         }
 
         printConfig();
@@ -343,4 +360,4 @@ namespace octopus
         }
         printf("--------------------------------------------\n");
     }
-} 
+}

@@ -13,7 +13,7 @@ using namespace std;
 
 namespace octopus
 {
-    CacheSim::CacheSim(string system_name, vector<string> cl_params, bool print_config, string output_dir)
+    CacheSim::CacheSim(string system_name, vector<string> cl_params, bool print_config, string output_dir, bool trace)
     {
         Configurable::print_config_global = print_config;
         if (!output_dir.empty())
@@ -43,6 +43,8 @@ namespace octopus
         // component initializes or writes reports. Applies to both topologies.
         if (!output_dir.empty())
             Logger::getLogger()->registerReportPath(output_dir);
+        if (trace)
+            Logger::getLogger()->enableTrace();
 
         ClockManager::getClockManager()->init();
     }
