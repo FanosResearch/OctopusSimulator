@@ -112,6 +112,18 @@ inclusive, the FSM's `IssueInv` on an eviction invalidates the copy in whichever
 line — the red path, and the reason a task whose working set fits in its own private cache can
 still be disturbed by other cores.
 
+The same drawing with one path highlighted — a read or write **hit**, a `GetS` or `GetM` that
+finds the line in a stable state — from the request's arrival on the bus to its data leaving on
+the response channel, in ten numbered steps:
+
+![The path of a read or write hit through the LLC](imgs/llc_hit_path.svg)
+
+Steps 4–6 — tag compare, FSM, sequencer — take no simulated time. What a hit pays for is the
+wait in the processing queue (1–3), the wait for the port (7), and then the `A_LLC`-cycle access
+itself (8–9). A write hit differs from a read hit in what the FSM does, not in the path: it also
+rewrites the line's state and owner bits (untimed), and if other L1s share the line it issues the
+red `IssueInv` as well.
+
 A `CacheController` (a `BaseController`) has **two `CommunicationInterface`s** — one
 facing the cores below, one facing the interconnect above. Incoming messages are
 serialized into a **processing queue** ordered **First‑Ready First‑Come‑First‑Serve
