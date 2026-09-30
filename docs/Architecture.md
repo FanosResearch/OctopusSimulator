@@ -261,9 +261,21 @@ sequenceDiagram
     end
 ```
 
+The same journey drawn on the system as shipped — four cores with private L1s on the
+TripleBus, the shared LLC, the point‑to‑point memory bus and DRAM — with one LLC miss
+from core 0 routed through it. Each hop is coloured by the LatencyReport column that
+measures it (amber = waiting, purple = a bus transfer, teal = being served), and the
+numbers ①–⑨ are the Logger stamps in order; the right‑hand panel lists, per hop, the
+two stamps whose distance the column is. The other cores' L1s see every request on the
+request lane, and when one of them owns the line it answers on the response lane in
+the LLC's place, its stamps then standing in for the LLC's. The service lane carries
+the LLC's back‑invalidations on an eviction and is not on this request's path.
+
+![The Octopus system end to end: four cores on a TripleBus, the shared LLC, the memory bus and DRAM, with one LLC miss from core 0 routed through it and each hop coloured by the LatencyReport column that measures it](imgs/system_end_to_end.svg)
+
 At each hop the component stamps a Logger checkpoint, so the same journey is what
 the [Logger](Logger.md) decomposes into per‑stage latencies. Exactly which stamps
-bound which column — for an LLC hit and for an LLC miss — is this:
+bound which column, on a time axis — for an LLC hit and for an LLC miss — is this:
 
 ![One request end to end, with the nine LatencyReport columns bracketed between the Logger events that bound them](imgs/request_end_to_end.svg)
 
