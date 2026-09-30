@@ -132,6 +132,12 @@ L1 owns it (`I` or `S` in `MESI_LLC.csv`). The third case, a hit on a line an L1
 and the LLC only saves that copy (`S_d → SaveData → S`); on a `GetM` the owner hands the line
 straight to the requester and the LLC merely rewrites the owner bits.
 
+The write hit drawn on its own, so the difference is visible rather than described. The path
+is the read hit's; what is new is the branch marked **5b** — the FSM's `SetOwner` written back
+into the line's bits over the dashed control wire, untimed — and the plain-data response:
+
+![The path of a write hit through the LLC](imgs/llc_write_hit.svg)
+
 And the same again for a read **miss** in the simplest case — the set still has a free way, so
 nothing is evicted:
 
