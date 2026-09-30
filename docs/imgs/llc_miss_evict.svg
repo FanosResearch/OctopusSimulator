@@ -26,6 +26,7 @@
     .rl   { font-size:9px; fill:#BE3F24; font-family:'IBM Plex Mono',monospace }
     .hit  { stroke:#0E9F8E; stroke-width:8; fill:none; stroke-opacity:.42; stroke-linejoin:round; stroke-linecap:round }
     .vic  { stroke:#F59E0B; stroke-width:8; fill:none; stroke-opacity:.45; stroke-linejoin:round; stroke-linecap:round }
+    .par  { stroke:#0E9F8E; stroke-width:8; fill:none; stroke-opacity:.42; stroke-linejoin:round; stroke-linecap:round; stroke-dasharray:14 8 }
     .badge{ fill:#0E7C73; stroke:#FFFFFF; stroke-width:1.5 }
     .vbadge{ fill:#B45309; stroke:#FFFFFF; stroke-width:1.5 }
     .bdig { font-size:9.5px; font-weight:700; fill:#FFFFFF; text-anchor:middle }
@@ -34,7 +35,7 @@
   <rect width="1280" height="1000" fill="#FCFBF8"/>
   <text x="34" y="30" font-size="16" font-weight="700" fill="#14212A">Octopus LLC datapath — the path of a read miss that evicts</text>
   <text x="34" y="47" class="sub">CacheController_End2End + CacheDataHandler_COTS · 32 KB, 2-way, 64 B lines · MESI_LLC coherence FSM · one timed data port</text>
-  <text x="34" y="59" font-size="9" font-weight="600"><tspan fill="#0E7C73">Highlighted: a GetS missing in a FULL set — teal the requested line, </tspan><tspan fill="#B45309">amber the victim, chosen by LRU only when the fill lands. Its INV goes out on TX service (inclusion) and it is always written back (no dirty bit). A GetM evicts identically; an owned victim returns its data first.</tspan></text>
+  <text x="34" y="59" font-size="9" font-weight="600"><tspan fill="#0E7C73">Highlighted: a GetS missing in a FULL set — teal the requested line, </tspan><tspan fill="#B45309">amber the victim, chosen by LRU only when the fill's array write runs (dashed: off the critical path). Its INV goes out on TX service and it is always written back (no dirty bit). A GetM evicts identically; an owned victim returns its data first.</tspan></text>
 
   <!-- ═══ bus[0] ═══ -->
   <rect x="34" y="64" width="1212" height="62" rx="4" class="io"/>
@@ -212,7 +213,8 @@
   </g>
   <!-- ═══ overlay: read miss into a full set: teal = requested line, amber = victim ═══ -->
   <g>
-    <path d="M275 116 L275 136 L345 136 L345 200 L435 200 L435 330 L312 330 L312 378 L166 378 L166 768 L934 768 L934 626 L1256 626 L1256 804 L510 804 L510 905 L1180 905 L1180 862 L680 862 L680 840 L1270 840 L1270 332 L1210 332 L1210 393 L1096 393 L1096 420 L905 420 L905 400 L920 400 L920 140 L915 140 L915 118" class="hit" marker-end="url(#h)"/>
+    <path d="M275 116 L275 136 L345 136 L345 200 L435 200 L435 330 L312 330 L312 378 L166 378 L166 768 L934 768 L934 626 L1256 626 L1256 804 L510 804 L510 905 L1180 905 L1180 862 L680 862 L680 840 L1270 840 L1270 186 L920 186 L920 140 L915 140 L915 118" class="hit" marker-end="url(#h)"/>
+    <path d="M1270 332 L1210 332 L1210 393 L1096 393 L1096 420 L905 420" class="par" marker-end="url(#h)"/>
     <path d="M900 470 L920 470 L920 688 L944 688" class="vic" marker-end="url(#v)"/>
     <path d="M298 642 L1262 642 L1262 101 L1236 101" class="vic" marker-end="url(#v)"/>
     <path d="M1140 724 L1140 812 L540 812 L540 868" class="vic" marker-end="url(#v)"/>
@@ -225,16 +227,16 @@
     <circle cx="1232" cy="572" r="8.5" class="badge"/><text x="1232" y="575.5" class="bdig">7</text>
     <circle cx="1212" cy="885" r="8.5" class="badge"/><text x="1212" y="888.5" class="bdig">8</text>
     <circle cx="752" cy="884" r="8.5" class="badge"/><text x="752" y="887.5" class="bdig">9</text>
-    <circle cx="1236" cy="292" r="8.5" class="badge"/><text x="1236" y="295.5" class="bdig">10</text>
-    <circle cx="866" cy="392" r="8.5" class="badge"/><text x="866" y="395.5" class="bdig">11</text>
-    <circle cx="896" cy="150" r="8.5" class="badge"/><text x="896" y="153.5" class="bdig">12</text>
+    <circle cx="1236" cy="292" r="8.5" class="badge"/><text x="1236" y="295.5" class="bdig">11</text>
+    <circle cx="866" cy="392" r="8.5" class="badge"/><text x="866" y="395.5" class="bdig">12</text>
+    <circle cx="896" cy="150" r="8.5" class="badge"/><text x="896" y="153.5" class="bdig">10</text>
     <circle cx="932" cy="580" r="8.5" class="vbadge"/><text x="932" y="583.5" class="bdig">A</text>
     <circle cx="1232" cy="664" r="8.5" class="vbadge"/><text x="1232" y="667.5" class="bdig">B</text>
     <circle cx="312" cy="660" r="8.5" class="vbadge"/><text x="312" y="663.5" class="bdig">C</text>
     <circle cx="1150" cy="130" r="8.5" class="vbadge"/><text x="1150" y="133.5" class="bdig">D</text>
     <circle cx="1154" cy="770" r="8.5" class="vbadge"/><text x="1154" y="773.5" class="bdig">E</text>
     <line x1="34" y1="984" x2="66" y2="984" class="hit"/>
-    <text x="74" y="987" font-size="8.5" fill="#0E7C73">requested line — 1 arrives · 2 admitted · 3 decoded · 4 tag miss; the set is full · 5 FSM: GetData, SetOwner · 6 sequencer: allocate, send · 7 MSHR · 8 DRAM read · 9 fill on RX · 10 port claim → busy timer · 11 written into the victim's way, MSHR freed · 12 data out on TX response</text>
+    <text x="74" y="987" font-size="8.5" fill="#0E7C73">requested line — 1 arrives · 2 admitted · 3 decoded · 4 tag miss; the set is full · 5 FSM: GetData, SetOwner · 6 sequencer: allocate, send · 7 MSHR · 8 DRAM read · 9 fill on RX · 10 response out, from the fill itself · off the critical path: 11 port claim → busy timer · 12 written into the victim's way, MSHR freed</text>
     <line x1="34" y1="996" x2="66" y2="996" class="vic"/>
     <text x="74" y="999" font-size="8.5" fill="#B45309">victim — A to the write-back buffer as the fill lands (LRU among the requester's ways) · B Replacement raised · C IssueInv → INV on TX service · D sharers drop it; the LLC gets its own INV back · E WriteBack: read via the bypass, written to memory on bus[1]</text>
   </g>

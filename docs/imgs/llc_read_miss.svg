@@ -24,6 +24,7 @@
     .cl   { font-size:9px; fill:#9A6B12; font-family:'IBM Plex Mono',monospace }
     .rl   { font-size:9px; fill:#BE3F24; font-family:'IBM Plex Mono',monospace }
     .hit  { stroke:#0E9F8E; stroke-width:8; fill:none; stroke-opacity:.42; stroke-linejoin:round; stroke-linecap:round }
+    .par  { stroke:#0E9F8E; stroke-width:8; fill:none; stroke-opacity:.42; stroke-linejoin:round; stroke-linecap:round; stroke-dasharray:14 8 }
     .badge{ fill:#0E7C73; stroke:#FFFFFF; stroke-width:1.5 }
     .bdig { font-size:9.5px; font-weight:700; fill:#FFFFFF; text-anchor:middle }
   </style>
@@ -31,7 +32,7 @@
   <rect width="1280" height="1000" fill="#FCFBF8"/>
   <text x="34" y="30" font-size="16" font-weight="700" fill="#14212A">Octopus LLC datapath — the path of a read miss (free way, no eviction)</text>
   <text x="34" y="47" class="sub">CacheController_End2End + CacheDataHandler_COTS · 32 KB, 2-way, 64 B lines · MESI_LLC coherence FSM · one timed data port</text>
-  <text x="34" y="59" font-size="9" fill="#0E7C73" font-weight="600">Highlighted: a GetS that misses in a set with a free way. The line is fetched through the MSHR and written into that way when the fill returns; nothing is evicted, so the write-back buffer and the red inclusion path stay idle.</text>
+  <text x="34" y="59" font-size="9" fill="#0E7C73" font-weight="600">Highlighted: a GetS that misses in a set with a free way. The response leaves as soon as the fill is processed; the array write into the free way follows in parallel (dashed). Nothing is evicted, so the write-back buffer and the red inclusion path stay idle.</text>
 
   <!-- ═══ bus[0] ═══ -->
   <rect x="34" y="64" width="1212" height="62" rx="4" class="io"/>
@@ -209,7 +210,8 @@
   </g>
   <!-- ═══ overlay: the read-miss path, free way, no eviction ═══ -->
   <g>
-    <path d="M275 116 L275 136 L345 136 L345 200 L435 200 L435 330 L312 330 L312 378 L166 378 L166 768 L934 768 L934 626 L1256 626 L1256 804 L510 804 L510 905 L1180 905 L1180 862 L680 862 L680 840 L1270 840 L1270 332 L1210 332 L1210 393 L1096 393 L1096 420 L905 420 L905 400 L920 400 L920 140 L915 140 L915 118" class="hit" marker-end="url(#h)"/>
+    <path d="M275 116 L275 136 L345 136 L345 200 L435 200 L435 330 L312 330 L312 378 L166 378 L166 768 L934 768 L934 626 L1256 626 L1256 804 L510 804 L510 905 L1180 905 L1180 862 L680 862 L680 840 L1270 840 L1270 186 L920 186 L920 140 L915 140 L915 118" class="hit" marker-end="url(#h)"/>
+    <path d="M1270 332 L1210 332 L1210 393 L1096 393 L1096 420 L905 420" class="par" marker-end="url(#h)"/>
     <circle cx="256" cy="150" r="8.5" class="badge"/><text x="256" y="153.5" class="bdig">1</text>
     <circle cx="455" cy="246" r="8.5" class="badge"/><text x="455" y="249.5" class="bdig">2</text>
     <circle cx="318" cy="298" r="8.5" class="badge"/><text x="318" y="301.5" class="bdig">3</text>
@@ -219,10 +221,10 @@
     <circle cx="1232" cy="572" r="8.5" class="badge"/><text x="1232" y="575.5" class="bdig">7</text>
     <circle cx="1212" cy="885" r="8.5" class="badge"/><text x="1212" y="888.5" class="bdig">8</text>
     <circle cx="752" cy="884" r="8.5" class="badge"/><text x="752" y="887.5" class="bdig">9</text>
-    <circle cx="1236" cy="292" r="8.5" class="badge"/><text x="1236" y="295.5" class="bdig">10</text>
-    <circle cx="866" cy="392" r="8.5" class="badge"/><text x="866" y="395.5" class="bdig">11</text>
-    <circle cx="896" cy="150" r="8.5" class="badge"/><text x="896" y="153.5" class="bdig">12</text>
+    <circle cx="1236" cy="292" r="8.5" class="badge"/><text x="1236" y="295.5" class="bdig">11</text>
+    <circle cx="866" cy="392" r="8.5" class="badge"/><text x="866" y="395.5" class="bdig">12</text>
+    <circle cx="896" cy="150" r="8.5" class="badge"/><text x="896" y="153.5" class="bdig">10</text>
     <line x1="34" y1="990" x2="66" y2="990" class="hit"/>
-    <text x="74" y="993" font-size="9" fill="#0E7C73">read miss, free way — 1 arrives · 2 admitted · 3 decoded · 4 tag miss; a free way, no victim · 5 FSM: GetData, SetOwner · 6 sequencer: allocate, send · 7 MSHR · 8 DRAM read · 9 fill on RX · 10 port claim → busy timer · 11 written into the free way, MSHR freed · 12 data out on TX response</text>
+    <text x="74" y="993" font-size="8.5" fill="#0E7C73">read miss, free way — 1 arrives · 2 admitted · 3 decoded · 4 tag miss; a free way, no victim · 5 FSM: GetData, SetOwner · 6 sequencer: allocate, send · 7 MSHR · 8 DRAM read · 9 fill on RX · 10 response out, from the fill itself · off the critical path: 11 port claim → busy timer · 12 written into the free way, MSHR freed</text>
   </g>
 </svg>

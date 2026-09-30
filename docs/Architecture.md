@@ -145,8 +145,10 @@ nothing is evicted:
 
 The request takes the same first six steps and then diverges at the tag compare: the FSM's
 `GetData` allocates an MSHR entry, the read leaves on `bus[1]`, and the line waits in the MSHR —
-not the array — until DRAM answers. The fill then contends for the port like any other array
-access, is written into the free way, frees the MSHR, and goes out on TX response. Because no
+not the array — until DRAM answers. When the fill is processed the response goes out on TX
+response at once, carrying the data from the fill message; the write into the free way — which
+contends for the port like any other array access and frees the MSHR — runs in parallel, off
+the requester's critical path (dashed in the figure). Because no
 victim is chosen, the write-back buffer and the red inclusion path are never touched. A miss into
 a *full* set adds a second actor, and it deserves its own colour:
 
@@ -265,11 +267,14 @@ bound which column — for an LLC hit and for an LLC miss — is this:
 
 ![One request end to end, with the nine LatencyReport columns bracketed between the Logger events that bound them](imgs/request_end_to_end.svg)
 
-Three things in it are easy to misread from the column names alone. **L2 Access** ends
-at the array-port *grant*, not after `A_LLC` cycles: the data is emitted at the grant,
-and the port's busy time is paid by whoever waits for it next — so a request's own
-`A_LLC` shows up in the *next* request's L2 Access, or its own L2 Stall if it queued
-behind an earlier one. **L2-DRAM Bus** is two pieces on a miss, either side of the
+Three things in it are easy to misread from the column names alone. **L2 Access** means
+two different waits. On a hit it ends at the array-port *grant*, not after `A_LLC`
+cycles: the data is emitted at the grant, and the port's busy time is paid by whoever
+waits for the port next. On a miss it is the fill's wait to be *admitted*: the response
+is emitted the moment the fill message is processed, carrying the data from the message
+itself, and the array write claims the port afterwards — in parallel, off the
+requester's critical path (the `ARRAY` lane in the visualizer shows it landing later).
+**L2-DRAM Bus** is two pieces on a miss, either side of the
 DRAM service, with `MainMemoryController`; MCsim stamps no DRAM events, so there the
 column becomes "LLC admit → read leaves on `bus[1]`" and **DRAM** becomes the whole
 `bus[1]` round trip. And when an owning L1 answers a request instead of the LLC, that
