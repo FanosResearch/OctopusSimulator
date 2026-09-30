@@ -46,7 +46,7 @@
     <rect x="462" y="178" width="28" height="18"/><rect x="492" y="178" width="28" height="18"/>
   </g>
   <text x="526" y="192" class="sub mono">…</text>
-  <line x1="275" y1="116" x2="275" y2="150" class="wire" marker-end="url(#d)"/>
+  <path d="M275 116 L275 136 L345 136 L345 150" class="wire" marker-end="url(#d)"/>
   <line x1="449" y1="116" x2="449" y2="150" class="wire" marker-end="url(#d)"/>
 
   <path d="M400 226 L680 226 L652 262 L428 262 Z" class="ctl"/>
@@ -120,7 +120,8 @@
   <path d="M166 426 L166 444" class="cwire" marker-end="url(#c)"/>
   <text x="172" y="440" class="cl">hit · way · state</text>
   <path d="M298 506 L328 506" class="cwire" marker-end="url(#c)"/>
-  <text x="302" y="500" class="cl">next state</text>
+  <text x="303" y="499" class="cl">next</text>
+  <text x="303" y="517" class="cl">state</text>
   <path d="M166 566 L166 584" class="cwire" marker-end="url(#c)"/>
   <text x="172" y="580" class="cl">actions</text>
 
@@ -131,14 +132,14 @@
   <g class="wl">
     <path d="M990 320 L1000 344" class="wire" marker-end="url(#d)"/><text x="946" y="314">demand read</text>
     <path d="M1090 320 L1090 344" class="wire" marker-end="url(#d)"/><text x="1046" y="314">evict read</text>
-    <path d="M1196 320 L1182 344" class="wire" marker-end="url(#d)"/><text x="1136" y="314">fill / write-back write</text>
+    <text x="1136" y="314">fill / write-back write</text>
   </g>
   <rect x="946" y="400" width="200" height="40" rx="3" class="blk"/>
   <text x="958" y="416" class="lbl">port busy timer</text>
   <text x="958" y="431" class="sub mono">A_LLC = 10 cycles</text>
   <path d="M1096 386 L1096 398" class="cwire" marker-end="url(#c)"/>
   <path d="M944 420 L902 420" class="wire" marker-end="url(#d)"/>
-  <text x="906" y="438" class="wl">data</text>
+  <text x="908" y="415" class="wl">data</text>
   <text x="946" y="458" class="sub">the arbiter is consulted only while the port is free</text>
 
   <!-- bypass -->
@@ -173,8 +174,8 @@
   <text x="926" y="212" class="wl">→ TX response</text>
 
   <!-- IssueInv up the right margin -->
-  <path d="M298 630 L1262 630 L1262 118" class="iwire" marker-end="url(#r)"/>
-  <text x="640" y="624" class="rl">IssueInv — inclusion: evicting a line an L1 holds invalidates its copy first</text>
+  <path d="M298 642 L1262 642 L1262 101 L1236 101" class="iwire" marker-end="url(#r)"/>
+  <text x="310" y="636" class="rl">IssueInv — inclusion: evicting a line an L1 holds invalidates its copy first</text>
 
   <!-- ═══ bus[1] + memory ═══ -->
   <rect x="34" y="848" width="1212" height="62" rx="4" class="io"/>
@@ -187,8 +188,8 @@
   <path d="M1140 724 L1140 812 L540 812 L540 868" class="wire" marker-end="url(#d)"/>
   <text x="560" y="796" class="wl">miss → memory read</text>
   <text x="590" y="824" class="wl">dirty victim → memory write</text>
-  <path d="M680 868 L680 836 L1270 836 L1270 332 L1214 332 L1214 344" class="wire" marker-end="url(#d)"/>
-  <text x="700" y="832" class="wl">fill → port → array write, MSHR freed</text>
+  <path d="M680 868 L680 836 L1270 836 L1270 332 L1190 332 L1190 344" class="wire" marker-end="url(#d)"/>
+  <text x="1000" y="832" class="wl">fill → port → array write, MSHR freed</text>
 
   <!-- ═══ legend ═══ -->
   <g>
