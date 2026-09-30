@@ -18,49 +18,98 @@ virtual bool elect(uint64_t cycle_number,
                    Message *out_msg) = 0;                // the winner, if any
 ```
 
-Base-class helpers you will want: `findMessage()`, and `electOldestOwned(buffers,
-owner, out)` — pick the oldest message owned by a given core across *all* buffers.
-(That helper exists because the naive "first buffer with a matching owner" starved
-cache-to-cache supplies; use it rather than re-deriving it.)
+The Base `Arbiter` class also contains a useful helper function:
+`electOldestOwned(buffers, owner, out)`,
+which finds the oldest request currently waiting at the interconnect
+destined for a given connected device (e.g. a cache controller)
+whose ID is the `owner` parameter.
 
 ## Steps
 
-1. Start from the round-robin one:
-
+1. Start by copying the round-robin arbiter as a base:
    ```shell
    cp header/Arbiters/RRArbiter.h  header/Arbiters/WRRArbiter.h
    cp src/Arbiters/RRArbiter.cpp   src/Arbiters/WRRArbiter.cpp
+   ```
+   Substitute `WRR` for `RR` in the header guard and code to
+   prevent conflicts:
+   ```shell
    sed -i 's/RRArbiter/WRRArbiter/g' header/Arbiters/WRRArbiter.h src/Arbiters/WRRArbiter.cpp
+   sed -i 's/_RR_ARBITER_H/_WRR_ARBITER_H/g' header/Arbiters/WRRArbiter.h
    ```
 
 2. Add `WRRArbiter.cpp` to `src/Arbiters/CMakeLists.txt`.
 
-3. **Register the name** in `src/Interconnect/SplitBusController.cpp`, in the
-   `if (arbiter_type == STRINGIFY(...))` chain. This is the step people miss — see
-   the trap below.
+3. Include the new class in `src/Interconnect/SplitBusController.cpp`:
 
-4. Rebuild, then select it:
+   ```cpp
+   #include "../../header/Arbiters/WRRArbiter.h"
+   ```
+
+4. Be sure to **register the name** in `src/Interconnect/SplitBusController.cpp`, adding a new case in the
+   `if (arbiter_type == STRINGIFY(...))` chain for `WRRArbiter`. 
+
+5. Rebuild and verify the unchanged copy against RR. Run from the **project root**:
 
    ```shell
    cmake --build build -j$(nproc)
    W=$PWD/BMs/eembc-traces/cacheb01-trace
+   # Windows/Git Bash: W=$(cygpath -m "$PWD/BMs/eembc-traces/cacheb01-trace")
+   OUT=tutorial/03-extending-octopus/01-arbiter/output
+
+   # Collect the results from the original round robin arbiter
    ./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
-       -p "bus[0].interconnect_controller.arbiter_type(s)=WRRArbiter"
-   column -s, -t $W/newLogger/Summary.csv | less -S
+       -p "bus[0].interconnect_controller.arbiter_type(s)=RRArbiter" \
+       -o "$OUT/RR" --trace
+
+   # Collect the results from our clean copy, to be modified later
+   ./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
+       -p "bus[0].interconnect_controller.arbiter_type(s)=WRRArbiter" \
+       -o "$OUT/WRR" --trace
+
+   # Verify that they are the same
+   diff -r "$OUT/RR" "$OUT/WRR"
    ```
 
-   With an unmodified copy of RR you must get **exactly** RR's numbers — that is your
-   check that the registration works. Then make it weighted.
+   With an unmodified copy of RR, the CSV reports should be identical: `diff`
+   should print nothing and exit. This verifies that you have a clean, working
+   base from which to add weights to the basic round-robin algorithm.
 
-5. Compare core 0's "Worst-case Requst Bus Latency" against `RRArbiter` on
-   `cacheb01` (four cores fighting over one block — the arbiter matters most there).
+6. Implement the weighting in `WRRArbiter`, then rebuild and repeat **only the WRR
+   run**, using the same output path:
 
-## The trap
+   ```shell
+   cmake --build build -j$(nproc)
+   ./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
+       -p "bus[0].interconnect_controller.arbiter_type(s)=WRRArbiter" \
+       -o "$OUT/WRR" --trace
 
-The tutorial's `bus[0]` is a `TripleBus` whose `controller_type` is `Split`, so
-`SplitBusController.cpp` is the file that decides which arbiters exist on the bus you
-are measuring. `MeshController.cpp` and `NoCController.cpp` have the same chain for
-the mesh — registering there instead compiles cleanly and does nothing.
+   diff -u "$OUT/RR/Summary.csv" "$OUT/WRR/Summary.csv"
+   ```
+
+   This overwrites the initial WRR reports with your weighted version while keeping
+   RR as the reference. We should now expect WRR to have different performance metrics. 
+   
+  Compare the two `Summary.csv` files to see how Core 0's performance
+  changes, now that WRR gives it extra service.  
+
+   Optionally plot the saved runs:
+
+   ```shell
+   python3 sweeps/plot_axis.py "$OUT"
+   ```
+
+   The plots aggregate across cores; use the summaries for the per-core effect of
+   weighting. Figures are saved under `output/figures/`, outside the setting
+   directories.
+   Also try using the visualizer to inspect the two simulations.
+   ```shell
+# Refresh WRR after overwriting its run; serve reuses any existing Parquet files.
+KEEP_TRACE=1 ./octoviz.sh convert "$OUT/WRR"
+./octoviz.sh serve "$OUT"
+```
+   Can you see any difference in how the messages are serviced,
+   depending on their issuing cores?
 
 ## Stretch
 

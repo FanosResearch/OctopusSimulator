@@ -54,6 +54,10 @@ Repeating this command overwrites that run. Explicit `-p workload_path` and `-o`
 paths are relative to your current directory unless absolute; a workload path
 read from the system CSV is relative to the project root.
 
+Note that if you do not specify `-o`, the data will instead be saved
+to a subdirectory `newLogger` within the corresponding 
+benchmark folder (in `BMs/`).
+
 ## 3. Read the output
 
 The saved run is in this exercise’s Git-ignored `output/` directory; `expected/`
