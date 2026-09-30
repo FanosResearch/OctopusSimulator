@@ -147,9 +147,25 @@ The request takes the same first six steps and then diverges at the tag compare:
 `GetData` allocates an MSHR entry, the read leaves on `bus[1]`, and the line waits in the MSHR —
 not the array — until DRAM answers. The fill then contends for the port like any other array
 access, is written into the free way, frees the MSHR, and goes out on TX response. Because no
-victim is chosen, the write-back buffer and the red inclusion path are never touched; a miss into
-a *full* set adds exactly those two things, an eviction read through the port and, if the victim
-is dirty or held by an L1, a write-back or an `IssueInv`.
+victim is chosen, the write-back buffer and the red inclusion path are never touched. A miss into
+a *full* set adds a second actor, and it deserves its own colour:
+
+![A read miss into a full set: the requested line in teal, the evicted victim in amber](imgs/llc_miss_evict.svg)
+
+Two things in that drawing are easy to get wrong from a textbook. First, **the victim is chosen
+late**: the miss allocates an MSHR and sends the read while the full set is left alone, and only
+when the fill's array write runs does the data handler pick the LRU line among the requester's
+allowed ways, move it — bits and data — into the write-back buffer, and put the fill in its way
+(`moveLine2WB` inside `updateLineData`). The requester's data leaves on TX response right then;
+everything the victim costs comes afterwards and lands on *other* traffic. Second, the victim's
+exit is a coherence transaction, not a buffer drain: a `Replacement` is raised for it and goes
+through the queue and the FSM like any request, `IssueInv` puts an INV on the service channel,
+every L1 that shares the line drops it (this is the inclusion interference the demo measures),
+the LLC receives its own INV back, and only then does `WriteBack` read the line — from the
+buffer, over the dotted bypass — and send it to memory. There is no dirty bit in the model, so
+every victim is written back; the code marks the spot with a `ToDo`. A `GetM` miss evicts
+identically. A victim an L1 *owns* adds one leg: the owner answers the INV with its data, and
+that copy is what reaches memory.
 
 A `CacheController` (a `BaseController`) has **two `CommunicationInterface`s** — one
 facing the cores below, one facing the interconnect above. Incoming messages are
