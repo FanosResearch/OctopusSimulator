@@ -276,8 +276,9 @@ data message is always ready, and every ready message is handled that same cycle
 typically a single cycle, plus any backlog in that one FIFO, and never a wait behind
 queued demand requests. The response is emitted the moment the fill is processed,
 carrying the data from the fill message itself; the array write claims the port
-afterwards — in parallel, off the requester's critical path (the `ARRAY` lane in the
-visualizer shows it landing later).
+afterwards — in parallel, off the requester's critical path. That write is the real
+"L2 access" of a miss, and the figure draws it as such, below the axis alongside the
+response; it lands in no report column (the `ARRAY` lane in the visualizer shows it).
 **L2-DRAM Bus** is two pieces on a miss, either side of the
 DRAM service, with `MainMemoryController`; MCsim stamps no DRAM events, so there the
 column becomes "LLC admit → read leaves on `bus[1]`" and **DRAM** becomes the whole
