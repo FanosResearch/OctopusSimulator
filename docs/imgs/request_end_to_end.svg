@@ -136,11 +136,14 @@
   <path d="M807 394 L807 388 L910 388 L910 394" class="br" stroke="#4B32A8"/>
   <text x="858" y="384" class="brt" fill="#4B32A8">L2-DRAM Bus (return)</text>
   <path d="M916 414 L916 408 L1019 408 L1019 414" class="br" stroke="#0E7C73"/>
-  <text x="968" y="404" class="brt" fill="#0E7C73">L2 Access</text>
+  <text x="968" y="404" class="brt" fill="#0E7C73">L2 Access = the fill's wait to be admitted</text>
   <path d="M1025 394 L1025 388 L1128 388 L1128 394" class="br" stroke="#4B32A8"/>
   <text x="1076" y="384" class="brt" fill="#4B32A8">Response Bus</text>
   <path d="M1134 414 L1134 408 L1237 408 L1237 414" class="br" stroke="#0E7C73"/>
   <text x="1186" y="404" class="brt" fill="#0E7C73">L1 Access</text>
+  <path d="M1025 496 L1196 496" stroke="#0E7C73" stroke-width="3" stroke-dasharray="7 5" fill="none" stroke-opacity=".7"/>
+  <path d="M1022 466 L1022 496" stroke="#0E7C73" stroke-width="1.2" stroke-dasharray="3 3" fill="none"/>
+  <text x="1196" y="509" font-size="9" font-weight="600" fill="#0E7C73" text-anchor="end">array write of the fill — after the emit, in no column, off the critical path</text>
   <text x="34" y="520" class="ttl">The columns not on the timelines, and the cases that bend it</text>
   <text x="34" y="540" class="lbl">CPU Latency</text>
   <text x="200" y="540" class="sub">issue − the trace timestamp: how long the request waited in the core before it could issue (the out-of-order window).</text>
