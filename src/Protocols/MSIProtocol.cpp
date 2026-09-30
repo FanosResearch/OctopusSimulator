@@ -19,10 +19,24 @@ namespace octopus
     {
     }
 
+    bool MSIProtocol::needsDataArray(const Message &msg)
+    {
+        GenericCacheLine cache_line;
+        EventId event_id;
+        Message message = msg;   // readEvent may clear a one-shot flag; work on a copy
+        m_data_handler->readLineBits(message.addr, &cache_line);
+        this->readEvent(message, &event_id);
+        int ev = (int)event_id;
+        return this->m_fsm->hasAction(cache_line.state, ev, "Hit") ||
+               this->m_fsm->hasAction(cache_line.state, ev, "Data2Req") ||
+               this->m_fsm->hasAction(cache_line.state, ev, "Data2Both");
+    }
+
     bool MSIProtocol::isReadableState(int state)
     {
         return this->m_fsm->isHit(state, (int)EventId::Load);
     }
+
     FRFCFS_State MSIProtocol::getRequestState(const Message &msg, FRFCFS_State req_state)
     {
         GenericCacheLine cache_line;

@@ -38,6 +38,9 @@ namespace octopus
         bool isHit(int state, int Event);
         bool isStall(int state, int Event);
         bool isStable(int state);
+        // Whether the transition (state, event) carries the named action.
+        // False when the table has no action of that name.
+        bool hasAction(int state, int Event, const std::string &action_name);
 
         void getTransition(int current_state, int event,
                             int& out_next_state, std::vector<int>& out_actions);
