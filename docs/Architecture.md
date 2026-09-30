@@ -270,10 +270,14 @@ bound which column — for an LLC hit and for an LLC miss — is this:
 Three things in it are easy to misread from the column names alone. **L2 Access** means
 two different waits. On a hit it ends at the array-port *grant*, not after `A_LLC`
 cycles: the data is emitted at the grant, and the port's busy time is paid by whoever
-waits for the port next. On a miss it is the fill's wait to be *admitted*: the response
-is emitted the moment the fill message is processed, carrying the data from the message
-itself, and the array write claims the port afterwards — in parallel, off the
-requester's critical path (the `ARRAY` lane in the visualizer shows it landing later).
+waits for the port next. On a miss it is the fill's *turn at the LLC*: each cycle one
+message moves from the memory-side RX FIFO to the **front** of the processing queue, a
+data message is always ready, and every ready message is handled that same cycle — so
+typically a single cycle, plus any backlog in that one FIFO, and never a wait behind
+queued demand requests. The response is emitted the moment the fill is processed,
+carrying the data from the fill message itself; the array write claims the port
+afterwards — in parallel, off the requester's critical path (the `ARRAY` lane in the
+visualizer shows it landing later).
 **L2-DRAM Bus** is two pieces on a miss, either side of the
 DRAM service, with `MainMemoryController`; MCsim stamps no DRAM events, so there the
 column becomes "LLC admit → read leaves on `bus[1]`" and **DRAM** becomes the whole

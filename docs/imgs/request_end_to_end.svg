@@ -88,7 +88,7 @@
   <path d="M1061 230 L1061 224 L1237 224 L1237 230" class="br" stroke="#0E7C73"/>
   <text x="1149" y="220" class="brt" fill="#0E7C73">L1 Access</text>
   <text x="34" y="360" class="ttl">LLC miss, MainMemoryController</text>
-  <text x="34" y="374" class="sub">Nine columns. L2 Access is now the fill's wait to be admitted: the response leaves when the fill is processed; the array write claims the port afterwards, off the critical path. MCsim stamps no DRAM events: L2-DRAM Bus = LLC admit → read on bus[1], DRAM = the bus[1] round trip.</text>
+  <text x="34" y="374" class="sub">L2 Access here is the fill's turn at the LLC — one RX message per cycle, to the front of the queue, always ready: ~1 cycle. The response leaves then; the array write follows off the path. MCsim (no DRAM events): L2-DRAM Bus = admit → read on bus[1], DRAM = the round trip.</text>
   <line x1="150" y1="430" x2="1240" y2="430" class="axis"/>
   <line x1="150" y1="425" x2="150" y2="435" class="tick"/>
   <text x="150" y="447" class="ev">CPU.ENTER</text>
@@ -116,7 +116,7 @@
   <text x="913" y="482" class="evd">data back on bus[1]</text>
   <line x1="1022" y1="425" x2="1022" y2="435" class="tick"/>
   <text x="1022" y="447" class="ev">LLC.SERVICE = EXIT</text>
-  <text x="1022" y="458" class="evd">fill admitted, response emitted</text>
+  <text x="1022" y="458" class="evd">fill processed, response emitted</text>
   <line x1="1131" y1="425" x2="1131" y2="459" class="tick"/>
   <text x="1131" y="471" class="ev">RESP_BUS.EXIT</text>
   <text x="1131" y="482" class="evd">on the response bus</text>
@@ -136,7 +136,7 @@
   <path d="M807 394 L807 388 L910 388 L910 394" class="br" stroke="#4B32A8"/>
   <text x="858" y="384" class="brt" fill="#4B32A8">L2-DRAM Bus (return)</text>
   <path d="M916 414 L916 408 L1019 408 L1019 414" class="br" stroke="#0E7C73"/>
-  <text x="968" y="404" class="brt" fill="#0E7C73">L2 Access = the fill's wait to be admitted</text>
+  <text x="968" y="404" class="brt" fill="#0E7C73">L2 Access = the fill's turn at the LLC, ~1 cycle</text>
   <path d="M1025 394 L1025 388 L1128 388 L1128 394" class="br" stroke="#4B32A8"/>
   <text x="1076" y="384" class="brt" fill="#4B32A8">Response Bus</text>
   <path d="M1134 414 L1134 408 L1237 408 L1237 414" class="br" stroke="#0E7C73"/>
