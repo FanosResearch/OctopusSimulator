@@ -11,6 +11,12 @@ set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 echo "== building Octopus"
+
+if ! make -C ./src/MCsim/src libmcsim.so -j"$(nproc)"; then
+  echo "post-create: build FAILED -- run 'bash .devcontainer/post-create.sh' to retry" >&2
+  exit 1
+fi
+
 if ! cmake -S . -B build -DCMAKE_BUILD_TYPE=Release; then
   echo "post-create: cmake configure FAILED -- run 'bash .devcontainer/post-create.sh' to retry" >&2
   exit 1

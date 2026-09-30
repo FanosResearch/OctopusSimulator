@@ -133,6 +133,14 @@ namespace octopus
 
     Parameter Configurable::parseCLparam(string line)
     {
+        // parseLine reads into fixed MAX_LINE_SIZE buffers; a longer override
+        // (e.g. a deep output path) would overrun them.
+        if (line.size() >= MAX_LINE_SIZE)
+        {
+            cout << "Configurable: command-line parameter longer than " << MAX_LINE_SIZE
+                 << " characters: " << line.substr(0, 60) << "..." << endl;
+            exit(0);
+        }
         for(int i = 0; line[i] != '\0'; i++)
         {
             if(line[i] == '=')

@@ -19,6 +19,10 @@ namespace octopus
     {
     }
 
+    bool MSIProtocol::isReadableState(int state)
+    {
+        return this->m_fsm->isHit(state, (int)EventId::Load);
+    }
     FRFCFS_State MSIProtocol::getRequestState(const Message &msg, FRFCFS_State req_state)
     {
         GenericCacheLine cache_line;

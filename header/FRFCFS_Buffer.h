@@ -195,6 +195,19 @@ namespace octopus
             for (const Element &e : m_buffer)
                 f(e.item, e.state);
         }
+
+        int maxSize() const { return this->m_max_size; }
+
+        /* Number of queued items satisfying pred(item). */
+        template <typename Pred>
+        int countIf(Pred pred) const
+        {
+            int n = 0;
+            for (const Element &e : this->m_buffer)
+                if (pred(e.item))
+                    n++;
+            return n;
+        }
     };
 }
 

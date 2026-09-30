@@ -66,6 +66,10 @@ namespace octopus
 
         virtual std::vector<ControllerAction> processRequest(Message &request_msg, DebugPrint* dprint = NULL) override;
         virtual FRFCFS_State getRequestState(const Message &, FRFCFS_State) override;
+        // Readable = a Load hits in that state (stable S/M and the transient
+        // states that keep a valid copy). Shared by MESI and MOESI, whose
+        // tables keep Load at event 0.
+        virtual bool isReadableState(int state) override;
     };
 }
 

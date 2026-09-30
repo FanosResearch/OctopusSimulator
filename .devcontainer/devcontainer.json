@@ -1,6 +1,6 @@
 {
   "name": "Octopus tutorial",
-  "image": "mcr.microsoft.com/devcontainers/cpp:1-ubuntu-24.04",
+  "image": "ghcr.io/fanosresearch/esweek:latest",
 
   "hostRequirements": { "cpus": 4, "memory": "8gb", "storage": "32gb" },
 

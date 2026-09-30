@@ -9,6 +9,7 @@
 #include "../../header/CacheControllers/BaseController.h"
 #include <cstdio>
 #include <cstdlib>
+#include "../../header/ExternalCPU.h"
 
 namespace octopus
 {
@@ -30,6 +31,7 @@ namespace octopus
             m_perfect_llc = std::get<int>(parameters.at(STRINGIFY(perfect_llc)).value);
         m_clk_period = std::get<int>(parameters.at(STRINGIFY(m_clk_period)).value);
         int processing_queue_size = std::get<int>(parameters.at(STRINGIFY(processing_queue_size)).value);
+        m_processing_queue_size = processing_queue_size;
         string protocol_type = std::get<string>(parameters.at(STRINGIFY(protocol_type)).value);
         string fsm_filename = std::get<string>(parameters.at(STRINGIFY(fsm_filename)).value);
         string fsm_path = string(FSM_PATH) + fsm_filename + ".csv";
@@ -197,6 +199,10 @@ namespace octopus
         }
     }
 
+    bool BaseController::demandAdmissionBlocked(int outstanding) const
+    {
+        return m_processing_queue_size >= 0 && outstanding >= m_processing_queue_size;
+    }
     uint64_t BaseController::getAddressKey(uint64_t addr)
     {
         return (addr & ~uint64_t(m_data_handler->getBlockSize() - 1));
@@ -246,6 +252,9 @@ namespace octopus
                 // Design B: refill data available -> array access (SERVICE) then
                 // response emitted (EXIT) to this pending requester.
                 Logger::getLogger()->event(pending_messages.front().msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::SERVICE);
+                // Serialisation point of this CPU request.
+                if (m_cpu_port != NULL)
+                    m_cpu_port->commit(pending_messages.front().msg_id, pending_messages.front().addr);
                 Logger::getLogger()->event(pending_messages.front().msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::EXIT);
                 Logger::getLogger()->trace(pending_messages.front(), m_log_role, (uint32_t)m_id, Logger::Phase::EXIT);
 
@@ -284,6 +293,9 @@ namespace octopus
 
         // Design B: response emitted to the response bus -- the LLC/L1 hand-off point.
         msg->kind = Message::K_RESP;   // a hit's data response (L1 -> CPU, or LLC -> L1 over the response bus)
+        // Serialisation point of this CPU request.
+        if (m_cpu_port != NULL)
+            m_cpu_port->commit(msg->msg_id, msg->addr);
         Logger::getLogger()->event(msg->msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::EXIT);
         Logger::getLogger()->trace(*msg, m_log_role, (uint32_t)m_id, Logger::Phase::EXIT);
 
