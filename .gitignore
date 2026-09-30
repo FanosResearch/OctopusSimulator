@@ -62,3 +62,6 @@ demo/workloads/*/.out*
 
 # Generated output for tutorial exercise 00
 /tutorial/00-setup-and-first-run/output/
+
+# Generated output for tutorial exercise 01
+/tutorial/01-exploration/output/

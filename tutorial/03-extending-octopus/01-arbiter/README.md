@@ -5,7 +5,7 @@ and visible in the numbers. About 40 minutes.
 
 **Suggested arbiter:** weighted round-robin where core 0 gets two slots per round.
 It is about twenty lines against `RRArbiter`, and its effect shows immediately in
-core 0's worst-case bus latency — which is also the story the papers tell.
+core 0's worst-case bus latency.
 
 ## The interface
 

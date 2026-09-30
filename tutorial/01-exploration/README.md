@@ -3,44 +3,117 @@
 **Goal:** convince yourself the axes really are independent. Change one thing,
 re-run (a few seconds), watch one number move. About 25 minutes.
 
-Use this shell helper for the whole exercise. It runs `a2time01` with whatever
-overrides you pass and prints the three numbers worth comparing:
+## 1. Save each arbiter setting as its own run
+
+Run these commands from the **project root**, using the shipped configuration
+from exercise 00. Each invocation starts from that same CSV baseline: `-p`
+overrides apply only to that run, not to the next command.
 
 ```shell
-W=$PWD/BMs/eembc-traces/a2time01-trace        # Windows/Git Bash: W=$(cygpath -m "$PWD/BMs/eembc-traces/a2time01-trace")
-run(){ ./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" "$@" >/dev/null 2>&1 \
-       && awk -F, 'NR==2{print "  worst total="$10"  worst DRAM="$8"  finish="$13}' $W/newLogger/Summary.csv; }
+W=$PWD/BMs/eembc-traces/a2time01-trace
+# Windows/Git Bash: W=$(cygpath -m "$PWD/BMs/eembc-traces/a2time01-trace")
+
+./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
+  -p "bus[0].interconnect_controller.arbiter_type(s)=FCFSArbiter" \
+  -o tutorial/01-exploration/output/Arbiter/FCFS --trace
+
+./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
+  -p "bus[0].interconnect_controller.arbiter_type(s)=RRArbiter" \
+  -o tutorial/01-exploration/output/Arbiter/RR --trace
+
+./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
+  -p "bus[0].interconnect_controller.arbiter_type(s)=TDMArbiter" \
+  -o tutorial/01-exploration/output/Arbiter/TDM --trace
 ```
 
-Then, one axis at a time:
+`-o` creates each setting's directory. Its CSVs and trace stay together, so there
+is no need to copy reports before the next run. Reusing the same output path
+replaces that setting's reports. `output/` is Git-ignored.
+
+## 2. Compare the saved settings
 
 ```shell
-echo FCFS;  run -p "bus[0].interconnect_controller.arbiter_type(s)=FCFSArbiter"
-echo RR;    run -p "bus[0].interconnect_controller.arbiter_type(s)=RRArbiter"
-echo TDM;   run -p "bus[0].interconnect_controller.arbiter_type(s)=TDMArbiter"
-echo MCsim; run -p "main_memory_type(s)=MCsim" -p "mcsim_scheduler(s)=FRFCFS"
-echo MSHR4; run -p "cache_controller[*].num_mshr(i)=4"
-echo part;  run -p "llc_controller.m_data_handler.way_partition(s)=0:0;1-3:1"
+python3 sweeps/plot_axis.py tutorial/01-exploration/output/Arbiter
+./octoviz.sh serve tutorial/01-exploration/output/Arbiter
 ```
 
-Fill in the table as you go. The point is not the numbers — it is that each row
-differs from the last in exactly one parameter.
+The plotter reads each setting's `Summary.csv` and writes PNG/PDF charts and
+`metrics.csv` under `Arbiter/figures/`. It requires matplotlib and NumPy. The
+comparison chart shows finish cycle, mean effective latency, and worst-case total
+latency. The stage chart shows where the worst delays occur. Stage maxima are
+independent; do not add them to obtain worst-case total latency.
 
-| change | worst total | worst DRAM | finish cycle |
-|---|---|---|---|
-| as shipped (TDM, fixed latency) | | | |
-| FCFS bus | | | |
-| RR bus | | | |
-| MCsim DDR4, FR-FCFS | | | |
-| L1 MSHR = 4 | | | |
-| LLC: 1 way reserved for core 0 | | | |
+Octoviz automatically converts missing visualization files and lets you select
+FCFS, RR, or TDM. Neither command reruns the simulator. If you rerun a setting
+that has already been converted, refresh it explicitly with
+`./octoviz.sh convert <setting-directory>` before viewing it again.
+
+Compare these values (worst cases and finish are maxima across **all cores**,
+not just the first row of `Summary.csv`):
+
+| arbiter | worst total | worst request bus | worst response bus | finish cycle |
+|---|---|---|---|---|
+| FCFS | | | | |
+| RR | | | | |
+| TDM | | | | |
+
+Which stages change most? Does the setting with the lowest worst-case latency
+also finish first? Use the timeline to investigate the differences.
+
+## 3. Explore another axis
+
+Use the same layout, `output/<axis>/<setting>/`, for the other experiments. Three possible axes you can explore are `Memory` simulation, `MSHR` size, and cache `Partition`.
+
+For whichever axis you choose, also record the unmodified baseline in that axis's
+`Baseline/` folder. For example, for `Memory`:
+
+```shell
+./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
+  -o tutorial/01-exploration/output/Memory/Baseline --trace
+python3 sweeps/plot_axis.py tutorial/01-exploration/output/Memory
+```
+
+For MSHR or partitioning, use `MSHR/Baseline` or `Partition/Baseline` instead and
+plot that axis directory. Keep the benchmark and all unrelated settings fixed.
+The memory experiment selects the memory model and its scheduler together;
+these commands are independent variations of the baseline, not cumulative edits.
+
+### Full DRAM simulation with MCSim (FRFCFS arbiter)
+```shell
+./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
+  -p "main_memory_type(s)=MCsim" -p "mcsim_scheduler(s)=FRFCFS" \
+  -o tutorial/01-exploration/output/Memory/MCsim --trace
+```
+_Baseline value: Fixed-latency model (`MainMemoryController`)_
+
+### MSHR size 4
+```shell
+./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
+  -p "cache_controller[*].num_mshr(i)=4" \
+  -o tutorial/01-exploration/output/MSHR/4 --trace
+```
+_Baseline value: `16`_
+
+### Way partitioning
+```shell
+./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
+  -p "llc_controller.m_data_handler.way_partition(s)=0:0;1-3:1" \
+  -o tutorial/01-exploration/output/Partition/Reserved --trace
+```
+_Baseline value: No partitioning_
+
+Having generated the baseline statistics and modified experiment's
+ statistics in a given axis's folder, try graphing and visualizing the
+ results as before. See if you can identify the different setting's
+ effect on the timeline view in the visualizer and the overall trend.
+
 
 ## The axes that ship
 
 | axis | parameter | values |
 |---|---|---|
 | bus arbiter | `bus[0].interconnect_controller.arbiter_type` | `FCFSArbiter` `RRArbiter` `TDMArbiter` |
-| LLC arbiter | `llc_controller.arbiter_type` | same |
+| LLC arbiter | `llc_controller.arbiter_type` | `FCFSArbiter` `RRArbiter` |
 | main memory | `main_memory_type` | `MainMemoryController` (fixed latency) `MCsim` (cycle-accurate DDR4) |
 | DRAM scheduler | `mcsim_scheduler` | `FRFCFS` `FCFS` `BLISS` `AMC` `MAG` … (`src/MCsim/system/`) |
 | LLC way partition | `llc_controller.m_data_handler.way_partition` | e.g. `0:0;1-3:1` |
@@ -65,8 +138,10 @@ every core drained its own trace and wrote the end-of-simulation footer.
 
 ## If you finish early
 
-Run the same six configurations on `cacheb01-trace` — the benchmark where all four
-cores fight over one block. The arbiter rows spread out much more.
+Repeat the arbiter comparison on `cacheb01-trace` — the benchmark where all four
+cores fight over one block. Save these in a separate axis folder such as `output/Arbiter-cacheb01/` so the
+`a2time01` results remain available. Compare how strongly arbitration affects
+each benchmark.
 
 `sweeps/` holds the scripts that sweep these axes in bulk and produce the figures in
 the papers; `sweep_protocols.sh` is the readable entry point.
