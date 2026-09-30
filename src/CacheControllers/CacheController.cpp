@@ -62,6 +62,17 @@ namespace octopus
         else if(arbiter_type == STRINGIFY(FCFSArbiter))                                                    
             m_data_access_arbiter = new FCFSArbiter(arbiter_candidates_ids, m_data_handler->getDataAccessLatency());
 
+        // Whole-message deferral (the pipelined model always, the occupancy
+        // model with line_interlock) is only safe with the line hold: without
+        // it a younger message to the line starts while an older one waits
+        // for the array (the snoop presets then fault). The pipelined model
+        // therefore turns the interlock on.
+        if (pipelinedArray() && m_line_interlock == 0)
+        {
+            cout << "CacheController(id = " << m_id << "): the pipelined data array needs line_interlock; enabling it" << endl;
+            m_line_interlock = 1;
+        }
+
         action_functions[ControllerAction::Type::WRITE_CACHE_LINE_DATA] = [&](void* ptr) {writeCacheLineData(ptr);};
         action_functions[ControllerAction::Type::MODIFY_DATA] = [&](void* ptr) {modifyData(ptr);};
         action_functions[ControllerAction::Type::SAVE_REQ_FOR_WRITE_BACK] = [&](void* ptr) {saveReqForWriteBack(ptr);};
@@ -785,7 +796,10 @@ namespace octopus
             // SendExeclusiveData, SaveData). A data-carrying message whose
             // protocol reports nothing keeps upstream's handling (state now,
             // bytes parked on the same level-2 list).
-            if (m_data_handler->getDataAccessLatency() == 0 || m_data_handler->isReady())
+            // With line_interlock off the occupancy model keeps upstream's
+            // handling everywhere (state now, bytes parked): deferring a whole
+            // message without the line hold is not safe (see the constructor).
+            if (m_line_interlock == 0 || m_data_handler->getDataAccessLatency() == 0 || m_data_handler->isReady())
                 return false;
             if (!m_protocol->needsDataArray(msg))
                 return false;
