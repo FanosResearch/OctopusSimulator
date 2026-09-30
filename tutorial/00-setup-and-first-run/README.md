@@ -57,6 +57,11 @@ into stages: CPU, L1 stall, request bus, L2 stall, L2 access, response bus, L2�
 bus, DRAM, L1 access. A total tells you a core was slow; the stages tell you **which
 shared resource** made it slow. That decomposition is the reason the tool exists.
 
+Which two events in the simulator bound each column — for an LLC hit and for an LLC
+miss — is drawn in [`docs/imgs/request_end_to_end.svg`](../../docs/imgs/request_end_to_end.svg)
+(and explained under "A request's journey" in [`docs/Architecture.md`](../../docs/Architecture.md)).
+Keep it open while you read your first report.
+
 ## 4. Check
 
 ```shell

@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 700" width="1280" height="700" font-family="'IBM Plex Sans','Segoe UI',system-ui,sans-serif" role="img" aria-label="One memory request end to end through the Octopus system, with the nine LatencyReport columns bracketed between the Logger events that bound them, for an LLC hit and for an LLC miss">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#14212A"/></marker>
+  </defs>
+  <style>
+    .blk { fill:#FFFFFF; stroke:#5A6B75; stroke-width:1.2 }
+    .mem { fill:#EAF1F6; stroke:#2F6F9F; stroke-width:1.2 }
+    .io  { fill:#F4F1FB; stroke:#6244C7; stroke-width:1.2 }
+    .cpu { fill:#FDF6E6; stroke:#9A6B12; stroke-width:1.2 }
+    .ttl { font-size:12px; fill:#14212A; font-weight:600 }
+    .lbl { font-size:10.5px; fill:#14212A; font-weight:600 }
+    .sub { font-size:9.5px; fill:#5E6E76 }
+    .mono{ font-family:'IBM Plex Mono',monospace }
+    .wire{ stroke:#14212A; stroke-width:1.6; fill:none }
+    .axis{ stroke:#5A6B75; stroke-width:1.2; fill:none }
+    .tick{ stroke:#14212A; stroke-width:1.2 }
+    .ev  { font-size:8.5px; fill:#14212A; font-family:'IBM Plex Mono',monospace; text-anchor:middle }
+    .evd { font-size:8.5px; fill:#5E6E76; text-anchor:middle }
+    .br  { stroke-width:2.2; fill:none }
+    .brt { font-size:9.5px; font-weight:600; text-anchor:middle }
+  </style>
+  <rect width="1280" height="700" fill="#FCFBF8"/>
+  <text x="34" y="30" font-size="16" font-weight="700" fill="#14212A">One request, end to end — and what each LatencyReport column measures</text>
+  <text x="34" y="47" class="sub">Every column is the distance between two Logger events on the request's own timeline, and the columns tile exactly to Total. Ticks are in order, not to scale.</text>
+  <rect x="34" y="72" width="120" height="58" rx="4" class="cpu"/>
+  <text x="44" y="90" class="ttl">core</text>
+  <text x="44" y="105" class="sub">trace CPU / gem5</text>
+  <text x="44" y="121" class="sub mono">CPU</text>
+  <rect x="176" y="72" width="130" height="58" rx="4" class="mem"/>
+  <text x="186" y="90" class="ttl">L1</text>
+  <text x="186" y="105" class="sub">private, MSHRs</text>
+  <text x="186" y="121" class="sub mono">L1</text>
+  <rect x="328" y="72" width="170" height="58" rx="4" class="io"/>
+  <text x="338" y="90" class="ttl">bus[0]</text>
+  <text x="338" y="105" class="sub">TripleBus: request · response · service</text>
+  <text x="338" y="121" class="sub mono">REQ_BUS · RESP_BUS · SVC_BUS</text>
+  <rect x="520" y="72" width="300" height="58" rx="4" class="mem"/>
+  <text x="530" y="90" class="ttl">LLC</text>
+  <text x="530" y="105" class="sub">queue → array port → array · MSHR · write-back buffer</text>
+  <text x="530" y="121" class="sub mono">LLC · LLC_QUEUE · ARRAY</text>
+  <rect x="842" y="72" width="130" height="58" rx="4" class="io"/>
+  <text x="852" y="90" class="ttl">bus[1]</text>
+  <text x="852" y="105" class="sub">memory bus</text>
+  <text x="852" y="121" class="sub mono">MEM_BUS</text>
+  <rect x="994" y="72" width="252" height="58" rx="4" class="blk"/>
+  <text x="1004" y="90" class="ttl">DRAM</text>
+  <text x="1004" y="105" class="sub">MainMemoryController (fixed latency) or MCsim DDR4</text>
+  <text x="1004" y="121" class="sub mono">DRAM</text>
+  <path d="M94 64 L1000 64" class="wire" marker-end="url(#a)"/>
+  <text x="400" y="59" class="sub">request: GetS / GetM out</text>
+  <path d="M1000 138 L94 138" class="wire" marker-end="url(#a)"/>
+  <text x="400" y="152" class="sub">data back</text>
+  <text x="34" y="172" class="sub">The Logger stamps ENTER / SERVICE / EXIT per component as the request passes; the LatencyReport is computed from those stamps alone.</text>
+  <text x="34" y="196" class="ttl">LLC hit</text>
+  <text x="34" y="210" class="sub">Six columns; L2-DRAM Bus and DRAM are 0. L2 Access ends at the port grant: the data leaves then, and the A_LLC busy time is paid by whoever waits for the port next.</text>
+  <line x1="150" y1="266" x2="1240" y2="266" class="axis"/>
+  <line x1="150" y1="261" x2="150" y2="271" class="tick"/>
+  <text x="150" y="283" class="ev">CPU.ENTER</text>
+  <text x="150" y="294" class="evd">issued</text>
+  <line x1="332" y1="261" x2="332" y2="295" class="tick"/>
+  <text x="332" y="307" class="ev">L1.ENTER</text>
+  <text x="332" y="318" class="evd">L1 admits it</text>
+  <line x1="513" y1="261" x2="513" y2="271" class="tick"/>
+  <text x="513" y="283" class="ev">REQ_BUS.EXIT</text>
+  <text x="513" y="294" class="evd">on the request bus</text>
+  <line x1="695" y1="261" x2="695" y2="295" class="tick"/>
+  <text x="695" y="307" class="ev">LLC.ENTER</text>
+  <text x="695" y="318" class="evd">LLC admits it</text>
+  <line x1="877" y1="261" x2="877" y2="271" class="tick"/>
+  <text x="877" y="283" class="ev">LLC.SERVICE = EXIT</text>
+  <text x="877" y="294" class="evd">array port granted, data emitted</text>
+  <line x1="1058" y1="261" x2="1058" y2="295" class="tick"/>
+  <text x="1058" y="307" class="ev">RESP_BUS.EXIT</text>
+  <text x="1058" y="318" class="evd">on the response bus</text>
+  <line x1="1240" y1="261" x2="1240" y2="271" class="tick"/>
+  <text x="1240" y="283" class="ev">CPU.EXIT</text>
+  <text x="1240" y="294" class="evd">delivered</text>
+  <path d="M153 250 L153 244 L329 244 L329 250" class="br" stroke="#B45309"/>
+  <text x="241" y="240" class="brt" fill="#B45309">L1 Stall</text>
+  <path d="M335 230 L335 224 L510 224 L510 230" class="br" stroke="#4B32A8"/>
+  <text x="422" y="220" class="brt" fill="#4B32A8">Request Bus</text>
+  <path d="M516 250 L516 244 L692 244 L692 250" class="br" stroke="#B45309"/>
+  <text x="604" y="240" class="brt" fill="#B45309">L2 Stall</text>
+  <path d="M698 230 L698 224 L874 224 L874 230" class="br" stroke="#0E7C73"/>
+  <text x="786" y="220" class="brt" fill="#0E7C73">L2 Access</text>
+  <path d="M880 250 L880 244 L1055 244 L1055 250" class="br" stroke="#4B32A8"/>
+  <text x="968" y="240" class="brt" fill="#4B32A8">Response Bus</text>
+  <path d="M1061 230 L1061 224 L1237 224 L1237 230" class="br" stroke="#0E7C73"/>
+  <text x="1149" y="220" class="brt" fill="#0E7C73">L1 Access</text>
+  <text x="34" y="360" class="ttl">LLC miss, MainMemoryController</text>
+  <text x="34" y="374" class="sub">Nine columns. With MCsim, which stamps no DRAM events, the two middle brackets fold: L2-DRAM Bus = LLC admit → read on bus[1], DRAM = the whole bus[1] round trip.</text>
+  <line x1="150" y1="430" x2="1240" y2="430" class="axis"/>
+  <line x1="150" y1="425" x2="150" y2="435" class="tick"/>
+  <text x="150" y="447" class="ev">CPU.ENTER</text>
+  <text x="150" y="458" class="evd">issued</text>
+  <line x1="259" y1="425" x2="259" y2="459" class="tick"/>
+  <text x="259" y="471" class="ev">L1.ENTER</text>
+  <text x="259" y="482" class="evd">L1 admits it</text>
+  <line x1="368" y1="425" x2="368" y2="435" class="tick"/>
+  <text x="368" y="447" class="ev">REQ_BUS.EXIT</text>
+  <text x="368" y="458" class="evd">on the request bus</text>
+  <line x1="477" y1="425" x2="477" y2="459" class="tick"/>
+  <text x="477" y="471" class="ev">LLC.ENTER</text>
+  <text x="477" y="482" class="evd">LLC admits it, allocates MSHR</text>
+  <line x1="586" y1="425" x2="586" y2="435" class="tick"/>
+  <text x="586" y="447" class="ev">MEM_BUS.EXIT #1</text>
+  <text x="586" y="458" class="evd">read leaves on bus[1]</text>
+  <line x1="695" y1="425" x2="695" y2="459" class="tick"/>
+  <text x="695" y="471" class="ev">DRAM.ENTER</text>
+  <text x="695" y="482" class="evd">DRAM starts</text>
+  <line x1="804" y1="425" x2="804" y2="435" class="tick"/>
+  <text x="804" y="447" class="ev">DRAM.EXIT</text>
+  <text x="804" y="458" class="evd">DRAM done</text>
+  <line x1="913" y1="425" x2="913" y2="459" class="tick"/>
+  <text x="913" y="471" class="ev">MEM_BUS.EXIT #2</text>
+  <text x="913" y="482" class="evd">data back on bus[1]</text>
+  <line x1="1022" y1="425" x2="1022" y2="435" class="tick"/>
+  <text x="1022" y="447" class="ev">LLC.SERVICE = EXIT</text>
+  <text x="1022" y="458" class="evd">port granted: fill written, data emitted</text>
+  <line x1="1131" y1="425" x2="1131" y2="459" class="tick"/>
+  <text x="1131" y="471" class="ev">RESP_BUS.EXIT</text>
+  <text x="1131" y="482" class="evd">on the response bus</text>
+  <line x1="1240" y1="425" x2="1240" y2="435" class="tick"/>
+  <text x="1240" y="447" class="ev">CPU.EXIT</text>
+  <text x="1240" y="458" class="evd">delivered</text>
+  <path d="M153 414 L153 408 L256 408 L256 414" class="br" stroke="#B45309"/>
+  <text x="204" y="404" class="brt" fill="#B45309">L1 Stall</text>
+  <path d="M262 394 L262 388 L365 388 L365 394" class="br" stroke="#4B32A8"/>
+  <text x="314" y="384" class="brt" fill="#4B32A8">Request Bus</text>
+  <path d="M371 414 L371 408 L474 408 L474 414" class="br" stroke="#B45309"/>
+  <text x="422" y="404" class="brt" fill="#B45309">L2 Stall</text>
+  <path d="M480 394 L480 388 L692 388 L692 394" class="br" stroke="#4B32A8"/>
+  <text x="586" y="384" class="brt" fill="#4B32A8">L2-DRAM Bus</text>
+  <path d="M698 414 L698 408 L801 408 L801 414" class="br" stroke="#0E7C73"/>
+  <text x="750" y="404" class="brt" fill="#0E7C73">DRAM</text>
+  <path d="M807 394 L807 388 L910 388 L910 394" class="br" stroke="#4B32A8"/>
+  <text x="858" y="384" class="brt" fill="#4B32A8">L2-DRAM Bus (return)</text>
+  <path d="M916 414 L916 408 L1019 408 L1019 414" class="br" stroke="#0E7C73"/>
+  <text x="968" y="404" class="brt" fill="#0E7C73">L2 Access</text>
+  <path d="M1025 394 L1025 388 L1128 388 L1128 394" class="br" stroke="#4B32A8"/>
+  <text x="1076" y="384" class="brt" fill="#4B32A8">Response Bus</text>
+  <path d="M1134 414 L1134 408 L1237 408 L1237 414" class="br" stroke="#0E7C73"/>
+  <text x="1186" y="404" class="brt" fill="#0E7C73">L1 Access</text>
+  <text x="34" y="520" class="ttl">The columns not on the timelines, and the cases that bend it</text>
+  <text x="34" y="540" class="lbl">CPU Latency</text>
+  <text x="200" y="540" class="sub">issue − the trace timestamp: how long the request waited in the core before it could issue (the out-of-order window).</text>
+  <text x="34" y="557" class="lbl">Total</text>
+  <text x="200" y="557" class="sub">delivered − issued, the sum of the stage columns.   Effective: the part of Total not overlapped with the previous request — delivered − max(previous retire, issue).</text>
+  <text x="34" y="574" class="lbl">L1 hit</text>
+  <text x="200" y="574" class="sub">only CPU.ENTER, L1.ENTER and CPU.EXIT exist: L1 Stall and L1 Access, everything else 0.</text>
+  <text x="34" y="591" class="lbl">cache-to-cache supply</text>
+  <text x="200" y="591" class="sub">an owning L1 answers instead of the LLC: its L1.SERVICE / EXIT stand in for the LLC's, so L2 Stall is the wait for the owner and L2 Access its service.</text>
+  <text x="34" y="608" class="lbl">no responder at all</text>
+  <text x="200" y="608" class="sub">admit → grant is unattributable and is folded into L2 Access; the run's stderr counts it as noresp so the gap stays visible.</text>
+  <line x1="34" y1="640" x2="66" y2="640" class="br" stroke="#B45309"/><text x="74" y="644" class="sub">waiting: in a queue, for a bus, for the port</text>
+  <line x1="330" y1="640" x2="362" y2="640" class="br" stroke="#4B32A8"/><text x="370" y="644" class="sub">moving: a bus transfer</text>
+  <line x1="540" y1="640" x2="572" y2="640" class="br" stroke="#0E7C73"/><text x="580" y="644" class="sub">being served: an array or DRAM access</text>
+  <text x="34" y="666" class="sub mono">Logger.cpp, "Report: the event timeline is the sole decomposition" · OCTOPUS_EVENT_DUMP=N prints these timelines for the first N slow requests · the [EVENT-PATH] check verifies the tiling on every run</text>
+</svg>

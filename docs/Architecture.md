@@ -260,7 +260,23 @@ sequenceDiagram
 ```
 
 At each hop the component stamps a Logger checkpoint, so the same journey is what
-the [Logger](Logger.md) decomposes into per‑stage latencies.
+the [Logger](Logger.md) decomposes into per‑stage latencies. Exactly which stamps
+bound which column — for an LLC hit and for an LLC miss — is this:
+
+![One request end to end, with the nine LatencyReport columns bracketed between the Logger events that bound them](imgs/request_end_to_end.svg)
+
+Three things in it are easy to misread from the column names alone. **L2 Access** ends
+at the array-port *grant*, not after `A_LLC` cycles: the data is emitted at the grant,
+and the port's busy time is paid by whoever waits for it next — so a request's own
+`A_LLC` shows up in the *next* request's L2 Access, or its own L2 Stall if it queued
+behind an earlier one. **L2-DRAM Bus** is two pieces on a miss, either side of the
+DRAM service, with `MainMemoryController`; MCsim stamps no DRAM events, so there the
+column becomes "LLC admit → read leaves on `bus[1]`" and **DRAM** becomes the whole
+`bus[1]` round trip. And when an owning L1 answers a request instead of the LLC, that
+L1's stamps stand in for the LLC's, so L2 Stall and L2 Access are the wait for and the
+service by the *owner*. The columns always tile to Total; the `[EVENT-PATH]` line on
+stderr says so on every run, and `OCTOPUS_EVENT_DUMP=N` prints the raw timelines of
+the first N slow requests when a column looks wrong.
 
 ---
 
