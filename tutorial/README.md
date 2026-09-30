@@ -5,7 +5,7 @@ shape:
 
 ```
 README.md    what to do, the exact commands, what you should see
-check.sh     runs the exercise and tells you in one line whether it worked
+check.sh     validates the exercise result (00 checks your saved output/)
 expected/    the reference result check.sh compares against
 start.sh     (only where needed) puts the starting files in place
 ```

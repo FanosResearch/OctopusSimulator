@@ -58,5 +58,7 @@ demo/workloads/*/newLogger/
 demo/workloads/*/.out*
 
 .venv/
-tutorial/
 *.csv#
+
+# Generated output for tutorial exercise 00
+/tutorial/00-setup-and-first-run/output/

@@ -7,7 +7,7 @@
 # Usage:
 #   ./octoviz.sh run     <workload_dir> [-- <extra simulator args>]   # simulate with OCTOPUS_TRACE
 #   ./octoviz.sh convert <root_dir>                                    # recursively find latency CSVs -> Parquet
-#   ./octoviz.sh serve   <root_dir>                                     # serve every converted run under root
+#   ./octoviz.sh serve   <root_dir>                                     # convert missing runs, then serve
 #   ./octoviz.sh view    <workload_dir> [-- <extra simulator args>]    # run + convert + serve + open browser
 #
 # <workload_dir> holds the core traces (trace_C0..C3.trc.shared); the simulator writes
@@ -89,6 +89,7 @@ cmd_run(){
 
 cmd_convert(){
   local root="$1"; [ -d "$root" ] || die "no such dir: $root"
+  local mode="${2:-all}"
   need_py
   local report d trace count=0
   local -A seen=()
@@ -97,6 +98,12 @@ cmd_convert(){
     d="$(dirname "$report")"
     [ -n "${seen[$d]:-}" ] && continue
     seen["$d"]=1
+    [ "$mode" = "missing" ] && [ -f "$d/octoviz.parquet" ] && continue
+    if [ "$mode" = "missing" ] && [ "$count" -eq 0 ]; then
+      echo
+      echo "Converting data to visualizer format, please wait..."
+      echo
+    fi
     args=(); trace=""
     # Custom output directories keep traces beside the CSVs. Legacy runs
     # put trace.bin one level above newLogger/.
@@ -109,16 +116,20 @@ cmd_convert(){
     [ -n "$WINDOW" ] && [ -n "$trace" ] && args+=(--t0 "${WINDOW%%:*}" --t1 "${WINDOW##*:}")
     echo "== converting $d ${args[*]:-}"
     "$PY" "$TOOLS/convert.py" "$d" "${args[@]}" || die "conversion failed: $d"
-    if [ "$KEEP_TRACE" != "1" ] && [ -n "$trace" ]; then rm -f "$trace"; fi
+    if [ "$mode" = "all" ] && [ "$KEEP_TRACE" != "1" ] && [ -n "$trace" ]; then rm -f "$trace"; fi
     count=$((count+1))
   done < <(find "$root" -type f -name 'LatencyReport_C*.csv' -print0 | sort -z)
-  [ "$count" -gt 0 ] || die "no LatencyReport_C*.csv found under $root"
+  if [ "$count" -eq 0 ]; then
+    [ "$mode" = "missing" ] && return 0
+    die "no LatencyReport_C*.csv found under $root"
+  fi
   echo "== converted $count run(s)"
 }
 
 cmd_serve(){
   local root="$1"; [ -d "$root" ] || die "no such dir: $root"
   need_py
+  cmd_convert "$root" missing
   find "$root" -name octoviz.parquet 2>/dev/null | grep -q . || die "no converted run (octoviz.parquet) under $root"
   local url; url="$(viewer_url)"
   echo "== serving $root  (Ctrl-C to stop)"

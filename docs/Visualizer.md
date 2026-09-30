@@ -27,6 +27,12 @@ raw event trace (phase 3) will fill those in and give per‑bank DRAM lanes.
 Prerequisites: Python 3.9+ with `pip install duckdb numpy` (nothing else; the UI has no build
 step and needs no network) and a browser. Everything runs on the user's machine.
 
+`./octoviz.sh serve <folder>` recursively discovers saved runs and automatically
+converts those missing `octoviz.parquet` before starting the viewer. Already
+converted runs are reused, and automatic conversion preserves raw traces. It
+never reruns the simulator. After replacing CSVs in an already converted run,
+use `convert` explicitly to refresh its Parquet files.
+
 `./octoviz.sh convert <folder>` recursively finds every directory containing
 `LatencyReport_C*.csv`, including the supplied folder itself, and converts each
 run once. Neither a `newLogger` directory name nor `Summary.csv` is required.
@@ -36,7 +42,6 @@ directory. For example, after simulator runs using `-o tutorial/Arbiter/FCFS/`
 and `-o tutorial/Arbiter/RR/`:
 
 ```bash
-./octoviz.sh convert tutorial/Arbiter
 ./octoviz.sh serve tutorial/Arbiter
 ```
 
