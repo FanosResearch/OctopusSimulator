@@ -112,8 +112,8 @@
 
   <rect x="34" y="586" width="264" height="86" rx="4" class="ctl"/>
   <text x="46" y="605" class="ttl" fill="#9A6B12">action sequencer</text>
-  <text x="46" y="622" class="sub">GetData · SendData · SaveData</text>
-  <text x="46" y="634" class="sub">SetOwner · ClearOwner · IssueInv</text>
+  <text x="46" y="622" class="sub">GetData · SendData · SendExclusiveData</text>
+  <text x="46" y="634" class="sub">SaveData · SetOwner · ClearOwner · IssueInv</text>
   <text x="46" y="646" class="sub">WriteBack · Stall</text>
   <text x="46" y="664" class="sub">a port claim, an allocation, or a message</text>
 
@@ -223,6 +223,6 @@
     <circle cx="866" cy="392" r="8.5" class="badge"/><text x="866" y="395.5" class="bdig">11</text>
     <circle cx="896" cy="150" r="8.5" class="badge"/><text x="896" y="153.5" class="bdig">12</text>
     <line x1="34" y1="990" x2="66" y2="990" class="hit"/>
-    <text x="74" y="993" font-size="9" fill="#0E7C73">read miss, free way — 1 arrives · 2 admitted · 3 decoded · 4 tag miss; a free way, no victim · 5 FSM: GetData · 6 sequencer: allocate, send · 7 MSHR · 8 DRAM read · 9 fill on RX · 10 port claim → busy timer · 11 written into the free way, MSHR freed · 12 data out on TX response</text>
+    <text x="74" y="993" font-size="9" fill="#0E7C73">read miss, free way — 1 arrives · 2 admitted · 3 decoded · 4 tag miss; a free way, no victim · 5 FSM: GetData, SetOwner · 6 sequencer: allocate, send · 7 MSHR · 8 DRAM read · 9 fill on RX · 10 port claim → busy timer · 11 written into the free way, MSHR freed · 12 data out on TX response</text>
   </g>
 </svg>

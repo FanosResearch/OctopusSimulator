@@ -107,8 +107,8 @@
 
   <rect x="34" y="586" width="264" height="86" rx="4" class="ctl"/>
   <text x="46" y="605" class="ttl" fill="#9A6B12">action sequencer</text>
-  <text x="46" y="622" class="sub">GetData · SendData · SaveData</text>
-  <text x="46" y="634" class="sub">SetOwner · ClearOwner · IssueInv</text>
+  <text x="46" y="622" class="sub">GetData · SendData · SendExclusiveData</text>
+  <text x="46" y="634" class="sub">SaveData · SetOwner · ClearOwner · IssueInv</text>
   <text x="46" y="646" class="sub">WriteBack · Stall</text>
   <text x="46" y="664" class="sub">a port claim, an allocation, or a message</text>
 
