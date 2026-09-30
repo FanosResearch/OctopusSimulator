@@ -31,7 +31,7 @@
   <rect width="1280" height="1000" fill="#FCFBF8"/>
   <text x="34" y="30" font-size="16" font-weight="700" fill="#14212A">Octopus LLC datapath — the path of a read / write hit</text>
   <text x="34" y="47" class="sub">CacheController_End2End + CacheDataHandler_COTS · 32 KB, 2-way, 64 B lines · MESI_LLC coherence FSM · one timed data port</text>
-  <text x="34" y="59" font-size="9" fill="#0E7C73" font-weight="600">Highlighted: a GetS / GetM that finds the line in a stable state. A write hit also rewrites the line's state and owner bits (untimed) and, if other L1s share the line, IssueInv sends INV on TX service (red).</text>
+  <text x="34" y="59" font-size="9" fill="#0E7C73" font-weight="600">Highlighted: a GetS / GetM for a line the LLC holds valid and no L1 owns. A write hit takes the same path and also rewrites the owner bits (untimed); sharers invalidate themselves by snooping the GetM on the bus — the LLC sends no INV (red is eviction only).</text>
 
   <!-- ═══ bus[0] ═══ -->
   <rect x="34" y="64" width="1212" height="62" rx="4" class="io"/>

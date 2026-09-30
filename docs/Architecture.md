@@ -120,9 +120,17 @@ the response channel, in ten numbered steps:
 
 Steps 4–6 — tag compare, FSM, sequencer — take no simulated time. What a hit pays for is the
 wait in the processing queue (1–3), the wait for the port (7), and then the `A_LLC`-cycle access
-itself (8–9). A write hit differs from a read hit in what the FSM does, not in the path: it also
-rewrites the line's state and owner bits (untimed), and if other L1s share the line it issues the
-red `IssueInv` as well.
+itself (8–9). A write hit differs from a read hit in what the FSM does, not in the path: the
+`GetM` gets plain data where a `GetS` gets exclusive data, and the FSM also rewrites the owner
+bits (untimed). Nothing else changes — in particular the LLC sends **no** invalidation: on the
+snooping bus every sharer sees the `GetM` itself and drops its copy (`S + Other_GetM → I`), so
+`IssueInv` is reserved for evictions.
+
+The figure draws the case where the LLC serves the data — the line is valid in the array and no
+L1 owns it (`I` or `S` in `MESI_LLC.csv`). The third case, a hit on a line an L1 holds in
+`EorM`, does not use the port at all: the owner answers the `GetS` on the bus with `Data2Both`,
+and the LLC only saves that copy (`S_d → SaveData → S`); on a `GetM` the owner hands the line
+straight to the requester and the LLC merely rewrites the owner bits.
 
 And the same again for a read **miss** in the simplest case — the set still has a free way, so
 nothing is evicted:
