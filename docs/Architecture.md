@@ -124,6 +124,19 @@ itself (8–9). A write hit differs from a read hit in what the FSM does, not in
 rewrites the line's state and owner bits (untimed), and if other L1s share the line it issues the
 red `IssueInv` as well.
 
+And the same again for a read **miss** in the simplest case — the set still has a free way, so
+nothing is evicted:
+
+![The path of a read miss that installs into a free way](imgs/llc_read_miss.svg)
+
+The request takes the same first six steps and then diverges at the tag compare: the FSM's
+`GetData` allocates an MSHR entry, the read leaves on `bus[1]`, and the line waits in the MSHR —
+not the array — until DRAM answers. The fill then contends for the port like any other array
+access, is written into the free way, frees the MSHR, and goes out on TX response. Because no
+victim is chosen, the write-back buffer and the red inclusion path are never touched; a miss into
+a *full* set adds exactly those two things, an eviction read through the port and, if the victim
+is dirty or held by an L1, a write-back or an `IssueInv`.
+
 A `CacheController` (a `BaseController`) has **two `CommunicationInterface`s** — one
 facing the cores below, one facing the interconnect above. Incoming messages are
 serialized into a **processing queue** ordered **First‑Ready First‑Come‑First‑Serve
