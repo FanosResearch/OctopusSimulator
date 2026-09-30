@@ -75,7 +75,7 @@ whose ID is the `owner` parameter.
    should print nothing and exit. This verifies that you have a clean, working
    base from which to add weights to the basic round-robin algorithm.
 
-6. Implement the weighting in `WRRArbiter`, then rebuild and repeat **only the WRR
+6. Implement the weighting in `WRRArbiter` (see the hint below), then rebuild and repeat **only the WRR
    run**, using the same output path:
 
    ```shell
@@ -90,6 +90,11 @@ whose ID is the `owner` parameter.
    This overwrites the initial WRR reports with your weighted version while keeping
    RR as the reference. We should now expect WRR to have different performance metrics. 
    
+**Hint**: the RRArbiter code uses a modulo counter in function 
+`selectCandidate` to select each of the connected controllers in
+succession. You want instead for Core 0 to be picked twice in
+each round of this process. You may also need to modify `elect`.
+
   Compare the two `Summary.csv` files to see how Core 0's performance
   changes, now that WRR gives it extra service.  
 
