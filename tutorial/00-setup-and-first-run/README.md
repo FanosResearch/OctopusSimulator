@@ -61,7 +61,9 @@ Where each column is spent — on which component of the system a request is wai
 moving or being served — is drawn on the system itself in
 [`docs/imgs/system_end_to_end.svg`](../../docs/imgs/system_end_to_end.svg): one LLC miss
 from core 0, routed through the cores, the bus, the LLC, the memory bus and DRAM, each
-hop coloured by its column. Which two events in the simulator bound each column — for
+hop coloured by its column, and its hit counterpart in
+[`docs/imgs/system_end_to_end_hit.svg`](../../docs/imgs/system_end_to_end_hit.svg),
+where the route stops at the LLC's array port. Which two events in the simulator bound each column — for
 an LLC hit and for an LLC miss — is the same route on a time axis, in
 [`docs/imgs/request_end_to_end.svg`](../../docs/imgs/request_end_to_end.svg)
 (both explained under "A request's journey" in [`docs/Architecture.md`](../../docs/Architecture.md)).

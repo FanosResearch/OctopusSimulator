@@ -275,6 +275,15 @@ the LLC's back‑invalidations on an eviction and is not on this request's path.
 
 ![The Octopus system end to end: four cores on a TripleBus, the shared LLC, the memory bus and DRAM, with one LLC miss from core 0 routed through it and each hop coloured by the LatencyReport column that measures it](imgs/system_end_to_end.svg)
 
+The same system with an LLC **hit** from core 0. The request never leaves the LLC,
+so the memory bus and DRAM are greyed out and L2-DRAM Bus and DRAM are 0. L2 Access
+is then the wait for the array port: the data is emitted at the grant, so the read's
+`A_LLC` cycles on the port fall in no column of this request; they are paid by whoever
+waits for the port next. A slow hit is therefore the bus, the LLC queue or the port,
+never memory.
+
+![The same system with an LLC hit from core 0: the route stops at the LLC's array port, the memory bus and DRAM are not on the path](imgs/system_end_to_end_hit.svg)
+
 At each hop the component stamps a Logger checkpoint, so the same journey is what
 the [Logger](Logger.md) decomposes into per‑stage latencies. Exactly which stamps
 bound which column, on a time axis — for an LLC hit and for an LLC miss — is this:
