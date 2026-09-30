@@ -265,8 +265,10 @@ The same journey drawn on the system as shipped — four cores with private L1s 
 TripleBus, the shared LLC, the point‑to‑point memory bus and DRAM — with one LLC miss
 from core 0 routed through it. Each hop is coloured by the LatencyReport column that
 measures it (amber = waiting, purple = a bus transfer, teal = being served), and the
-numbers ①–⑨ are the Logger stamps in order; the right‑hand panel lists, per hop, the
-two stamps whose distance the column is. The other cores' L1s see every request on the
+numbers ⓪–⑨ are the report's nine latency columns in order, placed at the Logger
+stamps that bound them (L2‑DRAM Bus is one column over two hops, ④ out and ⑥ back;
+CPU Latency, ⓪, is spent inside the core before the request exists on the bus); the
+right‑hand panel lists, per hop, the two stamps whose distance the column is. The other cores' L1s see every request on the
 request lane, and when one of them owns the line it answers on the response lane in
 the LLC's place, its stamps then standing in for the LLC's. The service lane carries
 the LLC's back‑invalidations on an eviction and is not on this request's path.
