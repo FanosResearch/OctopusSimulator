@@ -49,6 +49,8 @@ llc_controller.m_data_handler.cache_size(i),8388608,,,#From the ARM challenge XM
 llc_controller.m_data_handler.m_block_size(i),64,,,,,
 llc_controller.m_data_handler.m_ways_count(i),8,,,,,
 llc_controller.m_data_handler.m_data_access_latency(i),10,,,,,
+llc_controller.m_data_handler.m_data_array_pipelined(i),1,,,#Pipelined array: every access pays the 10 cycles and one is admitted per cycle (classic L2 semantics). 0 = occupancy model (one access per 10 cycles none charged),,
+llc_controller.m_data_handler.m_data_array_ports(i),1,,,,,
 llc_controller.m_data_handler.replacement_policy_name(s),LRU,,,,,
 llc_controller.num_mshr(i),64,,#LLC MSHR depth: larger than L1 (fans in all cores). -1 = unbounded,,
 llc_controller.m_data_handler.pwb_size(i),32,,#LLC write-back buffer depth: larger than L1. -1 = unbounded,,

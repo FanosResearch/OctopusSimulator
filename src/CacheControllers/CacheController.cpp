@@ -77,7 +77,10 @@ namespace octopus
     void CacheController::cycleProcess()
     {
         m_data_handler->updateCycle(m_cache_cycle);
-        this->processDataArrayBuffer();
+        if (pipelinedArray())
+            this->pipelineStep();
+        else
+            this->processDataArrayBuffer();
         this->processLogic(); // Call cache controller
 
         m_cache_cycle++;
@@ -435,8 +438,16 @@ namespace octopus
         bool port_busy = !m_data_handler->isReady();
         CacheDataHandler_COTS *cots = dynamic_cast<CacheDataHandler_COTS *>(m_data_handler);
         uint16_t reg_flags = cots ? ((cots->inMSHR(msg.addr) ? 0x200 : 0) | (cots->inPWB(msg.addr) ? 0x400 : 0)) : 0;
-        if(!m_data_handler->isReady(msg.addr))
+        if (pipelinedArray())
         {
+            // Completing an op: its array accesses are the op itself. The
+            // tracker counts the grant here, at completion: with one fixed
+            // latency, accesses complete in the order they were admitted.
+            if (m_pipe_firing)
+            {
+                trackArrayGrant(msg, type, port_busy, reg_flags);
+                return true;
+            }
         }
         else if (m_data_handler->isReady(msg.addr))
         {
@@ -532,12 +543,21 @@ namespace octopus
     // Pipelined data array
     // ------------------------------------------------------------------
 
+    bool CacheController::pipelinedArray() const
+    {
+        return m_data_handler->isPipelined() && m_data_handler->getDataAccessLatency() > 0;
+    }
 
     void CacheController::arrayEnqueue(DataArrayOp &&op)
     {
         m_pipe_ops++;
         op.op_id = ++m_array_op_seq;
         m_array_ops.push_back(std::move(op));
+        // Pipelined: an access may start the cycle it arrives, if a port is
+        // left and the policy picks it (oldest first picks it when nothing
+        // older waits; an arbiter applies its own rule).
+        if (pipelinedArray())
+            arrayAdmit();
     }
 
     bool CacheController::arbitrated(int owner) const
@@ -588,9 +608,23 @@ namespace octopus
         return m_array_ops.end();
     }
 
+    void CacheController::arrayAdmit()
+    {
+        while (m_array_admitted_this_cycle < m_data_handler->getDataArrayPorts())
+        {
+            auto it = arrayElect();
+            if (it == m_array_ops.end())
+                return;
+            it->admitted = true;
+            it->ready_cycle = m_cache_cycle + m_data_handler->getDataAccessLatency();
+            m_array_admitted_this_cycle++;
+        }
+    }
 
     void CacheController::pipelineFire(DataArrayOp &op)
     {
+        bool was_firing = m_pipe_firing;
+        m_pipe_firing = true;
 
         if (op.kind == DataArrayOp::MESSAGE)
         {
@@ -613,11 +647,35 @@ namespace octopus
                 action_functions[action.type](action.data);
         }
 
+        m_pipe_firing = was_firing;
         // The line's state may have changed; messages stalled on it must be
         // rescanned (readiness is state-only and rescans only after a push/pop).
         m_processing_queue->markDirty();
     }
 
+    void CacheController::pipelineStep()
+    {
+        // Pipelined model, level 2: admit up to the ports' worth of waiting
+        // accesses by policy, then complete every admitted access whose
+        // latency has elapsed. Completing one may enqueue another (a second
+        // array access of the same action list), which invalidates deque
+        // iterators, so rescan after each completion.
+        m_array_admitted_this_cycle = 0;
+        arrayAdmit();
+        for (bool fired = true; fired; )
+        {
+            fired = false;
+            for (auto it = m_array_ops.begin(); it != m_array_ops.end(); ++it)
+                if (it->admitted && it->ready_cycle <= m_cache_cycle)
+                {
+                    DataArrayOp op = std::move(*it);
+                    m_array_ops.erase(it);
+                    pipelineFire(op);
+                    fired = true;
+                    break;
+                }
+        }
+    }
 
     void CacheController::pipelineFlushLine(uint64_t address)
     {
@@ -643,9 +701,26 @@ namespace octopus
 
 
 
+    bool CacheController::messageTouchesArray(const Message &msg)
+    {
+        // Occupancy model: only the transitions the protocol reports (the
+        // snoop L1 protocols' Hit / Data2Req / Data2Both); a data-carrying
+        // message keeps upstream's handling so the lab presets are unchanged.
+        // Pipelined model: those, plus any bytes arriving from below or from
+        // a peer, which are array writes whatever the table says.
+        if (m_protocol->needsDataArray(msg))
+            return true;
+        if (!pipelinedArray())
+            return false;
+        bool cpu_demand = msg.source == Message::Source::LOWER_INTERCONNECT &&
+                          (msg.complementary_value == 0 || msg.complementary_value == 1);
+        return msg.data != NULL && !cpu_demand;
+    }
 
     bool CacheController::deferForDataArray(Message &msg)
     {
+        if (!pipelinedArray())
+        {
             // Occupancy model with a non-zero latency: a message whose
             // transition touches the array waits, whole, until the array is
             // free, then runs inline so its array access and its state change
@@ -665,6 +740,23 @@ namespace octopus
             op.msg = msg;
             arrayEnqueue(std::move(op));
             return true;
+        }
+        // Defer the whole message, and so the state change that comes with
+        // it, when its transition touches the array: a hit, a snoop that is
+        // answered with the line, a fill. The line keeps its current state
+        // for the array latency, so a snoop that needs the bytes waits behind
+        // the access that is producing them instead of taking the line away
+        // first. Messages that carry bytes from below (fills, peer data) are
+        // array writes whatever the table says; a CPU store's bytes are
+        // written by its Hit, which the table reports.
+        if (!messageTouchesArray(msg))
+            return false;
+
+        DataArrayOp op;
+        op.kind = DataArrayOp::MESSAGE;
+        op.msg = msg;
+        arrayEnqueue(std::move(op));
+        return true;
     }
 
     void CacheController::removePendingAndRespond(void *data_ptr)
