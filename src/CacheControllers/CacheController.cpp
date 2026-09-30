@@ -32,6 +32,10 @@ namespace octopus
         m_num_mshr = DEFAULT_NUM_MSHR;
         if (parameters.find(STRINGIFY(line_interlock)) != parameters.end())
             m_line_interlock = std::get<int>(parameters.at(STRINGIFY(line_interlock)).value);
+        if (const char *t = getenv("OCTOPUS_TRACE_ADDR"))
+            m_trace_addr = strtoull(t, NULL, 0);
+        if (const char *t = getenv("OCTOPUS_DUMP_AT"))
+            m_dump_at = strtoull(t, NULL, 0);
         if (parameters.find(STRINGIFY(num_mshr)) != parameters.end())
             m_num_mshr = std::get<int>(parameters.at(STRINGIFY(num_mshr)).value);
 
@@ -96,6 +100,15 @@ namespace octopus
         // won the bus for its GetM had already answered it: two data copies).
         m_processing_queue->setHold([this](const Message &m) {
             bool held = m_line_interlock != 0 && lineHasDeferredOp(m.addr);
+            if (held && m_trace_addr != 0 && m_trace_held.insert(m.msg_id).second)
+            {
+                traceMsg("hold", m);
+                for (const DataArrayOp &op : m_array_ops)
+                    if (getAddressKey(op.msg.addr) == getAddressKey(m.addr))
+                        cout << "[trace]    held by " << (op.kind == DataArrayOp::MESSAGE ? "MESSAGE" : "ACTIONS") << " op msg " << op.msg.msg_id
+                             << " src " << (int)op.msg.source << " type " << op.msg.complementary_value << " ready " << op.ready_cycle
+                             << (op.admitted ? " (admitted)" : " (waiting)") << endl;
+            }
             return held; });
     }
 
@@ -107,6 +120,8 @@ namespace octopus
 
     void CacheController::cycleProcess()
     {
+        if (m_dump_at != 0 && m_cache_cycle == m_dump_at)
+            dumpState();
         m_data_handler->updateCycle(m_cache_cycle);
         if (pipelinedArray())
             this->pipelineStep();
@@ -388,10 +403,19 @@ namespace octopus
         fprintf(stderr, "[HANG]   mshr=%d/%d pwb=%d/%d pwb_pending_issue=%d array_ops=%zu saved_for_wb=%zu\n",
                 cots->mshrCount(), m_num_mshr, cots->pwbCount(), cots->pwbSize(), cots->pwbPendingIssueCount(),
                 m_array_ops.size(), m_saved_requests_for_wb.size());
+        for (int i = 0; i < (int)m_processing_queue->size(); i++)
+        {
+            const Message &m = m_processing_queue->itemAt(i);
+            fprintf(stderr, "[HANG]   pq[%d] id=%llu held=%d fsm_ready=%d\n", i, (unsigned long long)m.msg_id,
+                    m_line_interlock != 0 && lineHasDeferredOp(m.addr),
+                    m_protocol->getRequestState(m, FRFCFS_State::NonReady) == FRFCFS_State::Ready);
+        }
         for (const DataArrayOp &op : m_array_ops)
-            fprintf(stderr, "[HANG]   array-op addr=%llx id=%llu kind=%s action=%d ready=%d\n", (unsigned long long)op.msg.addr,
-                    (unsigned long long)op.msg.msg_id, op.kind == DataArrayOp::MESSAGE ? "message" : "actions",
-                    op.actions.empty() ? -1 : (int)op.actions.front().type, m_data_handler->isReady(op.msg.addr));
+            fprintf(stderr, "[HANG]   array-op addr=%llx id=%llu kind=%s action=%d ready_cycle=%llu admitted=%d array_ready=%d\n",
+                    (unsigned long long)op.msg.addr, (unsigned long long)op.msg.msg_id,
+                    op.kind == DataArrayOp::MESSAGE ? "message" : "actions",
+                    op.actions.empty() ? -1 : (int)op.actions.front().type, (unsigned long long)op.ready_cycle,
+                    (int)op.admitted, m_data_handler->isReady(op.msg.addr));
     }
 
     bool CacheController::demandAdmissionBlocked(int outstanding) const
@@ -595,6 +619,7 @@ namespace octopus
     {
         m_pipe_ops++;
         op.op_id = ++m_array_op_seq;
+        traceMsg(op.kind == DataArrayOp::MESSAGE ? "park-message" : "park-actions", op.msg);
         m_array_ops.push_back(std::move(op));
         // Pipelined: an access may start the cycle it arrives, if a port is
         // left and the policy picks it (oldest first picks it when nothing
@@ -680,6 +705,7 @@ namespace octopus
             if (m_protocol->getRequestState(op.msg, FRFCFS_State::NonReady) != FRFCFS_State::Ready)
             {
                 m_pipe_requeues++;
+                traceMsg("requeue", op.msg);
                 m_processing_queue->pushBack(op.msg, FRFCFS_State::NonReady, /*force=*/true);
                 m_pipe_firing = was_firing;
                 m_processing_queue->markDirty();
@@ -687,6 +713,7 @@ namespace octopus
             }
             // The bytes have been written: apply the FSM event now, against
             // the line's current state, exactly as processLogic would have.
+            traceMsg("fire", op.msg);
             // Its ENTER is logged here, not at pop: processLogic defers the
             // message before it would log one.
             if (op.msg.source == Message::Source::LOWER_INTERCONNECT)
@@ -700,6 +727,7 @@ namespace octopus
         }
         else
         {
+            traceMsg("fire-actions", op.msg);
             for (ControllerAction action : op.actions)
                 action_functions[action.type](action.data);
         }
@@ -755,7 +783,16 @@ namespace octopus
         }
     }
 
-
+    void CacheController::traceMsg(const char *what, const Message &msg)
+    {
+        if (m_trace_addr == 0 || (m_trace_addr != 1 && getAddressKey(msg.addr) != getAddressKey(m_trace_addr)))
+            return;   // OCTOPUS_TRACE_ADDR=1 traces every line
+        GenericCacheLine bits; bool have = m_data_handler->readLineBits(msg.addr, &bits);
+        cout << "[trace] cyc " << m_cache_cycle << " ctl " << m_id << " " << what << " addr 0x" << std::hex << msg.addr << std::dec
+             << " state " << (have ? bits.state : -1) << " msg " << msg.msg_id << " src " << (int)msg.source
+             << " owner " << msg.owner << " type " << msg.complementary_value << " data " << (msg.data != NULL)
+             << " array-ops " << m_array_ops.size() << endl;
+    }
 
     bool CacheController::lineHasDeferredOp(uint64_t address)
     {

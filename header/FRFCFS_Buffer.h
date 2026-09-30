@@ -153,6 +153,9 @@ namespace octopus
         // must mark the buffer dirty when the hold can have lifted.
         std::function<bool(const TItem &)> m_hold;
         void setHold(std::function<bool(const TItem &)> hold) { m_hold = std::move(hold); }
+        // Debug access to the queued items in order (state dumps).
+        const TItem &itemAt(int i) const { return m_buffer[i].item; }
+        FRFCFS_State stateAt(int i) const { return m_buffer[i].state; }
 
         bool getFirstReady(TItem *out_item)
         {
