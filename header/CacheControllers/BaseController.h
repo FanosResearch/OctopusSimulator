@@ -22,6 +22,7 @@
 #include "Logger.h"
 
 #include <functional>
+#include <ostream>
 #include <string>
 #include <queue>
 #include <vector>
@@ -65,6 +66,14 @@ namespace octopus
         // readable line; NULL in the standalone simulator.
         ExternalCPU *m_cpu_port = NULL;
         uint64_t m_data_read_failures = 0;   // responses built without line data
+        // Occupancy diagnostics, reported at the end of a run (reportOccupancy):
+        // cycles a popped request was turned away by canAdmitRequest (MSHR or
+        // write-back buffer full), interconnect intakes refused because the
+        // demand queue was at its bound, and the queue's peak occupancy.
+        uint64_t m_admit_fail_cycles = 0;
+        uint64_t m_intake_refusals = 0;
+        int m_queue_peak = 0;
+        static std::vector<BaseController *> s_controllers;   // every controller built, for the report
 
         // key is the msg.addr & mask(nbits of CacheLineSize) and the value is vector of Messages
         // to ensure order of requests of the same cache line
@@ -113,6 +122,9 @@ namespace octopus
 
         virtual void init();
         void setCpuPort(ExternalCPU *port) { m_cpu_port = port; }
+        // One line per controller that ever refused or stalled: how close the
+        // queue, MSHR and write-back bounds came to binding in this run.
+        static void reportOccupancy(std::ostream &os);
         // Mirror of a classic cache's blocked CPU port. `outstanding` is the
         // number of the external core's requests accepted and not yet
         // answered. The queue bound is read as the total the core is credited

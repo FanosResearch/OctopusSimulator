@@ -367,6 +367,11 @@ namespace gem5
     void onInvalidate(uint64_t address);
     void deliverInvalidate(Addr blk_addr);
     uint64_t snoopsSent = 0;
+    /// Instruction mix seen at the port: exclusive loads/stores (LDXR/STXR
+    /// family) and LSE atomics, to tell how a workload synchronises.
+    uint64_t llscLoads = 0;
+    uint64_t llscStores = 0;
+    uint64_t atomicOps = 0;
 
     /// Traffic Octopus must not model as cache lines (devices, uncacheable
     /// requests): passed straight down and answered at once.

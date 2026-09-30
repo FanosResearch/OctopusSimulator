@@ -32,6 +32,7 @@ namespace octopus
         m_clk_period = std::get<int>(parameters.at(STRINGIFY(m_clk_period)).value);
         int processing_queue_size = std::get<int>(parameters.at(STRINGIFY(processing_queue_size)).value);
         m_processing_queue_size = processing_queue_size;
+        s_controllers.push_back(this);
         string protocol_type = std::get<string>(parameters.at(STRINGIFY(protocol_type)).value);
         string fsm_filename = std::get<string>(parameters.at(STRINGIFY(fsm_filename)).value);
         string fsm_path = string(FSM_PATH) + fsm_filename + ".csv";
@@ -109,6 +110,7 @@ namespace octopus
             if (!canAdmitRequest(ready_msg))
             {
                 traceMsg("admit-fail", ready_msg);
+                m_admit_fail_cycles++;
                 // Structural stall (e.g., MSHR/PWB full): put the request back
                 // and retry next cycle. A slot is guaranteed to be free because
                 // getFirstReady just removed this element.
@@ -203,7 +205,23 @@ namespace octopus
                 }
                 m_lower_interface->popFrontMessage();
             }
+            else
+                m_intake_refusals++;
         }
+        if (buf.size() > m_queue_peak)
+            m_queue_peak = buf.size();
+    }
+
+    std::vector<BaseController *> BaseController::s_controllers;
+
+    void BaseController::reportOccupancy(std::ostream &os)
+    {
+        for (BaseController *c : s_controllers)
+            if (c->m_admit_fail_cycles || c->m_intake_refusals)
+                os << "controller " << c->m_id << ": queue peak " << c->m_queue_peak
+                   << " of " << c->m_processing_queue_size
+                   << ", intake refusals (queue full) " << c->m_intake_refusals
+                   << ", admit-fail cycles (MSHR/PWB full) " << c->m_admit_fail_cycles << std::endl;
     }
 
     void BaseController::dataArrayReadFailed(const char *where, const Message *msg)

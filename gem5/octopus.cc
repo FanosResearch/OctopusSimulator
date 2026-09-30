@@ -110,6 +110,16 @@ Octopus::Octopus(const OctopusParams &params) :
         if (portBlocks)
             cprintf("%s: %llu CPU-port refusals while the Octopus L1 was "
                     "blocked\n", name(), portBlocks);
+        if (llscLoads || llscStores || atomicOps)
+            cprintf("%s: %llu exclusive loads, %llu exclusive stores, "
+                    "%llu LSE atomics\n", name(), llscLoads, llscStores,
+                    atomicOps);
+        // Library-side occupancy summary, once for the shared simulator.
+        static bool reported = false;
+        if (!reported && cache_sim != NULL) {
+            reported = true;
+            cache_sim->reportOccupancy(std::cout);
+        }
     });
 
     for (int i = 0; i < params.port_cpu_side_connection_count; ++i) {
@@ -469,6 +479,11 @@ Octopus::accessTiming(PacketPtr pkt, int connection_id, int port_id)
     // Octopus commits it (onCommit) and later completes it. Anything that
     // writes -- store, store-exclusive, swap, atomic -- is one write-type
     // transaction, so it commits only with the line held in M.
+    if (pkt->isLLSC()) {
+        if (pkt->isWrite()) llscStores++; else llscLoads++;
+    } else if (pkt->isAtomicOp()) {
+        atomicOps++;
+    }
     submit(pkt,
            pkt->isWrite() ? octopus::RequestType::WRITE : octopus::RequestType::READ,
            connection_id, port_id);
