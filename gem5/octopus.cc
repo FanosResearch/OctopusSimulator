@@ -51,7 +51,8 @@ Octopus::Octopus(const OctopusParams &params) :
     tickEvent([this]{ tick(); }, name()),
     blockSize(params.system->cacheLineSize()),
     octopusCycleNs(params.octopus_cycle_ns),
-    memPort(params.name + ".mem_side", this)
+    memPort(params.name + ".mem_side", this),
+    stats(this)
 {
     // Since the CPU side ports are a vector of ports, create an instance of
     // the CPUSidePort for each connection. This member of params is
@@ -79,6 +80,25 @@ Octopus::Octopus(const OctopusParams &params) :
              "(%s) must set cpu_type=ExternalCPU and have num_cores > %d.\n",
              name(), params.cache_id, params.config_name, params.cache_id);
     extCpu = ext_cpus->at(params.cache_id);
+
+    // Octopus request logging, per core: a core's instruction and data L1
+    // report into one LatencyReport. It follows gem5's statistics, so
+    // newLogger/ and stats.txt cover the same window: every stats reset
+    // starts a fresh log (as it zeroes the gem5 stats), the next dump
+    // writes the reports.
+    if (params.log_core >= 0)
+        extCpu->setLogCore(params.log_core);
+    static bool log_hooks = false;
+    if (extCpu->logRequestsConfigured() && !log_hooks) {
+        log_hooks = true;
+        statistics::registerResetCallback([]() {
+            octopus::ExternalCPU::setLoggerEnable(true);
+        });
+        statistics::registerDumpCallback([]() {
+            if (octopus::ExternalCPU::loggerEnabled())
+                octopus::ExternalCPU::writeLogReports();
+        });
+    }
 
     extCpu->registerCPUCallback(
         new octopus::CPUCallback<Octopus, uint64_t, uint64_t, uint64_t,
@@ -152,7 +172,11 @@ Octopus::submit(PacketPtr pkt, octopus::RequestType type, int connection_id,
 
     const bool inserted = pending_requests.emplace(
         msg_id, PendingTxn{pkt, connection_id, port_id, false, nextSeq++,
-                           false, false}).second;
+                           false, false, curTick()}).second;
+    if (type == octopus::RequestType::WRITE)
+        stats.writeReqs++;
+    else
+        stats.readReqs++;
     panic_if(!inserted, "%s: msg_id %llu issued twice\n", name(), msg_id);
     return msg_id;
 }
@@ -223,6 +247,8 @@ Octopus::respond(uint64_t msg_id)
     pending_requests.erase(itr);
     num_pending_req--;
     assert(txn.pkt->isResponse());
+    stats.responses++;
+    stats.latencyCycles += (curTick() - txn.issueTick) / clockPeriod();
     cpuPorts[txn.port_id].sendPacket(txn.pkt);
 
     // Completing a request may have unblocked the L1.
@@ -573,8 +599,30 @@ void Octopus::tick()
 
 void Octopus::setOctLoggerEn(bool enable)
 {
-    warn_once("%s: setOctLoggerEn(%d) is a no-op with this Octopus tree\n",
-              name(), enable);
+    warn_if(!extCpu->logRequestsConfigured(),
+            "%s: setOctLoggerEn(%d) has no effect without "
+            "--octopus-param 'cpu[*].log_requests(i)=1'\n", name(), enable);
+    if (enable)
+        octopus::ExternalCPU::setLoggerEnable(true);
+    else if (octopus::ExternalCPU::loggerEnabled())
+        octopus::ExternalCPU::writeLogReports();
+}
+
+Octopus::OctopusStats::OctopusStats(statistics::Group *parent)
+    : statistics::Group(parent),
+      ADD_STAT(readReqs, statistics::units::Count::get(),
+               "Reads handed to the Octopus L1 (loads, load-exclusives; one per packet)"),
+      ADD_STAT(writeReqs, statistics::units::Count::get(),
+               "Writes handed to the Octopus L1 (stores, store-exclusives, atomics)"),
+      ADD_STAT(responses, statistics::units::Count::get(),
+               "Responses returned to the core"),
+      ADD_STAT(latencyCycles, statistics::units::Cycle::get(),
+               "Sum over responses of the cycles from hand-off to response"),
+      ADD_STAT(avgLatency, statistics::units::Rate<
+                   statistics::units::Cycle, statistics::units::Count>::get(),
+               "Average cycles from hand-off to Octopus to the response")
+{
+    avgLatency = latencyCycles / responses;
 }
 
 void Octopus::startup()

@@ -317,6 +317,8 @@ namespace gem5
         /// The engine's completion arrived while the data operation was still
         /// held back; respond as soon as it has been performed.
         bool completionArrived;
+        /// When the request was handed to Octopus (latency statistic).
+        Tick issueTick;
     };
 
     uint64_t nextSeq = 0;
@@ -412,7 +414,25 @@ namespace gem5
 
     void startup() override;
 
+    /** Turn Octopus's request logging on, or off and write its reports
+     * (LatencyReport_C<core>.csv, Summary.csv under <outdir>/newLogger).
+     * Needs cpu[*].log_requests(i)=1; with it, a stats reset turns logging
+     * on and the next stats dump writes the reports, so both cover the
+     * same window. */
     void setOctLoggerEn(bool enable);
+
+  private:
+    /** The gem5 view of the requests this L1 hands to Octopus: one per
+     * packet, the same requests Octopus's LatencyReport lists. */
+    struct OctopusStats : public statistics::Group
+    {
+        OctopusStats(statistics::Group *parent);
+        statistics::Scalar readReqs;
+        statistics::Scalar writeReqs;
+        statistics::Scalar responses;
+        statistics::Scalar latencyCycles;
+        statistics::Formula avgLatency;
+    } stats;
   };
 
 } // namespace gem5

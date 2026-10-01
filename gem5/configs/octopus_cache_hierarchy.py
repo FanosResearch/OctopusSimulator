@@ -1,3 +1,4 @@
+import os
 from m5.objects import *
 from m5.objects import (
     Port,
@@ -32,13 +33,18 @@ class OctopusCacheHierarchy(AbstractClassicCacheHierarchy):
         # Every bridge must carry the same list: only the first one built
         # constructs the Octopus system.
         self._extraParams = list(extra_params or [])
+        # Request logging (cpu[*].log_requests(i)=1) writes under
+        # <outdir>/newLogger, which the Logger does not create itself.
+        if any("log_requests" in p for p in self._extraParams):
+            os.makedirs(os.path.join(self._outputPath, "newLogger"), exist_ok=True)
         self.membus = SystemXBar(width=64)
         if atp_files is not None:
             self._useATP = True
 
-    def _bridge(self, cache_id):
+    def _bridge(self, cache_id, core):
         return Octopus(
             cache_id=cache_id,
+            log_core=core,
             system_name="MultiCoreSystem",
             config_name=self._configName,
             # The Logger writes its per-core reports under <workload_path>/newLogger.
@@ -58,8 +64,10 @@ class OctopusCacheHierarchy(AbstractClassicCacheHierarchy):
             cntr.port = self.membus.mem_side_ports
 
         n = board.get_processor().get_num_cores()
-        self.l1i_caches = [self._bridge(i) for i in range(n)]
-        self.l1d_caches = [self._bridge(n + i) for i in range(n)]
+        # Core i's instruction L1 is Octopus id i, its data L1 id n + i; both
+        # report as core i when request logging is on.
+        self.l1i_caches = [self._bridge(i, i) for i in range(n)]
+        self.l1d_caches = [self._bridge(n + i, i) for i in range(n)]
 
         if board.has_coherent_io():
             self._setup_io_cache(board)

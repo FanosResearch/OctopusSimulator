@@ -21,6 +21,11 @@ class Octopus(ClockedObject):
     cache_id = Param.Int(
         0, "Id of the Octopus L1 (and of its ExternalCPU) this bridge drives"
     )
+    log_core = Param.Int(
+        -1,
+        "Core this L1 belongs to, for Octopus's per-core request reports "
+        "(-1: its cache_id)",
+    )
 
     # How far Octopus is advanced per gem5 clock cycle. This is the core/cache
     # period of the Octopus configuration (cpu[*].m_clk_period in the system
