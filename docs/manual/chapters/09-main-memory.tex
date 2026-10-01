@@ -1,3 +1,84 @@
 \chapter{Main memory}\label{ch:main-memory}
 
-\whatyoufind{To be written.}
+\whatyoufind{The two memory models behind \code{bus[1]}: a fixed-latency controller for fast
+exploration and MCsim's cycle-accurate DDR4 controllers for fidelity; how each is selected,
+clocked and stamped; the schedulers MCsim brings; and the two things that went wrong at this
+boundary and are worth knowing.}
+
+\section{Two models, one interface}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/membus-mcsim-clocks}\end{adjustbox}
+\caption{The LLC, the memory bus and the two memory models with their clocks.}
+\label{fig:membus-mcsim}
+\end{figure}
+
+The LLC talks to memory through \code{bus[1]}, a point-to-point interconnect: a \act{GetData}
+becomes a read, a \act{WriteBack} a write, and the fill comes back the same way
+(\cref{fig:membus-mcsim}). Whatever answers on the far side is a \code{CommunicationInterface}
+consumer, so the LLC does not know which model it is talking to; \key{main\_memory\_type}
+selects it.
+
+\paragraph{\code{MainMemoryController}} (the default) is a fixed-latency model: every read is
+served \key{m\_memory\_latency} cycles after it is accepted (250 as shipped), from a queue of
+\key{processing\_queue\_size} entries (32), at the cores' clock period. It stamps
+\stamp{DRAM.ENTER} on acceptance and \stamp{DRAM.EXIT} when the data leaves, so the report's
+\col{DRAM} column is exactly the service and \col{L2-DRAM Bus} the two bus legs
+(\cref{ch:request-end-to-end}). It is the right model for design-space exploration where memory
+is not the variable, and it is what the sweeps use as the baseline.
+
+\paragraph{\code{MCsimInterface}} wraps MCsim, the extensible DRAM memory-controller simulator
+vendored under \file{src/MCsim/}: a DDR4-2400 device with configurable channels, ranks, bank
+groups and banks, per-requestor queues, and one scheduler chosen by \key{mcsim\_scheduler} from
+the directories under \file{src/MCsim/system/}: FCFS, FR-FCFS (and its batched and capped
+variants), BLISS, PAR-BS, MEDUSA, ORP, RTMem, ROC, RankReOrder, ReOrder, Round, PipeCAS, and the
+predictable controllers AMC, DCmc, MAG, MCMC, PMC and RROF. Each is a \code{system.ini} that
+names the request-queue structure, the command generator and the command scheduler; a new
+controller is on average about 130 lines. MCsim stamps no DRAM events: the \col{DRAM} column
+becomes the whole \code{bus[1]} round trip and \col{L2-DRAM Bus} the admit-to-leave hand-off.
+Writes are fire-and-forget. Selecting it:
+
+\begin{lstlisting}[style=shell]
+-p "main_memory_type(s)=MCsim" -p "mcsim_scheduler(s)=FRFCFS"
+\end{lstlisting}
+
+MCsim is cycle-accurate and correspondingly slower --- five to ten times on EEMBC, and
+prohibitive on the SPLASH giants, which is why the memory axis of the sweeps is EEMBC-only. Use
+\code{FRFCFS} unless the scheduler is the subject: the \code{Round} and \code{ORP} schedulers
+wedge on the shipped workloads.
+
+\section{Clocks at the boundary}
+
+The memory models are \code{ClockedObj}s like everything else. \code{MainMemoryController}
+ticks at the cores' period. \code{MCsimInterface} is constructed with the \emph{LLC's} period
+and must be: MCsim advances its DRAM clock once per tick of the interface, so one tick per core
+cycle is what makes a DRAM cycle a core cycle.
+
+\begin{notebox}[Design note: the hundred-fold DRAM]
+The interface once ticked at the manager's base period rather than the LLC's --- a hundred DRAM
+cycles per core cycle --- and DRAM looked like a one-cycle device. Every MCsim number produced
+before that fix is untrustworthy; the environment check's reference run exists partly to make
+sure it never comes back.
+\end{notebox}
+
+\begin{notebox}[Design note: the row that decoded differently on two platforms]
+MCsim's DDR results once differed by a factor of two between Linux and Windows. The cause was an
+uninitialised sub-array entry in the address-decode table: the same address decoded to a
+different row on the two platforms. \env{MCSIM\_PROBE} was written to find it --- it logs every
+request, command and completion with MCsim's own clock, so two builds can be diffed decision by
+decision --- and since the fix the reports are byte-identical on both platforms.
+\end{notebox}
+
+\begin{trapbox}[CRLF in the MCsim configuration]
+MCsim's \code{.ini} parser rejects CRLF line endings with \emph{Malformed Line N (missing
+equals)}. A tree checked out on Windows and copied to Linux has them; the environment check
+tests for it.
+\end{trapbox}
+
+\begin{wherebox}
+\file{src/MainMemoryController.cpp}, \file{configuration/MainMemoryController.csv} --- the
+fixed-latency model; \file{header/MCsimInterface.h}, \file{src/MCsimInterface.cpp} --- the
+bridge; \file{src/MCsim/} --- MCsim, with \file{src/MCsim/README.md} on writing a controller
+and \file{src/MCsim/system/<Name>/<Name>.ini} per scheduler;
+\file{src/SystemConfigurations/MultiCoreSystem.cpp} --- where \key{main\_memory\_type} is read.
+\end{wherebox}

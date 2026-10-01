@@ -1,0 +1,21 @@
+% Three ways to run the same hierarchy: only the endpoints change.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex,
+  col/.style={draw=octrule!40, rounded corners=3pt, inner sep=0, minimum width=42mm, minimum height=62mm, anchor=north},
+  src/.style={draw=octamber, fill=octctl, rounded corners=2pt, minimum width=36mm, minimum height=10mm, align=center},
+  mid/.style={draw=octrule, fill=octmem, rounded corners=2pt, minimum width=36mm, minimum height=22mm, align=center},
+  snk/.style={draw=octrule, fill=white, rounded corners=2pt, minimum width=36mm, minimum height=10mm, align=center},
+  ttl/.style={font=\sffamily\footnotesize\bfseries, text=octink},
+  w/.style={<->, thick, octink}]
+  \foreach \ox/\ot/\os/\osb/\om/\omb in {
+      0/{Standalone}/{\textbf{CPU}: trace replay}/{trace\_C<n>.trc.shared, or a periodic task}/{\textbf{MainMemoryController}}/{fixed 250-cycle latency},
+      48/{Standalone + MCsim}/{\textbf{CPU}: trace replay}/{the same traces}/{\textbf{MCsimInterface}}/{DDR4, twenty schedulers},
+      96/{Full system}/{\textbf{ExternalCPU}: gem5}/{Arm cores, Linux, real applications; ATP aggressors}/{\textbf{MCsimInterface}}/{DDR4; gem5 holds the data}} {
+    \node[col] (c) at (\ox mm, 0) {};
+    \node[ttl] at ($(c.north)+(0,-4mm)$) {\ot};
+    \node[src] (s) at ($(c.north)+(0,-13mm)$) {\os\\\scriptsize\osb};
+    \node[mid] (m) at ($(c.north)+(0,-33mm)$) {\textbf{the same hierarchy}\\L1s \textperiodcentered\ bus[0] \textperiodcentered\ LLC \textperiodcentered\ bus[1]\\\scriptsize CSV-configured, unchanged};
+    \node[snk] (k) at ($(c.north)+(0,-53mm)$) {\om\\\scriptsize\omb};
+    \draw[w] (s) -- (m); \draw[w] (m) -- (k);
+  }
+  \node[text=octquiet, align=center, text width=130mm] at (48mm, -68mm) {the endpoints are \code{CommunicationInterface} producers and consumers; swapping them changes the request source and the memory sink, nothing in between};
+\end{tikzpicture}

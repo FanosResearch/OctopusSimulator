@@ -1,0 +1,17 @@
+% The five ways to evaluate a predictable-architecture idea, and what each gives up.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex,
+  card/.style={draw=octrule, fill=white, rounded corners=3pt, inner sep=5pt, text width=27mm, align=left, minimum height=34mm, anchor=north},
+  rhigh/.style={fill=octteal}, rmed/.style={fill=octamber}, rlow/.style={fill=octred}]
+  \foreach \px/\pt/\pd/\ra/\rb/\rc/\rd/\re in {
+      0/{Analytical model}/{sum per-resource bounds; fast; blind to interactions and reorderings}/rhigh/rhigh/rlow/rhigh/rhigh,
+      31/{Custom simulator}/{models exactly the idea and nothing comparable; neither reproducible nor reusable}/rlow/rhigh/rmed/rlow/rhigh,
+      62/{Existing simulator}/{gem5, zsim, Sniper: reproducible, not built for worst case or for swapping a protocol}/rmed/rmed/rmed/rhigh/rmed,
+      93/{Custom RTL}/{exact timing; months of work; one design point per effort}/rlow/rlow/rhigh/rmed/rhigh,
+      124/{COTS hardware}/{real and available; closed: profiling and OS-level fixes only, no architectural change}/rmed/rhigh/rhigh/rlow/rlow} {
+    \node[card] (c) at (\px mm, 0) {\textbf{\pt}\\[2pt]\pd};
+    \begin{scope}[shift={($(c.south west)+(3mm,4mm)$)}]
+      \foreach \col [count=\i] in {\ra,\rb,\rc,\rd,\re} { \fill[\col, draw=octrule!50] (\i*2.2mm, 0) circle (0.9mm); }
+    \end{scope}
+  }
+  \node[text=octquiet, anchor=north west, text width=150mm] at (0, -37mm) {dots, left to right: development speed \textperiodcentered\ run-time speed \textperiodcentered\ fidelity \textperiodcentered\ reproducibility \textperiodcentered\ control and visibility \quad (\tikz\fill[octteal] circle (0.9mm); high \ \tikz\fill[octamber] circle (0.9mm); medium \ \tikz\fill[octred] circle (0.9mm); low)};
+\end{tikzpicture}

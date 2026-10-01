@@ -1,0 +1,36 @@
+% Where to edit: the shipped system with a pin on every extension point.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex,
+  box/.style={draw=octrule, rounded corners=2pt, inner sep=3pt, align=center},
+  core/.style={box, fill=octmem, minimum width=16mm, minimum height=9mm},
+  bus/.style={box, fill=octio, draw=octpurple, minimum width=76mm, minimum height=8mm},
+  llc/.style={box, fill=octmem, minimum width=76mm, minimum height=9mm, text width=72mm},
+  mem/.style={box, fill=white, minimum width=76mm, minimum height=8mm},
+  pin/.style={draw=octamber, fill=octctl, rounded corners=2pt, inner sep=3pt, align=left, font=\sffamily\scriptsize, text width=46mm},
+  pinf/.style={pin, draw=octquiet, fill=octpaper, text=octquiet},
+  pl/.style={->, octamber, thick}, plf/.style={->, octquiet, thick, densely dashed}, w/.style={thick, octink}]
+  \foreach \k in {0,1,2,3} { \node[core] (c\k) at (\k*19mm, 0) {CPU \k\\L1 \k}; }
+  \node[bus, below=8mm of $(c1)!0.5!(c2)$] (b0) {bus[0]: three lanes, one arbiter each};
+  \foreach \k in {0,1,2,3} { \draw[w] (c\k.south) -- (c\k.south |- b0.north); }
+  \node[llc, below=7mm of b0] (llc) {LLC: controller + \code{MESI\_LLC} FSM + data handler\\(array, MSHR, write-back buffer, replacement)};
+  \node[bus, below=7mm of llc, minimum height=7mm] (b1) {bus[1]: point-to-point};
+  \node[mem, below=7mm of b1] (mem) {main memory: \code{MainMemoryController} or MCsim};
+  \draw[w] (b0) -- (llc); \draw[w] (llc) -- (b1); \draw[w] (b1) -- (mem);
+  % pins, right column
+  \node[pin, right=8mm of c3] (p1) {\textbf{a coherence protocol}\\\code{Protocols\_FSM/*.csv}, L1 + LLC pair; no rebuild};
+  \draw[pl] (p1.west) -- (c3.east);
+  \node[pin, right=8mm of b0.east] (p2) {\textbf{an arbiter}\\\code{src/Arbiters/}, its \code{CMakeLists.txt}, the name in \code{SplitBusController.cpp}};
+  \draw[pl] (p2.west) -- (b0.east);
+  \node[pin, right=8mm of llc.east] (p3) {\textbf{a replacement policy}\\subclass \code{ReplacementPolicy} in \code{src/ReplacementPolicies/}};
+  \draw[pl] (p3.west) -- (llc.east);
+  \node[pin, right=8mm of b1.east] (p4) {\textbf{a topology}\\subclass \code{InterconnectTopology} + controller, \code{src/Interconnect/}};
+  \draw[pl] (p4.west) -- (b1.east);
+  \node[pin, right=8mm of mem.east] (p5) {\textbf{a memory controller}\\\code{src/MCsim/system/<Name>/}, key \code{mcsim\_scheduler}};
+  \draw[pl] (p5.west) -- (mem.east);
+  % pins, left column
+  \node[pin, left=8mm of c0] (p6) {\textbf{the system's shape}\\a class in \code{src/SystemConfigurations/} + a CSV of the same name};
+  \draw[pl] (p6.east) -- (c0.west);
+  \node[pin, left=8mm of llc.west] (p7) {\textbf{a parameter}\\a key in the component's CSV; \code{-p} overrides it at once};
+  \draw[pl] (p7.east) -- (llc.west);
+  \node[pinf, left=8mm of mem.west] (p8) {\textbf{multi-hop routing} (planned)\\\code{RoutingAlgorithm::nextHop}};
+  \draw[plf] (p8.east) -- (b1.west);
+\end{tikzpicture}

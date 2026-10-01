@@ -1,3 +1,126 @@
 \chapter{Getting started}\label{ch:getting-started}
 
-\whatyoufind{To be written.}
+\whatyoufind{From nothing to a first completed simulation and a first read of its output:
+the toolchain, the build, the zero-install Codespace, the benchmarks, the environment check
+with its fixed numbers, one run, and what comes out of it.}
+
+\section{Prerequisites and build}
+
+A C++17 toolchain and CMake (g++ $\geq$ 9 or clang; MinGW on Windows), Bash for the driver
+scripts, \code{xz} to inflate the compressed SPLASH-2 traces, and Python 3 with \code{duckdb},
+\code{numpy} and \code{matplotlib} for the visualizer and the figures. The simulator is tested on
+Ubuntu, on Windows under MinGW with Git Bash, and under WSL.
+
+\begin{lstlisting}[style=shell]
+sudo apt-get install build-essential cmake xz-utils        # Ubuntu
+pip install duckdb numpy matplotlib
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j$(nproc)
+\end{lstlisting}
+
+The binary is \file{build/Octopus_Simulator} (\code{.exe} on Windows). A debug build is the
+same with \code{-DCMAKE\_BUILD\_TYPE=Debug}. The repository layout: \file{src/} and
+\file{header/} hold the simulator, \file{Protocols_FSM/} the coherence tables,
+\file{configuration/} the CSV parameters, \file{tools/octoviz/} the visualizer,
+\file{sweeps/} the experiment harness, \file{tutorial/} the exercises, \file{docs/} the
+documents this manual consolidates.
+
+\section{Zero-install: a Codespace}
+
+The \code{esweek-tutorial} branch carries a dev container. On GitHub, \emph{Code
+$\rightarrow$ Codespaces $\rightarrow$ Create codespace on esweek-tutorial} gives a working
+simulator in a browser: the container (\code{ghcr.io/fanosresearch/esweek}) carries the
+toolchain and the Python packages, \file{.devcontainer/on-create.sh} fetches the EEMBC traces,
+\file{post-create.sh} builds MCsim and the simulator and runs the environment check, and port
+8765 is forwarded so the visualizer opens by itself. The two scripts double as documentation of
+the dependencies.
+
+\section{Benchmarks}
+
+The traces are a separate repository, \code{FanosResearch/OctopusBMs}: EEMBC automotive traces
+run on every core to create a data-sharing stress workload, and SPLASH-2 application traces,
+including the \code{raytrace} and \code{radiosity} giants, stored as \code{xz} archives (about
+650\,MB, 10\,GB inflated). Nothing is needed by hand: every driver script calls
+\file{get_benchmarks.sh}, which clones the repository into \file{BMs/} if absent and inflates
+the archives in place, idempotently. Run it yourself only to call the binary on a benchmark
+directly, and use the sparse form for an EEMBC-only environment:
+
+\begin{lstlisting}[style=shell]
+./get_benchmarks.sh                              # everything, ~710 MB download
+BMS_SPARSE="eembc-traces" ./get_benchmarks.sh    # EEMBC only, ~61 MB, seconds
+\end{lstlisting}
+
+\section{Is the environment healthy?}
+
+\begin{lstlisting}[style=shell]
+bash scripts/check_environment.sh
+\end{lstlisting}
+
+One \code{[PASS]} line per component, then a short reference simulation --- the single-core DRAM
+exerciser under MCsim --- whose result is fixed: \textbf{15364 requests, worst-case DRAM latency
+359 cycles}. The simulator is deterministic and platform-independent, so those numbers are an
+equality check, not a smoke test: a mismatch means a stale build, an edited file under
+\file{configuration/} (\code{git checkout -- configuration/} puts everything back), or a bug.
+The check also catches the one portability trap in the tree: a working copy checked out on
+Windows and copied to Linux carries CRLF line endings, which MCsim's \code{.ini} parser rejects
+with \emph{Malformed Line N (missing equals)}.
+
+\section{A first run}
+
+\code{a2time01} from EEMBC, four cores, on the configuration as shipped: snooping MESI, a
+TDM-arbitrated TripleBus, fixed-latency memory (\cref{sec:shipped-system}).
+
+\begin{lstlisting}[style=shell]
+W=$PWD/BMs/eembc-traces/a2time01-trace       # Git Bash on Windows: W=$(cygpath -m "$PWD/BMs/eembc-traces/a2time01-trace")
+./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/"
+\end{lstlisting}
+
+It takes a few seconds. \code{-s} names the system --- the class \code{MultiCoreSystem} and
+\file{configuration/SystemConfigurations/MultiCoreSystem.csv} --- and \code{-p} overrides any
+key in it; \cref{ch:configuration} is about little else. The suite drivers wrap the same call:
+\code{./run\_octopus.sh --protocol snoop --suite eembc --bench a2time01-trace} runs one
+benchmark under the snoop-MSI preset and prints a completion verdict.
+
+\section{What comes out}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/what-comes-out}\end{adjustbox}
+\caption{A run's outputs and what reads them.}
+\label{fig:what-comes-out}
+\end{figure}
+
+Everything lands in the workload's \file{newLogger/} directory (\cref{fig:what-comes-out}):
+
+\begin{lstlisting}[style=shell]
+column -s, -t $W/newLogger/Summary.csv | less -S            # one row per core: worst cases, finish cycle
+head -3 $W/newLogger/LatencyReport_C0.csv | column -s, -t   # one row per request
+\end{lstlisting}
+
+\code{Summary.csv} gives, per core, the worst-case latency of every stage and the finish cycle.
+\code{LatencyReport\_C<n>.csv} has one row per memory request with its latency split into
+stages: CPU, L1 stall, request bus, L2 stall, L2 access, response bus, L2--DRAM bus, DRAM, L1
+access. A total tells you a core was slow; the stages tell you \emph{which shared resource}
+made it slow, and that decomposition is the reason the tool exists. \Cref{ch:request-end-to-end}
+draws where each column is spent; keep it open while reading a first report.
+
+To \emph{see} the run rather than read it:
+
+\begin{lstlisting}[style=shell]
+./octoviz.sh view BMs/eembc-traces/a2time01-trace
+\end{lstlisting}
+
+About eight seconds: it re-runs the benchmark with the raw event trace on, converts it and
+serves it, printing a URL in a codespace or opening the browser on a laptop. Three views to
+find, in this order: the request pipeline, the resource lanes under it, and the coherence
+transition table (\cref{ch:monitoring}).
+
+\begin{trapbox}[The preset copy]
+\code{./run\_octopus.sh --protocol <snoop|directory>} \emph{copies} a preset over
+\file{MultiCoreSystem.csv}. Any hand edit to that file is overwritten. Keep edits in \code{-p}
+overrides, or expect to \code{git checkout -- configuration/}.
+\end{trapbox}
+
+\begin{wherebox}
+\file{CMakeLists.txt} --- the build; \file{.devcontainer/} --- the Codespace;
+\file{get_benchmarks.sh}; \file{scripts/check_environment.sh}; \file{run_octopus.sh};
+\file{octoviz.sh}; \file{README.md}, \file{REPRODUCIBILITY.md} --- the same material online.
+\end{wherebox}

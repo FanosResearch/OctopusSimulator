@@ -12,6 +12,7 @@ Octopus is a cycle-accurate cache system simulator with flexible interconnect mo
 ![What we gain: a common, cycle-accurate simulation framework](docs/imgs/solution.png)
 
 # Documentation
+* **[The reference manual](docs/manual/octopus-manual.pdf)** — everything below in one book: the system, the cache controller and the LLC datapath, the CSV-FSM coherence engine, a request end to end, interconnects, memory, configuration, monitoring, tasks and the demo, extending, gem5, the tutorial; with the configuration keys and the shipped FSM tables as appendices. Sources and build in [`docs/manual/`](docs/manual/README.md).
 * **[Supported configurations & features](SUPPORTED_CONFIGURATIONS.md)** — the full capability matrix: coherence protocols, interconnect topologies, bus arbitration, cache hierarchy, memory systems (incl. MCsim), operating/integration modes, predictable caching, and monitoring.
 * **[Architecture deep-dive](docs/Architecture.md)** — how the clocked, configurable components fit together, the CSV-FSM coherence engine, a request's end-to-end journey, and how to extend the tool.
 * **[Adding a coherence protocol](docs/AddingAProtocol.md)** — a worked example: implement **MI** (Modified/Invalid) as a CSV finite-state machine with no C++ and no recompile, with the MI-vs-MESI coherence trace.

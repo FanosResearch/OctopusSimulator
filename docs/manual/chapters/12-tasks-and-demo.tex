@@ -1,3 +1,131 @@
 \chapter{Periodic tasks and the interference demo}\label{ch:tasks-and-demo}
 
-\whatyoufind{To be written.}
+\whatyoufind{How a core runs a periodic real-time task instead of replaying a trace, with the
+simulator reporting each job's release, finish and deadline; how a streaming neighbour evicts
+that task's lines through an inclusive shared cache; the one knob that stops it, LLC way
+reservation; and the demo that turns those measurements into a robot leaving its path.}
+
+\section{Periodic tasks}
+
+A core can run a periodic task: a fixed job body of compute phases and memory accesses, re-run
+every period, with the simulator itself reporting each job's release, finish, deadline and
+miss. The memory system, protocols and arbiters are untouched; the task layer lives in
+\code{CPU::periodicLogic} and is opt-in per core. For core $n$ the system looks in the workload
+directory for \code{task\_C<n>.task.csv} first, then \code{trace\_C<n>.trc.shared}, then nothing
+--- an idle core that issues nothing and finishes at once, which is how ``core 0 alone'' is
+expressed.
+
+\begin{lstlisting}[style=csv,caption={A task program. \code{attr} rows set the task's parameters; the phase rows are the job body.}]
+kind,a,b,c,d,comment
+attr,period,50000,,,control period in CPU cycles (= implicit deadline)
+attr,jobs,200,,,number of jobs, then the core finishes   (-1 = free-running generator)
+attr,ooo,1,,,outstanding-request window (1 = in-order core)
+COMPUTE,300,,,,advance 300 CPU cycles, no memory
+READ,0x600040,,,,one read
+WRITE,0x600000,,,,one write
+LINEAR,0x600080,5,64,1.0,burst: base, count, stride, read ratio
+RANDOM,0x2000000,0x400000,1024,0.85,base, range, count, read ratio (line-aligned)
+\end{lstlisting}
+
+With period $T$, relative deadline $D$ (default $T$) and job index $j$, non-preemptive, one
+instance at a time: $\mathrm{release}_j = \max(\mathrm{finish}_{j-1},\, jT)$,
+$\mathrm{deadline}_j = jT + D$, $\mathrm{finish}_j$ is the cycle the last access of the body has
+returned plus trailing compute, and a job misses when $\mathrm{finish}_j > \mathrm{deadline}_j$.
+An overrun pushes the next release out; periods whose whole window ended before the overrunning
+job finished are \emph{skipped} --- no job is released for them, each is a missed deadline, and
+they are reported on the overrunning job's row. \code{attr,jobs,-1} makes a free-running
+generator with no period and no deadline: a memory aggressor, which stops when every finite
+core is done. \code{LINEAR} and \code{RANDOM} draw from a per-core deterministic generator, so
+runs are reproducible. The Logger writes \code{JobReport\_C<n>.csv} next to the latency report,
+one row per job, flushed as the job finishes (\cref{app:formats}).
+
+What is not modelled is as important: compute is a fixed cycle budget, so a task program is a
+timing model, right for interference studies and not for data-dependent control flow; there is
+no preemption and no multi-task scheduling on a core; deadlines are observed and reported, never
+enforced.
+
+\section{Inclusion interference}
+
+\figwide{inclusion_interference.pdf}{Two cores, one LLC set, and the line core 0 loses. Core 0
+brings X in and hits on it in its L1; core 1 misses on Y in the same set; the fill evicts X;
+the invalidation on the service lane removes X from core 0's L1 too; core 0's next \code{Load
+X} is a full DRAM round trip it did nothing to cause.}{fig:inclusion}
+
+Nine cache lines fit comfortably in a private L1, so a small task's working set should never
+leave it; yet under three streaming neighbours more than half of such a task's accesses go to
+DRAM. The mechanism is \cref{fig:inclusion}, the same eviction \cref{ch:llc-datapath} draws from
+inside the LLC, seen from the cores. The shared LLC is inclusive, so when it evicts a line it
+owns it must first invalidate the copy in the owner's private L1 (\code{EorM
+--Own\_Invalidation--> MN\_d} on the LLC, \code{E --Invalidation--> I} in the L1). The LLC is
+32\,KB and 2-way, hence 256 sets; the task's nine lines land in a handful of sets, and streamers
+sweeping 256\,KB and 4\,MB regions cover every set repeatedly. In the demo's contention act the
+LLC evicted 45\,728 lines, 195 of them one of the task's nine --- and 195 is precisely the number
+of task accesses that had to leave the L1. The second half of the damage is the memory
+controller: FR-FCFS prefers the streams' row hits over an isolated read, so the task's few DRAM
+reads waited a mean of 4\,524 cycles and up to 30\,904, against 739 and 25\,024 for a streamer.
+The low-intensity core is penalised precisely because it is well behaved.
+
+Bus arbitration cannot prevent any of this. Round-robin or TDM bounds the task's wait for a
+lane; the invalidation still arrives and the next access still goes to DRAM, because the loss is
+in the cache, not on the bus.
+
+\section{Way reservation}
+
+\begin{lstlisting}[style=csv]
+llc_controller.m_data_handler.way_partition(s),0:0;1-3:1
+\end{lstlisting}
+
+The format is \code{<cores>:<ways>;\ldots} with \code{a-b} ranges. A listed core's fills are
+installed in, and evict from, its own ways only; cores not listed share the ways nobody claimed,
+so \code{0:0} alone reserves way 0 for core 0 and leaves the rest to everyone else. It is
+implemented in the data handler --- the empty-way search and the replacement candidate are
+restricted to the requester's mask, and the controller names the requester while a fill is
+installed --- with masked candidates in the LRU and random policies. Empty means no
+partitioning, byte-identical to before. With \code{0:0} on the 2-way LLC the demo's task under
+full contention runs exactly as it does alone.
+
+\section{The demo}
+
+A mobile robot follows a planned path. Its localization task --- an EKF pose update of about
+4\,150 compute cycles and twenty accesses over nine lines, period 5\,000 --- runs on core 0 of
+a four-core machine with the shared LLC and one DDR4 controller. When three other cores stream
+memory, the localization job finishes late, the robot steers on a stale waypoint and leaves the
+path; reserving one cache way puts it back exactly where it was alone. Every millisecond of that
+story is a cycle-accurate Octopus run.
+
+\begin{table}[htbp]\centering\small
+\caption{The three acts. All use the sweeps' pinned configuration --- snoop MESI, 32\,KB 2-way
+inclusive LLC, MCsim DDR4 with FR-FCFS --- and differ only in per-run \code{-p} overrides.}
+\label{tab:acts}
+\begin{tabularx}{\textwidth}{@{}lYrrll@{}}
+\toprule act & what differs & jobs & missed & job time mean / worst & path error rmse / max \\ \midrule
+1 alone & cores 1--3 idle, FCFS bus & 200 & 0 & 4\,193 / 4\,747 & 0.13\,m / 0.18\,m \\
+2 contention & three streaming cores, FCFS bus & 57 & 198 & 19\,717 / 181\,266 & 4.13\,m / 6.63\,m \\
+3 protected & same load, RR bus + \code{way\_partition=0:0} & 200 & 0 & 4\,193 / 4\,747 & 0.13\,m / 0.18\,m \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\figmed{trajectory.pdf}{The robot's path in the three acts: alone and protected coincide
+exactly; under contention one 181\,266-cycle job left the robot steering for 35 periods on a
+stale waypoint, the long chord across the figure.}{fig:trajectory}{0.7}
+
+The chain is short (\cref{tab:acts}): \file{demo/run_acts.sh} runs the three acts, each a
+workload directory with the task on core 0 and streamers or nothing on the others; the Logger
+writes the job and latency reports; \file{demo/extract_jobs.py} joins them into one record per
+job; \file{demo/plot_trajectory.py} draws \cref{fig:trajectory} and \file{build_page.py} the
+self-contained page. The robot's motion is a function of two numbers per job, the release and
+the finish: job $j$ senses the pose at its release and plans the waypoint for one period later,
+the waypoint is applied when the job finishes, and the robot drives toward it at a fixed speed
+cap. The path's shape, its scale, the speed cap and the playback rate are chosen for
+presentation; everything about timing is measured, and acts 1 and 3 produce byte-identical job
+reports. In act 2 one job ran 181\,266 cycles inside a 5\,000-cycle period, its slowest access
+27\,848 cycles of which 27\,832 were DRAM; its sum of access latencies plus the compute budget
+equals its execution time exactly. Nothing is added on top of the simulation.
+
+\begin{wherebox}
+\file{src/CPU.cpp} --- \code{periodicLogic}; \file{src/CacheDataHandler.cpp} --- way
+partitioning; \file{docs/Tasks.md}; \file{demo/} --- \code{run\_acts.sh}, \code{tasks/},
+\code{extract\_jobs.py}, \code{plot\_trajectory.py}, \code{build\_page.py}, \code{README.md};
+\file{docs/imgs/inclusion_interference.svg}.
+\end{wherebox}

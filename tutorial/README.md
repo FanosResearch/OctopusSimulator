@@ -23,6 +23,10 @@ reference, something real changed (usually a file under `configuration/`).
 | 03 | `03-extending-octopus/` | three ways to extend the simulator: a new arbiter, a protocol change, a third cache level |
 | 04 | `04-gem5-and-fullsystem-stack/` | Octopus as the memory hierarchy behind gem5, in SE mode and full-system ARM |
 
+The reference for everything the exercises touch is the manual,
+[`docs/manual/octopus-manual.pdf`](../docs/manual/octopus-manual.pdf): its chapter 15 is this
+tutorial, and each exercise's README names the chapters it draws on.
+
 Two commands to remember:
 
 ```shell
