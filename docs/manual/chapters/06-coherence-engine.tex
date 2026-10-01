@@ -154,11 +154,17 @@ and \evt{Load} behaving like \evt{Store}: 9 states instead of 22. Because MI use
 of MSI's events and actions, it runs on the existing \code{SNOOP\_MSI} handler and the existing
 \code{MSI\_LLC}: the entire protocol is one CSV, \file{Protocols_FSM/MI_splitBus_snooping.csv}.
 
-\begin{lstlisting}[style=csv,caption={The two stable rows of \code{MI\_splitBus\_snooping.csv}.}]
-State, stable, isDataValid, Load,        Store,       ... , OwnData,  Invalidation
-I,     1,      0,           GetM/IM_ad,  GetM/IM_ad,  ... , Fault/,
-M,     1,      1,           Hit/,        Hit/,        ... , Fault/,   Data2Req/I
-\end{lstlisting}
+\begin{table}[htbp]\centering\small
+\caption{The two stable rows of \code{MI\_splitBus\_snooping.csv}; the columns not shown are
+those of MSI.}\label{tab:mi-rows}
+\begin{tabular}{@{}>{\ttfamily}l>{\ttfamily}c>{\ttfamily}c>{\ttfamily}l>{\ttfamily}l>{\ttfamily}c>{\ttfamily}l>{\ttfamily}l@{}}
+\toprule
+\normalfont\textbf{State} & \normalfont\textbf{stable} & \normalfont\textbf{isDataValid} & \normalfont\textbf{Load} & \normalfont\textbf{Store} & \ldots & \normalfont\textbf{OwnData} & \normalfont\textbf{Invalidation} \\ \midrule
+I & 1 & 0 & GetM/IM\_ad & GetM/IM\_ad & \ldots & Fault/ & \\
+M & 1 & 1 & Hit/ & Hit/ & \ldots & Fault/ & Data2Req/I \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 Selecting it is one override on top of the MSI preset:
 

@@ -17,13 +17,13 @@ L1 answers on the response lane instead; if the LLC does not have it, a read lea
 response is emitted from it. The response travels the response lane to the requesting L1, which
 fills and hands the data to the core.
 
-\figwide{system_end_to_end.pdf}{The system as shipped with one LLC \emph{miss} from core 0
+\figpage{system_end_to_end.pdf}{The system as shipped with one LLC \emph{miss} from core 0
 routed through it. Each hop carries the colour of the \code{LatencyReport} column that measures
 it (amber: waiting; purple: a bus transfer; teal: being served) and the number of the Logger
 stamp that bounds it, \ding{172}--\ding{181} being the report's nine latency columns in order; the
 side panel lists the stamp pair behind every column.}{fig:system-miss}
 
-\figwide{system_end_to_end_hit.pdf}{The same system with an LLC \emph{hit} from core 0. The route
+\figpage{system_end_to_end_hit.pdf}{The same system with an LLC \emph{hit} from core 0. The route
 stops at the LLC's array port, where the data is emitted at the grant; the memory bus and DRAM
 are not on the path, so \col{L2-DRAM Bus} and \col{DRAM} are 0.}{fig:system-hit}
 
