@@ -66,14 +66,6 @@ stamps it (\cref{ch:monitoring}). Each component carries its own \code{m\_clk\_p
 memory model may legitimately tick at a different rate from the cores; in the shipped
 configuration every period is 100 and one tick is one cycle everywhere.
 
-\begin{notebox}[Design note: a clock-period bug worth knowing about]
-The MCsim bridge once ticked the DRAM model once per \emph{manager} step rather than once per
-LLC cycle --- a hundred DRAM cycles per core cycle --- so DRAM looked like a one-cycle device.
-The LLC's period is now passed into the bridge; any DRAM number produced before that fix is
-untrustworthy. The lesson generalises: a component with its own period must be stepped by the
-manager, never by whoever happens to call it.
-\end{notebox}
-
 \section{Component map}
 
 \figmed{SystemConfiguration3.pdf}{What a configured system can contain: clusters of cores with
