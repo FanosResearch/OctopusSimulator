@@ -67,3 +67,6 @@ build_asan/
 
 # --- LaTeX manual aux files (the PDF itself is committed) ---
 docs/manual/build/
+
+*.o
+*.so

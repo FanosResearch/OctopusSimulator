@@ -45,7 +45,7 @@ def get_atp_files(atp_files_path):
             atp_files.update([os.path.join(dname, fname) for fname in fnames])
     return list(atp_files)
 # Here we setup the parameters of the l1 and l2 caches.
-atp_files = get_atp_files(["/home/guotong/gem5_resource/atp_files"])
+atp_files = get_atp_files(["/opt/gem5-resources/atp_files"])
 
 # Add argument parser for command line arguments
 parser = argparse.ArgumentParser(description="ARM FS simulation with customizable cache hierarchy")
@@ -163,15 +163,15 @@ board.set_kernel_disk_workload(
     # kernel=KernelResource("/workspaces/gem5/resource/vmlinux"),
     # disk_image=DiskImageResource("/workspaces/gem5/resource/ubuntu-18.04.img"),
     # bootloader=BootloaderResource("/workspaces/gem5/resource/boot_emm.arm64-20220707"),
-    kernel=KernelResource("/home/guotong/gem5_resource/arm64-linux-kernel-5.15.180"),
-    disk_image=DiskImageResource("/home/guotong/gem5_resource/arm-ubuntu-22.04.img"),
-    bootloader=BootloaderResource("/home/guotong/gem5_resource/boot_foundation.arm64-20220707"),
+    kernel=KernelResource("/opt/gem5-resources/arm64-linux-kernel-5.15.180"),
+    disk_image=DiskImageResource("/opt/gem5-resources/arm-ubuntu-22.04-trim.img"),
+    bootloader=BootloaderResource("/opt/gem5-resources/boot_foundation.arm64-20220707"),
     
-    readfile="/home/guotong/gem5_resource/ov2slam_octopus.rcS",
-    # readfile="/home/guotong/gem5_resource/testarm.rcS",
+    readfile="/workspaces/OctopusSimulator/gem5/configs/ov2slam_octopus.rcS",
+    # readfile="/opt/gem5-resources/testarm.rcS",
     kernel_args=kernel_cmd,
-    # checkpoint=CheckpointResource("/home/guotong/gem5_resource/test_start"),
-    checkpoint=CheckpointResource("/home/guotong/gem5_resource/ov2_start"),
+    # checkpoint=CheckpointResource("/opt/gem5-resources/test_start"),
+    checkpoint=CheckpointResource("/workspaces/OctopusSimulator/gem5/configs/ov2_start"),
     # checkpoint=CheckpointResource("/workspaces/gem5/resource/ov2_3s_end"),
 )
 
@@ -198,7 +198,7 @@ def handle_workbegin():
     print("Resetting stats at the start of ROI!")
     m5.stats.reset()
     # processor.switch()
-    simulator.save_checkpoint("/home/guotong/gem5_resource/ov2_start")
+    simulator.save_checkpoint("/workspaces/OctopusSimulator/gem5/configs/ov2_start")
     yield True
 
 def exit_event_handler():

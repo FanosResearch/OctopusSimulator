@@ -2,7 +2,7 @@
   "name": "Octopus tutorial",
   "image": "ghcr.io/fanosresearch/esweek:latest",
 
-  "hostRequirements": { "cpus": 4, "memory": "8gb", "storage": "32gb" },
+  "hostRequirements": { "cpus": 4, "memory": "16gb", "storage": "32gb" },
 
   // The visualizer serves on 8765 (octoviz.sh).
   //
