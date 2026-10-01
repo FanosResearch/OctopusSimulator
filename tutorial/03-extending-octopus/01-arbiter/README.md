@@ -46,10 +46,10 @@ whose ID is the `owner` parameter.
    #include "../../header/Arbiters/WRRArbiter.h"
    ```
 
-4. Be sure to **register the name** in `src/Interconnect/SplitBusController.cpp`, adding a new case in the
+4. Be sure to register the name in `src/Interconnect/SplitBusController.cpp`, adding a new case in the
    `if (arbiter_type == STRINGIFY(...))` chain for `WRRArbiter`. 
 
-5. Rebuild and verify the unchanged copy against RR. Run from the **project root**:
+5. Rebuild and verify the unchanged copy against RR. Run from the project root:
 
    ```shell
    cmake --build build -j$(nproc)
@@ -75,8 +75,8 @@ whose ID is the `owner` parameter.
    should print nothing and exit. This verifies that you have a clean, working
    base from which to add weights to the basic round-robin algorithm.
 
-6. Implement the weighting in `WRRArbiter` (see the hint below), then rebuild and repeat **only the WRR
-   run**, using the same output path:
+6. Implement the weighting in `WRRArbiter` (see the hint below), then rebuild and repeat only the WRR
+   run, using the same output path:
 
    ```shell
    cmake --build build -j$(nproc)
@@ -107,7 +107,7 @@ each round of this process. You may also need to modify `elect`.
    The plots aggregate across cores; use the summaries for the per-core effect of
    weighting. Figures are saved under `output/figures/`, outside the setting
    directories.
-   Also try using the visualizer to inspect the two simulations.
+   Also try using the visualizer to inspect the two simulations:
    ```shell
 # Refresh WRR after overwriting its run; serve reuses any existing Parquet files.
 KEEP_TRACE=1 ./octoviz.sh convert "$OUT/WRR"
@@ -118,6 +118,13 @@ KEEP_TRACE=1 ./octoviz.sh convert "$OUT/WRR"
 
 ## Stretch
 
-Make the weight a parameter: read `bus[0].interconnect_controller.wrr_weight(vi)` in
-the constructor and select it with `-p`. Look at how `TDMArbiter` reads its slot table
-for the pattern.
+Make the Core 0 weight configurable through `bus[0].interconnect_controller.wrr_weight(i)`,
+supplied using `-p`.
+
+You will need to have the `WRRArbiter` constructor take in the value
+as an argument, and have the `SplitBusController` class supply it
+by reading from the CSV parameter map (see how the `SplitBusController`
+class reads parameter `arbiter_type` in its constructor for reference).
+
+Interpret the value as the total weight: 1 gives ordinary round-robin, and 2 gives
+Core 0 two slots per round. Default to 2 if omitted, and reject values below 1.

@@ -192,6 +192,29 @@ A worked end-to-end example of the simulator driving something visible is
 job timings steer a robot along a planned path, showing what shared-cache and DRAM interference
 cost a real-time task, and what a reserved cache way recovers.
 
+Select a system CSV independently of its C++ system class with `-c` or
+`--config`:
+
+```bash
+./build/Octopus_Simulator -s MultiCoreSystem \
+  -c MultiCoreSystem_Directory -o results/directory --trace
+./build/Octopus_Simulator -s MultiCoreSystem \
+  --config ./my-config.csv -p "num_cores(i)=4"
+```
+
+A bare name (with or without `.csv`) selects a file under
+`configuration/SystemConfigurations/`. A path such as `./my-config.csv`,
+`configs/experiment.csv`, or an absolute path selects that file; relative paths
+resolve from the current working directory. A missing `.csv` suffix is appended.
+Without this option, the system's usual class-named CSV is loaded. Both
+`MultiCoreSystem` and `MultiCoreSystem_Mesh` support it; the chosen CSV must match
+the selected class's expected configuration. If repeated, the last `-c` or
+`--config` wins. `-p` overrides are applied after the selected file is loaded.
+No preset is copied and no configuration file is modified. Component defaults
+still load from their usual CSVs; a system CSV's `Extends` resolves from its own
+directory. Relative workload paths inside the CSV remain project-root-relative,
+even for a custom CSV stored elsewhere.
+
 When running the binary directly, use `-o <directory>` to write the logger CSVs
 (`LatencyReport_C*.csv`, `Summary.csv`, and task `JobReport_C*.csv`) to a separate
 directory. Missing directories are created; relative paths resolve from the current

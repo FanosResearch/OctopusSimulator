@@ -62,7 +62,7 @@ also finish first? Use the timeline to investigate the differences.
 
 ## 3. Explore another axis
 
-Use the same layout, `output/<axis>/<setting>/`, for the other experiments. Three possible axes you can explore are `Memory` simulation, `MSHR` size, and cache `Partition`.
+Use the same layout, `output/<axis>/<setting>/`, for the other experiments. Two other possible axes you can explore are `Memory` simulation and cache `Partition`.
 
 For whichever axis you choose, also record the unmodified baseline in that axis's
 `Baseline/` folder. For example, for `Memory`:
@@ -73,7 +73,7 @@ For whichever axis you choose, also record the unmodified baseline in that axis'
 python3 sweeps/plot_axis.py tutorial/01-exploration/output/Memory
 ```
 
-For MSHR or partitioning, use `MSHR/Baseline` or `Partition/Baseline` instead and
+For partitioning, use `Partition/Baseline` instead and
 plot that axis directory. Keep the benchmark and all unrelated settings fixed.
 The memory experiment selects the memory model and its scheduler together;
 these commands are independent variations of the baseline, not cumulative edits.
@@ -85,14 +85,6 @@ these commands are independent variations of the baseline, not cumulative edits.
   -o tutorial/01-exploration/output/Memory/MCsim --trace
 ```
 _Baseline value: Fixed-latency model (`MainMemoryController`)_
-
-### MSHR size 4
-```shell
-./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
-  -p "cache_controller[*].num_mshr(i)=4" \
-  -o tutorial/01-exploration/output/MSHR/4 --trace
-```
-_Baseline value: `16`_
 
 ### Way partitioning
 ```shell
@@ -118,23 +110,127 @@ Having generated the baseline statistics and modified experiment's
 | DRAM scheduler | `mcsim_scheduler` | `FRFCFS` `FCFS` `BLISS` `AMC` `MAG` … (`src/MCsim/system/`) |
 | LLC way partition | `llc_controller.m_data_handler.way_partition` | e.g. `0:0;1-3:1` |
 | queues | `*.num_mshr` `*.pwb_size` `*.processing_queue_size` | integers, `-1` = unbounded |
-| **coherence protocol** | **a whole preset — see below** | snoop MSI · snoop MESI · directory MSI |
+| **coherence protocol** | **system preset (`-c`) or coordinated overrides — see below** | snoop MSI · snoop MESI · directory MSI |
 
-## Switching protocol — not a `-p`
+## Switching coherence families with a system preset
 
-A protocol is five coupled parameters (controller type, L1 and LLC `protocol_type`,
-L1 and LLC `fsm_filename`). Overriding some of them on the command line segfaults.
-Switch protocol by selecting a whole preset instead:
+Switching between snooping and directory coherence requires coordinated controller,
+protocol, and FSM settings. The supplied system CSVs group those choices into
+presets. Select one directly with `-c` (or `--config`):
 
 ```shell
-./run_octopus.sh --protocol snoop     --suite eembc --bench a2time01-trace   # snoop MSI
-./run_octopus.sh --protocol directory --suite eembc --bench a2time01-trace   # directory MSI, FCFS bus
-git checkout -- configuration/      # back to snoop MESI as shipped
+# Run from the project root, using the same benchmark for both presets.
+W=$PWD/BMs/eembc-traces/a2time01-trace
+# Windows/Git Bash: W=$(cygpath -m "$PWD/BMs/eembc-traces/a2time01-trace")
+
+./build/Octopus_Simulator -s MultiCoreSystem -c MultiCoreSystem_Snoop \
+  -p "workload_path(s)=$W/" \
+  -p "bus[0].interconnect_controller.arbiter_type(s)=FCFSArbiter" \
+  -o tutorial/01-exploration/output/Coherence/Snoop-MSI --trace
+
+./build/Octopus_Simulator -s MultiCoreSystem -c MultiCoreSystem_Directory \
+  -p "workload_path(s)=$W/" \
+  -p "bus[0].interconnect_controller.arbiter_type(s)=FCFSArbiter" \
+  -o tutorial/01-exploration/output/Coherence/Directory-MSI --trace
 ```
 
-`run_octopus.sh` copies the preset over `MultiCoreSystem.csv` — that is why the
-reset command exists. Its summary line (`PASS: 1 / 1 complete`) uses a strict test:
-every core drained its own trace and wrote the end-of-simulation footer.
+`-s` still selects the C++ system class and its wiring. `-c` selects the system
+CSV from `configuration/SystemConfigurations/`; the `.csv` suffix is optional.
+You can also supply a path, such as `--config ./my-system.csv`. `-p` overrides
+apply after loading the selected CSV. No files are copied or edited, so there is
+no configuration reset step afterward. Omitting `-c` uses `MultiCoreSystem.csv`
+again, with whatever settings it currently contains.
+
+Both presets above select **MSI**. FCFS is pinned for both runs because the
+directory preset is validated with FCFS and documents a starvation issue with
+TDM. The presets also differ in buffer and queue sizing: this is a comparison of
+complete configurations, not an isolated change to one protocol parameter.
+
+Compare the saved summaries, graphs, and coherence transitions:
+
+```shell
+python3 sweeps/plot_axis.py tutorial/01-exploration/output/Coherence
+./octoviz.sh serve tutorial/01-exploration/output/Coherence
+```
+
+Select a request or filter by the same cache-line address in each run to inspect
+its coherence transitions. Which messages and state changes differ? If you rerun
+an already converted setting, refresh it with `octoviz.sh convert` before viewing.
+
+### Changing MSI/MESI within a family
+
+A preset is convenient, but protocol selection is not restricted to presets.
+Multiple `-p` overrides can change the matched L1/LLC protocol and FSM settings.
+For example, starting from the snoop MSI preset, this selects snoop MESI:
+
+```shell
+./build/Octopus_Simulator -s MultiCoreSystem -c MultiCoreSystem_Snoop \
+  -p "workload_path(s)=$W/" \
+  -p "bus[0].interconnect_controller.arbiter_type(s)=FCFSArbiter" \
+  -p "cache_controller_type(s)=CacheControllerExclusive" \
+  -p "cache_controller[*].protocol_type(s)=SNOOP_MESI" \
+  -p "cache_controller[*].fsm_filename(s)=MESI_splitBus_snooping" \
+  -p "llc_controller.protocol_type(s)=SNOOP_LLC_MESI" \
+  -p "llc_controller.fsm_filename(s)=MESI_LLC" \
+  -o tutorial/01-exploration/output/Coherence/Snoop-MESI --trace
+```
+
+
+Snooping MESI needs the exclusive-capable L1 controller as well as the two
+protocol names and two FSM filenames. Changing just a name can leave an
+incompatible combination. Rerun the plotter to include the new setting and
+restart `serve` to discover and convert it.
+
+### Shared bus vs two network layouts
+The base `MultiCoreSystem` class provides for a shared bus connecting
+the cache controllers. Within this class, we selected either a
+snooping- or directory-based coherence protocol by specifying a different
+configuration preset CSV file with `-c`. 
+
+This version of Octopus also provides a class that allows for a simple
+network on chip (NoC). We can specify it by passing 
+`-s MultiCoreSystem_Mesh` as the command line argument to Octopus.
+
+
+There are two preset network topologies provided: 
+- a star layout (`configuration/Interconnect/NoC.csv`), in
+which all L1 caches are connected directly to the LLC and DRAM directly,
+- and a mesh layout (`configuration/Interconnect/Mesh.csv`) in which all cache controllers are connected to each
+other. 
+
+Open each of these CSV files and observe how the controllers are
+connected to each other. Then try simulating each layout and comparing
+the results against each other and the earlier bus layout, using
+the FCFS arbiter for all to ensure consistency:
+
+```shell
+# Run from the project root, using the same benchmark for both presets.
+W=$PWD/BMs/eembc-traces/a2time01-trace
+# Windows/Git Bash: W=$(cygpath -m "$PWD/BMs/eembc-traces/a2time01-trace")
+
+# Run the shared bus with snooping from earlier
+./build/Octopus_Simulator -s MultiCoreSystem -c MultiCoreSystem_Snoop \
+  -p "workload_path(s)=$W/" \
+  -p "bus[0].interconnect_controller.arbiter_type(s)=FCFSArbiter" \
+  -o tutorial/01-exploration/output/Interconnect/0_Snoop-MSI --trace
+
+# Run a star-based layout on a NoC
+./build/Octopus_Simulator -s MultiCoreSystem_Mesh \
+  -p "workload_path(s)=$W/" \
+  -p "bus[0].interconnect_controller.arbiter_type(s)=FCFSArbiter" \
+  -p "interconnect_type(s)=NoC" \
+  -o tutorial/01-exploration/output/Interconnect/1_Star --trace
+
+# Run a mesh-based layout
+./build/Octopus_Simulator -s MultiCoreSystem_Mesh \
+  -p "workload_path(s)=$W/" \
+  -p "bus[0].interconnect_controller.arbiter_type(s)=FCFSArbiter" \
+  -p "interconnect_type(s)=Mesh" \
+  -o tutorial/01-exploration/output/Interconnect/2_Mesh --trace
+```
+
+Try graphing the trend with the python script `sweeps/graph_axis.py`.
+See if it matches your expectations.
 
 ## If you finish early
 

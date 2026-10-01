@@ -21,9 +21,9 @@ namespace octopus
             //Rearrange lines
             for (int i = 0; i < vec.size(); i++)
             {
-                if(vec[i].size() == 2 && vec[i][0] == '-' && i + 1 < vec.size())
+                if(((vec[i].size() == 2 && vec[i][0] == '-') || vec[i] == "--config") && i + 1 < vec.size())
                 {    
-                    lines.push_back(vec[i] + " " + vec[i + 1]);
+                    lines.push_back((vec[i] == "-c" ? string("--config") : vec[i]) + " " + vec[i + 1]);
                     i++;
                 }
                 else

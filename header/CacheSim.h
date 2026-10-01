@@ -26,7 +26,7 @@ namespace octopus
 
     public:
         CacheSim(std::string system_name, std::vector<std::string> cl_params, bool print_config = false,
-                 std::string output_dir = "", bool trace = false);
+                 std::string output_dir = "", bool trace = false, std::string config = "");
         ~CacheSim();
 
         void run();

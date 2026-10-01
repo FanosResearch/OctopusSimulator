@@ -39,7 +39,9 @@ namespace octopus
                                          CommunicationInterface *lower_interface, 
                                          string pname = "");
     public:
-        MultiCoreSystem(std::vector<std::string> cl_params);
+        MultiCoreSystem(std::vector<std::string> cl_params,
+            std::string config_path = std::string(CONFIGURATION_PATH) + SYSTEM_CONFIGURATIONS,
+            std::string config_name = "MultiCoreSystem");
     };
 }
 

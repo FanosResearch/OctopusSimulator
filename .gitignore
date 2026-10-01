@@ -65,3 +65,11 @@ demo/workloads/*/.out*
 
 # Generated output for tutorial exercise 01
 /tutorial/01-exploration/output/
+
+# Generated output for tutorial exercise 02
+/tutorial/02-configuration/output/
+
+# Generated output for the arbiter extension exercise
+/tutorial/03-extending-octopus/01-arbiter/output/
+header/Arbiters/WRRArbiter.h
+src/Arbiters/WRRArbiter.cpp
