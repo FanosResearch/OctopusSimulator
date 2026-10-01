@@ -1,0 +1,90 @@
+% preamble.tex -- packages, fonts, colours, boxes and macros for the Octopus manual.
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{plex-serif}            % body: IBM Plex Serif
+\usepackage{plex-sans}             % headings, captions: IBM Plex Sans
+\usepackage{plex-mono}             % code: IBM Plex Mono (matches the figures)
+\usepackage{microtype}
+\usepackage[a4paper,margin=2.2cm,headheight=14pt]{geometry}
+\usepackage{graphicx}
+\graphicspath{{figures/pdf/}{figures/paper/}{figures/png/}}
+\usepackage{xcolor}
+\usepackage{booktabs,longtable,array,tabularx,multirow,rotating,pdflscape,adjustbox}
+\usepackage{caption,subcaption}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,shapes.geometric,fit,backgrounds,chains,decorations.pathreplacing}
+\usepackage{pgf-umlsd}
+\usepackage[most]{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{imakeidx}
+\usepackage{amsmath,amssymb,pifont}
+\usepackage[style=ieee,backend=biber,maxbibnames=6]{biblatex}
+\addbibresource{references.bib}
+\usepackage[hidelinks,pdfusetitle]{hyperref}
+\usepackage[capitalise,noabbrev]{cleveref}
+
+% ---- the palette of the SVG figure series, so TikZ figures match ----
+\definecolor{octink}{HTML}{14212A}
+\definecolor{octquiet}{HTML}{5E6E76}
+\definecolor{octteal}{HTML}{0E7C73}
+\definecolor{octamber}{HTML}{B45309}
+\definecolor{octpurple}{HTML}{4B32A8}
+\definecolor{octred}{HTML}{BE3F24}
+\definecolor{octpaper}{HTML}{FCFBF8}
+\definecolor{octmem}{HTML}{EAF1F6}
+\definecolor{octio}{HTML}{F4F1FB}
+\definecolor{octctl}{HTML}{FDF6E6}
+\definecolor{octrule}{HTML}{5A6B75}
+
+\makeindex[name=cfg,title=Index of configuration keys,columns=2]
+\makeindex[name=idx,title=Index,columns=2]
+
+% ---- typography ----
+\titleformat{\chapter}[display]{\sffamily\bfseries\Huge\color{octink}}{\sffamily\mdseries\Large\color{octquiet}Chapter \thechapter}{0.6em}{}
+\titleformat*{\section}{\sffamily\bfseries\Large\color{octink}}
+\titleformat*{\subsection}{\sffamily\bfseries\large\color{octink}}
+\titleformat*{\subsubsection}{\sffamily\bfseries\color{octink}}
+\captionsetup{font={sf,small},labelfont={bf,color=octink},labelsep=period,width=0.92\textwidth}
+\setlist{nosep,leftmargin=1.4em}
+\pagestyle{fancy}\fancyhf{}
+\fancyhead[LE]{\sffamily\small\nouppercase\leftmark}\fancyhead[RO]{\sffamily\small\nouppercase\rightmark}
+\fancyfoot[C]{\sffamily\small\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+\setlength{\parskip}{0.35em}\setlength{\parindent}{0pt}
+\setcounter{secnumdepth}{2}\setcounter{tocdepth}{1}
+
+% ---- code ----
+\lstset{basicstyle=\ttfamily\small,backgroundcolor=\color{octpaper},frame=single,rulecolor=\color{octrule!40},
+  framesep=4pt,xleftmargin=4pt,breaklines=true,breakatwhitespace=false,columns=fullflexible,keepspaces=true,
+  showstringspaces=false,commentstyle=\color{octquiet},keywordstyle=\color{octpurple}\bfseries,stringstyle=\color{octteal},
+  upquote=true,literate={→}{{$\rightarrow$}}1 {←}{{$\leftarrow$}}1 {—}{{---}}1 {–}{{--}}1 {·}{{$\cdot$}}1 {≈}{{$\approx$}}1 {≠}{{$\neq$}}1 {×}{{$\times$}}1}
+\lstdefinestyle{shell}{language=bash,morekeywords={cmake,make,git,python,bash,cd,export},keywordstyle=\color{octink}\bfseries,commentstyle=\color{octquiet}\itshape}
+\lstdefinestyle{csv}{language={},commentstyle=\color{octquiet},morecomment=[l]{\#}}
+\lstdefinestyle{cpp}{language=C++,morekeywords={override,virtual,uint64_t,uint16_t,uint8_t,size_t,Message,ControllerAction}}
+\lstdefinestyle{plain}{language={}}
+
+% ---- boxes ----
+\newtcolorbox{wherebox}[1][Where in the code]{enhanced,colback=octmem!60,colframe=octrule,fonttitle=\sffamily\bfseries,title=#1,arc=2pt,boxrule=0.6pt,left=5pt,right=5pt,top=4pt,bottom=4pt,before skip=8pt,after skip=10pt}
+\newtcolorbox{trapbox}[1][Trap]{enhanced,colback=octctl,colframe=octamber,fonttitle=\sffamily\bfseries,title=#1,arc=2pt,boxrule=0.6pt,left=5pt,right=5pt,top=4pt,bottom=4pt,before skip=8pt,after skip=10pt}
+\newtcolorbox{notebox}[1][Design note]{enhanced,colback=octio,colframe=octpurple,fonttitle=\sffamily\bfseries,title=#1,arc=2pt,boxrule=0.6pt,left=5pt,right=5pt,top=4pt,bottom=4pt,before skip=8pt,after skip=10pt}
+\newtcolorbox{presenterbox}[1][Presenter note]{enhanced,colback=octteal!8,colframe=octteal,fonttitle=\sffamily\bfseries,title=#1,arc=2pt,boxrule=0.6pt,left=5pt,right=5pt,top=4pt,bottom=4pt,before skip=8pt,after skip=10pt}
+\newtcolorbox{findbox}{enhanced,colback=octpaper,colframe=octrule!50,arc=2pt,boxrule=0.5pt,left=5pt,right=5pt,top=3pt,bottom=3pt,before skip=6pt,after skip=8pt,fontupper=\small}
+
+% ---- macros ----
+\newcommand{\octopus}{Octopus}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\file}[1]{\path{#1}}   % verbatim argument: write raw _ and *, breaks at / and _
+\newcommand{\key}[1]{\texttt{#1}\index[cfg]{#1}}
+\newcommand{\env}[1]{\texttt{#1}\index[idx]{#1@\texttt{#1} (environment)}}
+\newcommand{\state}[1]{\textsf{#1}}
+\newcommand{\act}[1]{\texttt{#1}\index[idx]{#1@\texttt{#1} (FSM action)}}
+\newcommand{\evt}[1]{\texttt{#1}}
+\newcommand{\stamp}[1]{\texttt{#1}}
+\newcommand{\col}[1]{\textsf{#1}}
+\newcommand{\figwide}[3]{\begin{figure}[htbp]\centering\includegraphics[width=\textwidth]{#1}\caption{#2}\label{#3}\end{figure}}
+\newcommand{\figmed}[4]{\begin{figure}[htbp]\centering\includegraphics[width=#4\textwidth]{#1}\caption{#2}\label{#3}\end{figure}}
+\newcommand{\gitcommit}{\input{generated/version.tex}\unskip}
+\newcommand{\whatyoufind}[1]{\begin{findbox}\textbf{\sffamily What you will find here.} #1\end{findbox}}

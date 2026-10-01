@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 1064" width="1280" height="1064" font-family="'IBM Plex Sans','Segoe UI',system-ui,sans-serif" role="img" aria-label="Sequence diagram of inclusion interference between two cores sharing an inclusive LLC: core 0 brings line X in and hits on it; core 1 misses on line Y in the same set, the fill evicts X, an invalidation on the service lane removes X from core 0's L1, and core 0's next access to X pays a full DRAM round trip">
+  <defs>
+    <marker id="k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#14212A"/></marker>
+    <marker id="t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#0E7C73"/></marker>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#B45309"/></marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#BE3F24"/></marker>
+    <marker id="q" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#5E6E76"/></marker>
+  </defs>
+  <style>
+    .blk { fill:#FFFFFF; stroke:#5A6B75; stroke-width:1.2 }
+    .mem { fill:#EAF1F6; stroke:#2F6F9F; stroke-width:1.2 }
+    .io  { fill:#F4F1FB; stroke:#6244C7; stroke-width:1.2 }
+    .ttl { font-size:12px; fill:#14212A; font-weight:600 }
+    .lbl { font-size:10.5px; fill:#14212A; font-weight:600 }
+    .sub { font-size:9.5px; fill:#5E6E76 }
+    .mono{ font-family:'IBM Plex Mono',monospace }
+    .life{ stroke:#9AA7AE; stroke-width:1.2; stroke-dasharray:4 3; fill:none }
+    .lane{ stroke:#6244C7; stroke-width:1; opacity:.5; fill:none }
+    .msg { stroke-width:1.8; fill:none }
+    .ml  { font-size:9.5px; font-weight:600; text-anchor:middle }
+    .nt  { font-size:9.5px }
+    .bg  { fill:#FCFBF8 }
+    .pill{ fill:#FFFFFF; stroke-width:1.2 }
+    .pt  { font-size:8.5px; font-family:'IBM Plex Mono',monospace; text-anchor:middle; font-weight:600 }
+    .ph  { fill:#F1EFE9 }
+    .pht { font-size:11px; font-weight:700; fill:#14212A }
+    .wl  { font-size:8.5px; font-family:'IBM Plex Mono',monospace; fill:#4B32A8; text-anchor:middle }
+  </style>
+  <rect width="1280" height="1064" class="bg"/>
+  <text x="34" y="30" font-size="16" font-weight="700" fill="#14212A">Inclusion interference — two cores, one LLC set, and the line that core 0 loses</text>
+  <text x="34" y="47" class="sub">Snoop MESI on a TripleBus, shared inclusive LLC (MESI_LLC), time runs downward. Core 0 is the small task of the demo, core 1 one of its streaming neighbours. Teal = core 0's own traffic, amber = core 1's, red = the damage.</text>
+  <rect x="55" y="70" width="190" height="40" rx="4" class="mem" stroke="#0E7C73" stroke-width="1.8"/>
+  <text x="150" y="86" class="lbl" text-anchor="middle">Core 0 · L1</text>
+  <text x="150" y="100" class="sub" text-anchor="middle">the task · CacheControllerExclusive</text>
+  <line x1="150" y1="110" x2="150" y2="960" class="life"/>
+  <rect x="255" y="70" width="190" height="40" rx="4" class="mem" stroke="#B45309" stroke-width="1.8"/>
+  <text x="350" y="86" class="lbl" text-anchor="middle">Core 1 · L1</text>
+  <text x="350" y="100" class="sub" text-anchor="middle">a streamer · same controller</text>
+  <line x1="350" y1="110" x2="350" y2="960" class="life"/>
+  <rect x="695" y="70" width="190" height="40" rx="4" class="mem"/>
+  <text x="790" y="86" class="lbl" text-anchor="middle">LLC</text>
+  <text x="790" y="100" class="sub" text-anchor="middle">shared, inclusive · MESI_LLC FSM</text>
+  <line x1="790" y1="110" x2="790" y2="960" class="life"/>
+  <rect x="935" y="70" width="190" height="40" rx="4" class="blk"/>
+  <text x="1030" y="86" class="lbl" text-anchor="middle">DRAM</text>
+  <text x="1030" y="100" class="sub" text-anchor="middle">via bus[1] (Point2Point)</text>
+  <line x1="1030" y1="110" x2="1030" y2="960" class="life"/>
+  <rect x="520" y="70" width="72" height="890" rx="4" class="io"/>
+  <text x="556" y="86" class="lbl" text-anchor="middle" fill="#4B32A8">bus[0]</text>
+  <line x1="536" y1="110" x2="536" y2="960" class="lane"/>
+  <text x="536" y="102" class="wl">req</text>
+  <line x1="556" y1="110" x2="556" y2="960" class="lane"/>
+  <text x="556" y="102" class="wl">resp</text>
+  <line x1="576" y1="110" x2="576" y2="960" class="lane"/>
+  <text x="576" y="102" class="wl">svc</text>
+  <rect x="34" y="128" width="1212" height="22" rx="3" class="ph"/>
+  <text x="44" y="143" class="pht">Act 1 — core 0 alone: it brings X in and then keeps hitting on it</text>
+  <rect x="158" y="159" width="91" height="14" class="bg"/>
+  <text x="163" y="170" class="nt" fill="#0E7C73">Load X — L1 miss</text>
+  <line x1="150" y1="192" x2="790" y2="192" class="msg" stroke="#0E7C73" marker-end="url(#t)"/>
+  <circle cx="536" cy="192" r="3.2" fill="#4B32A8"/>
+  <rect x="450" y="178" width="40" height="12" class="bg"/>
+  <text x="470" y="188" class="ml" fill="#0E7C73">GetS X</text>
+  <rect x="133" y="208" width="35" height="14" rx="7" class="pill" stroke="#0E7C73"/>
+  <text x="150" y="218" class="pt" fill="#0E7C73">IS_ad</text>
+  <rect x="798" y="228" width="216" height="14" class="bg"/>
+  <text x="803" y="239" class="nt" fill="#0E7C73">N: miss — GetData, allocate an MSHR entry</text>
+  <line x1="790" y1="261" x2="1030" y2="261" class="msg" stroke="#0E7C73" marker-end="url(#t)"/>
+  <rect x="865" y="247" width="91" height="12" class="bg"/>
+  <text x="910" y="257" class="ml" fill="#0E7C73">read X on bus[1]</text>
+  <line x1="1030" y1="284" x2="790" y2="284" class="msg" stroke="#0E7C73" marker-end="url(#t)"/>
+  <rect x="902" y="270" width="15" height="12" class="bg"/>
+  <text x="910" y="280" class="ml" fill="#0E7C73">X</text>
+  <line x1="790" y1="307" x2="150" y2="307" class="msg" stroke="#0E7C73" marker-end="url(#t)"/>
+  <circle cx="556" cy="307" r="3.2" fill="#4B32A8"/>
+  <rect x="384" y="293" width="171" height="12" class="bg"/>
+  <text x="470" y="303" class="ml" fill="#0E7C73">X, exclusive — SendExclusiveData</text>
+  <rect x="142" y="323" width="17" height="14" rx="7" class="pill" stroke="#0E7C73"/>
+  <text x="150" y="333" class="pt" fill="#0E7C73">E</text>
+  <rect x="737" y="323" width="107" height="14" rx="7" class="pill" stroke="#0E7C73"/>
+  <text x="790" y="333" class="pt" fill="#0E7C73">EorM · owner = core 0</text>
+  <rect x="158" y="343" width="307" height="14" class="bg"/>
+  <text x="163" y="354" class="nt" fill="#0E7C73">Load X, Load X, Load X … — L1 hits; the bus never sees them</text>
+  <rect x="34" y="365" width="1212" height="22" rx="3" class="ph"/>
+  <text x="44" y="380" class="pht">Act 2 — core 1 streams through the same set: the LLC evicts X by inclusion</text>
+  <rect x="358" y="396" width="297" height="14" class="bg"/>
+  <text x="363" y="407" class="nt" fill="#B45309">Load Y — L1 miss. Y maps to X's set, and that set is full</text>
+  <line x1="350" y1="429" x2="790" y2="429" class="msg" stroke="#B45309" marker-end="url(#m)"/>
+  <circle cx="536" cy="429" r="3.2" fill="#4B32A8"/>
+  <rect x="415" y="415" width="40" height="12" class="bg"/>
+  <text x="435" y="425" class="ml" fill="#B45309">GetS Y</text>
+  <rect x="158" y="442" width="106" height="14" class="bg"/>
+  <text x="163" y="453" class="nt" fill="#5E6E76">snoops it: not mine</text>
+  <rect x="798" y="465" width="292" height="14" class="bg"/>
+  <text x="803" y="476" class="nt" fill="#B45309">miss — GetData, MSHR; the full set is left alone for now</text>
+  <line x1="790" y1="498" x2="1030" y2="498" class="msg" stroke="#B45309" marker-end="url(#m)"/>
+  <rect x="865" y="484" width="91" height="12" class="bg"/>
+  <text x="910" y="494" class="ml" fill="#B45309">read Y on bus[1]</text>
+  <line x1="1030" y1="521" x2="790" y2="521" class="msg" stroke="#B45309" marker-end="url(#m)"/>
+  <rect x="902" y="507" width="15" height="12" class="bg"/>
+  <text x="910" y="517" class="ml" fill="#B45309">Y</text>
+  <line x1="790" y1="544" x2="350" y2="544" class="msg" stroke="#B45309" marker-end="url(#m)"/>
+  <circle cx="556" cy="544" r="3.2" fill="#4B32A8"/>
+  <rect x="400" y="530" width="70" height="12" class="bg"/>
+  <text x="435" y="540" class="ml" fill="#B45309">Y, exclusive</text>
+  <rect x="342" y="560" width="17" height="14" rx="7" class="pill" stroke="#B45309"/>
+  <text x="350" y="570" class="pt" fill="#B45309">E</text>
+  <rect x="798" y="580" width="498" height="14" class="bg"/>
+  <text x="803" y="591" class="nt" fill="#BE3F24">the fill's array write needs a way: LRU victim = X → write-back buffer → Replacement X → IssueInv</text>
+  <line x1="790" y1="613" x2="350" y2="613" class="msg" stroke="#BE3F24" marker-end="url(#r)"/>
+  <line x1="346" y1="613" x2="150" y2="613" class="msg" stroke="#BE3F24" marker-end="url(#r)"/>
+  <path d="M790 613 L816 613 L816 624 L794 624" class="msg" stroke="#BE3F24" marker-end="url(#r)"/>
+  <circle cx="576" cy="613" r="3.2" fill="#4B32A8"/>
+  <rect x="517" y="599" width="347" height="12" class="bg"/>
+  <text x="691" y="609" class="ml" fill="#BE3F24">INV X — on the service lane, to every L1 and back to the LLC itself</text>
+  <rect x="158" y="626" width="307" height="14" class="bg"/>
+  <text x="163" y="637" class="nt" fill="#BE3F24">E → I  (Data2Req): core 0 loses X without having touched it</text>
+  <line x1="150" y1="659" x2="790" y2="659" class="msg" stroke="#BE3F24" marker-end="url(#r)"/>
+  <circle cx="556" cy="659" r="3.2" fill="#4B32A8"/>
+  <rect x="415" y="645" width="111" height="12" class="bg"/>
+  <text x="470" y="655" class="ml" fill="#BE3F24">X — the owner's copy</text>
+  <path d="M790 676 L812 676 L812 688 L794 688" class="msg" stroke="#BE3F24" marker-end="url(#r)"/>
+  <text x="820" y="685" class="nt" fill="#BE3F24">Own_Invalidation → ClearOwner, MN_d; data in → WriteBack</text>
+  <line x1="790" y1="705" x2="1030" y2="705" class="msg" stroke="#BE3F24" marker-end="url(#r)"/>
+  <rect x="850" y="691" width="121" height="12" class="bg"/>
+  <text x="910" y="701" class="ml" fill="#BE3F24">write back X on bus[1]</text>
+  <rect x="142" y="721" width="17" height="14" rx="7" class="pill" stroke="#BE3F24"/>
+  <text x="150" y="731" class="pt" fill="#BE3F24">I</text>
+  <rect x="752" y="721" width="75" height="14" rx="7" class="pill" stroke="#BE3F24"/>
+  <text x="790" y="731" class="pt" fill="#BE3F24">N  (X is gone)</text>
+  <rect x="34" y="740" width="1212" height="22" rx="3" class="ph"/>
+  <text x="44" y="755" class="pht">… and core 0 pays: its next Load X is a full DRAM round trip it did nothing to cause</text>
+  <rect x="158" y="771" width="91" height="14" class="bg"/>
+  <text x="163" y="782" class="nt" fill="#BE3F24">Load X — L1 miss</text>
+  <line x1="150" y1="804" x2="790" y2="804" class="msg" stroke="#BE3F24" marker-end="url(#r)"/>
+  <circle cx="536" cy="804" r="3.2" fill="#4B32A8"/>
+  <rect x="450" y="790" width="40" height="12" class="bg"/>
+  <text x="470" y="800" class="ml" fill="#BE3F24">GetS X</text>
+  <rect x="798" y="817" width="156" height="14" class="bg"/>
+  <text x="803" y="828" class="nt" fill="#BE3F24">N: miss again — GetData, MSHR</text>
+  <line x1="790" y1="850" x2="1030" y2="850" class="msg" stroke="#BE3F24" marker-end="url(#r)"/>
+  <rect x="865" y="836" width="91" height="12" class="bg"/>
+  <text x="910" y="846" class="ml" fill="#BE3F24">read X on bus[1]</text>
+  <line x1="1030" y1="873" x2="790" y2="873" class="msg" stroke="#BE3F24" marker-end="url(#r)"/>
+  <rect x="902" y="859" width="15" height="12" class="bg"/>
+  <text x="910" y="869" class="ml" fill="#BE3F24">X</text>
+  <line x1="790" y1="896" x2="150" y2="896" class="msg" stroke="#BE3F24" marker-end="url(#r)"/>
+  <circle cx="556" cy="896" r="3.2" fill="#4B32A8"/>
+  <rect x="435" y="882" width="70" height="12" class="bg"/>
+  <text x="470" y="892" class="ml" fill="#BE3F24">X, exclusive</text>
+  <rect x="142" y="912" width="17" height="14" rx="7" class="pill" stroke="#0E7C73"/>
+  <text x="150" y="922" class="pt" fill="#0E7C73">E</text>
+  <rect x="737" y="912" width="107" height="14" rx="7" class="pill" stroke="#0E7C73"/>
+  <text x="790" y="922" class="pt" fill="#0E7C73">EorM · owner = core 0</text>
+  <rect x="158" y="932" width="498" height="14" class="bg"/>
+  <text x="163" y="943" class="nt" fill="#BE3F24">LatencyReport: this row has L2-DRAM Bus and DRAM > 0 — the same access was an L1 hit a moment ago</text>
+  <text x="34" y="980" class="lbl">In the demo</text><text x="150" y="980" class="sub">with three streamers this is the steady state of act 2: 53 % of core 0's accesses go to DRAM, none when it runs alone (act 1) — the task's jobs overrun and the robot steers on a stale pose.</text>
+  <text x="34" y="997" class="lbl">What does not help</text><text x="150" y="997" class="sub">bus arbitration. RR or TDM bounds core 0's wait for a lane, but the INV still arrives and the next access still goes to DRAM: the loss is in the LLC, not on the bus.</text>
+  <text x="34" y="1014" class="lbl">What does</text><text x="150" y="1014" class="sub">way reservation (act 3): llc_controller.m_data_handler.way_partition = 0:0 installs core 0's fills in, and evicts from, its own way only. Core 1's Y then takes a way X is not in, and X is never the victim.</text>
+  <text x="34" y="1038" class="sub mono">Protocols_FSM/MESI_splitBus_snooping.csv (E, Invalidation → Data2Req/I) · MESI_LLC.csv (EorM, Replacement → IssueInv; Own_Invalidation → MN_d; data → WriteBack/N) · the LLC side in detail: llc_miss_evict.svg · demo/run_acts.sh</text>
+</svg>

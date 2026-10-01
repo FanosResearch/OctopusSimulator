@@ -1,0 +1,18 @@
+% One message through a cache controller: queue -> protocol handler -> FSMReader -> actions.
+\begin{sequencediagram}
+  \tikzstyle{inststyle}+=[rounded corners=2pt, fill=octmem, draw=octrule, font=\sffamily\small]
+  \newthread[octctl]{q}{Processing queue}
+  \newinst[1.6]{ph}{Protocol handler}
+  \newinst[1.6]{fsm}{FSMReader}
+  \newinst[1.8]{dh}{Data handler, interfaces}
+  \begin{call}{q}{\code{processRequest(msg)}}{ph}{\code{ControllerAction[]}}
+    \begin{callself}{ph}{\code{readEvent(msg)} $\rightarrow$ \code{EventId}}{}
+    \end{callself}
+    \begin{call}{ph}{\code{getTransition(state, event)}}{fsm}{\code{next\_state, actions[]}}
+    \end{call}
+    \begin{callself}{ph}{\code{handleAction(actions)}}{}
+    \end{callself}
+  \end{call}
+  \begin{messcall}{q}{\code{SEND\_BUS\_MSG} / \code{UPDATE\_CACHE\_LINE} / \code{WRITE\_BACK} / \ldots}{dh}
+  \end{messcall}
+\end{sequencediagram}
