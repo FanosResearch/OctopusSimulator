@@ -210,6 +210,41 @@ timing differences decide where the estimate drifts.
   cannot help, nothing is queueing. **Way partitioning** keeps the aggressor
   out of the SLAM's ways and tracking is back, the aggressor still at 8.1 GB/s.
 
+### Where the time goes: Octopus's own reports
+
+The figures above are the program's view. The hierarchy's view says *why*:
+rerun the matrix with Octopus's per-request reports (Part B), reduce them, and
+plot again.
+
+```shell
+LOG=1 bash run_matrix.sh                       # about 1 GB of reports per run, 2x the time
+for d in runs/*/; do bash slam_demo/viz/reduce_reports.sh $d --delete; done
+python slam_demo/viz/plot_matrix.py            # adds figures/5_memory_breakdown.png
+```
+
+`reduce_reports.sh` keeps, per core, the requests that left the L1 (the
+spinning threads hit their L1 millions of times, which would drown the rest)
+and their mean time per `LatencyReport` stage, in `runs/<config>/breakdown.csv`
+(reference: `expected/breakdown/`, `expected/figures/5_memory_breakdown.png`).
+Logging does not change the simulation: the logged runs give the same numbers.
+
+| config | front-end core: cycles per request past the L1 | of which | reached DRAM |
+|---|---|---|---|
+| Solo | 13 | response bus 5 | 203 |
+| light | 143 | **response bus 128** | 200 |
+| light + RR | 16 | response bus 8 | 202 |
+| heavy | 2207 | **DRAM 2071**, LLC queue 114 | **2096** |
+| heavy + partition | 60 | DRAM 42 | 201 |
+
+- **Light aggressor:** the SLAM's requests wait for the response bus behind
+  the aggressor's stream of LLC refills, about 25 times longer than alone.
+  Round-robin gives each requester its turn, and the wait is back to Solo.
+- **Heavy aggressor:** ten times more of the SLAM's requests reach DRAM (its
+  lines were evicted from the LLC), and each waits there behind the
+  aggressor's misses. Partitioning brings the count of DRAM requests back to
+  Solo; the few left still queue behind the aggressor at DRAM, which is the
+  DRAM scheduler's job (see "Going further").
+
 ### Reading the error
 
 The error is meaningful only when tracking worked. Decide that first, from

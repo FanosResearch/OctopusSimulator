@@ -8,6 +8,9 @@ lines after the report); run_matrix.sh writes them to ../../runs/<name>. Figures
   2_error_boxplot  per-scan position error per configuration (their Fig. 2)
   3_error_over_time  position error per scan, dropped and lost scans marked
   4_exec_times     front-end per scan and mapper per keyframe (their Fig. 4)
+  5_memory_breakdown  where the SLAM cores' memory time goes, per stage, from
+                   Octopus's own reports (runs made with LOG=1, reduced by
+                   reduce_reports.sh into breakdown.csv)
 
 usage: python plot_matrix.py [--runs-dir DIR] [--out DIR] [--period-us US]
        (needs numpy and matplotlib; the walls come from steps.json, made by
@@ -191,6 +194,74 @@ def fig_exec_times(data, out, period_us, kf_every):
     plt.close(fig)
 
 
+STAGES = [("mean_l1_stall", "L1 stall"), ("mean_req_bus", "request bus"),
+          ("mean_l2_stall", "LLC queue (L2 stall)"), ("mean_l2_access", "LLC array"),
+          ("mean_resp_bus", "response bus"), ("mean_l2_dram_bus", "LLC-DRAM bus"),
+          ("mean_dram", "DRAM"), ("mean_l1_access", "L1 access")]
+STAGE_COL = ["#b4bec9", "#d97a12", "#c73e5a", "#8e44ad", "#f0a03c", "#5a9e2f", "#17202b", "#2f7ed8"]
+
+
+def load_breakdown(path):
+    f = os.path.join(path, "breakdown.csv")
+    if not os.path.isfile(f):
+        return None
+    rows = {}
+    with open(f) as fh:
+        head = fh.readline().strip().split(",")
+        for line in fh:
+            v = dict(zip(head, line.strip().split(",")))
+            rows[int(v["core"])] = {k: float(x) for k, x in v.items()}
+    return rows
+
+
+def fig_memory_breakdown(breakdowns, out):
+    """Stacked mean latency per stage of the requests that left the L1, for
+    the front-end and the mapper core; one row per aggressor, each with its
+    own scale (the heavy aggressor's DRAM waits would flatten the rest)."""
+    if "A_solo" not in breakdowns:
+        return False
+
+    def core_of(b, role):
+        # the aggressor thread is created first: with one, the mapper runs on
+        # core 2 and the front-end on core 3, otherwise on cores 1 and 2
+        if 3 in b:
+            return 3 if role == "front-end" else 2
+        return 2 if role == "front-end" else 1
+
+    groups = [("light aggressor: bus and LLC queueing", "light"),
+              ("heavy aggressor: LLC capacity", "heavy")]
+    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+    for row, (gtitle, g) in enumerate(groups):
+        names = [r for r in RUNS if r[0] in breakdowns and r[3] in (g, "both")]
+        for col, role in enumerate(("front-end", "mapper")):
+            ax = axes[row][col]
+            x = np.arange(len(names))
+            bottom = np.zeros(len(names))
+            for (key, lab), color in zip(STAGES, STAGE_COL):
+                vals = [breakdowns[n].get(core_of(breakdowns[n], role), {}).get(key, 0.0)
+                        for n, *_ in names]
+                ax.bar(x, vals, bottom=bottom, color=color, label=lab, width=0.6)
+                bottom += np.array(vals)
+            for i, (n, *_) in enumerate(names):
+                r = breakdowns[n].get(core_of(breakdowns[n], role), {})
+                if r:
+                    ax.text(i, bottom[i], f"{bottom[i]:.0f} cy\n{r['beyond_l1'] / 1000:.1f}k left L1\n"
+                            f"{int(r['dram'])} to DRAM", ha="center", va="bottom", fontsize=7.5)
+            ax.set_ylim(0, max(bottom) * 1.3)
+            ax.set_xticks(x)
+            ax.set_xticklabels([lab for _, lab, _, _ in names], rotation=12, fontsize=8.5)
+            ax.set_title(f"{role} core, {gtitle}", fontsize=10.5)
+            ax.set_ylabel("mean cycles per request that left the L1")
+            ax.grid(axis="y", alpha=0.3)
+    axes[0][0].legend(fontsize=8, loc="upper right")
+    fig.suptitle("Where the SLAM cores' memory time goes  (Octopus LatencyReport stages, "
+                 "requests that left the L1)", fontsize=12)
+    fig.tight_layout()
+    fig.savefig(os.path.join(out, "5_memory_breakdown.png"), dpi=140)
+    plt.close(fig)
+    return True
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--runs-dir", default=os.path.join(HERE, "..", "..", "runs"),
@@ -220,6 +291,13 @@ def main():
     fig_error_boxplot(data, a.out)
     fig_error_over_time(data, a.out)
     fig_exec_times(data, a.out, a.period_us, a.kf_every)
+    breakdowns = {}
+    for name, *_ in RUNS:
+        b = load_breakdown(os.path.join(a.runs_dir, name))
+        if b:
+            breakdowns[name] = b
+    if fig_memory_breakdown(breakdowns, a.out):
+        print("memory breakdown from", len(breakdowns), "runs with breakdown.csv")
     print("figures in", a.out)
 
 
