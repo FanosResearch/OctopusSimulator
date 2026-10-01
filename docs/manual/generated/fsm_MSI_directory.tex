@@ -23,8 +23,7 @@
 \begin{landscape}
 \begin{table}[p]\centering
 \caption{\texttt{MSI\_directory}: transitions as \texttt{actions/next\_state}; an empty cell ignores the event, \textcolor{octred}{Fault} aborts the run. \textbf{Bold} states are stable, \emph{italic} ones transient.}\label{fsm:MSI_directory}
-\begin{adjustbox}{max width=\linewidth}\small
-\begin{tabular}{@{}lllllllllllll@{}}
+\sbox0{\small\begin{tabular}{@{}lllllllllllll@{}}
 \toprule \textbf{state} & \rotatebox{60}{\texttt{Load}} & \rotatebox{60}{\texttt{Store}} & \rotatebox{60}{\texttt{Replacement}} & \rotatebox{60}{\texttt{Fwd\_GetS}} & \rotatebox{60}{\texttt{Fwd\_GetM}} & \rotatebox{60}{\texttt{Inv}} & \rotatebox{60}{\texttt{Put\_Ack}} & \rotatebox{60}{\texttt{Data\_zeroAck}} & \rotatebox{60}{\texttt{Data\_nonZeroAck}} & \rotatebox{60}{\texttt{DataFromOwner}} & \rotatebox{60}{\texttt{InvAck}} & \rotatebox{60}{\texttt{lastInvAck}} \\ \midrule
 \textbf{I} & \texttt{GetS/IS\_d} & \texttt{GetM/IM\_ad} &  & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} \\
 \emph{IS\_d} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \texttt{InvAck2Req/IS\_dI} & \textcolor{octred}{Fault} & \texttt{Hit/S} & \textcolor{octred}{Fault} & \texttt{Hit/S} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} \\
@@ -41,6 +40,7 @@
 \emph{MI\_a} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Data2Both/SI\_a} & \texttt{Data2Req/II\_a} &  & \texttt{I} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} \\
 \emph{SI\_a} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \texttt{InvAck2Req/II\_a} & \texttt{I} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} \\
 \emph{II\_a} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \texttt{I} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} \\
-\bottomrule\end{tabular}
-\end{adjustbox}\end{table}
+\bottomrule\end{tabular}}
+\ifdim\wd0>\linewidth \resizebox{\linewidth}{!}{\usebox0}\else\usebox0\fi
+\end{table}
 \end{landscape}

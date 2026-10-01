@@ -72,10 +72,10 @@ bug.
 \section{02 --- The configuration model}
 
 Goal: understand why configuration looks the way it does, so the extension exercises make
-sense. Ten minutes of reading, nothing to build: open \file{BaseController.csv},
-\file{CacheController.csv}, \file{CacheControllerExclusive.csv} and
-\file{MultiCoreSystem.csv} in that order and follow one key through \code{Extends} and the
-per-instance overrides; read the typed suffixes; find where the L1 MSHR depth is set, override it
+sense. Ten minutes of reading, nothing to build: open the four files of the L1's chain
+(\cref{ch:configuration}) --- the base controller, the cache controller, the exclusive
+controller and the system CSV --- in that order and follow one key through \code{Extends} and
+the per-instance overrides; read the typed suffixes; find where the L1 MSHR depth is set, override it
 to 1 with \code{-p} and watch the L1 stall column grow; see that \code{-s} selects a C++ class
 and a CSV by the same name, which is the boundary the third exercise of 03 crosses; and look at
 \code{git diff} after a \code{run\_octopus.sh --protocol} to see exactly which five keys a
@@ -84,9 +84,9 @@ protocol is. \Cref{ch:configuration} is the chapter.
 \section{03 --- Extending Octopus}
 
 Three exercises of different natures; pick one, because 45 minutes is enough for one done
-properly. All three edit the real source tree --- \file{src/Arbiters/}, \file{Protocols_FSM/},
-\file{src/SystemConfigurations/} --- not a copy; the exercise folders hold only the instructions
-and the answer key. \Cref{ch:extending} has each in full.
+properly. All three edit the real source tree, not a copy (\file{src/Arbiters/},
+\file{Protocols_FSM/} and \file{src/SystemConfigurations/}); the exercise folders hold only the
+instructions and the answer key. \Cref{ch:extending} has each in full.
 
 \begin{description}
 \item[01 --- a bus arbiter] (C++, small, well-fenced; a fifty-second rebuild). Weighted

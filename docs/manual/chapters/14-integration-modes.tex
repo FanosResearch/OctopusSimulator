@@ -1,4 +1,4 @@
-\chapter{Integration modes: gem5 and the full-system stack}\label{ch:integration-modes}
+\chapter[Integration modes]{Integration modes: gem5 and full system}\label{ch:integration-modes}
 
 \whatyoufind{The three ways to run the same hierarchy --- trace replay, trace replay over
 MCsim, and a real CPU model under gem5 with Arm cores booting Linux --- and why the middle never
@@ -64,9 +64,9 @@ so the five keys of a protocol switch it to MESI without rebuilding anything. Af
 the library, \code{cmake --build build} and the \code{scons} line relink only the bridge.
 
 \paragraph{Octopus's reports under gem5.} With \code{cpu[*].log\_requests(i)=1} the
-\code{ExternalCPU} reports its requests to the Logger, so a gem5 run writes the same
-\code{newLogger/} --- one \code{LatencyReport\_C<core>.csv} per core, both of a core's L1s
-reporting into it, and \code{Summary.csv} --- that a standalone run does. The window follows
+\code{ExternalCPU} reports its requests to the Logger, and a gem5 run then writes the same
+reports a standalone run does: a \code{newLogger/} directory with one latency report per core
+(both of a core's L1s report into it) and the \code{Summary.csv}. The window follows
 gem5's statistics: a stats reset starts a fresh log, the next stats dump writes the reports, so
 both views cover the region of interest only. gem5's side is the bridge's own counters per L1 in
 \code{stats.txt} (\code{readReqs}, \code{writeReqs}, \code{responses}, \code{avgLatency}); every
@@ -83,8 +83,9 @@ Arm Industrial Challenge AR-HUD workload --- an OV\textsuperscript{2}SLAM stereo
 CNN pose estimator on a Jetson-class SoC model --- coordinating the shared arbiters cut the
 worst observed memory latency by more than twenty times at near-baseline throughput.
 
-\paragraph{Harnesses and tests.} \file{gem5/harness/build.sh} builds single binaries against
-\file{build/libOctopus.so} with no gem5 --- \code{l1} (hit and miss latencies, same-line bursts),
+\paragraph{Harnesses and tests.} The script \file{gem5/harness/build.sh} builds single
+binaries against the Octopus library with no gem5 --- \code{l1} (hit and miss latencies,
+same-line bursts),
 \code{llc}, \code{evict}, \code{seq}, \code{reorder} (with an override, e.g.\ a 10-cycle L1 port)
 and \code{stress} (multi-core random contention with a hang detector) --- each taking a log
 directory and \code{name(type)=value} overrides. \file{gem5/se_test/} is a self-checking

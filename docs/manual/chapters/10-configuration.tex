@@ -68,17 +68,17 @@ name; a \code{MyConfig.csv} cannot be selected with \code{-s MyConfig} unless a 
 class exists. That boundary --- data below, wiring in C++ --- is what the three-level-cache
 exercise crosses (\cref{ch:extending}).
 
-The command line is parsed by \code{CLParser}: \code{-s <system>} names the system,
-\code{-p "<key>=<value>"} overrides one key and may be repeated; \cref{app:cli} has the full
+The command line is parsed by \code{CLParser}. \code{-s} names the system; \code{-p} with a
+\code{key=value} pair overrides one key and may be repeated. \Cref{app:cli} has the full
 reference.
 
 \section{Presets, and the protocol axis}
 
 \file{configuration/SystemConfigurations/} also holds presets that are never selected directly:
-\file{MultiCoreSystem_Snoop.csv} (snoop MSI), \file{MultiCoreSystem_Directory.csv} (directory
-MSI, pinned to an FCFS bus), \file{MultiCoreSystem_Mesh.csv} (the mesh). \code{run\_octopus.sh
---protocol} \emph{copies} the chosen one over \file{MultiCoreSystem.csv}, which is why
-\code{git checkout -- configuration/} is the reset for everything in this chapter.
+snoop MSI in \file{MultiCoreSystem_Snoop.csv}, directory MSI (pinned to an FCFS bus) in
+\file{MultiCoreSystem_Directory.csv}, and the mesh in \file{MultiCoreSystem_Mesh.csv}.
+\code{run\_octopus.sh --protocol} \emph{copies} the chosen one over \file{MultiCoreSystem.csv},
+which is why \code{git checkout -- configuration/} is the reset for everything in this chapter.
 
 \begin{trapbox}[{The protocol is five coupled keys, not one}]
 A protocol is \code{cache\_controller\_type}, \code{cache\_controller[*].protocol\_type},
@@ -91,16 +91,17 @@ selecting a preset.
 
 \begin{table}[htbp]\centering\small
 \caption{The configuration axes that ship, with the key that moves each.}\label{tab:axes}
-\begin{tabularx}{\textwidth}{@{}lYp{0.3\textwidth}@{}}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}p{0.17\textwidth}p{0.45\textwidth}Y@{}}
 \toprule axis & key & values \\ \midrule
-bus arbiter & \code{bus[0].interconnect\_controller.arbiter\_type} & \code{FCFSArbiter} \code{RRArbiter} \code{TDMArbiter} \\
-LLC port arbiter & \code{llc\_controller.arbiter\_type} & the same \\
-main memory & \code{main\_memory\_type} & \code{MainMemoryController} \code{MCsim} \\
-DRAM scheduler & \code{mcsim\_scheduler} & \code{FRFCFS} \code{FCFS} \code{BLISS} \code{AMC} \code{MAG} \ldots \\
-LLC geometry & \code{llc\_controller.m\_data\_handler.cache\_size}, \code{m\_ways\_count} & bytes, ways \\
-LLC way partition & \code{llc\_controller.m\_data\_handler.way\_partition} & e.g.\ \code{0:0;1-3:1} \\
-queues & \code{*.num\_mshr} \code{*.pwb\_size} \code{*.processing\_queue\_size} & integers, \code{-1} = unbounded \\
-out-of-order window & \code{cpu[*].m\_number\_of\_OoO\_requests} & integer \\
+bus arbiter & \file{bus[0].interconnect_controller.arbiter_type} & \code{FCFSArbiter}, \code{RRArbiter}, \code{TDMArbiter} \\
+LLC port arbiter & \file{llc_controller.arbiter_type} & the same \\
+main memory & \file{main_memory_type} & \code{MainMemoryController}, \code{MCsim} \\
+DRAM scheduler & \file{mcsim_scheduler} & \code{FRFCFS}, \code{FCFS}, \code{BLISS}, \code{AMC}, \code{MAG}, \ldots \\
+LLC geometry & \file{llc_controller.m_data_handler.cache_size}, \file{llc_controller.m_data_handler.m_ways_count} & bytes, ways \\
+LLC way partition & \file{llc_controller.m_data_handler.way_partition} & e.g.\ \code{0:0;1-3:1} \\
+queues & \file{*.num_mshr}, \file{*.pwb_size}, \file{*.processing_queue_size} & integers, \code{-1} = unbounded \\
+out-of-order window & \file{cpu[*].m_number_of_OoO_requests} & integer \\
 coherence protocol & a whole preset & snoop MSI, snoop MESI, directory MSI \\
 \bottomrule
 \end{tabularx}

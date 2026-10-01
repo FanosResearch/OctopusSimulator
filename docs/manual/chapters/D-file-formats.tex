@@ -7,7 +7,7 @@ completion order, then two footer rows (per-column worst case, then averages). C
 as the scripts address them:
 
 \begin{table}[htbp]\centering\small
-\begin{tabularx}{\textwidth}{@{}rp{0.34\textwidth}Y@{}}
+\begin{tabularx}{\textwidth}{@{}r>{\raggedright\arraybackslash}p{0.42\textwidth}Y@{}}
 \toprule \# & column & meaning \\ \midrule
 1 & \code{RequstID} & the global \code{msg\_id}; joins with Debugger traces and the raw trace \\
 2 & \code{Request Address} & \\
@@ -46,10 +46,15 @@ The last two are the job's mean and worst access latency as the core sees it, is
 \section{The task program, \code{task\_C<n>.task.csv}}
 
 Column 1 is the row kind. \code{attr} rows set \code{period}, \code{jobs} ($-1$ = free-running),
-\code{ooo}, \code{deadline}, \code{start}; phase rows are the job body, replayed once per job:
-\code{COMPUTE,cycles}; \code{READ,addr}; \code{WRITE,addr}; \code{LINEAR,base,count,stride,rd\_ratio};
-\code{RANDOM,base,range,count,rd\_ratio}. Numbers accept hex or decimal; \code{\#} lines and
-blank lines are ignored.
+\code{ooo}, \code{deadline}, \code{start}; phase rows are the job body, replayed once per job.
+Numbers accept hex or decimal; \code{\#} lines and blank lines are ignored.
+
+\begin{lstlisting}[style=plain]
+COMPUTE,cycles
+READ,addr            WRITE,addr
+LINEAR,base,count,stride,rd_ratio
+RANDOM,base,range,count,rd_ratio
+\end{lstlisting}
 
 \section{The sweep result, \code{results/<axis>/<suite>.csv}}
 

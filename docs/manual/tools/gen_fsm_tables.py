@@ -72,16 +72,17 @@ def emit(name):
     out.append(r"\begin{landscape}")
     out.append(r"\begin{table}[p]\centering")
     out.append(r"\caption{\texttt{%s}: transitions as \texttt{actions/next\_state}; an empty cell ignores the event, \textcolor{octred}{Fault} aborts the run. \textbf{Bold} states are stable, \emph{italic} ones transient.}\label{fsm:%s}" % (tex(name), name))
-    out.append(r"\begin{adjustbox}{max width=\linewidth}\small")
-    out.append(r"\begin{tabular}{@{}l%s@{}}" % ("l" * len(events)))
+    # the landscape text width is the portrait text height; scale down only when wider
+    out.append(r"\sbox0{\small\begin{tabular}{@{}l%s@{}}" % ("l" * len(events)))
     out.append(r"\toprule \textbf{state} & " + " & ".join(r"\rotatebox{60}{\texttt{%s}}" % tex(e) for e in events) + r" \\ \midrule")
     for r in trans:
         st, stable, valid = r[0], r[1], r[2]
         cells = r[3:] + [""] * (len(events) - len(r[3:]))
         mark = r"\textbf{%s}" % tex(st) if stable == "1" else r"\emph{%s}" % tex(st)
         out.append(mark + " & " + " & ".join(cell(c) for c in cells) + r" \\")
-    out.append(r"\bottomrule\end{tabular}")
-    out.append(r"\end{adjustbox}\end{table}")
+    out.append(r"\bottomrule\end{tabular}}")
+    out.append(r"\ifdim\wd0>\linewidth \resizebox{\linewidth}{!}{\usebox0}\else\usebox0\fi")
+    out.append(r"\end{table}")
     out.append(r"\end{landscape}")
     p = os.path.join(OUT_DIR, "fsm_%s.tex" % name)
     io.open(p, "w", encoding="utf-8", newline="\n").write("\n".join(out) + "\n")

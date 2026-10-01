@@ -69,20 +69,21 @@
 
 % ---- boxes ----
 \newtcolorbox{wherebox}[1][Where in the code]{enhanced,colback=octmem!60,colframe=octrule,fonttitle=\sffamily\bfseries,title={#1},before upper=\raggedright,arc=2pt,boxrule=0.6pt,left=5pt,right=5pt,top=4pt,bottom=4pt,before skip=8pt,after skip=10pt}
-\newtcolorbox{trapbox}[1][Trap]{enhanced,colback=octctl,colframe=octamber,fonttitle=\sffamily\bfseries,title={#1},arc=2pt,boxrule=0.6pt,left=5pt,right=5pt,top=4pt,bottom=4pt,before skip=8pt,after skip=10pt}
-\newtcolorbox{notebox}[1][Design note]{enhanced,colback=octio,colframe=octpurple,fonttitle=\sffamily\bfseries,title={#1},arc=2pt,boxrule=0.6pt,left=5pt,right=5pt,top=4pt,bottom=4pt,before skip=8pt,after skip=10pt}
-\newtcolorbox{findbox}{enhanced,colback=octpaper,colframe=octrule!50,arc=2pt,boxrule=0.5pt,left=5pt,right=5pt,top=3pt,bottom=3pt,before skip=6pt,after skip=8pt,fontupper=\small}
+\newtcolorbox{trapbox}[1][Trap]{enhanced,colback=octctl,colframe=octamber,fonttitle=\sffamily\bfseries,title={#1},before upper=\raggedright,arc=2pt,boxrule=0.6pt,left=5pt,right=5pt,top=4pt,bottom=4pt,before skip=8pt,after skip=10pt}
+\newtcolorbox{notebox}[1][Design note]{enhanced,colback=octio,colframe=octpurple,fonttitle=\sffamily\bfseries,title={#1},before upper=\raggedright,arc=2pt,boxrule=0.6pt,left=5pt,right=5pt,top=4pt,bottom=4pt,before skip=8pt,after skip=10pt}
+\newtcolorbox{findbox}{enhanced,colback=octpaper,colframe=octrule!50,arc=2pt,boxrule=0.5pt,left=5pt,right=5pt,top=3pt,bottom=3pt,before skip=6pt,after skip=8pt,fontupper=\small,before upper=\raggedright}
 
 % ---- macros ----
 \newcommand{\octopus}{Octopus}
-\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\brkus}{\textunderscore\allowbreak}
+\newcommand{\code}[1]{{\let\_\brkus\ttfamily #1}}   % monospace that may break after an underscore
 \newcommand{\file}[1]{\path{#1}}   % verbatim argument: write raw _ and *, breaks at / and _
-\newcommand{\key}[1]{\texttt{#1}\index[cfg]{#1}}
-\newcommand{\env}[1]{\texttt{#1}\index[idx]{#1@\texttt{#1} (environment)}}
+\newcommand{\key}[1]{\code{#1}\index[cfg]{#1@\code{#1}}}
+\newcommand{\env}[1]{\code{#1}\index[idx]{#1@\code{#1} (environment)}}
 \newcommand{\state}[1]{\textsf{#1}}
-\newcommand{\act}[1]{\texttt{#1}\index[idx]{#1@\texttt{#1} (FSM action)}}
-\newcommand{\evt}[1]{\texttt{#1}}
-\newcommand{\stamp}[1]{\texttt{#1}}
+\newcommand{\act}[1]{\code{#1}\index[idx]{#1@\code{#1} (FSM action)}}
+\newcommand{\evt}[1]{\code{#1}}
+\newcommand{\stamp}[1]{\code{#1}}
 \newcommand{\col}[1]{\textsf{#1}}
 \newcommand{\figwide}[3]{\begin{figure}[htbp]\centering\includegraphics[width=\textwidth]{#1}\caption{#2}\label{#3}\end{figure}}
 \newcommand{\figmed}[4]{\begin{figure}[htbp]\centering\includegraphics[width=#4\textwidth]{#1}\caption{#2}\label{#3}\end{figure}}

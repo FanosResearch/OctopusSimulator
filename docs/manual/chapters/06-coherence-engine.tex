@@ -1,4 +1,4 @@
-\chapter{The coherence engine: CSV finite-state machines}\label{ch:coherence-engine}
+\chapter[The coherence engine]{The coherence engine: CSV finite-state machines}\label{ch:coherence-engine}
 
 \whatyoufind{Why a coherence protocol in Octopus is a spreadsheet and not a program; the exact
 format of that spreadsheet and the one rule about it that silently breaks protocols; the
@@ -126,14 +126,15 @@ protocol handler and the tables differ.
 \begin{table}[htbp]\centering\small
 \caption{The protocol families that ship, and the preset that selects each. The L1 and LLC
 tables of a family are a matched pair.}\label{tab:families}
-\begin{tabularx}{\textwidth}{@{}llp{0.2\textwidth}Y@{}}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}p{0.17\textwidth}p{0.27\textwidth}p{0.2\textwidth}Y@{}}
 \toprule family & L1 table & LLC table & selected by \\ \midrule
-snoop MSI & \code{MSI\_splitBus\_snooping} & \code{MSI\_LLC} & \code{MultiCoreSystem\_Snoop.csv} \\
-snoop MESI & \code{MESI\_splitBus\_snooping} & \code{MESI\_LLC} & \code{MultiCoreSystem.csv} (default) \\
-snoop MOESI & \code{MOESI\_splitBus\_snooping} & \code{MOESI\_LLC} & no preset \\
-directory MSI & \code{MSI\_directory} & \code{MSI\_LLC\_directory} & \code{MultiCoreSystem\_Directory.csv} \\
-directory MESI, MOESI & \code{MESI\_directory}, \code{MOESI\_directory} & \code{\ldots\_LLC\_directory} & no preset \\
-predictable & \code{PMSI}, \code{PMESI}, \code{PMSI\_asterisk}, \code{PMESI\_asterisk}, \code{Pendulum} & their \code{\ldots\_LLC} tables & research configurations \\
+snoop MSI & \file{MSI_splitBus_snooping} & \file{MSI_LLC} & \file{MultiCoreSystem_Snoop.csv} \\
+snoop MESI & \file{MESI_splitBus_snooping} & \file{MESI_LLC} & \file{MultiCoreSystem.csv} (the default) \\
+snoop MOESI & \file{MOESI_splitBus_snooping} & \file{MOESI_LLC} & no preset \\
+directory MSI & \file{MSI_directory} & \file{MSI_LLC_directory} & \file{MultiCoreSystem_Directory.csv} \\
+directory MESI, MOESI & \file{MESI_directory}, \file{MOESI_directory} & \file{MESI_LLC_directory}, \file{MOESI_LLC_directory} & no preset \\
+predictable & \file{PMSI}, \file{PMESI}, \file{PMSI_asterisk}, \file{PMESI_asterisk}, \file{Pendulum} & their \file{_LLC} tables & research configurations \\
 \bottomrule
 \end{tabularx}
 \end{table}

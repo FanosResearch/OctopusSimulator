@@ -86,13 +86,14 @@ order (\cref{sec:fsm-format}): a new state's row goes last.
 L1 per core on \code{bus[0]}, one LLC between \code{bus[0]} and \code{bus[1]}, memory beyond.
 There is no parameter for a third level; the wiring is in C++, which is the boundary between
 data and code (\cref{ch:configuration}). So this is a new class beside \code{MultiCoreSystem}
-and \code{MultiCoreSystem\_Mesh}, selected with \code{-s ThreeLevelSystem}, which needs
-\code{ThreeLevelSystem.\{h,cpp\}} \emph{and} \file{configuration/SystemConfigurations/ThreeLevelSystem.csv}
---- the same name is how \code{-s} finds both. Every building block exists and is generic:
-\code{createController(type, map, lower, upper, name)} makes a controller of any type from a
-parameter sub-map, \code{Bus} and \code{TripleBus} build from \code{getSubMap("bus", i)},
-\key{bus\_type} already sizes the bus array from the CSV so a third bus is a CSV line, and
-\code{getSubMap("cache\_controller", i)} gives per-instance parameters. The new class is
+and \code{MultiCoreSystem\_Mesh}, selected with \code{-s ThreeLevelSystem}. It needs the
+class --- a header and a source file --- \emph{and} a CSV of the same name under
+\file{configuration/SystemConfigurations/}; the shared name is how \code{-s} finds both. Every
+building block exists and is generic. \code{createController} makes a controller of any type
+from a parameter sub-map and a pair of interfaces; \code{Bus} and \code{TripleBus} build from
+their own sub-map (\code{getSubMap} with \code{"bus"} and the index); \key{bus\_type} already
+sizes the bus array from the CSV, so a third bus is a CSV line; and the per-instance parameters
+of a controller come from \code{getSubMap} with \code{"cache\_controller"} and the index. The new class is
 \code{MultiCoreSystem.cpp} with one more loop: L1s on \code{bus[0]}, private L2s between
 \code{bus[0]} and \code{bus[1]}, the LLC between \code{bus[1]} and \code{bus[2]}, memory on
 \code{bus[2]}; register it where \code{MultiCoreSystem\_Mesh} is registered and add the source to

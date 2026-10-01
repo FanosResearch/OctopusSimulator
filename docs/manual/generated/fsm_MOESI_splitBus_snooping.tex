@@ -37,8 +37,7 @@
 \begin{landscape}
 \begin{table}[p]\centering
 \caption{\texttt{MOESI\_splitBus\_snooping}: transitions as \texttt{actions/next\_state}; an empty cell ignores the event, \textcolor{octred}{Fault} aborts the run. \textbf{Bold} states are stable, \emph{italic} ones transient.}\label{fsm:MOESI_splitBus_snooping}
-\begin{adjustbox}{max width=\linewidth}\small
-\begin{tabular}{@{}lllllllllllll@{}}
+\sbox0{\small\begin{tabular}{@{}lllllllllllll@{}}
 \toprule \textbf{state} & \rotatebox{60}{\texttt{Load}} & \rotatebox{60}{\texttt{Store}} & \rotatebox{60}{\texttt{Replacement}} & \rotatebox{60}{\texttt{Own\_GetS}} & \rotatebox{60}{\texttt{Own\_GetM}} & \rotatebox{60}{\texttt{Own\_PutM}} & \rotatebox{60}{\texttt{Other\_GetS}} & \rotatebox{60}{\texttt{Other\_GetM}} & \rotatebox{60}{\texttt{Other\_PutM}} & \rotatebox{60}{\texttt{OwnData}} & \rotatebox{60}{\texttt{Invalidation}} & \rotatebox{60}{\texttt{OwnData\_Execlusive}} \\ \midrule
 \textbf{I} & \texttt{GetS/IS\_ad} & \texttt{GetM/IM\_ad} &  & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} &  &  &  & \textcolor{octred}{Fault} &  & \textcolor{octred}{Fault} \\
 \emph{IS\_ad} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \texttt{IS\_d} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} &  &  &  & \texttt{IS\_a} &  & \textcolor{octred}{Fault} \\
@@ -69,6 +68,7 @@
 \emph{EM\_a} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \textcolor{octred}{Fault} & \texttt{Hit/M} & \textcolor{octred}{Fault} & \texttt{Data2Req/SM\_ad} & \texttt{Data2Req/IM\_ad} & \texttt{Stall/} & \textcolor{octred}{Fault} & \texttt{IM\_ad} & \textcolor{octred}{Fault} \\
 \emph{IM\_dOI} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} &  &  &  & \texttt{Hit/Data2Req/I} &  & \textcolor{octred}{Fault} \\
 \emph{SM\_dOI} & \texttt{Hit/} & \texttt{Stall/} & \texttt{Stall/} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} &  &  &  & \texttt{Hit/Data2Req/I} &  & \textcolor{octred}{Fault} \\
-\bottomrule\end{tabular}
-\end{adjustbox}\end{table}
+\bottomrule\end{tabular}}
+\ifdim\wd0>\linewidth \resizebox{\linewidth}{!}{\usebox0}\else\usebox0\fi
+\end{table}
 \end{landscape}

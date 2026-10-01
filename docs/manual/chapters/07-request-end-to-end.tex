@@ -124,7 +124,7 @@ run's stderr counts the request as \code{noresp}.
 \section{Checking a column}
 
 The columns tile to \col{Total} on every row by construction, and the simulator says so: the
-\code{[EVENT-PATH]} line on stderr at the end of a run reports how many requests tiled, how
+\code{EVENT-PATH} line on stderr at the end of a run reports how many requests tiled, how
 many did not, and how many had no responder. When a column looks wrong,
 \env{OCTOPUS\_EVENT\_DUMP}\code{=N} prints the raw timeline --- every stamp with its role and
 cycle --- of the first $N$ requests whose Total exceeds 100 cycles or that crossed the memory

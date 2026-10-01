@@ -8,11 +8,12 @@ the latencies the simulator reports come from.}
 
 \section{The datapath}
 
-\figwide{llc_architecture.pdf}{The shipped LLC as a datapath: \code{CacheController\_End2End}
+\begin{figure}[htbp]\centering\includegraphics[width=\textwidth]{llc_architecture.pdf}
+\caption[The shipped LLC as a datapath]{The shipped LLC as a datapath: \code{CacheController\_End2End}
 with \code{CacheDataHandler\_COTS}, 32\,KB, 2-way, 64\,B lines, the \code{MESI\_LLC} FSM and
 one timed data port. Bus interfaces on top, control on the left, the single array in the
 middle read by an untimed bits path and a timed data port on the right, MSHR and write-back
-buffer beside it, the memory bus below.}{fig:llc-architecture}
+buffer beside it, the memory bus below.}\label{fig:llc-architecture}\end{figure}
 
 \Cref{fig:llc-architecture} follows the model rather than a textbook cache. The address splits
 into tag, set and offset, and the set indexes \emph{one} array: in Octopus a line carries its

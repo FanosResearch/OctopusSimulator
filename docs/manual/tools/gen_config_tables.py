@@ -32,6 +32,8 @@ def parse(path):
         if cells[0] == "Extends":
             extends = cells[1] if len(cells) > 1 else ""
             continue
+        if cells[0].startswith("#"):      # a comment row, not a key
+            continue
         key = cells[0]
         m = re.match(r"^(.*)\(([a-z]+)\)$", key)
         name, typ = (m.group(1), m.group(2)) if m else (key, "")
@@ -68,16 +70,17 @@ def main():
         out.append(r"\subsection*{\texttt{%s}}\label{cfg:%s}" % (tex(rel), label))
         if extends:
             out.append(r"\noindent\emph{Extends} \texttt{%s}; every key below overrides or adds to it." % tex(extends))
-        out.append(r"\begin{longtable}{@{}>{\ttfamily}p{0.34\textwidth}p{0.08\textwidth}p{0.16\textwidth}p{0.36\textwidth}@{}}")
+        out.append(r"\begin{longtable}{@{}>{\ttfamily\raggedright\arraybackslash}p{0.33\textwidth}p{0.07\textwidth}>{\raggedright\arraybackslash}p{0.19\textwidth}>{\raggedright\arraybackslash}p{0.33\textwidth}@{}}")
         out.append(r"\toprule \normalfont key & type & value & meaning \\ \midrule \endfirsthead")
         out.append(r"\toprule \normalfont key & type & value & meaning \\ \midrule \endhead")
         out.append(r"\bottomrule \endfoot")
         for name, typ, val, com in rows:
             # long dotted keys and value lists must be breakable inside a narrow column
             k = tex(name).replace(".", r".\allowbreak{}").replace(r"\_", r"\_\allowbreak{}").replace("[", r"\allowbreak{}[")
-            v = tex(val).replace(", ", r",\allowbreak{} ").replace(r"\_", r"\_\allowbreak{}")
+            v = tex(val).replace(", ", r",\allowbreak{} ").replace(r"\_", r"\_\allowbreak{}").replace("/", r"/\allowbreak{}")
             v = re.sub(r"(?<=[a-z])(?=[A-Z])", r"\\allowbreak{}", v)   # CamelCase class names
-            out.append(r"%s\index[cfg]{%s} & %s & \texttt{%s} & %s \\" % (k, tex(name), tex(typ), v, tex(com)))
+            v = re.sub(r"([0-9A-F]{8})(?=[0-9A-F])", r"\1\\allowbreak{}", v)  # long hex masks
+            out.append(r"%s\index[cfg]{%s@\code{%s}} & %s & \texttt{%s} & %s \\" % (k, tex(name), tex(name), tex(typ), v, tex(com)))
         out.append(r"\end{longtable}")
         out.append("")
     io.open(OUT, "w", encoding="utf-8", newline="\n").write("\n".join(out) + "\n")

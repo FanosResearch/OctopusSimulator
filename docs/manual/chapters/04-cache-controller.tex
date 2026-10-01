@@ -48,7 +48,7 @@ per-line FCFS gate is what prevents an eviction's invalidation from leapfrogging
 \section{From message to actions}
 
 \begin{figure}[htbp]\centering
-\input{figures/tikz/controller-sequence}
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/controller-sequence}\end{adjustbox}
 \caption{One message through the controller. The handler decodes the message into an event,
 looks up the transition for the line's current state, and hands the controller a list of
 protocol-agnostic actions; the controller does not know which protocol it is running.}
@@ -189,8 +189,8 @@ kind & the producer's classification of the message (\code{DEMAND}, \code{GETS},
 \end{tabularx}
 \end{table}
 
-The bus \code{MessageType} passed to \code{pushMessage} (\code{REQUEST}, \code{DATA\_RESPONSE},
-\code{SERVICE\_REQUEST}) selects the lane the message travels on; it is not stored in the message.
+The bus \code{MessageType} passed to \code{pushMessage} --- \code{REQUEST}, \code{DATA\_RESPONSE}
+or \code{SERVICE\_REQUEST} --- selects the lane the message travels on; it is not stored in the message.
 Three things the same value means are worth remembering: \code{cv = 2} is a PutM on a request, an
 eviction write-back at the LLC and an exclusive grant at a MESI L1; \code{owner} is the requester
 for requests, supplies and fills but the LLC for invalidations; and \code{msg\_id} joins a demand

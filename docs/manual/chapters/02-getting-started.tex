@@ -26,10 +26,10 @@ documents this manual consolidates.
 
 \section{Zero-install: a Codespace}
 
-The \code{esweek-tutorial} branch carries a dev container. On GitHub, \emph{Code
-$\rightarrow$ Codespaces $\rightarrow$ Create codespace on esweek-tutorial} gives a working
-simulator in a browser: the container (\code{ghcr.io/fanosresearch/esweek}) carries the
-toolchain and the Python packages, \file{.devcontainer/on-create.sh} fetches the EEMBC traces,
+The \code{esweek-tutorial} branch carries a dev container. On GitHub, choose \emph{Code},
+then \emph{Codespaces}, then \emph{Create codespace on esweek-tutorial}, and a working
+simulator opens in the browser: the container image (\file{ghcr.io/fanosresearch/esweek})
+carries the toolchain and the Python packages, \file{.devcontainer/on-create.sh} fetches the EEMBC traces,
 \file{post-create.sh} builds MCsim and the simulator and runs the environment check, and port
 8765 is forwarded so the visualizer opens by itself. The two scripts double as documentation of
 the dependencies.
@@ -74,11 +74,14 @@ W=$PWD/BMs/eembc-traces/a2time01-trace       # Git Bash on Windows: W=$(cygpath 
 ./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/"
 \end{lstlisting}
 
-It takes a few seconds. \code{-s} names the system --- the class \code{MultiCoreSystem} and
-\file{configuration/SystemConfigurations/MultiCoreSystem.csv} --- and \code{-p} overrides any
-key in it; \cref{ch:configuration} is about little else. The suite drivers wrap the same call:
-\code{./run\_octopus.sh --protocol snoop --suite eembc --bench a2time01-trace} runs one
-benchmark under the snoop-MSI preset and prints a completion verdict.
+It takes a few seconds. \code{-s} names the system: the class \code{MultiCoreSystem} and the
+CSV of the same name under \file{configuration/SystemConfigurations/}. \code{-p} overrides any
+key in it; \cref{ch:configuration} is about little else. The suite drivers wrap the same call; this runs
+one benchmark under the snoop-MSI preset and prints a completion verdict:
+
+\begin{lstlisting}[style=shell]
+./run_octopus.sh --protocol snoop --suite eembc --bench a2time01-trace
+\end{lstlisting}
 
 \section{What comes out}
 

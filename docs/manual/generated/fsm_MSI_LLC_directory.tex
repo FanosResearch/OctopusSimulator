@@ -22,8 +22,7 @@
 \begin{landscape}
 \begin{table}[p]\centering
 \caption{\texttt{MSI\_LLC\_directory}: transitions as \texttt{actions/next\_state}; an empty cell ignores the event, \textcolor{octred}{Fault} aborts the run. \textbf{Bold} states are stable, \emph{italic} ones transient.}\label{fsm:MSI_LLC_directory}
-\begin{adjustbox}{max width=\linewidth}\small
-\begin{tabular}{@{}llllllllllll@{}}
+\sbox0{\small\begin{tabular}{@{}llllllllllll@{}}
 \toprule \textbf{state} & \rotatebox{60}{\texttt{GetS}} & \rotatebox{60}{\texttt{GetM}} & \rotatebox{60}{\texttt{Replacement}} & \rotatebox{60}{\texttt{PutS}} & \rotatebox{60}{\texttt{last\_PutS}} & \rotatebox{60}{\texttt{InvAck}} & \rotatebox{60}{\texttt{last\_InvAck}} & \rotatebox{60}{\texttt{PutM\_Data\_fromOwner}} & \rotatebox{60}{\texttt{PutM\_Data\_fromNonOwner}} & \rotatebox{60}{\texttt{Data\_fromLowerInterface}} & \rotatebox{60}{\texttt{Data\_fromUpperInterface}} \\ \midrule
 \textbf{N} & \texttt{GetData/IncSharers/NS\_d} & \texttt{SetOwner/GetData/NM\_d} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \texttt{PutAck/} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} \\
 \emph{NS\_d} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \texttt{PutAck/} & \textcolor{octred}{Fault} & \texttt{SendData/S} \\
@@ -34,6 +33,7 @@
 \emph{S\_d} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \texttt{PutAck/DecSharers/} & \texttt{SaveData/S} & \textcolor{octred}{Fault} \\
 \emph{N\_d} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \texttt{ClearOwner/DecSharers/WriteBack/N} & \texttt{ClearOwner/DecSharers/PutAck/WriteBack/N} & \texttt{PutAck/} & \texttt{DecSharers/WriteBack/N} & \textcolor{octred}{Fault} \\
 \emph{N\_a} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \texttt{PutAck/} & \texttt{PutAck/} & \texttt{DecSharers/} & \texttt{DecSharers/N} & \textcolor{octred}{Fault} & \texttt{PutAck/} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} \\
-\bottomrule\end{tabular}
-\end{adjustbox}\end{table}
+\bottomrule\end{tabular}}
+\ifdim\wd0>\linewidth \resizebox{\linewidth}{!}{\usebox0}\else\usebox0\fi
+\end{table}
 \end{landscape}

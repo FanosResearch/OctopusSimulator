@@ -1,28 +1,24 @@
 % The Logger's view of a request: a chain of self-describing events in the originating
-% core's clock; consecutive events bound the stages.
-\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, node distance=3mm and 5mm,
-  r/.style={draw=octrule, fill=octmem, rounded corners=2pt, minimum width=15mm, minimum height=7mm, font=\sffamily\footnotesize\bfseries},
+% core's clock; consecutive events bound the stages. Each box lists the stamps it takes.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, node distance=4mm and 6mm,
+  r/.style={draw=octrule, fill=octmem, rounded corners=2pt, minimum width=17mm, minimum height=7mm, font=\sffamily\footnotesize\bfseries},
   bus/.style={r, fill=octio, draw=octpurple},
   mem/.style={r, fill=white},
-  w/.style={->, thick, octink}, e/.style={font=\ttfamily\scriptsize, text=octquiet}]
+  w/.style={->, thick, octink}, e/.style={font=\ttfamily\scriptsize, text=octquiet, align=center}]
   \node[r] (cpu) {CPU};
   \node[r, right=of cpu] (l1) {L1};
   \node[bus, right=of l1] (rb) {REQ\_BUS};
   \node[r, right=of rb] (llc) {LLC};
   \node[bus, right=of llc] (sb) {RESP\_BUS};
   \node[r, right=of sb] (cpu2) {CPU};
-  \node[bus, below=10mm of llc, xshift=-12mm] (mb1) {MEM\_BUS};
+  \node[bus, below=12mm of llc, xshift=-14mm] (mb1) {MEM\_BUS};
   \node[mem, right=of mb1] (dr) {DRAM};
   \node[bus, right=of dr] (mb2) {MEM\_BUS};
-  \draw[w] (cpu) -- node[e, above] {ENTER} (l1);
-  \draw[w] (l1) -- node[e, above] {ENTER} (rb);
-  \draw[w] (rb) -- node[e, above] {EXIT} (llc);
-  \draw[w] (llc) -- node[e, above] {ENTER} node[e, below] {SERVICE, EXIT} (sb);
-  \draw[w] (sb) -- node[e, above] {EXIT} (cpu2);
-  \node[e, above=0.5mm of cpu2] {EXIT $\rightarrow$ \code{finalizeEvents}};
-  \draw[w, octquiet] (llc.south) |- node[e, below, pos=0.9] {miss} (mb1.north);
-  \draw[w, octquiet] (mb1) -- node[e, above] {EXIT} (dr);
-  \draw[w, octquiet] (dr) -- node[e, above] {ENTER, EXIT} (mb2);
-  \draw[w, octquiet] (mb2.east) -- ++(4mm,0) |- node[e, above, pos=0.25] {EXIT} (llc.east);
-  \node[text=octquiet, align=center, below=3mm of dr, text width=70mm] {every event records \code{(comp\_id, role, phase, cycle)}; the cycle is the originating core's clock whatever component stamps it, so stages are differences of named events and tile to Total};
+  \foreach \n/\t in {cpu/ENTER, l1/ENTER, rb/EXIT, llc/{ENTER\\SERVICE, EXIT}, sb/EXIT, cpu2/{EXIT\\$\rightarrow$ finalizeEvents}, mb1/EXIT, dr/{ENTER, EXIT}, mb2/EXIT}
+    { \node[e, below=0.8mm of \n] {\t}; }
+  \draw[w] (cpu) -- (l1); \draw[w] (l1) -- (rb); \draw[w] (rb) -- (llc); \draw[w] (llc) -- (sb); \draw[w] (sb) -- (cpu2);
+  \draw[w, octquiet] (llc.south) ++(-3mm,0) |- node[e, pos=0.9, above] {miss} (mb1.west);
+  \draw[w, octquiet] (mb1) -- (dr); \draw[w, octquiet] (dr) -- (mb2);
+  \draw[w, octquiet] (mb2.east) -- ++(4mm,0) |- ($(llc.east)+(0,-1.5mm)$);
+  \node[text=octquiet, align=center, below=11mm of dr, text width=90mm] {every event records \code{(comp\_id, role, phase, cycle)}; the cycle is the originating core's clock whatever component stamps it, so stages are differences of named events and tile to Total};
 \end{tikzpicture}
