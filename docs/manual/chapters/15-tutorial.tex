@@ -107,10 +107,19 @@ first: Octopus is compiled into gem5 as an \code{EXTRAS} module, so an Octopus C
 relinking \code{gem5.opt}; both exercises vary configuration only.
 
 \begin{description}
-\item[01 --- gem5 + Octopus in SE mode] (15--20 min). One short program under gem5; trace the
-  journey of a request through \code{ExternalCPU}, the hierarchy and \code{MCsimInterface};
-  compare its \code{LatencyReport} with the same configuration standalone; vary the bus arbiter
-  in the configuration and re-run.
+\item[01 --- gem5 + Octopus in SE mode] (20 min, with runs in the background). Three parts
+  on real programs under gem5's out-of-order cores. \emph{A}: \code{se\_test}, a self-checking
+  four-thread program, once as shipped and once with the bus arbiter changed by
+  \code{--octopus-param}, nothing rebuilt. \emph{B}: two views of one run, gem5's
+  \code{stats.txt} next to Octopus's own \code{newLogger/} reports written under gem5, with
+  equal request counts and latencies that agree to a cycle. \emph{C}: a small real-time SLAM
+  --- a sensor thread releasing scans on a period, a mapper and a front-end --- under a
+  co-running memory aggressor, in seven configurations: alone, a light aggressor that fits the
+  LLC with FCFS and with round-robin arbitration, and a heavy one that sweeps twice the LLC
+  with FCFS, round-robin, LLC way partitioning and both. Timing becomes tracking error: the
+  light aggressor's queueing is undone by round-robin, the heavy one's evictions through the
+  inclusive LLC make tracking fail and only way partitioning brings it back. Octopus's
+  per-request reports then say why, stage by stage.
 \item[02 --- full-system Arm Linux] (25--30 min plus a take-home). The pre-warm, launched at the
   start of the block, restores a checkpoint taken past boot and starts the workload; the
   walkthrough covers what the checkpoint contains, why booting is separated from measuring and

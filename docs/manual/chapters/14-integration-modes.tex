@@ -49,13 +49,28 @@ export LD_LIBRARY_PATH=$root/OctopusSimulator/build:$root/OctopusSimulator/MCsim
     --octopus-param 'bus[0].interconnect_controller.m_response_latency(i)=1'
 \end{lstlisting}
 
-The bridge, its gem5 configurations and the preset that describes the hierarchy behind gem5
-(\code{MultiCoreSystem\_gem5.csv}) live under \file{gem5/} on the \code{gem5\_ARM\_Challenge}
-branch and in the ESWEEK container image; the tutorial branch carries the simulator side
-(\code{ExternalCPU}) and the build instructions. \code{--octopus-param} takes any
-\code{name(type)=value} line of the preset and may be repeated, so the five keys of a protocol
-switch it to MESI without rebuilding anything. After a change to the library, \code{cmake
---build build} and the \code{scons} line relink only the bridge.
+The bridge is \file{gem5/octopus.cc}, a gem5 SimObject per L1, with \file{gem5/Octopus.py} and
+\file{gem5/SConscript} for the \code{EXTRAS} build; \file{gem5/configs/octopus_cache_hierarchy.py}
+puts the Octopus hierarchy behind gem5's cores, \file{fs_arm.py} and \file{se_arm.py} are the
+full-system and syscall-emulation entry points, and \file{gem5_base_cache_hierarchy.py} is
+gem5's own classic caches built from the same preset for comparison (\code{--classic}). The
+hierarchy itself is the preset \file{configuration/SystemConfigurations/MultiCoreSystem_gem5.csv}:
+four cores and eight L1 bridges --- instruction caches are Octopus ids 0--3, data caches 4--7
+--- running snoop MSI on a \code{CacheController}, 512\,KiB 4-way L1s with random replacement,
+an 8\,MiB 8-way LLC with a pipelined 10-cycle array and the line interlock on
+(\cref{ch:cache-controller}), an FCFS bus, and MCsim DDR4-2400 as memory.
+\code{--octopus-param} takes any \code{name(type)=value} line of the preset and may be repeated,
+so the five keys of a protocol switch it to MESI without rebuilding anything. After a change to
+the library, \code{cmake --build build} and the \code{scons} line relink only the bridge.
+
+\paragraph{Octopus's reports under gem5.} With \code{cpu[*].log\_requests(i)=1} the
+\code{ExternalCPU} reports its requests to the Logger, so a gem5 run writes the same
+\code{newLogger/} --- one \code{LatencyReport\_C<core>.csv} per core, both of a core's L1s
+reporting into it, and \code{Summary.csv} --- that a standalone run does. The window follows
+gem5's statistics: a stats reset starts a fresh log, the next stats dump writes the reports, so
+both views cover the region of interest only. gem5's side is the bridge's own counters per L1 in
+\code{stats.txt} (\code{readReqs}, \code{writeReqs}, \code{responses}, \code{avgLatency}); every
+packet gem5 hands to an L1 is one Octopus request, and the two latencies agree to about a cycle.
 
 \paragraph{The Arm ISA is the hard part.} Booting Linux requires faithful atomics over
 Octopus's asynchronous, out-of-order message model. The bridge implements Arm LL/SC
@@ -68,15 +83,18 @@ Arm Industrial Challenge AR-HUD workload --- an OV\textsuperscript{2}SLAM stereo
 CNN pose estimator on a Jetson-class SoC model --- coordinating the shared arbiters cut the
 worst observed memory latency by more than twenty times at near-baseline throughput.
 
-\paragraph{Harnesses.} On the same branch, \file{gem5/harness/build.sh} builds three single
-binaries against \file{build/libOctopus.so} with no gem5: \code{l1} (hit and miss latencies, same-line bursts),
-\code{reorder} (with an override, e.g.\ a 10-cycle L1 port) and \code{stress} (multi-core random
-contention with a hang detector). Each takes a log directory and \code{name(type)=value}
-overrides. Two debug aids apply to any run: \env{OCTOPUS\_TRACE\_ADDR}\code{=<addr>} (or
-\code{1}) prints each controller's events on a line, \env{OCTOPUS\_DUMP\_AT}\code{=<cycle>} dumps
-every controller's queues at that cycle. The standalone presets are the regression check for
-library changes: run \code{MultiCoreSystem\_Directory} and \code{MultiCoreSystem\_Snoop} and
-diff \file{BMs/TestBM/newLogger/} against a build of the commit you started from.
+\paragraph{Harnesses and tests.} \file{gem5/harness/build.sh} builds single binaries against
+\file{build/libOctopus.so} with no gem5 --- \code{l1} (hit and miss latencies, same-line bursts),
+\code{llc}, \code{evict}, \code{seq}, \code{reorder} (with an override, e.g.\ a 10-cycle L1 port)
+and \code{stress} (multi-core random contention with a hang detector) --- each taking a log
+directory and \code{name(type)=value} overrides. \file{gem5/se_test/} is a self-checking
+four-thread program for SE mode, shipped as a static aarch64 binary: private streaming, one
+shared atomic counter, and producer--consumer slices, each phase checking its own result. Two
+debug aids apply to any run: \env{OCTOPUS\_TRACE\_ADDR}\code{=<addr>} (or \code{1}) prints each
+controller's events on a line, \env{OCTOPUS\_DUMP\_AT}\code{=<cycle>} dumps every controller's
+queues at that cycle. The standalone presets are the regression check for library changes: run
+\code{MultiCoreSystem\_Directory} and \code{MultiCoreSystem\_Snoop} and diff
+\file{BMs/TestBM/newLogger/} against a build of the commit you started from.
 
 \section{Running a session on it}
 
@@ -98,8 +116,14 @@ exercises (\cref{ch:tutorial}) are these; the ESWEEK container image carries the
 \begin{itemize}[nosep,leftmargin=1.2em]
 \item \file{header/ExternalCPU.h}, \file{src/ExternalCPU.cpp} --- the CPU-side interface
 \item \file{header/MCsimInterface.h}, \file{src/MCsimInterface.cpp} --- the memory side
-\item \file{README.md} --- ``Integrating Octopus with gem5'': the layout, the build and the run commands
-\item \file{gem5/} on the \code{gem5\_ARM\_Challenge} branch --- the bridge, its configurations (\file{configs/fs_arm.py}, \file{configs/octopus_cache_hierarchy.py}), the harnesses and \file{cmds.md}; the ESWEEK container image carries them prebuilt
+\item \file{gem5/octopus.cc}, \file{gem5/octopus.hh}, \file{gem5/Octopus.py}, \file{gem5/SConscript} --- the bridge and its build
+\item \file{gem5/configs/octopus_cache_hierarchy.py}, \file{gem5/configs/fs_arm.py}, \file{gem5/configs/se_arm.py}, \file{gem5/configs/gem5_base_cache_hierarchy.py} --- the gem5 configurations
+\item \file{configuration/SystemConfigurations/MultiCoreSystem_gem5.csv}, \file{configuration/ExternalCPU.csv} --- the hierarchy behind gem5
+\item \file{gem5/harness/}, \file{gem5/se_test/} --- the harnesses and the SE test
+\item \file{gem5/patches/} --- the gem5 patch the integration needs
+\item \file{gem5/cmds.md} --- the working record of the full-system runs
+\item \file{docs/StateAndData.md} --- what real data adds to the timing model
+\item \file{README.md} --- ``Integrating Octopus with gem5''
 \item \file{tutorial/04-gem5-and-fullsystem-stack/} --- the two exercises
 \end{itemize}
 \end{wherebox}

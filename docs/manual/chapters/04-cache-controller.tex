@@ -107,6 +107,44 @@ such accesses cut in ahead of an access already in progress (the dotted bypass i
 response is emitted from the fill message itself and the array write runs afterwards
 (\cref{ch:llc-datapath,ch:request-end-to-end}).
 
+\subsection{Two array models, and the line interlock}
+
+The data port can be timed in two ways, chosen per controller
+(\cref{tab:array-models}). In the \emph{occupancy} model, the default, a row runs when its
+message is popped --- the line's state changes at once --- and only the access to the line's
+bytes waits for the port, which then stays busy for the latency; the requester is not charged
+the latency and one access is served per latency window. It is the model every standalone
+preset uses, and it is correct for them because a trace carries no data and the LLC tables never
+invalidate what an older parked read still needs. In the \emph{pipelined} model
+(\key{m\_data\_handler.m\_data\_array\_pipelined}\code{=1}) every access pays the latency and one
+is admitted per port per cycle (\key{m\_data\_handler.m\_data\_array\_ports}); a message whose
+row touches the array is deferred \emph{whole}, so that its state change and its data access
+happen together when the access runs. Lines that sit in the MSHR or the write-back buffer are
+not in the array and bypass the pipeline in either model.
+
+Deferring a message whole takes it out of the queue, so a younger message to the same line could
+otherwise act on a state the older one was about to change. The \emph{line interlock}
+(\key{line\_interlock}\code{=1}) prevents that: while a line has an array access pending, every
+queued message to it is held in place, not ready, until the access has completed, so each message
+sees the line in bus order. The pipelined model turns the interlock on; with real data flowing
+through the hierarchy (the gem5 integration, \cref{ch:integration-modes}) or an L1 with an array
+latency, it must be on. In the same spirit a message from the bus enters a controller's queue
+ahead of the core's own requests but behind older bus messages, so bus order is kept even when a
+bus message has to wait. \file{docs/StateAndData.md} walks through the situations in which line
+state and line data can come apart and which setting handles each.
+
+\begin{table}[htbp]\centering\small
+\caption{The data-array settings.}\label{tab:array-models}
+\begin{tabularx}{\textwidth}{@{}lllY@{}}
+\toprule setting & default & gem5 preset & effect \\ \midrule
+\code{m\_data\_array\_pipelined} & 0 & 1 (LLC) & accesses pay the latency, one admitted per port per cycle; always defers whole, so it turns the interlock on \\
+\code{m\_data\_array\_ports} & 1 & 1 & pipelined model only: accesses admitted per cycle \\
+\code{line\_interlock} & 0 & 1 (L1, LLC) & hold every message to a line with an array access pending; enables whole-message deferral in the occupancy model \\
+\code{m\_data\_access\_latency} & 0 (L1), 10 (LLC) & 0, 10 & the port's busy time per access \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
 \section{Admission and back-pressure}
 
 A new demand miss is admitted only when the controller can finish it. \code{canAdmitRequest}

@@ -37,6 +37,8 @@ sweeps/sweep\_*.sh & one axis each (\code{arbiter}, \code{replacement}, \code{ca
 sweeps/plot\_results.py, analyze\_*.sh & the figures and the mechanism / trace analyses over sweep output \\
 demo/run\_acts.sh & the three acts of the interference demo (\code{act1 act2 act3}); \code{demo/extract\_jobs.py}, \code{build\_page.py}, \code{live.sh} \\
 demo\_protocol.sh & the MI-versus-MESI example of \cref{ch:coherence-engine} \\
+tutorial/04-\ldots/01-gem5-se/check.sh, run\_matrix.sh, compare\_views.sh & the gem5 SE exercise: the self-check, the seven SLAM configurations (\code{LOG=1} for Octopus's reports), gem5's statistics against Octopus's reports \\
+gem5/harness/build.sh, gem5/se\_test/Makefile & the standalone harnesses and the SE test binary \\
 docs/manual/build.sh & this manual \\
 \bottomrule
 \end{tabularx}
@@ -55,6 +57,8 @@ OCTOPUS\_EVENT\_DUMP\_MIN=<cycles> & the Total threshold for the dump (default 1
 OCTOPUS\_EVENT\_DEBUG=1 & report any request whose stages do not tile to Total, and the end-of-run ok/fail/noresp tally \\
 OCTOPUS\_NO\_LOG=1 & skip per-request logging; still write \code{Summary.csv} \\
 OCTOPUS\_HANG\_DUMP=<cycles> & dump every controller that has been idle with a non-empty queue for that long, and finalize the trace \\
+OCTOPUS\_TRACE\_ADDR=<addr> & print every controller's events on that line to stderr (\code{1} for every line); the first tool for a protocol fault \\
+OCTOPUS\_DUMP\_AT=<cycle> & dump every controller's queues at that cycle \\
 MCSIM\_PROBE=<file> & log every MCsim request, command and completion with the DRAM clock \\
 \bottomrule
 \end{tabularx}

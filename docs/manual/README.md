@@ -46,7 +46,7 @@ A change to one of these documents is a change to that chapter.
 | 1 Introduction | `README.md`, `SUPPORTED_CONFIGURATIONS.md`, `PUBLICATIONS.md` |
 | 2 Getting started | `README.md`, `REPRODUCIBILITY.md`, `tutorial/00-setup-and-first-run/` |
 | 3 System organization | `docs/Architecture.md` §1–3, `configuration/SystemConfigurations/MultiCoreSystem.csv` |
-| 4 The cache controller | `docs/Architecture.md` §4, `docs/MessageEncoding.md` |
+| 4 The cache controller | `docs/Architecture.md` §4, `docs/MessageEncoding.md`, `docs/StateAndData.md` |
 | 5 The LLC datapath | `docs/Architecture.md` §4 (the LLC figure series) |
 | 6 The coherence engine | `docs/Architecture.md` §5, `docs/AddingAProtocol.md`, `Protocols_FSM/` |
 | 7 A request, end to end | `docs/Architecture.md` §6, `docs/Logger.md` §3–5 |
@@ -56,7 +56,7 @@ A change to one of these documents is a change to that chapter.
 | 11 Monitoring | `docs/Logger.md`, `docs/Debugger.md`, `docs/Trace.md`, `docs/Visualizer.md` |
 | 12 Tasks and the demo | `docs/Tasks.md`, `demo/README.md` |
 | 13 Extending Octopus | `docs/Architecture.md` §10, `tutorial/03-extending-octopus/` |
-| 14 Integration modes | `docs/Architecture.md` §9, `README.md` (gem5), `tutorial/04-gem5-and-fullsystem-stack/` |
+| 14 Integration modes | `docs/Architecture.md` §9, `README.md` (gem5), `gem5/`, `configuration/SystemConfigurations/MultiCoreSystem_gem5.csv`, `tutorial/04-gem5-and-fullsystem-stack/` |
 | 15 Hands-on tutorial | `tutorial/**/README.md`, `docs/TutorialExercises.md` |
 | 16 Evaluation | `REPRODUCIBILITY.md`, `results/README.md` (placeholder until the sweeps are re-run) |
 | A, B | generated from `configuration/**/*.csv` and `Protocols_FSM/*.csv` |

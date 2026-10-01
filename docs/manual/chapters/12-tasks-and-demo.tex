@@ -123,6 +123,9 @@ reports. In act 2 one job ran 181\,266 cycles inside a 5\,000-cycle period, its 
 27\,848 cycles of which 27\,832 were DRAM; its sum of access latencies plus the compute budget
 equals its execution time exactly. Nothing is added on top of the simulation.
 
+The same story with real programs on gem5's cores --- a lidar SLAM, a memory aggressor, and
+the same two mitigations --- is the SE-mode exercise of the tutorial (\cref{ch:tutorial}).
+
 \begin{wherebox}
 \begin{itemize}[nosep,leftmargin=1.2em]
 \item \file{src/CPU.cpp} --- \code{periodicLogic}
