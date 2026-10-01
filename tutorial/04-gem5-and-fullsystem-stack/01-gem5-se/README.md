@@ -1,39 +1,291 @@
 # 04/01 — gem5 + Octopus in SE mode
 
-> Pending the gem5 environment. Steps below are the plan.
+**Goal:** run real programs on gem5's out-of-order cores with Octopus as their
+memory hierarchy. First a self-checking test that shows the interface works,
+then a small real-time SLAM that shows what memory interference does to a
+real-time task, and what the hierarchy's knobs can do about it.
 
-**Goal:** make the interface concrete — how a memory request leaves the gem5 CPU,
-enters the Octopus hierarchy, and reaches the DRAM model — by running one short
-SE-mode program and reading its `LatencyReport`. 15–20 minutes.
+| part | what | time |
+|---|---|---|
+| A | `se_test`: one SE run, then the same run with a different bus arbiter | 5 min |
+| B | two views of one run: gem5's statistics next to Octopus's own reports | 5 min |
+| C | the interference demo: seven configurations, then the plots | 15 min (runs in the background) |
 
 ## The journey of a memory request
 
 1. The gem5 CPU model issues a load or store.
-2. It crosses into Octopus through `ExternalCPU` (`header/ExternalCPU.h`) — a
-   `CommunicationInterface` producer exactly like the trace-driven `CPU` you used in
-   exercises 00–03. Nothing downstream can tell the difference.
-3. From there it is an ordinary Octopus `Message`: L1 controller, bus arbitration,
-   LLC, and out to memory.
-4. Memory is `MCsimInterface`: the address is handed to MCsim's DDR4 model and the
-   fill comes back through a callback.
-5. The `LatencyReport` row for that request decomposes exactly the path you just
-   traced.
+2. It crosses into Octopus through `ExternalCPU` (`header/ExternalCPU.h`), a
+   `CommunicationInterface` producer exactly like the trace-driven `CPU` you used
+   in exercises 00–03. Nothing downstream can tell the difference.
+3. From there it is an ordinary Octopus `Message`: L1 controller, bus
+   arbitration, LLC, and out to memory.
+4. Memory is `MCsimInterface`: the address is handed to MCsim's DDR4 model and
+   the fill comes back through a callback.
+5. The response travels back the same way and completes the load in the gem5
+   core, with real data: under gem5 the bytes matter, not only the timing
+   (`docs/StateAndData.md`).
 
-Steps 2–5 are **the same code** you ran standalone. Only the request source changed.
+Steps 2–4 are **the same code** you ran standalone. Only the request source
+changed. The gem5 side is `gem5/octopus.cc` (a SimObject per L1) and
+`gem5/configs/octopus_cache_hierarchy.py`; the system is the CSV preset
+`configuration/SystemConfigurations/MultiCoreSystem_gem5.csv` (4 cores, 8 L1s:
+instruction caches are Octopus ids 0–3, data caches 4–7, the LLC is 10).
 
-## Steps (to be finalised)
+## Step 1 — build
 
 ```shell
-# prebuilt gem5 with Octopus linked in, provided by the container
-$GEM5_ROOT/build/ARM/gem5.opt configs/se_octopus.py \
-    --octopus-xml test/arm_challenge/<config>.xml --cmd <small SE binary>
+export GEM5_ROOT=<your gem5 checkout>
+# gem5 with this repository linked in (once; minutes):
+(cd $GEM5_ROOT && scons EXTRAS=<this repository> build/ARM/gem5.opt -j$(nproc))
+
+make -C gem5/se_test                     # the self-checking SE test (aarch64, static)
+cd tutorial/04-gem5-and-fullsystem-stack/01-gem5-se
+make -C slam_demo                        # the demo (aarch64, static)
+make -C slam_demo steps                  # scenario data for the plots
 ```
 
-Then compare the `LatencyReport` for the same configuration standalone versus under
-gem5, and vary one thing in the XML — the bus arbiter is the natural choice — and
-re-run. No rebuild is involved at any point.
+The aarch64 binaries need `g++-aarch64-linux-gnu`; the plots need Python with
+`numpy` and `matplotlib`. Both binaries are static, so gem5 SE needs no disk image.
+
+`bash check.sh` (in this folder) runs Parts A and B and the demo's Solo
+configuration (about 5 minutes) and tells you whether everything works.
+
+## Part A — `se_test`
+
+```shell
+$GEM5_ROOT/build/ARM/gem5.opt -re -d m5out_se gem5/configs/se_arm.py
+tail -5 m5out_se/simout.txt          # RESULT: PASS
+```
+
+`se_test` (`gem5/se_test/se_test.cpp`) runs 4 threads through three phases, each
+aimed at a path the hierarchy must get right: private streaming (misses,
+write-backs, LLC refills), one shared atomic counter (a line moving between
+cores on every increment) and producer/consumer slices (invalidations and
+cache-to-cache data). Every phase checks its own result.
+
+Now change one thing, the L1↔LLC bus arbiter, from the command line:
+
+```shell
+$GEM5_ROOT/build/ARM/gem5.opt -re -d m5out_se_rr gem5/configs/se_arm.py \
+    --octopus-param 'bus[0].interconnect_controller.arbiter_type(s)=RRArbiter'
+grep simTicks m5out_se/stats.txt m5out_se_rr/stats.txt
+```
+
+`--octopus-param` takes any `name(type)=value` line of the preset and may be
+repeated; nothing is rebuilt. The tick counts are close: `se_test`'s threads are
+symmetric, so no core is squeezed out under either arbiter. Part C is a
+workload where the arbiter matters.
+
+## Part B — two views of one run
+
+A gem5 run has two sets of books: gem5's `stats.txt`, and Octopus's own reports,
+the `newLogger/` you read in exercise 00 (`LatencyReport_C<n>.csv`, one row per
+request; `Summary.csv`, worst cases per core). Octopus writes them under gem5
+too when asked:
+
+```shell
+$GEM5_ROOT/build/ARM/gem5.opt -re -d m5out_views gem5/configs/se_arm.py \
+    --octopus-param 'cpu[*].log_requests(i)=1'
+bash tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/compare_views.sh m5out_views
+```
+
+- **Same window.** Octopus logging follows gem5's statistics: a stats reset
+  (`se_test`'s work-begin marker, `m5 resetstats`) starts a fresh log, the next
+  stats dump writes `newLogger/`. Both cover the region of interest only.
+- **Per core.** A core's instruction and data L1 report into one
+  `LatencyReport_C<core>.csv`, as a trace-driven core does in exercise 00.
+- **gem5's side** is the bridge's counters in `stats.txt`, per L1:
+  `board.cache_hierarchy.l1d_caches<n>.readReqs / writeReqs / responses /
+  avgLatency`.
+
+`compare_views.sh` puts them side by side (reference: `expected/two_views.txt`):
+
+```
+core   gem5 requests   Octopus rows in flight       gem5 latency  Octopus latency
+0             414175         414172         3            96.7 cy          95.7 cy
+1             411189         411189         0            98.1 cy          97.1 cy
+2             409017         409017         0            99.0 cy          98.0 cy
+3             408568         408568         0            98.4 cy          97.4 cy
+```
+
+Every packet gem5 hands to the L1 is one Octopus request, so the counts are
+equal; the few missing rows (core 0) are requests still in flight when the
+window closed. The latencies agree to about a cycle: gem5 measures from the
+bridge's hand-off to its response, Octopus from the CPU issue to the response
+(`Total Latency`). The rest of exercise 00 applies unchanged: read a row's
+stages in `LatencyReport`, the worst cases in `Summary.csv`. With
+`OCTOPUS_TRACE=<file>` set as well, the run also writes the raw event trace
+(`docs/Trace.md`). The reports are large (a row per request, about 27 MB per
+core here), so logging is off unless you ask for it.
+
+## Part C — a real-time SLAM under memory interference
+
+The idea follows Bechtel & Yun, *Analysis and Mitigation of Shared Resource
+Contention on Heterogeneous Multicore* (ARM Industrial Challenge 2022): a SLAM
+has to keep up with a sensor while a co-runner, sharing only the memory system,
+slows it down; accuracy against ground truth is the end metric.
+
+### The workload (`slam_demo/slam_demo.cpp`)
+
+A 2D lidar SLAM (Hector-style scan matching on an occupancy grid) drives 40
+scans through a corner of a corridor loop. Four threads, one per core:
+
+| core | thread | does |
+|---|---|---|
+| 0 | player | releases scan *k* at *k* × 80 µs of simulated time (the sensor) |
+| 1 | aggressor (optional) | sweeps a private buffer, one access per 64-byte line |
+| 2 | mapper | writes every 2nd scan (a *keyframe*) into the shared grid |
+| 3 | front-end | takes the newest scan, guesses the pose from the last motion, matches the scan against the grid |
+
+Timing becomes error in two ways, as in the paper:
+
+- a late **front-end drops scans**: a newer one has arrived, so the older one is
+  skipped and the next guess has to bridge a larger gap;
+- a late **mapper leaves the map stale**: the robot matches against a map that
+  does not yet contain the area it is entering, and the error it picks up is
+  written into the map by the next keyframe.
+
+What the demo reports:
+
+- **dropped**: scans the front-end never processed;
+- **lost**: scans whose match it discarded (too few beams near a mapped wall, or
+  a jump over 1 m) and replaced by the guess;
+- **keyframes mapped**: how many keyframes the mapper wrote before the end;
+- **position error**: per scan, the distance between the estimated and the true
+  position *at that scan*; the RMSE over the run is the headline (ATE).
+
+`python slam_demo/viz/slam_steps.py` draws the algorithm step by step (scan,
+grid, matching, keyframes, timeline) from a run on this machine.
+
+### The configurations (`run_matrix.sh`)
+
+| config | aggressor | contends for | Octopus options |
+|---|---|---|---|
+| `A_solo` | none | | |
+| `L_fcfs` | **light**: 2 MiB write sweep, fits the LLC | bus and LLC queues | |
+| `L_rr` | light | | round-robin bus and LLC arbitration |
+| `H_fcfs` | **heavy**: 16 MiB read sweep, twice the LLC | LLC capacity: evictions, and back-invalidations of the SLAM's L1 lines | |
+| `H_rr` | heavy | | round-robin |
+| `H_part` | heavy | | LLC way partitioning: the aggressor fills only way 0 |
+| `H_rr_part` | heavy | | both |
+
+```shell
+bash run_matrix.sh                   # all seven in parallel, ~10 min on 7+ cores
+python slam_demo/viz/plot_matrix.py  # figures/ from runs/
+```
+
+The partition `way_partition(s)=1:0;5:0` names Octopus requester ids: gem5 SE
+gives each new thread the next free core, the aggressor thread is created first
+and so runs on core 1, whose L1s are ids 1 and 5.
+
+### What you should see
+
+Reference results (`expected/summary.txt`, figures in `expected/figures/`):
+
+| config | dropped | keyframes mapped | front-end µs, median / max | mapper µs per keyframe, median / max | error RMSE | aggressor |
+|---|---|---|---|---|---|---|
+| Solo | 0 | 19/19 | 54.5 / 57.8 | 143 / 150 | 5.4 cm | |
+| light | 0 | 19/19 | 61.5 / 71.3 | 152 / 184 | 8.7 cm | 19.2 GB/s |
+| light + RR | 0 | 19/19 | 54.5 / 58.1 | 143 / 150 | 5.5 cm | 19.2 GB/s |
+| heavy | 8 | 2/15 | 71 / 422 | 1555 | *failed* | 8.8 GB/s |
+| heavy + RR | 9 | 2/15 | 79 / 422 | 1505 | *failed* | 8.8 GB/s |
+| heavy + partition | 0 | 19/19 | 55.0 / 85.4 | 143 / 150 | 9.7 cm | 8.1 GB/s |
+| heavy + RR + partition | 0 | 19/19 | 54.9 / 85.4 | 143 / 150 | 9.5 cm | 8.1 GB/s |
+
+Your numbers for the working configurations should match these closely. The
+two failed ones vary from build to build (in our runs, 6 to 11 dropped scans,
+2 of 14–16 keyframes, errors from 2 to 12 m): once the map stops growing, tiny
+timing differences decide where the estimate drifts.
+
+- The **light** aggressor slows both SLAM threads (front-end +13 %, the mapper's
+  worst keyframe +23 %) and the error rises by 60 % without a single dropped
+  scan: the stale-map path. **Round-robin** arbitration undoes it completely,
+  and the aggressor keeps its full bandwidth: under FCFS the SLAM's requests
+  queued behind the aggressor's; under round-robin each requester takes its
+  turn.
+- The **heavy** aggressor moves less data (it waits on DRAM) but evicts the
+  SLAM's lines from the inclusive LLC, and with them from its L1s. The mapper
+  slows down tenfold and writes 2 keyframes; the front-end drops scans and
+  matches against a map that ends near the start: tracking fails. Round-robin
+  cannot help, nothing is queueing. **Way partitioning** keeps the aggressor
+  out of the SLAM's ways and tracking is back, the aggressor still at 8.1 GB/s.
+
+### Where the time goes: Octopus's own reports
+
+The figures above are the program's view. The hierarchy's view says *why*:
+rerun the matrix with Octopus's per-request reports (Part B), reduce them, and
+plot again.
+
+```shell
+LOG=1 bash run_matrix.sh                       # about 1 GB of reports per run, 2x the time
+for d in runs/*/; do bash slam_demo/viz/reduce_reports.sh $d --delete; done
+python slam_demo/viz/plot_matrix.py            # adds figures/5_memory_breakdown.png
+```
+
+`reduce_reports.sh` keeps, per core, the requests that left the L1 (the
+spinning threads hit their L1 millions of times, which would drown the rest)
+and their mean time per `LatencyReport` stage, in `runs/<config>/breakdown.csv`
+(reference: `expected/breakdown/`, `expected/figures/5_memory_breakdown.png`).
+Logging does not change the simulation: the logged runs give the same numbers.
+
+| config | front-end core: cycles per request past the L1 | of which | reached DRAM |
+|---|---|---|---|
+| Solo | 13 | response bus 5 | 203 |
+| light | 143 | **response bus 128** | 200 |
+| light + RR | 16 | response bus 8 | 202 |
+| heavy | 2207 | **DRAM 2071**, LLC queue 114 | **2096** |
+| heavy + partition | 60 | DRAM 42 | 201 |
+
+- **Light aggressor:** the SLAM's requests wait for the response bus behind
+  the aggressor's stream of LLC refills, about 25 times longer than alone.
+  Round-robin gives each requester its turn, and the wait is back to Solo.
+- **Heavy aggressor:** ten times more of the SLAM's requests reach DRAM (its
+  lines were evicted from the LLC), and each waits there behind the
+  aggressor's misses. Partitioning brings the count of DRAM requests back to
+  Solo; the few left still queue behind the aggressor at DRAM, which is the
+  DRAM scheduler's job (see "Going further").
+
+### Reading the error
+
+The error is meaningful only when tracking worked. Decide that first, from
+numbers that do not depend on the error:
+
+| | tracking worked | tracking failed |
+|---|---|---|
+| dropped scans | none or a few | many |
+| keyframes mapped | all (or all but the last) | a few |
+| mapper time per keyframe | within 2 periods | far beyond |
+| error over the run (figure 3) | flat, a few cm | grows to metres |
+
+When it worked, compare RMSE between configurations. A few centimetres are
+within what timing alone moves in a run this short (the front-end reads a grid
+the mapper is writing, and which updates it sees depends on timing), so small
+differences need several scenarios before they mean anything. When it failed,
+the size of the error only says where the estimate happened to drift: report
+the failure (dropped, keyframes mapped) and look at the trajectories.
+
+## Things to know about SE mode
+
+- No scheduler: every thread needs a core of its own (`--num-cores`), and a
+  waiting thread spins. The demo uses 4 threads on 4 cores.
+- `clock_gettime` follows simulated time, which is what lets the player release
+  scans on a real-time period.
+- gem5 is deterministic: the same gem5 build, the same program binary and the
+  same options give the same numbers, so a difference between two runs is the
+  change you made. Rebuilding the program (even from the same source, at
+  another path) moves its code and data in memory and shifts timing slightly,
+  which is why your numbers can differ from `expected/` in the last digits.
 
 ## What you will *not* be able to do here
 
-Change Octopus C++ and see it under gem5: that relinks `gem5.opt`. See the parent
-README.
+Change Octopus C++ and see it under gem5 without relinking `gem5.opt` (see the
+parent README).
+
+## Going further
+
+- The DRAM scheduler is a third knob: `--octopus-param 'mcsim_scheduler(s)=BLISS'`
+  (any directory under `src/MCsim/system/`). It matters only when the SLAM's own
+  requests reach DRAM, i.e. with the heavy aggressor and no partition.
+- `docs/StateAndData.md` explains what changes once a data array has a latency
+  and real data flows, and why `MultiCoreSystem_gem5.csv` sets `line_interlock`
+  and a pipelined LLC array.

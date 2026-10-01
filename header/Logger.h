@@ -143,6 +143,10 @@ namespace octopus
         void traceFinalize() { traceClose(); }
         static void traceAtExit();
         void addRequest(uint64_t cpu_id, Message&);
+        // Discard everything logged so far: per-request rows, worst cases and
+        // the requests still in flight. The next request starts new reports,
+        // as a gem5 stats reset starts its statistics over (ExternalCPU).
+        void resetReports();
         void registerReportPath(std::string file_path);
         void traceEnd(uint64_t core_id);
         void setClkCount(uint64_t core_id, uint64_t clk);

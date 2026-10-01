@@ -32,6 +32,7 @@ namespace octopus
         m_clk_period = std::get<int>(parameters.at(STRINGIFY(m_clk_period)).value);
         int processing_queue_size = std::get<int>(parameters.at(STRINGIFY(processing_queue_size)).value);
         m_processing_queue_size = processing_queue_size;
+        s_controllers.push_back(this);
         string protocol_type = std::get<string>(parameters.at(STRINGIFY(protocol_type)).value);
         string fsm_filename = std::get<string>(parameters.at(STRINGIFY(fsm_filename)).value);
         string fsm_path = string(FSM_PATH) + fsm_filename + ".csv";
@@ -104,15 +105,21 @@ namespace octopus
                 return;
             }
             m_last_progress_cycle = m_cache_cycle;
+            traceMsg("popped", ready_msg);
 
             if (!canAdmitRequest(ready_msg))
             {
+                traceMsg("admit-fail", ready_msg);
+                m_admit_fail_cycles++;
                 // Structural stall (e.g., MSHR/PWB full): put the request back
                 // and retry next cycle. A slot is guaranteed to be free because
                 // getFirstReady just removed this element.
                 m_processing_queue->pushBack(ready_msg, FRFCFS_State::NonReady);
                 return;
             }
+
+            if (deferForDataArray(ready_msg))
+                continue;
 
             if(ready_msg.source == Message::Source::LOWER_INTERCONNECT)
             {
@@ -163,13 +170,15 @@ namespace octopus
         if (m_upper_interface->peekMessage(&msg))
         {
             msg.source = Message::Source::UPPER_INTERCONNECT;
-            if (buf.pushFront(msg))
+            traceMsg("intake-upper", msg);
+            if (buf.pushFrontOrdered(msg))
                 m_upper_interface->popFrontMessage();
         }
 
         if (m_lower_interface->peekMessage(&msg))
         {
             msg.source = Message::Source::LOWER_INTERCONNECT;
+            traceMsg("intake-lower", msg);
             // Only demand requests are subject to the queue bound. Responses and
             // service traffic (data fills, write-backs, invalidations) must always
             // be admitted: a full queue of stalled demand requests would otherwise
@@ -196,13 +205,53 @@ namespace octopus
                 }
                 m_lower_interface->popFrontMessage();
             }
+            else
+                m_intake_refusals++;
         }
+        if (buf.size() > m_queue_peak)
+            m_queue_peak = buf.size();
+    }
+
+    std::vector<BaseController *> BaseController::s_controllers;
+
+    void BaseController::reportOccupancy(std::ostream &os)
+    {
+        for (BaseController *c : s_controllers)
+            if (c->m_admit_fail_cycles || c->m_intake_refusals)
+                os << "controller " << c->m_id << ": queue peak " << c->m_queue_peak
+                   << " of " << c->m_processing_queue_size
+                   << ", intake refusals (queue full) " << c->m_intake_refusals
+                   << ", admit-fail cycles (MSHR/PWB full) " << c->m_admit_fail_cycles << std::endl;
+    }
+
+    void BaseController::dataArrayReadFailed(const char *where, const Message *msg)
+    {
+        // A response that needs the line's bytes found no readable line: the
+        // line's state was changed (invalidated or evicted) before the array
+        // access that should have preceded it ran. With a data latency of 0
+        // the read runs inline first; with a latency it must be parked with
+        // the state change, or this is what happens.
+        m_data_read_failures++;
+        // Standalone traces carry mock data, so a response without bytes was
+        // always tolerated there; keep that. With an external core attached
+        // the bytes will matter (Stage 4), so make it fatal.
+        if (m_cpu_port == NULL)
+            return;
+        GenericCacheLine bits;
+        bool have_bits = m_data_handler->readLineBits(msg->addr, &bits);
+        cout << "CacheController(id = " << m_id << "): " << where
+             << " needs the data of line 0x" << std::hex << msg->addr << std::dec
+             << " but the array has no readable copy (state "
+             << (have_bits ? bits.state : -1) << ", valid " << (have_bits ? bits.valid : false)
+             << ", msg " << msg->msg_id << "). The state changed before the array read." << endl;
+        exit(0);
     }
 
     bool BaseController::demandAdmissionBlocked(int outstanding) const
     {
         return m_processing_queue_size >= 0 && outstanding >= m_processing_queue_size;
     }
+
     uint64_t BaseController::getAddressKey(uint64_t addr)
     {
         return (addr & ~uint64_t(m_data_handler->getBlockSize() - 1));
@@ -228,6 +277,8 @@ namespace octopus
             GenericCacheLine cache_line;
             if (m_data_handler->readCacheLine(msg->addr, &cache_line) && cache_line.m_data != NULL)
                 msg->copy(cache_line.m_data);
+            else
+                dataArrayReadFailed("removePendingAndRespond", msg);
         }
 
         if (m_pending_requests.find(getAddressKey(msg->addr)) != m_pending_requests.end())
@@ -289,6 +340,8 @@ namespace octopus
             GenericCacheLine cache_line;
             if (m_data_handler->readCacheLine(msg->addr, &cache_line) && cache_line.m_data != NULL)
                 msg->copy(cache_line.m_data);
+            else
+                dataArrayReadFailed("hitAction", msg);
         }
 
         // Design B: response emitted to the response bus -- the LLC/L1 hand-off point.
@@ -348,8 +401,10 @@ namespace octopus
         if(msg->data == NULL)
         {
             GenericCacheLine cache_line;
-            m_data_handler->readCacheLine(msg->addr, &cache_line);
-            msg->copy(cache_line.m_data);
+            if (m_data_handler->readCacheLine(msg->addr, &cache_line) && cache_line.m_data != NULL)
+                msg->copy(cache_line.m_data);
+            else
+                dataArrayReadFailed("performWriteBack", msg);
         }
 
         if (msg->owner == this->m_id)

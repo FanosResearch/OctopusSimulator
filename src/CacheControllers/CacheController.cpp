@@ -30,11 +30,19 @@ namespace octopus
         // Optional MSHR depth (max concurrent outstanding misses). Read from
         // config when present, otherwise a finite realistic default. -1 = off.
         m_num_mshr = DEFAULT_NUM_MSHR;
+        if (parameters.find(STRINGIFY(line_interlock)) != parameters.end())
+            m_line_interlock = std::get<int>(parameters.at(STRINGIFY(line_interlock)).value);
+        if (const char *t = getenv("OCTOPUS_TRACE_ADDR"))
+            m_trace_addr = strtoull(t, NULL, 0);
+        if (const char *t = getenv("OCTOPUS_DUMP_AT"))
+            m_dump_at = strtoull(t, NULL, 0);
         if (parameters.find(STRINGIFY(num_mshr)) != parameters.end())
             m_num_mshr = std::get<int>(parameters.at(STRINGIFY(num_mshr)).value);
 
         if(arbiter_type != STRINGIFY(NULL))
             arbiter_candidates_ids = new vector<int>(std::get<vector<int>>(parameters.at(STRINGIFY(arbiter_candidates_ids)).value));
+        if (arbiter_candidates_ids != NULL)
+            m_arbiter_candidates = *arbiter_candidates_ids;
         
         //Constructor
         delete m_data_handler;
@@ -58,12 +66,50 @@ namespace octopus
         else if(arbiter_type == STRINGIFY(FCFSArbiter))                                                    
             m_data_access_arbiter = new FCFSArbiter(arbiter_candidates_ids, m_data_handler->getDataAccessLatency());
 
+        // Whole-message deferral (the pipelined model always, the occupancy
+        // model with line_interlock) is only safe with the line hold: without
+        // it a younger message to the line starts while an older one waits
+        // for the array (the snoop presets then fault). The pipelined model
+        // therefore turns the interlock on.
+        if (pipelinedArray() && m_line_interlock == 0)
+        {
+            cout << "CacheController(id = " << m_id << "): the pipelined data array needs line_interlock; enabling it" << endl;
+            m_line_interlock = 1;
+        }
+
         action_functions[ControllerAction::Type::WRITE_CACHE_LINE_DATA] = [&](void* ptr) {writeCacheLineData(ptr);};
         action_functions[ControllerAction::Type::MODIFY_DATA] = [&](void* ptr) {modifyData(ptr);};
         action_functions[ControllerAction::Type::SAVE_REQ_FOR_WRITE_BACK] = [&](void* ptr) {saveReqForWriteBack(ptr);};
         action_functions[ControllerAction::Type::NO_ACTION] = [&](void* ptr) {noAction(ptr);};
         action_functions[ControllerAction::Type::STALL] = [&](void* ptr) {stall(ptr);};
         action_functions[ControllerAction::Type::SEND_INV_MSG] = [&](void* ptr) {sendInvalidationMessage(ptr);};
+
+        // Address interlock. A message to a line that has a deferred data-array
+        // access waiting or in flight stays in the processing queue, in place,
+        // until that access completes (pipelineFire marks the queue dirty).
+        // Younger demand requests to the line stay behind it through the
+        // per-line gate, so same-line traffic runs in arrival order against the
+        // state the older access leaves. Hardware: a snoop arbitrates for the
+        // same tag pipeline as the demand access and cannot pass an older
+        // access to the line; classic gem5 has no such window, its hits are
+        // atomic. Without this a state-only snoop (S -> I) ran ahead of a
+        // deferred load hit on the line, which then re-ran as a miss. Held in
+        // the queue rather than popped and parked: a parked request that fired
+        // into a Stall row had to be re-queued behind younger requests, which
+        // broke bus order at the LLC (a GetS served from IorS after the L1 that
+        // won the bus for its GetM had already answered it: two data copies).
+        m_processing_queue->setHold([this](const Message &m) {
+            bool held = m_line_interlock != 0 && lineHasDeferredOp(m.addr);
+            if (held && m_trace_addr != 0 && m_trace_held.insert(m.msg_id).second)
+            {
+                traceMsg("hold", m);
+                for (const DataArrayOp &op : m_array_ops)
+                    if (getAddressKey(op.msg.addr) == getAddressKey(m.addr))
+                        cout << "[trace]    held by " << (op.kind == DataArrayOp::MESSAGE ? "MESSAGE" : "ACTIONS") << " op msg " << op.msg.msg_id
+                             << " src " << (int)op.msg.source << " type " << op.msg.complementary_value << " ready " << op.ready_cycle
+                             << (op.admitted ? " (admitted)" : " (waiting)") << endl;
+            }
+            return held; });
     }
 
     CacheController::~CacheController()
@@ -74,8 +120,13 @@ namespace octopus
 
     void CacheController::cycleProcess()
     {
+        if (m_dump_at != 0 && m_cache_cycle == m_dump_at)
+            dumpState();
         m_data_handler->updateCycle(m_cache_cycle);
-        this->processDataArrayBuffer();
+        if (pipelinedArray())
+            this->pipelineStep();
+        else
+            this->processDataArrayBuffer();
         this->processLogic(); // Call cache controller
 
         m_cache_cycle++;
@@ -83,21 +134,20 @@ namespace octopus
 
     void CacheController::processDataArrayBuffer()
     {
-        if(m_data_handler->isReady() && m_data_access_arbiter != NULL)
-        {
-            Message selected_msg;
-            vector<vector<Message>*> messages_pending_data_access; //wrapper vector to use the arbiter
-            messages_pending_data_access.push_back(&m_data_access_buffer);
-
-            bool msg_available = m_data_access_arbiter->elect(m_cache_cycle, 
-                                                              messages_pending_data_access, &selected_msg);
-            if(msg_available)
-            {
-                auto action = m_data_access_action[selected_msg.msg_id];
-                action_functions[action.type](action.data);
-                m_data_access_action.erase(selected_msg.msg_id);
-            }
-        }
+        // Occupancy model, level 2: when the array is free, one waiting
+        // access runs, chosen by the configured arbiter (keyed on the
+        // requesting core) or oldest first; its own array access closes the
+        // array again. A whole deferred message runs its FSM now, so its
+        // state change and its bytes land together; a parked single action
+        // runs its byte phase now.
+        if (!m_data_handler->isReady())
+            return;
+        auto it = arrayElect();
+        if (it == m_array_ops.end())
+            return;
+        DataArrayOp op = std::move(*it);
+        m_array_ops.erase(it);
+        pipelineFire(op);   // a parked byte phase is logged as an ARRAY SERVICE when it re-enters checkReadinessOfCache
     }
 
     void CacheController::addRequests2ProcessingQueue(FRFCFS_Buffer<Message, CoherenceProtocolHandler> &buf)
@@ -350,12 +400,22 @@ namespace octopus
     {
         BaseController::dumpState();
         CacheDataHandler_COTS *cots = (CacheDataHandler_COTS *)m_data_handler;
-        fprintf(stderr, "[HANG]   mshr=%d/%d pwb=%d/%d pwb_pending_issue=%d data_access_buffer=%zu saved_for_wb=%zu\n",
+        fprintf(stderr, "[HANG]   mshr=%d/%d pwb=%d/%d pwb_pending_issue=%d array_ops=%zu saved_for_wb=%zu\n",
                 cots->mshrCount(), m_num_mshr, cots->pwbCount(), cots->pwbSize(), cots->pwbPendingIssueCount(),
-                m_data_access_buffer.size(), m_saved_requests_for_wb.size());
-        for (auto &m : m_data_access_buffer)
-            fprintf(stderr, "[HANG]   dab addr=%llx id=%llu action=%d ready=%d\n", (unsigned long long)m.addr,
-                    (unsigned long long)m.msg_id, (int)m_data_access_action[m.msg_id].type, m_data_handler->isReady(m.addr));
+                m_array_ops.size(), m_saved_requests_for_wb.size());
+        for (int i = 0; i < (int)m_processing_queue->size(); i++)
+        {
+            const Message &m = m_processing_queue->itemAt(i);
+            fprintf(stderr, "[HANG]   pq[%d] id=%llu held=%d fsm_ready=%d\n", i, (unsigned long long)m.msg_id,
+                    m_line_interlock != 0 && lineHasDeferredOp(m.addr),
+                    m_protocol->getRequestState(m, FRFCFS_State::NonReady) == FRFCFS_State::Ready);
+        }
+        for (const DataArrayOp &op : m_array_ops)
+            fprintf(stderr, "[HANG]   array-op addr=%llx id=%llu kind=%s action=%d ready_cycle=%llu admitted=%d array_ready=%d\n",
+                    (unsigned long long)op.msg.addr, (unsigned long long)op.msg.msg_id,
+                    op.kind == DataArrayOp::MESSAGE ? "message" : "actions",
+                    op.actions.empty() ? -1 : (int)op.actions.front().type, (unsigned long long)op.ready_cycle,
+                    (int)op.admitted, m_data_handler->isReady(op.msg.addr));
     }
 
     bool CacheController::demandAdmissionBlocked(int outstanding) const
@@ -403,44 +463,75 @@ namespace octopus
         return true;
     }
 
+    // Array-port tracker (esweek-tutorial 443f0f39, docs/Logger.md S5): every
+    // access granted the array bumps m_array_served (+ writes). A demand read
+    // that had to wait remembers the counters when it parks; at its grant the
+    // difference is the number of accesses served ahead of it. port_busy and
+    // reg_flags describe the port BEFORE this claim: CacheDataHandler_COTS::
+    // isReady(addr) admits an access to an MSHR/PWB-resident line even while
+    // the port timer is busy, and the trace marks such "cut-in" claims (flag
+    // 0x100) so the occupancy builder can tell a port slot from a bypass
+    // (docs/Trace.md).
+    void CacheController::trackArrayGrant(const Message &msg, ControllerAction::Type type,
+                                          bool port_busy, uint16_t reg_flags)
+    {
+        auto it = m_array_park.find(msg.msg_id);
+        if (it != m_array_park.end())
+        {
+            Logger::getLogger()->annotate(msg.msg_id, Logger::Annot::ARRAY_AHEAD, (int64_t)(m_array_served - it->second.first));
+            Logger::getLogger()->annotate(msg.msg_id, Logger::Annot::ARRAY_AHEAD_WRITES, (int64_t)(m_array_served_writes - it->second.second));
+            m_array_park.erase(it);
+        }
+        m_array_served++;
+        if (type == ControllerAction::Type::WRITE_CACHE_LINE_DATA) m_array_served_writes++;
+        Logger::getLogger()->trace(msg, Logger::Role::ARRAY, (uint32_t)m_id, Logger::Phase::SERVICE,
+                                   (uint16_t)type | (port_busy ? 0x100 : 0) | reg_flags);   // port claim; flags = action | cut-in | MSHR | PWB
+    }
+
     bool CacheController::checkReadinessOfCache(Message &msg, ControllerAction::Type type, void *data_ptr)
     {
-        // Array-port tracker: every access that takes the port (direct grab or elected
-        // from the buffer) bumps m_array_served (+ writes). A demand read that has to park
-        // remembers the counters; when it is finally granted, the difference is the number
-        // of accesses served ahead of it at the port (docs/Logger.md S5).
-        // Port state BEFORE this claim. CacheDataHandler_COTS::isReady(addr) admits an
-        // access to an MSHR/PWB-resident line even while the port timer is busy (the
-        // data lives in the register, not the array) -- but the fill / write-back that
-        // follows still resets the port timer, so such an access overlaps the one in
-        // progress. The trace marks these "cut-in" claims (flag 0x100) so the occupancy
-        // builder can tell a genuine port slot from a bypass (docs/Trace.md).
         bool port_busy = !m_data_handler->isReady();
         CacheDataHandler_COTS *cots = dynamic_cast<CacheDataHandler_COTS *>(m_data_handler);
         uint16_t reg_flags = cots ? ((cots->inMSHR(msg.addr) ? 0x200 : 0) | (cots->inPWB(msg.addr) ? 0x400 : 0)) : 0;
-        if (m_data_handler->isReady(msg.addr))
+        if (pipelinedArray())
         {
-            auto it = m_array_park.find(msg.msg_id);
-            if (it != m_array_park.end())
+            // Completing an op: its array accesses are the op itself. The
+            // tracker counts the grant here, at completion: with one fixed
+            // latency, accesses complete in the order they were admitted.
+            if (m_pipe_firing)
             {
-                Logger::getLogger()->annotate(msg.msg_id, Logger::Annot::ARRAY_AHEAD, (int64_t)(m_array_served - it->second.first));
-                Logger::getLogger()->annotate(msg.msg_id, Logger::Annot::ARRAY_AHEAD_WRITES, (int64_t)(m_array_served_writes - it->second.second));
-                m_array_park.erase(it);
+                trackArrayGrant(msg, type, port_busy, reg_flags);
+                return true;
             }
-            m_array_served++;
-            if (type == ControllerAction::Type::WRITE_CACHE_LINE_DATA) m_array_served_writes++;
-            Logger::getLogger()->trace(msg, Logger::Role::ARRAY, (uint32_t)m_id, Logger::Phase::SERVICE,
-                                       (uint16_t)type | (port_busy ? 0x100 : 0) | reg_flags);   // port claim; flags = action | cut-in | MSHR | PWB
-            return true;
+            // A line held in the MSHR or the write-back buffer is not in the
+            // array: it is read or written in place, as the occupancy model
+            // does through isReady(address). Parking such an access raced
+            // with the buffer entry's release: an eviction's WriteBack reads
+            // the buffered line and the state change that follows it (to N)
+            // erases the entry at once, so the parked read found nothing.
+            CacheDataHandler::LineLocation loc = m_data_handler->lineLocation(msg.addr);
+            if (loc == CacheDataHandler::LineLocation::MSHR || loc == CacheDataHandler::LineLocation::PWB)
+            {
+                trackArrayGrant(msg, type, port_busy, reg_flags);   // a register cut-in, as in the occupancy model
+                return true;
+            }
         }
+        else if (m_data_handler->isReady(msg.addr))
         {
-            if (type == ControllerAction::Type::HIT_Action && m_array_park.find(msg.msg_id) == m_array_park.end())
-                m_array_park[msg.msg_id] = std::make_pair(m_array_served, m_array_served_writes);
-            m_data_access_buffer.push_back(msg);
-            m_data_access_action[msg.msg_id] = ControllerAction{.type = type,
-                                                               .data = data_ptr};
-            return false;
+            trackArrayGrant(msg, type, port_busy, reg_flags);
+            return true;    // array free, or the line is in a side buffer: run inline
         }
+
+        // The byte phase waits for the array: one more access on the level-2
+        // list, scheduled with everything else that needs the array.
+        if (type == ControllerAction::Type::HIT_Action && m_array_park.find(msg.msg_id) == m_array_park.end())
+            m_array_park[msg.msg_id] = std::make_pair(m_array_served, m_array_served_writes);
+        DataArrayOp op;
+        op.kind = DataArrayOp::ACTIONS;
+        op.msg = msg;
+        op.actions.push_back(ControllerAction{.type = type, .data = data_ptr});
+        arrayEnqueue(std::move(op));
+        return false;
     }
 
     void CacheController::checkReplacements(FRFCFS_Buffer<Message, CoherenceProtocolHandler> &buf)
@@ -464,19 +555,10 @@ namespace octopus
             if (buf.pushBack(msg, FRFCFS_State::NonReady, /*force=*/true))
                 ((CacheDataHandler_COTS*)m_data_handler)->addressOfLinePendingWB(true, &evicted_address);
 
-            for(int i = 0; i < (int)m_data_access_buffer.size(); )
-            {
-                if(getAddressKey(m_data_access_buffer[i].addr) == getAddressKey(evicted_address))
-                {
-                    auto action = m_data_access_action[m_data_access_buffer[i].msg_id];
-                    action_functions[action.type](action.data);
-
-                    m_data_access_action.erase(m_data_access_buffer[i].msg_id);  //after erasing the looping counter shouldn't get incremented
-                    m_data_access_buffer.erase(m_data_access_buffer.begin() + i);
-                }
-                else
-                    i++;
-            }
+            // The victim's bytes have moved to the write-back buffer: every
+            // access still waiting on that line completes now, before the
+            // write-back can release the buffered copy (both models).
+            pipelineFlushLine(evicted_address);
         }
     }
 
@@ -522,5 +604,281 @@ namespace octopus
             else
                 m_children_controllers[cache_line.owner_id]->read(address, data);    
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Pipelined data array
+    // ------------------------------------------------------------------
+
+    bool CacheController::pipelinedArray() const
+    {
+        return m_data_handler->isPipelined() && m_data_handler->getDataAccessLatency() > 0;
+    }
+
+    void CacheController::arrayEnqueue(DataArrayOp &&op)
+    {
+        m_pipe_ops++;
+        op.op_id = ++m_array_op_seq;
+        traceMsg(op.kind == DataArrayOp::MESSAGE ? "park-message" : "park-actions", op.msg);
+        m_array_ops.push_back(std::move(op));
+        // Pipelined: an access may start the cycle it arrives, if a port is
+        // left and the policy picks it (oldest first picks it when nothing
+        // older waits; an arbiter applies its own rule).
+        if (pipelinedArray())
+            arrayAdmit();
+    }
+
+    bool CacheController::arbitrated(int owner) const
+    {
+        for (int id : m_arbiter_candidates)
+            if (id == owner)
+                return true;
+        return false;
+    }
+
+    std::deque<CacheController::DataArrayOp>::iterator CacheController::arrayElect()
+    {
+        // No arbiter (the L1 default): oldest waiting access.
+        if (m_data_access_arbiter == NULL)
+        {
+            for (auto it = m_array_ops.begin(); it != m_array_ops.end(); ++it)
+                if (!it->admitted)
+                    return it;
+            return m_array_ops.end();
+        }
+        // The arbiter elects among messages by requesting core (owner) and
+        // removes the winner from the vector it is given: hand it copies of
+        // the waiting accesses' messages with msg_id replaced by the op id,
+        // then map the winner back. Accesses whose owner is not one of its
+        // candidates (a controller's own maintenance traffic) are outside the
+        // policy and go oldest first when the arbiter elects nothing.
+        vector<Message> candidates;
+        for (const DataArrayOp &op : m_array_ops)
+            if (!op.admitted && arbitrated(op.msg.owner))
+            {
+                Message m(op.msg);
+                m.msg_id = op.op_id;
+                candidates.push_back(m);
+            }
+        if (!candidates.empty())
+        {
+            vector<vector<Message> *> wrap;
+            wrap.push_back(&candidates);
+            Message elected;
+            if (m_data_access_arbiter->elect(m_cache_cycle, wrap, &elected))
+                for (auto it = m_array_ops.begin(); it != m_array_ops.end(); ++it)
+                    if (!it->admitted && it->op_id == elected.msg_id)
+                        return it;
+        }
+        for (auto it = m_array_ops.begin(); it != m_array_ops.end(); ++it)
+            if (!it->admitted && !arbitrated(it->msg.owner))
+                return it;
+        return m_array_ops.end();
+    }
+
+    void CacheController::arrayAdmit()
+    {
+        while (m_array_admitted_this_cycle < m_data_handler->getDataArrayPorts())
+        {
+            auto it = arrayElect();
+            if (it == m_array_ops.end())
+                return;
+            it->admitted = true;
+            it->ready_cycle = m_cache_cycle + m_data_handler->getDataAccessLatency();
+            m_array_admitted_this_cycle++;
+        }
+    }
+
+    void CacheController::pipelineFire(DataArrayOp &op)
+    {
+        bool was_firing = m_pipe_firing;
+        m_pipe_firing = true;
+
+        if (op.kind == DataArrayOp::MESSAGE)
+        {
+            // The line's state may have moved while this message waited (an
+            // older op on the line completed first). If its row now stalls,
+            // executing here would bypass the queue's readiness filter, which
+            // the LLC protocol treats as fatal; the message goes back to the
+            // processing queue and is popped again when its row is ready,
+            // like any other stalled request (the MSHR-target semantics).
+            if (m_protocol->getRequestState(op.msg, FRFCFS_State::NonReady) != FRFCFS_State::Ready)
+            {
+                m_pipe_requeues++;
+                traceMsg("requeue", op.msg);
+                m_processing_queue->pushBack(op.msg, FRFCFS_State::NonReady, /*force=*/true);
+                m_pipe_firing = was_firing;
+                m_processing_queue->markDirty();
+                return;
+            }
+            // The bytes have been written: apply the FSM event now, against
+            // the line's current state, exactly as processLogic would have.
+            traceMsg("fire", op.msg);
+            // Its ENTER is logged here, not at pop: processLogic defers the
+            // message before it would log one.
+            if (op.msg.source == Message::Source::LOWER_INTERCONNECT)
+            {
+                Logger::getLogger()->event(op.msg.msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::ENTER);
+                Logger::getLogger()->trace(op.msg, m_log_role, (uint32_t)m_id, Logger::Phase::ENTER);
+            }
+            vector<ControllerAction> actions = m_protocol->processRequest(op.msg, dprint);
+            for (ControllerAction action : actions)
+                action_functions[action.type](action.data);
+        }
+        else
+        {
+            traceMsg("fire-actions", op.msg);
+            for (ControllerAction action : op.actions)
+                action_functions[action.type](action.data);
+        }
+
+        m_pipe_firing = was_firing;
+        // The line's state may have changed; messages stalled on it must be
+        // rescanned (readiness is state-only and rescans only after a push/pop).
+        m_processing_queue->markDirty();
+    }
+
+    void CacheController::pipelineStep()
+    {
+        // Pipelined model, level 2: admit up to the ports' worth of waiting
+        // accesses by policy, then complete every admitted access whose
+        // latency has elapsed. Completing one may enqueue another (a second
+        // array access of the same action list), which invalidates deque
+        // iterators, so rescan after each completion.
+        m_array_admitted_this_cycle = 0;
+        arrayAdmit();
+        for (bool fired = true; fired; )
+        {
+            fired = false;
+            for (auto it = m_array_ops.begin(); it != m_array_ops.end(); ++it)
+                if (it->admitted && it->ready_cycle <= m_cache_cycle)
+                {
+                    DataArrayOp op = std::move(*it);
+                    m_array_ops.erase(it);
+                    pipelineFire(op);
+                    fired = true;
+                    break;
+                }
+        }
+    }
+
+    void CacheController::pipelineFlushLine(uint64_t address)
+    {
+        // The line is leaving the array: complete every access waiting on it
+        // now, oldest first, before its bytes move to the write-back buffer.
+        uint64_t key = getAddressKey(address);
+        for (bool fired = true; fired; )
+        {
+            fired = false;
+            for (auto it = m_array_ops.begin(); it != m_array_ops.end(); ++it)
+                if (getAddressKey(it->msg.addr) == key)
+                {
+                    DataArrayOp op = std::move(*it);
+                    m_array_ops.erase(it);
+                    m_pipe_early_fires++;
+                    pipelineFire(op);
+                    fired = true;
+                    break;
+                }
+        }
+    }
+
+    void CacheController::traceMsg(const char *what, const Message &msg)
+    {
+        if (m_trace_addr == 0 || (m_trace_addr != 1 && getAddressKey(msg.addr) != getAddressKey(m_trace_addr)))
+            return;   // OCTOPUS_TRACE_ADDR=1 traces every line
+        GenericCacheLine bits; bool have = m_data_handler->readLineBits(msg.addr, &bits);
+        cout << "[trace] cyc " << m_cache_cycle << " ctl " << m_id << " " << what << " addr 0x" << std::hex << msg.addr << std::dec
+             << " state " << (have ? bits.state : -1) << " msg " << msg.msg_id << " src " << (int)msg.source
+             << " owner " << msg.owner << " type " << msg.complementary_value << " data " << (msg.data != NULL)
+             << " array-ops " << m_array_ops.size() << endl;
+    }
+
+    bool CacheController::lineHasDeferredOp(uint64_t address)
+    {
+        uint64_t key = getAddressKey(address);
+        for (const DataArrayOp &op : m_array_ops)
+            if (getAddressKey(op.msg.addr) == key)
+                return true;
+        return false;
+    }
+
+    bool CacheController::messageTouchesArray(const Message &msg)
+    {
+        // Occupancy model: only the transitions the protocol reports (the
+        // snoop L1 protocols' Hit / Data2Req / Data2Both); a data-carrying
+        // message keeps upstream's handling so the lab presets are unchanged.
+        // Pipelined model: those, plus any bytes arriving from below or from
+        // a peer, which are array writes whatever the table says.
+        if (m_protocol->needsDataArray(msg))
+            return true;
+        if (!pipelinedArray())
+            return false;
+        bool cpu_demand = msg.source == Message::Source::LOWER_INTERCONNECT &&
+                          (msg.complementary_value == 0 || msg.complementary_value == 1);
+        return msg.data != NULL && !cpu_demand;
+    }
+
+    bool CacheController::deferForDataArray(Message &msg)
+    {
+        if (!pipelinedArray())
+        {
+            // Occupancy model with a non-zero latency: a message whose
+            // transition touches the array waits, whole, until the array is
+            // free, then runs inline so its array access and its state change
+            // happen together. Without this the state change ran at once and
+            // the parked read later found the line invalidated or evicted.
+            // Only transitions the protocol reports as array accesses (snoop
+            // L1 protocols: Hit, Data2Req, Data2Both; LLC protocols: SendData,
+            // SendExeclusiveData, SaveData). A data-carrying message whose
+            // protocol reports nothing keeps upstream's handling (state now,
+            // bytes parked on the same level-2 list).
+            // With line_interlock off the occupancy model keeps upstream's
+            // handling everywhere (state now, bytes parked): deferring a whole
+            // message without the line hold is not safe (see the constructor).
+            if (m_line_interlock == 0 || m_data_handler->getDataAccessLatency() == 0 || m_data_handler->isReady())
+                return false;
+            if (!m_protocol->needsDataArray(msg))
+                return false;
+            DataArrayOp op;
+            op.kind = DataArrayOp::MESSAGE;
+            op.msg = msg;
+            arrayEnqueue(std::move(op));
+            return true;
+        }
+        // Defer the whole message, and so the state change that comes with
+        // it, when its transition touches the array: a hit, a snoop that is
+        // answered with the line, a fill. The line keeps its current state
+        // for the array latency, so a snoop that needs the bytes waits behind
+        // the access that is producing them instead of taking the line away
+        // first. Messages that carry bytes from below (fills, peer data) are
+        // array writes whatever the table says; a CPU store's bytes are
+        // written by its Hit, which the table reports.
+        // A line in the write-back buffer has left the array for good: a
+        // request served from it, its write-back trigger, or an owner's bytes
+        // merged into it touch the buffer only. (A line in the MSHR is
+        // different: the data message for it is the fill, an array write.)
+        if (m_data_handler->lineLocation(msg.addr) == CacheDataHandler::LineLocation::PWB)
+            return false;
+        if (!messageTouchesArray(msg))
+            return false;
+
+        DataArrayOp op;
+        op.kind = DataArrayOp::MESSAGE;
+        op.msg = msg;
+        arrayEnqueue(std::move(op));
+        return true;
+    }
+
+    void CacheController::removePendingAndRespond(void *data_ptr)
+    {
+        Message *msg = (Message *)data_ptr;
+        // A response built from the resident line needs the data array, like
+        // a hit. Without this guard the base version reads inline and, in the
+        // occupancy model, aborts if the array happens to be busy.
+        if (msg->data == NULL &&
+            !checkReadinessOfCache(*msg, ControllerAction::Type::REMOVE_PENDING, data_ptr))
+            return;
+        BaseController::removePendingAndRespond(data_ptr);
     }
 }

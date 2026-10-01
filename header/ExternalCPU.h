@@ -23,6 +23,7 @@
 #include "Initializable.h"
 
 #include <map>
+#include <set>
 #include <list>
 #include <string>
 
@@ -96,6 +97,18 @@ namespace octopus
         uint64_t m_clk_cycle;
         uint64_t m_link_full_holds = 0;
 
+        // Request logging (config log_requests): each request issued to the
+        // L1 and its response are reported to the Logger under the core this
+        // CPU belongs to (setLogCore; default its own id), so a core's
+        // instruction and data L1 share one LatencyReport. Logging is global
+        // and switched with setLoggerEnable (each enable starts a fresh
+        // window); writeLogReports ends it.
+        bool m_log_requests = false;
+        int m_log_core = -1;
+        static bool s_log_enabled;
+        static std::set<int> s_logged_cores;
+        int logCore() const { return m_log_core < 0 ? m_id : m_log_core; }
+
         CommunicationInterface *m_upper_interface; // A pointer to the upper Interface FIFO
         FRFCFS_Buffer<Message, ExternalCPU> *m_processing_queue;
         BaseController *m_cache = NULL;             // the L1 this CPU feeds
@@ -122,6 +135,15 @@ namespace octopus
 
         static int portVersion();
         int getId() const { return m_id; }
+
+        // Request logging (see m_log_requests above).
+        bool logRequestsConfigured() const { return m_log_requests; }
+        void setLogCore(int core) { m_log_core = core; }
+        static void setLoggerEnable(bool enable);
+        static bool loggerEnabled() { return s_log_enabled; }
+        // Write Summary.csv and close every logged core's LatencyReport; logging
+        // stays off afterwards. Requests still in flight have no row.
+        static void writeLogReports();
 
         void registerCPUCallback(CpuCompletionCallback* cpu_callback);
         void registerCommitCallback(CpuCommitCallback* commit_callback);

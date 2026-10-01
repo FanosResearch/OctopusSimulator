@@ -14,6 +14,7 @@
 // CacheSim.cpp instead, so an embedder needs only this directory on its
 // include path.
 #include <cstdint>
+#include <ostream>
 #include <string>
 #include <vector>
 
@@ -46,6 +47,10 @@ namespace octopus
          * clock period. Equal in a well-formed configuration. */
         uint64_t stepGranularity() const;
         uint64_t minPeriod() const;
+
+        /* Print each controller's queue/MSHR occupancy summary (only those that
+         * ever refused or stalled). */
+        void reportOccupancy(std::ostream &os) const;
     };
 }
 

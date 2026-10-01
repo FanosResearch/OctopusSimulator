@@ -8,6 +8,7 @@
 
 #include "../header/ExternalCPU.h"
 #include "../header/CacheControllers/BaseController.h"
+#include "../header/Logger.h"
 
 using namespace std;
 
@@ -26,6 +27,9 @@ namespace octopus
         : ClockedObj(0), Configurable(map, resolveConfigPath(config_path), name, pname)
     {
         m_clk_period = std::get<int>(parameters.at(STRINGIFY(m_clk_period)).value);
+
+        if (parameters.find(STRINGIFY(log_requests)) != parameters.end())
+            m_log_requests = std::get<int>(parameters.at(STRINGIFY(log_requests)).value) != 0;
 
         m_id = id;
         m_clk_cycle = 1;
@@ -49,6 +53,10 @@ namespace octopus
 
     void ExternalCPU::processLogic()
     {
+        // The Logger stamps a logged request's events with its core's cycle.
+        if (m_log_requests && (s_log_enabled || s_logged_cores.count(logCore())))
+            Logger::getLogger()->setClkCount(logCore(), m_clk_cycle);
+
         addRequests2ProcessingQueue(*m_processing_queue);
 
         Message ready_msg;
@@ -70,9 +78,27 @@ namespace octopus
                     m_link_full_holds++;
                     return;
                 }
+                if (m_log_requests && s_log_enabled)
+                {
+                    // ready = issue cycle: the core model has already waited
+                    // for its own slot before handing the request over.
+                    Logger::getLogger()->addRequest(logCore(), ready_msg);
+                    Logger::getLogger()->event(ready_msg.msg_id, Logger::Role::CPU, (uint32_t)logCore(), Logger::Phase::ENTER);
+                    Logger::getLogger()->trace(ready_msg, Logger::Role::CPU, (uint32_t)logCore(), Logger::Phase::ENTER);
+                    s_logged_cores.insert(logCore());
+                }
             }
             else if(ready_msg.source == Message::Source::UPPER_INTERCONNECT)
             {
+                // Only while logging: once the reports are written, a late
+                // response would make the Logger reopen (and truncate) its
+                // core's report. Requests in flight at the end have no row.
+                // The Logger ignores requests it never registered.
+                if (m_log_requests && s_log_enabled)
+                {
+                    Logger::getLogger()->event(ready_msg.msg_id, Logger::Role::CPU, (uint32_t)logCore(), Logger::Phase::EXIT);
+                    Logger::getLogger()->trace(ready_msg, Logger::Role::CPU, (uint32_t)logCore(), Logger::Phase::EXIT);
+                }
                 if(m_cpu_callback != NULL)
                     (*m_cpu_callback)(ready_msg.msg_id, ready_msg.addr, this->m_clk_cycle,
                                       (RequestType)ready_msg.complementary_value, ready_msg.data);
@@ -200,6 +226,29 @@ namespace octopus
     }
 
     std::map<int, ExternalCPU*> ExternalCPU::ext_CPUs;
+    bool ExternalCPU::s_log_enabled = false;
+    std::set<int> ExternalCPU::s_logged_cores;
+
+    void ExternalCPU::setLoggerEnable(bool enable)
+    {
+        // Enabling starts a fresh window, like a gem5 stats reset: gem5 resets
+        // its statistics once when the simulation starts and again at the
+        // workload's own marker, and the reports must cover the latter only.
+        if (enable && (s_log_enabled || !s_logged_cores.empty()))
+        {
+            Logger::getLogger()->resetReports();
+            s_logged_cores.clear();
+        }
+        s_log_enabled = enable;
+    }
+
+    void ExternalCPU::writeLogReports()
+    {
+        s_log_enabled = false;
+        for (int core : s_logged_cores)
+            Logger::getLogger()->traceEnd(core);
+        s_logged_cores.clear();
+    }
 
     std::map<int, ExternalCPU*>* ExternalCPU::getExtCPUs()
     {

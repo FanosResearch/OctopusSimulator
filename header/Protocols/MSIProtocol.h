@@ -70,6 +70,9 @@ namespace octopus
         // states that keep a valid copy). Shared by MESI and MOESI, whose
         // tables keep Load at event 0.
         virtual bool isReadableState(int state) override;
+        // Hit (read or write of the line), Data2Req / Data2Both (read for a
+        // snoop response). Same action names in the MESI and MOESI tables.
+        virtual bool needsDataArray(const Message &msg) override;
     };
 }
 

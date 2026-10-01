@@ -11,6 +11,7 @@
 #include "../header/SystemConfigurations/MultiCoreSystem.h"
 #include "../header/SystemConfigurations/MultiCoreSystem_Mesh.h"
 #include "../header/ClockManager.h"
+#include "../header/CacheControllers/BaseController.h"
 
 using namespace std;
 
@@ -64,5 +65,10 @@ namespace octopus
     uint64_t CacheSim::minPeriod() const
     {
         return ClockManager::getClockManager()->getMinPeriod();
+    }
+
+    void CacheSim::reportOccupancy(std::ostream &os) const
+    {
+        BaseController::reportOccupancy(os);
     }
 }
