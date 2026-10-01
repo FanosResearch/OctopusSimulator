@@ -1,24 +1,33 @@
 % The Logger's view of a request: a chain of self-describing events in the originating
-% core's clock; consecutive events bound the stages. Each box lists the stamps it takes.
-\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, node distance=4mm and 6mm,
-  r/.style={draw=octrule, fill=octmem, rounded corners=2pt, minimum width=17mm, minimum height=7mm, font=\sffamily\footnotesize\bfseries},
+% core's clock; consecutive events bound the stages. Each box shows the stamps it takes.
+% Main path on the lower row (stamps below the boxes); the miss excursion on the upper row
+% (stamps above the boxes), so no connector crosses a label.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex,
+  r/.style={draw=octrule, fill=octmem, rounded corners=2pt, minimum width=18mm, minimum height=7mm, font=\sffamily\footnotesize\bfseries},
   bus/.style={r, fill=octio, draw=octpurple},
   mem/.style={r, fill=white},
-  w/.style={->, thick, octink}, e/.style={font=\ttfamily\scriptsize, text=octquiet, align=center}]
-  \node[r] (cpu) {CPU};
-  \node[r, right=of cpu] (l1) {L1};
-  \node[bus, right=of l1] (rb) {REQ\_BUS};
-  \node[r, right=of rb] (llc) {LLC};
-  \node[bus, right=of llc] (sb) {RESP\_BUS};
-  \node[r, right=of sb] (cpu2) {CPU};
-  \node[bus, below=12mm of llc, xshift=-14mm] (mb1) {MEM\_BUS};
-  \node[mem, right=of mb1] (dr) {DRAM};
-  \node[bus, right=of dr] (mb2) {MEM\_BUS};
-  \foreach \n/\t in {cpu/ENTER, l1/ENTER, rb/EXIT, llc/{ENTER\\SERVICE, EXIT}, sb/EXIT, cpu2/{EXIT\\$\rightarrow$ finalizeEvents}, mb1/EXIT, dr/{ENTER, EXIT}, mb2/EXIT}
-    { \node[e, below=0.8mm of \n] {\t}; }
+  w/.style={->, thick, octink}, wm/.style={->, thick, octquiet},
+  e/.style={font=\ttfamily\scriptsize, text=octquiet, align=center},
+  tag/.style={font=\sffamily\scriptsize\itshape, text=octquiet, fill=octpaper, inner sep=1pt}]
+  % main row
+  \node[r]   (cpu)  at (0mm, 0)   {CPU};
+  \node[r]   (l1)   at (25mm, 0)  {L1};
+  \node[bus] (rb)   at (50mm, 0)  {REQ\_BUS};
+  \node[r]   (llc)  at (78mm, 0)  {LLC};
+  \node[bus] (sb)   at (106mm, 0) {RESP\_BUS};
+  \node[r]   (cpu2) at (132mm, 0) {CPU};
+  \foreach \n/\t in {cpu/ENTER, l1/ENTER, rb/EXIT, llc/{ENTER\\SERVICE, EXIT}, sb/EXIT, cpu2/{EXIT\\$\rightarrow$ finalizeEvents}}
+    { \node[e, anchor=north] at ($(\n.south)+(0,-1mm)$) {\t}; }
   \draw[w] (cpu) -- (l1); \draw[w] (l1) -- (rb); \draw[w] (rb) -- (llc); \draw[w] (llc) -- (sb); \draw[w] (sb) -- (cpu2);
-  \draw[w, octquiet] (llc.south) ++(-3mm,0) |- node[e, pos=0.9, above] {miss} (mb1.west);
-  \draw[w, octquiet] (mb1) -- (dr); \draw[w, octquiet] (dr) -- (mb2);
-  \draw[w, octquiet] (mb2.east) -- ++(4mm,0) |- ($(llc.east)+(0,-1.5mm)$);
-  \node[text=octquiet, align=center, below=11mm of dr, text width=90mm] {every event records \code{(comp\_id, role, phase, cycle)}; the cycle is the originating core's clock whatever component stamps it, so stages are differences of named events and tile to Total};
+  % miss row, above
+  \node[bus] (mb1) at (60mm, 24mm)  {MEM\_BUS};
+  \node[mem] (dr)  at (86mm, 24mm)  {DRAM};
+  \node[bus] (mb2) at (112mm, 24mm) {MEM\_BUS};
+  \foreach \n/\t in {mb1/EXIT, dr/{ENTER, EXIT}, mb2/EXIT}
+    { \node[e, anchor=south] at ($(\n.north)+(0,1mm)$) {\t}; }
+  \draw[wm] ($(llc.north)+(-3mm,0)$) -- ++(0,6mm) -| (mb1.south) node[tag, pos=0.25, below] {on a miss};
+  \draw[wm] (mb1) -- (dr); \draw[wm] (dr) -- (mb2);
+  \draw[wm] (mb2.south) |- ($(llc.north)+(3mm,8mm)$) node[tag, pos=0.75, above] {fill} -- ($(llc.north)+(3mm,0)$);
+  % note
+  \node[text=octquiet, align=center, text width=110mm] at (66mm, -25mm) {every event records \code{(comp\_id, role, phase, cycle)}; the cycle is the originating core's clock whatever component stamps it, so the stages are differences of named events and tile to Total};
 \end{tikzpicture}
