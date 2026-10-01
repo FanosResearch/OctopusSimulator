@@ -81,9 +81,33 @@ while porting to this branch: with the LLC deferring its array-touching rows
 stopped with `MSIProtocol: Fault Transaction is detected`; with the hold it
 ran clean.
 
+The fault, traced (`OCTOPUS_TRACE_ADDR`, Snoop preset, LLC deferral on, hold
+off; LLC states from `MSI_LLC.csv`: IorS = no L1 owner, M = an L1 owns the
+line, IorS_d = waiting for the previous owner's data):
+
+| cycle | LLC | L1 1 |
+| --- | --- | --- |
+| 2618 | L1 2's GetM 272 pops in IorS and is deferred whole (array busy) | |
+| 2625 | L1 1's GetS 329 pops in IorS and is deferred whole; its row (IorS + GetS: SendData) is chosen against IorS | issues GetS 329 |
+| 2660 | GetM 272 fires: IorS to M (L1 2 owns the line) | |
+| 2663 | L1 0's GetS 321, younger than 329, pops: M + GetS needs no array, runs at once, M to IorS_d | |
+| 2670 | GetS 329 fires against IorS_d: a Stall row, so it is pushed back to the queue behind younger messages | |
+| 2689 | | L1 2, the owner, answers 329 cache-to-cache (correct, in bus order); the load completes |
+| 2701-2721 | the re-queued 329 runs again in IorS: SendData, a second answer to a finished request | invalidated by L1 3's GetM; issues GetS 348 |
+| 2764 | | the stale answer to 329 arrives while waiting for 348; an L1 matches data by line, so it takes it as 348's data and goes to S |
+| 2814 | | the real answer to 348 arrives in S: no row for OwnData in S, `MSIProtocol: Fault Transaction is detected` |
+
+Deferring 329 whole took it out of the queue, and a younger message to the
+same line changed the line's state before 329's row ran. 329's row had been
+chosen against a state that no longer held; it stalled, was re-queued behind
+younger traffic, and ran a second time, so its requester was answered twice.
+In gem5 the stale answer is also wrong data.
+
 Handled by `line_interlock=1`: while a line has an entry on the array-access
 list, every queued message to it stays in place, not ready, until the entry is
-gone. Holding in place (rather than popping and parking) keeps each message's
+gone. In the trace, GetS 321 waits until 329's access has run, so every
+message sees the line in bus order and a fired row is never a Stall
+(`m_pipe_requeues` stays 0). Holding in place (rather than popping and parking) keeps each message's
 position, so bus order and the per-line FCFS gate still apply. This is why
 whole-message deferral is tied to the interlock: with `line_interlock=0` the
 occupancy model keeps upstream's handling, and the pipelined model turns the
@@ -146,6 +170,24 @@ With gem5, the bytes matter as well as the timing:
   older overlapping write (hold-back in `gem5/octopus.cc`).
 - LL/SC depends on the invalidation reaching the core at the right point;
   a snoop that runs early (situation 1) or late changes which SC succeeds.
+
+## Why each gem5-integration change exists
+
+Some changes are needed only because the integration gives the data array a
+latency the presets never used (introduced); others fix defects that were
+already there but that no preset or trace reached (hidden).
+
+| change | needed for | kind | why nothing failed before |
+| --- | --- | --- | --- |
+| bus slot at latency 1 (`SplitBusController`) | bus latency experiments | hidden | the if/else-if slot logic dropped every message at latency 1; every preset uses 2/5 |
+| one array-access list; parked accesses served without an arbiter; a whole message deferred so state and data change together (L1) | an L1 with a data latency (situations 1-3); the base of the pipelined model | hidden | all presets use L1 latency 0, so no L1 ever parked |
+| pipelined data array | an LLC that charges its latency and serves one access per cycle under multi-core load | introduced (new model) | the occupancy model charges the requester 0 cycles and serves one access per 10 cycles for all L1s; on a 4-thread streaming test that made runs 56% longer, invisible in single-trace presets |
+| MSHR / write-back-buffer lines bypass the array (situation 6) | the pipelined model | introduced by pipelining | the occupancy model already ran such accesses in place through `isReady(addr)`; only the pipelined model parked them |
+| line interlock (hold) | any whole-message deferral (situation 4) | introduced by deferral | with latency 0 or rows decided at pop, a message never left the queue before its line's older work had run |
+| `pushFrontOrdered` (situation 5) | any queue where a bus message can wait | hidden, now reachable on this branch | upstream bus messages never waited; this branch's INV-aware gate and the hold can make one wait |
+| directory: stale PutS, `IM_aI` store (situation 7) | reordered LLC traffic | hidden | the window needs the LLC's answers reordered; also found on this branch through a NoC (d9b4f6b4) |
+| LLC defers array-touching rows whole | real data at the LLC (state and data together) | introduced, only with the interlock | the LLC tables happen never to invalidate what an older parked read needs, and traces carry no data; without the hold it faults (situation 4) |
+| bridge hold-back (gem5 side) | a core's younger access to a line with its older store in flight | introduced by gem5 (real data) | trace-driven cores do not read back the bytes they wrote |
 
 ## Settings
 
