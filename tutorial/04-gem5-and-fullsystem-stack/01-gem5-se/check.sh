@@ -3,7 +3,7 @@
 # requests, and the SLAM demo tracks when it runs alone. Runs se_test (FCFS with
 # Octopus logging, then round-robin bus) and the Solo demo, all in parallel;
 # about 5 minutes. Needs gem5 built with this repository as an EXTRAS
-# module (GEM5_ROOT or GEM5_BIN) and the two aarch64 binaries built (README, step 1).
+# module (GEM5_ROOT or GEM5_BIN); the two aarch64 binaries ship prebuilt.
 #
 # gem5 timing depends on the gem5 build, so this checks behaviour, not cycle
 # counts: se_test's self-checks pass, and the demo drops no scan, maps every
