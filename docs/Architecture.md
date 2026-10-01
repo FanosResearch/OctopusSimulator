@@ -169,6 +169,16 @@ every victim is written back; the code marks the spot with a `ToDo`. A `GetM` mi
 identically. A victim an L1 *owns* adds one leg: the owner answers the INV with its data, and
 that copy is what reaches memory.
 
+Seen from the cores instead of from inside the LLC, that eviction is the whole story of
+inter-core interference through an inclusive LLC — and the story the demo measures. Core 0
+brings a line in and hits on it in its L1; core 1 misses on a different line in the same
+set, the fill evicts core 0's line, the INV on the service lane removes it from core 0's
+L1 too, and core 0's next access to it is a full DRAM round trip that core 0 did nothing
+to cause. Bus arbitration cannot prevent it; LLC way reservation can (see
+[Tasks.md](Tasks.md)).
+
+![Inclusion interference as a sequence: core 0 owns X, core 1's miss on Y in the same set evicts X, the INV removes X from core 0's L1, and core 0's next Load X goes to DRAM](imgs/inclusion_interference.svg)
+
 A `CacheController` (a `BaseController`) has **two `CommunicationInterface`s** — one
 facing the cores below, one facing the interconnect above. Incoming messages are
 serialized into a **processing queue** ordered **First‑Ready First‑Come‑First‑Serve

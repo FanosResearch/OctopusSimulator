@@ -26,6 +26,12 @@ echo part;  run -p "llc_controller.m_data_handler.way_partition(s)=0:0;1-3:1"
 Fill in the table as you go. The point is not the numbers — it is that each row
 differs from the last in exactly one parameter.
 
+The `part` row is the one with a story behind it: under a shared inclusive LLC a
+streaming core's fills evict a quiet core's lines, and by inclusion its L1 copies too,
+so the quiet core's next accesses go to DRAM through no fault of its own. The sequence
+is drawn in [`docs/imgs/inclusion_interference.svg`](../../docs/imgs/inclusion_interference.svg);
+way reservation is what stops it, and no bus arbiter can.
+
 | change | worst total | worst DRAM | finish cycle |
 |---|---|---|---|
 | as shipped (TDM, fixed latency) | | | |
