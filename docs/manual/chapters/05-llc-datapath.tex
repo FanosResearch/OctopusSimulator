@@ -103,11 +103,12 @@ inter-core interference through an inclusive LLC; \cref{ch:tasks-and-demo} draws
 sequence and \cref{ch:request-end-to-end} shows what it costs the victim's next request.
 
 \begin{wherebox}
-\file{src/CacheControllers/CacheController_End2End.cpp} --- the LLC controller;
-\file{src/CacheDataHandler_COTS.cpp} --- \code{updateLineData}, \code{moveLine2WB}, the port
-arbiter and the bypass; \file{Protocols_FSM/MESI_LLC.csv} --- the FSM (\cref{app:fsm-tables});
-\file{src/Protocols/LLCMESIProtocol.cpp} --- its handler;
-\file{src/CacheControllers/CacheController.cpp} --- \code{sendInvalidationMessage},
-\code{checkReplacements}; \file{configuration/SystemConfigurations/MultiCoreSystem.csv} --- the
-\code{llc\_controller.*} keys that size it.
+\begin{itemize}[nosep,leftmargin=1.2em]
+\item \file{src/CacheControllers/CacheController_End2End.cpp} --- the LLC controller
+\item \file{src/CacheDataHandler_COTS.cpp} --- \code{updateLineData}, \code{moveLine2WB}, the port arbiter and the bypass
+\item \file{Protocols_FSM/MESI_LLC.csv} --- the FSM (\cref{app:fsm-tables})
+\item \file{src/Protocols/LLCMESIProtocol.cpp} --- its handler
+\item \file{src/CacheControllers/CacheController.cpp} --- \code{sendInvalidationMessage}, \code{checkReplacements}
+\item \file{configuration/SystemConfigurations/MultiCoreSystem.csv} --- the \code{llc\_controller.*} keys that size it
+\end{itemize}
 \end{wherebox}

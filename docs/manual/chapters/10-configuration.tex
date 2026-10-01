@@ -128,8 +128,12 @@ verified before a run starts, because a simulator that is still running keeps th
 Windows and a silent failed edit would run the wrong configuration without any error.
 
 \begin{wherebox}
-\file{src/Configurable.cpp}, \file{header/Configurable.h} --- the parameter model;
-\file{src/CLParser.cpp} --- the command line; \file{configuration/} --- every CSV
-(\cref{app:config-keys}); \file{run_octopus.sh}, \file{sweeps/sweep_common.sh} --- preset
-selection and the harness; \file{REPRODUCIBILITY.md}, \file{sweeps/README.md}.
+\begin{itemize}[nosep,leftmargin=1.2em]
+\item \file{header/Configurable.h}, \file{src/Configurable.cpp} --- the parameter model
+\item \file{src/CLParser.cpp} --- the command line
+\item \file{configuration/} --- every CSV (\cref{app:config-keys})
+\item \file{run_octopus.sh} --- preset selection
+\item \file{sweeps/sweep_common.sh} --- the harness
+\item \file{REPRODUCIBILITY.md}, \file{sweeps/README.md} --- the same material online
+\end{itemize}
 \end{wherebox}

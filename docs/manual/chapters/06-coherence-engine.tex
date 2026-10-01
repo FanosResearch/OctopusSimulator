@@ -174,9 +174,14 @@ transition trace shows the cause --- \code{I --Load--> IM\_ad} under MI against
 \code{I --Load--> IS\_ad} under MESI. One new file, one override, no compiler.
 
 \begin{wherebox}
-\file{Protocols_FSM/*.csv} --- the tables; \file{header/FSMReader.h},
-\file{src/FSMReader.cpp} --- the parser and \code{getTransition}; \file{src/Protocols/} ---
-\code{MSIProtocol.cpp}, \code{MESIProtocol.cpp}, \code{MOESIProtocol.cpp}, their
-\code{LLC\ldots} and \code{\ldots Directory} variants (\code{readEvent}, \code{handleAction});
-\file{docs/AddingAProtocol.md} --- the MI example in full; \file{demo_protocol.sh} --- runs it.
+\begin{itemize}[nosep,leftmargin=1.2em]
+\item \file{Protocols_FSM/} --- the tables, one CSV per agent
+\item \file{header/FSMReader.h}, \file{src/FSMReader.cpp} --- the parser and \code{getTransition}
+\item \file{src/Protocols/MSIProtocol.cpp}, \file{src/Protocols/MESIProtocol.cpp}, \file{src/Protocols/MOESIProtocol.cpp} --- the snooping L1 handlers
+\item \file{src/Protocols/LLCMSIProtocol.cpp}, \file{src/Protocols/LLCMESIProtocol.cpp} --- the snooping LLC handlers (MOESI's LLC runs on the MESI handler)
+\item \file{src/Protocols/MSIDirectory.cpp}, \file{src/Protocols/MESIDirectory.cpp}, \file{src/Protocols/MOESIDirectory.cpp} --- the directory L1 handlers
+\item \file{src/Protocols/LLCMSIDirectory.cpp}, \file{src/Protocols/LLCMESIDirectory.cpp}, \file{src/Protocols/LLCMOESIDirectory.cpp} --- the directory home handlers
+\item \file{docs/AddingAProtocol.md} --- the MI example in full
+\item \file{demo_protocol.sh} --- runs it
+\end{itemize}
 \end{wherebox}

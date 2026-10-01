@@ -120,7 +120,13 @@ overrides, or expect to \code{git checkout -- configuration/}.
 \end{trapbox}
 
 \begin{wherebox}
-\file{CMakeLists.txt} --- the build; \file{.devcontainer/} --- the Codespace;
-\file{get_benchmarks.sh}; \file{scripts/check_environment.sh}; \file{run_octopus.sh};
-\file{octoviz.sh}; \file{README.md}, \file{REPRODUCIBILITY.md} --- the same material online.
+\begin{itemize}[nosep,leftmargin=1.2em]
+\item \file{CMakeLists.txt} --- the build
+\item \file{.devcontainer/devcontainer.json}, \file{.devcontainer/on-create.sh}, \file{.devcontainer/post-create.sh} --- the Codespace
+\item \file{get_benchmarks.sh} --- fetches and inflates the benchmark traces
+\item \file{scripts/check_environment.sh} --- the environment check
+\item \file{run_octopus.sh} --- runs a suite under a protocol preset
+\item \file{octoviz.sh} --- the visualizer entry point
+\item \file{README.md}, \file{REPRODUCIBILITY.md} --- the same material online
+\end{itemize}
 \end{wherebox}

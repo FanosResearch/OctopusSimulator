@@ -124,8 +124,14 @@ reports. In act 2 one job ran 181\,266 cycles inside a 5\,000-cycle period, its 
 equals its execution time exactly. Nothing is added on top of the simulation.
 
 \begin{wherebox}
-\file{src/CPU.cpp} --- \code{periodicLogic}; \file{src/CacheDataHandler.cpp} --- way
-partitioning; \file{docs/Tasks.md}; \file{demo/} --- \code{run\_acts.sh}, \code{tasks/},
-\code{extract\_jobs.py}, \code{plot\_trajectory.py}, \code{build\_page.py}, \code{README.md};
-\file{docs/imgs/inclusion_interference.svg}.
+\begin{itemize}[nosep,leftmargin=1.2em]
+\item \file{src/CPU.cpp} --- \code{periodicLogic}
+\item \file{src/CacheDataHandler.cpp} --- way partitioning
+\item \file{docs/Tasks.md} --- the task layer as a reference
+\item \file{demo/run_acts.sh} --- the three acts
+\item \file{demo/tasks/} --- the task programs
+\item \file{demo/extract_jobs.py}, \file{demo/plot_trajectory.py}, \file{demo/build_page.py} --- the post-processing
+\item \file{demo/README.md} --- what is measured and what is drawn
+\item \file{docs/imgs/inclusion_interference.svg} --- the sequence figure
+\end{itemize}
 \end{wherebox}

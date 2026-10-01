@@ -117,9 +117,12 @@ degenerate case, and ``add a routing algorithm'' becomes the mesh's analogue of 
 arbiter''. \file{docs/NoC_MultiHop_Plan.md} has the design and its phasing.
 
 \begin{wherebox}
-\file{header/Arbiters/Arbiter.h} --- the interface; \file{src/Interconnect/SplitBusController.cpp}
---- the arbiter factory for the bus; \file{header/ReplacementPolicies/ReplacementPolicy.h},
-\file{src/ReplacementPolicies/} --- replacement (LRU, random);
-\file{src/SystemConfigurations/} --- system classes; \file{tutorial/03-extending-octopus/} ---
-the three exercises with their checks; \file{tutorial/solutions/} --- the reference patches.
+\begin{itemize}[nosep,leftmargin=1.2em]
+\item \file{header/Arbiters/Arbiter.h} --- the arbiter interface
+\item \file{src/Interconnect/SplitBusController.cpp} --- the arbiter factory for the bus
+\item \file{header/ReplacementPolicies/ReplacementPolicy.h}, \file{src/ReplacementPolicies/} --- replacement (LRU, random)
+\item \file{src/SystemConfigurations/} --- the system classes
+\item \file{tutorial/03-extending-octopus/} --- the three exercises with their checks
+\item \file{tutorial/solutions/} --- the reference patches
+\end{itemize}
 \end{wherebox}

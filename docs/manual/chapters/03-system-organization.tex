@@ -139,10 +139,12 @@ MSI, pinned to an FCFS bus); \file{MultiCoreSystem_Mesh.csv} replaces the bus wi
 not single \code{-p} overrides (\cref{ch:configuration}).
 
 \begin{wherebox}
-\file{src/ClockManager.cpp}, \file{header/ClockManager.h} --- the clock and
-\code{ClockedObj}; \file{src/Configurable.cpp} --- parameters;
-\file{header/Interconnect/CommunicationInterface.h} --- \code{Message} and the interfaces;
-\file{src/SystemConfigurations/MultiCoreSystem.cpp} --- the system class that wires
-\cref{fig:shipped-system}; \file{configuration/SystemConfigurations/MultiCoreSystem.csv} --- its
-parameters; \file{Octopus_Simulator.cpp}, \file{src/CacheSim.cpp} --- \code{main} and the run.
+\begin{itemize}[nosep,leftmargin=1.2em]
+\item \file{header/ClockManager.h}, \file{src/ClockManager.cpp} --- the clock and \code{ClockedObj}
+\item \file{header/Configurable.h}, \file{src/Configurable.cpp} --- parameters
+\item \file{header/Interconnect/CommunicationInterface.h} --- \code{Message} and the interfaces
+\item \file{src/SystemConfigurations/MultiCoreSystem.cpp} --- the system class that wires \cref{fig:shipped-system}
+\item \file{configuration/SystemConfigurations/MultiCoreSystem.csv} --- its parameters
+\item \file{Octopus_Simulator.cpp}, \file{src/CacheSim.cpp} --- \code{main} and the run
+\end{itemize}
 \end{wherebox}

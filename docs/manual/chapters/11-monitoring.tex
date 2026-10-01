@@ -210,9 +210,12 @@ state, oldest-only, responses ahead --- are AND-combined and kept in the URL has
 a shareable link; views can be popped out into their own windows, which stay synchronised.
 
 \begin{wherebox}
-\file{header/Logger.h}, \file{src/Logger.cpp} --- the Logger, the trace writer, the reports;
-\file{header/DebugPrint.h}, \file{src/DebugPrint.cpp} --- the Debugger; \file{tools/octoviz/}
---- \code{convert.py}, \code{occupancy.py}, \code{tracefile.py}, \code{server.py},
-\code{static/index.html}; \file{octoviz.sh}; \file{docs/Logger.md}, \file{docs/Debugger.md},
-\file{docs/Trace.md}, \file{docs/Visualizer.md}.
+\begin{itemize}[nosep,leftmargin=1.2em]
+\item \file{header/Logger.h}, \file{src/Logger.cpp} --- the Logger, the trace writer, the reports
+\item \file{header/DebugPrint.h}, \file{src/DebugPrint.cpp} --- the Debugger
+\item \file{tools/octoviz/convert.py}, \file{tools/octoviz/occupancy.py}, \file{tools/octoviz/tracefile.py} --- the converters
+\item \file{tools/octoviz/server.py}, \file{tools/octoviz/static/index.html} --- the viewer
+\item \file{octoviz.sh} --- the entry point
+\item \file{docs/Logger.md}, \file{docs/Debugger.md}, \file{docs/Trace.md}, \file{docs/Visualizer.md} --- the same material online
+\end{itemize}
 \end{wherebox}

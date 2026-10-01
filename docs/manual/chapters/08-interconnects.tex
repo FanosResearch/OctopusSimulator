@@ -127,11 +127,11 @@ its degenerate case.
 \end{notebox}
 
 \begin{wherebox}
-\file{header/Interconnect/}, \file{src/Interconnect/} --- \code{Bus}, \code{TripleBus},
-\code{BusController}, \code{SplitBusController}, \code{TripleBusController},
-\code{UnifiedBusController}, \code{Point2PointController}, \code{Mesh}, \code{MeshController},
-\code{NoC}, \code{NoCController} and their interfaces; \file{header/Arbiters/},
-\file{src/Arbiters/} --- \code{Arbiter}, \code{FCFSArbiter}, \code{RRArbiter},
-\code{TDMArbiter}; \file{configuration/Interconnect/*.csv} --- latencies, buffer depths,
-arbiter names, the mesh and NoC connection matrices (\cref{app:config-keys}).
+\begin{itemize}[nosep,leftmargin=1.2em]
+\item \file{header/Interconnect/}, \file{src/Interconnect/} --- \code{Bus}, \code{TripleBus} and their interfaces
+\item \file{src/Interconnect/BusController.cpp}, \file{src/Interconnect/SplitBusController.cpp}, \file{src/Interconnect/TripleBusController.cpp}, \file{src/Interconnect/UnifiedBusController.cpp}, \file{src/Interconnect/Point2PointController.cpp} --- the bus controllers
+\item \file{src/Interconnect/Mesh.cpp}, \file{src/Interconnect/MeshController.cpp}, \file{src/Interconnect/NoC.cpp}, \file{src/Interconnect/NoCController.cpp} --- the mesh and the NoC
+\item \file{header/Arbiters/}, \file{src/Arbiters/} --- \code{Arbiter}, \code{FCFSArbiter}, \code{RRArbiter}, \code{TDMArbiter}
+\item \file{configuration/Interconnect/} --- latencies, buffer depths, arbiter names, the mesh and NoC connection matrices (\cref{app:config-keys})
+\end{itemize}
 \end{wherebox}

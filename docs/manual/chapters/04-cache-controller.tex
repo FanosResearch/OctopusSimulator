@@ -170,13 +170,16 @@ the request RX. Data responses are deliberately not ordered against requests, so
 queue of stalled requests can always drain.
 
 \begin{wherebox}
-\file{header/CacheControllers/BaseController.h}, \file{CacheController.h},
-\file{CacheControllerExclusive.h}, \file{CacheController_End2End.h},
-\file{CacheControllerDirectory.h} and their \file{src/CacheControllers/*.cpp} ---
-the controllers; \file{src/CacheDataHandler_COTS.cpp} --- array, MSHRs, write-back buffer,
-port arbiter; \file{header/FRFCFS_Buffer.h} --- the processing queue;
-\file{src/Protocols/*.cpp} --- the handlers (\code{readEvent}, \code{handleAction});
-\file{header/Interconnect/CommunicationInterface.h} --- the message;
-\file{src/Interconnect/BusInterface.cpp},
-\file{TripleBusInterface.cpp} --- delivery order.
+\begin{itemize}[nosep,leftmargin=1.2em]
+\item \file{header/CacheControllers/BaseController.h}, \file{src/CacheControllers/BaseController.cpp} --- the machinery every controller shares
+\item \file{header/CacheControllers/CacheController.h}, \file{src/CacheControllers/CacheController.cpp} --- the data array, miss handling, write-back path
+\item \file{header/CacheControllers/CacheControllerExclusive.h}, \file{src/CacheControllers/CacheControllerExclusive.cpp} --- the shipped L1
+\item \file{header/CacheControllers/CacheController_End2End.h}, \file{src/CacheControllers/CacheController_End2End.cpp} --- the shipped LLC
+\item \file{header/CacheControllers/CacheControllerDirectory.h}, \file{src/CacheControllers/CacheControllerDirectory.cpp} --- the directory home
+\item \file{src/CacheDataHandler_COTS.cpp} --- array, MSHRs, write-back buffer, port arbiter
+\item \file{header/FRFCFS_Buffer.h} --- the processing queue
+\item \file{src/Protocols/} --- the handlers (\code{readEvent}, \code{handleAction})
+\item \file{header/Interconnect/CommunicationInterface.h} --- the message
+\item \file{src/Interconnect/BusInterface.cpp}, \file{src/Interconnect/TripleBusInterface.cpp} --- delivery order
+\end{itemize}
 \end{wherebox}

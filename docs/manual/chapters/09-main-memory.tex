@@ -66,9 +66,12 @@ tests for it.
 \end{trapbox}
 
 \begin{wherebox}
-\file{src/MainMemoryController.cpp}, \file{configuration/MainMemoryController.csv} --- the
-fixed-latency model; \file{header/MCsimInterface.h}, \file{src/MCsimInterface.cpp} --- the
-bridge; \file{src/MCsim/} --- MCsim, with \file{src/MCsim/README.md} on writing a controller
-and \file{src/MCsim/system/<Name>/<Name>.ini} per scheduler;
-\file{src/SystemConfigurations/MultiCoreSystem.cpp} --- where \key{main\_memory\_type} is read.
+\begin{itemize}[nosep,leftmargin=1.2em]
+\item \file{src/MainMemoryController.cpp}, \file{configuration/MainMemoryController.csv} --- the fixed-latency model
+\item \file{header/MCsimInterface.h}, \file{src/MCsimInterface.cpp} --- the bridge to MCsim
+\item \file{src/MCsim/} --- MCsim itself
+\item \file{src/MCsim/README.md} --- writing a memory controller
+\item \file{src/MCsim/system/<Name>/<Name>.ini} --- one per scheduler
+\item \file{src/SystemConfigurations/MultiCoreSystem.cpp} --- where \key{main\_memory\_type} is read
+\end{itemize}
 \end{wherebox}
