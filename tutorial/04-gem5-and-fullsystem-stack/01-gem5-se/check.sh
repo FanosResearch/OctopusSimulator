@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# 04/01 check: gem5 SE drives Octopus correctly, and the SLAM demo tracks when it
-# runs alone. Runs se_test (FCFS, then round-robin bus) and the Solo demo, all in
-# parallel; about 5 minutes. Needs gem5 built with this repository as an EXTRAS
+# 04/01 check: gem5 SE drives Octopus correctly, gem5 and Octopus count the same
+# requests, and the SLAM demo tracks when it runs alone. Runs se_test (FCFS with
+# Octopus logging, then round-robin bus) and the Solo demo, all in parallel;
+# about 5 minutes. Needs gem5 built with this repository as an EXTRAS
 # module (GEM5_ROOT or GEM5_BIN) and the two aarch64 binaries built (README, step 1).
 #
 # gem5 timing depends on the gem5 build, so this checks behaviour, not cycle
@@ -24,7 +25,8 @@ OUT="$HERE/runs/check"
 [ -x "$DEMO" ] || { echo "[FAIL] slam_demo not built: make -C $HERE/slam_demo"; exit 1; }
 rm -rf "$OUT"; mkdir -p "$OUT"
 
-"$GEM5_BIN" -re -d "$OUT/se_fcfs" "$CONFIG" --binary "$SE_TEST" > /dev/null 2>&1 &
+"$GEM5_BIN" -re -d "$OUT/se_fcfs" "$CONFIG" --binary "$SE_TEST" \
+    --octopus-param 'cpu[*].log_requests(i)=1' > /dev/null 2>&1 &
 "$GEM5_BIN" -re -d "$OUT/se_rr" "$CONFIG" --binary "$SE_TEST" \
     --octopus-param 'bus[0].interconnect_controller.arbiter_type(s)=RRArbiter' > /dev/null 2>&1 &
 "$GEM5_BIN" -re -d "$OUT/solo" "$CONFIG" --num-cores 4 --binary "$DEMO" -- --period-us 80 > /dev/null 2>&1 &
@@ -38,6 +40,15 @@ for r in se_fcfs se_rr; do
         echo "[FAIL] se_test ($r): see $OUT/$r/simout.txt and simerr.txt"; fail=1
     fi
 done
+
+# Part B: gem5's requests per core vs Octopus's LatencyReport rows. Equal up to
+# the requests in flight when the window closed (at most one queue's worth).
+views=$(bash "$HERE/compare_views.sh" "$OUT/se_fcfs" 2>/dev/null | awk '$1 ~ /^[0-9]+$/ && / cy /')
+if [ -n "$views" ] && echo "$views" | awk '{ if ($4 < 0 || $4 > 64) bad = 1 } END { exit bad }'; then
+    echo "[ok]   two views: gem5 requests = Octopus rows per core (in flight: $(echo "$views" | awk '{printf "%s ", $4}'))"
+else
+    echo "[FAIL] two views: gem5 and Octopus disagree (bash compare_views.sh $OUT/se_fcfs)"; fail=1
+fi
 
 rt=$(grep -h '^\[RT\]' "$OUT/solo/simout.txt" 2>/dev/null)
 rmse=$(grep -h '^\[ATE\]' "$OUT/solo/simout.txt" 2>/dev/null | grep -oE 'rmse [0-9.]+' | cut -d' ' -f2)

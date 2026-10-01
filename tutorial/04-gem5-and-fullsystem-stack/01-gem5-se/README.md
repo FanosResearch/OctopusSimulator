@@ -8,7 +8,8 @@ real-time task, and what the hierarchy's knobs can do about it.
 | part | what | time |
 |---|---|---|
 | A | `se_test`: one SE run, then the same run with a different bus arbiter | 5 min |
-| B | the interference demo: seven configurations, then the plots | 15 min (runs in the background) |
+| B | two views of one run: gem5's statistics next to Octopus's own reports | 5 min |
+| C | the interference demo: seven configurations, then the plots | 15 min (runs in the background) |
 
 ## The journey of a memory request
 
@@ -28,9 +29,7 @@ Steps 2–4 are **the same code** you ran standalone. Only the request source
 changed. The gem5 side is `gem5/octopus.cc` (a SimObject per L1) and
 `gem5/configs/octopus_cache_hierarchy.py`; the system is the CSV preset
 `configuration/SystemConfigurations/MultiCoreSystem_gem5.csv` (4 cores, 8 L1s:
-instruction caches are Octopus ids 0–3, data caches 4–7, the LLC is 10). Under
-gem5, Octopus's own `LatencyReport` files are not written; the measurements come
-from gem5's `stats.txt` and from the programs themselves.
+instruction caches are Octopus ids 0–3, data caches 4–7, the LLC is 10).
 
 ## Step 1 — build
 
@@ -48,8 +47,8 @@ make -C slam_demo steps                  # scenario data for the plots
 The aarch64 binaries need `g++-aarch64-linux-gnu`; the plots need Python with
 `numpy` and `matplotlib`. Both binaries are static, so gem5 SE needs no disk image.
 
-`bash check.sh` (in this folder) runs Part A and the demo's Solo configuration
-(about 5 minutes) and tells you whether everything works.
+`bash check.sh` (in this folder) runs Parts A and B and the demo's Solo
+configuration (about 5 minutes) and tells you whether everything works.
 
 ## Part A — `se_test`
 
@@ -74,10 +73,52 @@ grep simTicks m5out_se/stats.txt m5out_se_rr/stats.txt
 
 `--octopus-param` takes any `name(type)=value` line of the preset and may be
 repeated; nothing is rebuilt. The tick counts are close: `se_test`'s threads are
-symmetric, so no core is squeezed out under either arbiter. Part B is a
+symmetric, so no core is squeezed out under either arbiter. Part C is a
 workload where the arbiter matters.
 
-## Part B — a real-time SLAM under memory interference
+## Part B — two views of one run
+
+A gem5 run has two sets of books: gem5's `stats.txt`, and Octopus's own reports,
+the `newLogger/` you read in exercise 00 (`LatencyReport_C<n>.csv`, one row per
+request; `Summary.csv`, worst cases per core). Octopus writes them under gem5
+too when asked:
+
+```shell
+$GEM5_ROOT/build/ARM/gem5.opt -re -d m5out_views gem5/configs/se_arm.py \
+    --octopus-param 'cpu[*].log_requests(i)=1'
+bash tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/compare_views.sh m5out_views
+```
+
+- **Same window.** Octopus logging follows gem5's statistics: a stats reset
+  (`se_test`'s work-begin marker, `m5 resetstats`) starts a fresh log, the next
+  stats dump writes `newLogger/`. Both cover the region of interest only.
+- **Per core.** A core's instruction and data L1 report into one
+  `LatencyReport_C<core>.csv`, as a trace-driven core does in exercise 00.
+- **gem5's side** is the bridge's counters in `stats.txt`, per L1:
+  `board.cache_hierarchy.l1d_caches<n>.readReqs / writeReqs / responses /
+  avgLatency`.
+
+`compare_views.sh` puts them side by side (reference: `expected/two_views.txt`):
+
+```
+core   gem5 requests   Octopus rows in flight       gem5 latency  Octopus latency
+0             414175         414172         3            96.7 cy          95.7 cy
+1             411189         411189         0            98.1 cy          97.1 cy
+2             409017         409017         0            99.0 cy          98.0 cy
+3             408568         408568         0            98.4 cy          97.4 cy
+```
+
+Every packet gem5 hands to the L1 is one Octopus request, so the counts are
+equal; the few missing rows (core 0) are requests still in flight when the
+window closed. The latencies agree to about a cycle: gem5 measures from the
+bridge's hand-off to its response, Octopus from the CPU issue to the response
+(`Total Latency`). The rest of exercise 00 applies unchanged: read a row's
+stages in `LatencyReport`, the worst cases in `Summary.csv`. With
+`OCTOPUS_TRACE=<file>` set as well, the run also writes the raw event trace
+(`docs/Trace.md`). The reports are large (a row per request, about 27 MB per
+core here), so logging is off unless you ask for it.
+
+## Part C — a real-time SLAM under memory interference
 
 The idea follows Bechtel & Yun, *Analysis and Mitigation of Shared Resource
 Contention on Heterogeneous Multicore* (ARM Industrial Challenge 2022): a SLAM
