@@ -128,11 +128,9 @@ constructor, so observability costs nothing when off.}
 \end{figure}
 
 \paragraph{Zero cost when off.} A \code{DebugPrint} with \key{enable}\code{=0} removes itself
-from the clock loop in its constructor (\cref{fig:debugger-lifecycle}). Dozens of idle
-instances once dominated event dispatch --- about 57\,\% of all \code{cycleProcess} calls ---
-for the sake of a counter read only while printing; deregistering them makes instances free to
-leave in place throughout the code. Because every setting is an ordinary configuration key,
-enabling and scoping a trace needs no recompilation:
+from the clock loop in its constructor (\cref{fig:debugger-lifecycle}), so instances can be
+left in place throughout the code at no cost. Because every setting is an ordinary
+configuration key, enabling and scoping a trace needs no recompilation:
 
 \begin{lstlisting}[style=shell]
 -p "cache_controller[*].dprint.enable(i)=1" -p "llc_controller.dprint.enable(i)=1" \

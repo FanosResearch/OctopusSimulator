@@ -86,13 +86,10 @@ buffer, and names the message that gets the lane (\cref{fig:arbitration}):
   (\file{SplitBusController.csv}).
 \end{description}
 
-\begin{notebox}[Design note: the owner's slot must take the owner's oldest message]
-RR and TDM once took the \emph{first} buffer in interface order that held a message of the slot
-owner. A core's cache-to-cache supply sits in a different buffer from its own requests, so it
-could be passed over round after round: a 17\,000-cycle response-lane outlier. The fix is
-\code{Arbiter::electOldestOwned}, which picks the oldest message of a given owner across
-\emph{all} buffers; every arbiter that grants by owner uses it, and a new one should too.
-\end{notebox}
+An arbiter that grants by owner takes the owner's \emph{oldest} message across all buffers
+(\code{Arbiter::electOldestOwned}), not the first buffer in interface order that holds one: a
+core's cache-to-cache supplies sit in a different buffer from its own requests and would
+otherwise be passed over round after round. A new arbiter should use the same helper.
 
 The arbiter of a bus is a configuration key, \key{arbiter\_type}, in the controller's CSV or
 overridden per instance: \code{-p "bus[0].interconnect\_controller.arbiter\_type(s)=RRArbiter"}.
@@ -118,7 +115,7 @@ switch. As shipped (\cref{fig:topologies} right) the L1s link to the LLC directl
 other through the switch. A message can cross at most one switch, because a switch's own table
 knows only its direct neighbours.
 
-\begin{notebox}[Design note: what the NoC does not model yet]
+\begin{notebox}[What the NoC does not model yet]
 Three things are worth knowing before measuring on it. A destination the routing table does not
 know is dropped silently and \code{pushMessage} returns true; the TX-side capacity check
 compares the \emph{number of per-link queues}, a constant, against the limit, so there is no

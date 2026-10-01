@@ -116,13 +116,7 @@ bound. Responses and the controller's own maintenance traffic are never subject 
 checks, which is what keeps the system deadlock-free under finite buffers: a full queue of
 stalled requests can always drain, because the data they wait for is always admitted.
 
-\begin{notebox}[Design note: why the bounds are shaped this way]
-Finite queues and buffers once deadlocked the simulator: requests and responses shared one
-bounded queue, so a queue full of requests waiting for data could block the data they were
-waiting for. The fix is \emph{response-safe admission}: only new demand is bounded, data and
-maintenance always get through, and each level carries its own finite caps. The default
-depths are in \cref{app:config-keys}.
-\end{notebox}
+The default depths of every queue and buffer are in \cref{app:config-keys}.
 
 \section{The LLC's extra duties}
 
@@ -174,13 +168,6 @@ with one global sequence number, and \code{TripleBusInterface} hands out a servi
 (an LLC back-invalidation) only when it was delivered \emph{before} the request at the head of
 the request RX. Data responses are deliberately not ordered against requests, so that a full
 queue of stalled requests can always drain.
-
-\begin{notebox}[Design note: the invalidation that overtook a GetM]
-Giving the service lane unconditional priority once let a controller that was one message
-behind process an invalidation ahead of a \code{GetM} every other snooper had already seen; the
-LLC parked in a transient state with no exit. The global delivery sequence is the fix, and the
-reason the service lane is ordered against the request lane but data is not.
-\end{notebox}
 
 \begin{wherebox}
 \file{header/CacheControllers/BaseController.h}, \file{CacheController.h},

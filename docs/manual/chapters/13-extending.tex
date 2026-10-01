@@ -41,8 +41,8 @@ four-core codespace: \code{cmake --build build -j\$(nproc)}.
 An arbiter is a subclass of \code{Arbiter} implementing one pure virtual, \code{elect}
 (\cref{sec:arbiters}). The base class offers \code{findMessage()} and
 \code{electOldestOwned(buffers, owner, out)}, which picks the oldest message owned by a given
-core across all buffers; use it rather than re-deriving it, because the naive ``first buffer
-with a matching owner'' starved cache-to-cache supplies. A weighted round-robin where core 0
+core across all buffers; use it rather than re-deriving it, because a core's cache-to-cache
+supplies sit in a different buffer from its own requests (\cref{sec:arbiters}). A weighted round-robin where core 0
 gets two slots per round is about twenty lines against \code{RRArbiter}, and its effect shows at
 once in core 0's worst-case request-bus latency:
 
