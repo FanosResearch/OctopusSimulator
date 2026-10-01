@@ -1,0 +1,37 @@
+# Reference results: gem5 v25.1.0.1 (ARM, O3), this branch's library, bash run_matrix.sh
+# (SE, 4 cores, period 80 us, keyframe every 2nd scan, 40 scans).
+# Working configurations reproduce closely; failed runs (heavy, heavy + RR) vary run to run.
+== A_solo
+[RT]   roi 3.23 ms, scans tracked 39/39, dropped 0, tracking lost 0, keyframes mapped 19/19, max mapper backlog 1
+[TIME] front-end us per scan: p50 54.5 max 57.8; mapper us per keyframe: p50 143.3 max 150.1
+[ATE]  position error: median 0.047 m, rmse 0.054 m, max 0.083 m
+== L_fcfs
+[RT]   roi 3.25 ms, scans tracked 39/39, dropped 0, tracking lost 0, keyframes mapped 19/19, max mapper backlog 1
+[TIME] front-end us per scan: p50 61.5 max 71.3; mapper us per keyframe: p50 151.6 max 184.0
+[AGGR] co-runner 0: 19226 MB/s
+[ATE]  position error: median 0.086 m, rmse 0.087 m, max 0.122 m
+== L_rr
+[RT]   roi 3.23 ms, scans tracked 39/39, dropped 0, tracking lost 0, keyframes mapped 19/19, max mapper backlog 1
+[TIME] front-end us per scan: p50 54.5 max 58.1; mapper us per keyframe: p50 143.4 max 150.3
+[AGGR] co-runner 0: 19188 MB/s
+[ATE]  position error: median 0.050 m, rmse 0.055 m, max 0.083 m
+== H_fcfs
+[RT]   roi 3.79 ms, scans tracked 31/39, dropped 8, tracking lost 0, keyframes mapped 2/15, max mapper backlog 7
+[TIME] front-end us per scan: p50 70.9 max 422.0; mapper us per keyframe: p50 1554.9 max 1554.9
+[AGGR] co-runner 0: 8759 MB/s
+[ATE]  position error: median 1.973 m, rmse 6.489 m, max 12.152 m
+== H_rr
+[RT]   roi 3.72 ms, scans tracked 30/39, dropped 9, tracking lost 7, keyframes mapped 2/15, max mapper backlog 7
+[TIME] front-end us per scan: p50 78.8 max 422.0; mapper us per keyframe: p50 1505.1 max 1505.1
+[AGGR] co-runner 0: 8773 MB/s
+[ATE]  position error: median 3.224 m, rmse 4.693 m, max 12.862 m
+== H_part
+[RT]   roi 3.24 ms, scans tracked 39/39, dropped 0, tracking lost 0, keyframes mapped 19/19, max mapper backlog 1
+[TIME] front-end us per scan: p50 55.0 max 85.4; mapper us per keyframe: p50 143.2 max 150.0
+[AGGR] co-runner 0: 8099 MB/s
+[ATE]  position error: median 0.098 m, rmse 0.097 m, max 0.142 m
+== H_rr_part
+[RT]   roi 3.23 ms, scans tracked 39/39, dropped 0, tracking lost 0, keyframes mapped 19/19, max mapper backlog 1
+[TIME] front-end us per scan: p50 54.9 max 85.4; mapper us per keyframe: p50 143.2 max 150.3
+[AGGR] co-runner 0: 8091 MB/s
+[ATE]  position error: median 0.090 m, rmse 0.095 m, max 0.146 m

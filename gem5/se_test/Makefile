@@ -14,7 +14,7 @@
 # util/m5/src/abi/arm64/m5op.S, assembled here instead of linking a prebuilt
 # libm5.a, which is not built for arm64 in this tree.
 
-GEM5     ?= /home/guotong/gem5_arm
+GEM5     ?= $(GEM5_ROOT)
 CROSS    ?= aarch64-linux-gnu-
 # Plain '=': make predefines CXX, so '?=' would keep the host compiler.
 CXX       = $(CROSS)g++
