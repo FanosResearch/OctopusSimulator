@@ -144,7 +144,7 @@ the raw event trace readable.
 
 \begin{table}[htbp]\centering\small
 \caption{The \code{Message} fields a decoder reads.}\label{tab:message-fields}
-\begin{tabularx}{\textwidth}{@{}>{\ttfamily}lX@{}}
+\begin{tabularx}{\textwidth}{@{}>{\ttfamily}lY@{}}
 \toprule \normalfont field & meaning \\ \midrule
 source & where the message entered the controller: \code{LOWER\_INTERCONNECT} (from the cores' side), \code{UPPER\_INTERCONNECT} (from the bus or memory side), \code{SELF} (a replacement the controller raised for itself) \\
 data & \code{NULL} for a request or command; non-\code{NULL} for a data transfer \\

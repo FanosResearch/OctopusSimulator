@@ -1,0 +1,35 @@
+% One GetM from core A while core B shares the line: snooping (left) and directory (right).
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex,
+  head/.style={draw=octrule, fill=octmem, rounded corners=2pt, minimum width=16mm, minimum height=6mm, font=\sffamily\footnotesize\bfseries},
+  life/.style={octquiet, densely dashed},
+  m/.style={->, thick},
+  lbl/.style={font=\sffamily\scriptsize, fill=octpaper, inner sep=1pt},
+  pill/.style={draw, fill=white, rounded corners=3pt, inner sep=2pt, font=\ttfamily\scriptsize},
+  ttl/.style={font=\sffamily\small\bfseries, text=octink}]
+  % ---------- snooping ----------
+  \begin{scope}
+    \node[ttl] at (28mm, 8mm) {Snooping (shipped MESI)};
+    \foreach \x/\n/\t in {0/A/Core A L1, 19/B/Core B L1, 38/bus/bus[0], 57/llc/LLC}
+      { \node[head] (s\n) at (\x mm, 0) {\t}; \draw[life] (s\n.south) -- ++(0,-46mm); }
+    \draw[m, octpurple] (sA) ++(0,-8mm) -- node[lbl, above] {GetM X, request lane: broadcast} ++(57mm, 0);
+    \node[pill, draw=octamber] at (19mm, -14mm) {B snoops: S $\rightarrow$ I};
+    \node[pill, draw=octteal] at (57mm, -14mm) {LLC: SendData, SetOwner A};
+    \draw[m, octpurple] (sllc) ++(0,-22mm) -- node[lbl, above] {X, response lane} ++(-57mm, 0);
+    \node[pill, draw=octteal] at (0mm, -29mm) {A: IM\_d $\rightarrow$ M};
+    \node[align=left, text=octquiet, text width=60mm] at (30mm, -40mm) {one broadcast, every sharer invalidates itself by seeing it; the order every controller sees on the bus is the order of the protocol};
+  \end{scope}
+  % ---------- directory ----------
+  \begin{scope}[xshift=84mm]
+    \node[ttl] at (28mm, 8mm) {Directory (shipped MSI)};
+    \foreach \x/\n/\t in {0/A/Core A L1, 19/B/Core B L1, 38/home/LLC + directory, 57/mem/memory}
+      { \node[head] (d\n) at (\x mm, 0) {\t}; \draw[life] (d\n.south) -- ++(0,-46mm); }
+    \draw[m, octpurple] (dA) ++(0,-8mm) -- node[lbl, above] {GetM X, point-to-point} ++(38mm, 0);
+    \node[pill, draw=octteal] at (38mm, -13mm) {sharers = \{B\}};
+    \draw[m, octred] (dhome) ++(0,-18mm) -- node[lbl, above] {Inv X} ++(-19mm, 0);
+    \draw[m, octpurple] (dhome) ++(0,-23mm) -- node[lbl, above] {Data X, acks = 1} ++(-38mm, 0);
+    \node[pill, draw=octamber] at (19mm, -27mm) {B: S $\rightarrow$ I};
+    \draw[m, octteal] (dB) ++(0,-31mm) -- node[lbl, above] {Inv-Ack} ++(-19mm, 0);
+    \node[pill, draw=octteal] at (0mm, -37mm) {A: all acks in $\rightarrow$ M};
+    \node[align=left, text=octquiet, text width=60mm] at (30mm, -43mm) {no broadcast: the home knows the sharers and forwards; the requester counts acks. Works on any point-to-point network};
+  \end{scope}
+\end{tikzpicture}

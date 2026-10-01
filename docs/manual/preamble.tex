@@ -11,10 +11,11 @@
 \usepackage{xcolor}
 \usepackage{booktabs,longtable,array,tabularx,multirow,rotating,pdflscape,adjustbox}
 \usepackage{caption,subcaption}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}   % a left-aligned X column (no justification gaps)
 \usepackage{enumitem}
 \usepackage{listings}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,calc,shapes.geometric,fit,backgrounds,chains,decorations.pathreplacing}
+\usetikzlibrary{arrows.meta,positioning,calc,shapes.geometric,fit,backgrounds,chains,decorations.pathreplacing,matrix}
 \usepackage{pgf-umlsd}
 \usepackage[most]{tcolorbox}
 \usepackage{fancyhdr}
@@ -67,10 +68,10 @@
 \lstdefinestyle{plain}{language={}}
 
 % ---- boxes ----
-\newtcolorbox{wherebox}[1][Where in the code]{enhanced,colback=octmem!60,colframe=octrule,fonttitle=\sffamily\bfseries,title=#1,arc=2pt,boxrule=0.6pt,left=5pt,right=5pt,top=4pt,bottom=4pt,before skip=8pt,after skip=10pt}
-\newtcolorbox{trapbox}[1][Trap]{enhanced,colback=octctl,colframe=octamber,fonttitle=\sffamily\bfseries,title=#1,arc=2pt,boxrule=0.6pt,left=5pt,right=5pt,top=4pt,bottom=4pt,before skip=8pt,after skip=10pt}
-\newtcolorbox{notebox}[1][Design note]{enhanced,colback=octio,colframe=octpurple,fonttitle=\sffamily\bfseries,title=#1,arc=2pt,boxrule=0.6pt,left=5pt,right=5pt,top=4pt,bottom=4pt,before skip=8pt,after skip=10pt}
-\newtcolorbox{presenterbox}[1][Presenter note]{enhanced,colback=octteal!8,colframe=octteal,fonttitle=\sffamily\bfseries,title=#1,arc=2pt,boxrule=0.6pt,left=5pt,right=5pt,top=4pt,bottom=4pt,before skip=8pt,after skip=10pt}
+\newtcolorbox{wherebox}[1][Where in the code]{enhanced,colback=octmem!60,colframe=octrule,fonttitle=\sffamily\bfseries,title={#1},arc=2pt,boxrule=0.6pt,left=5pt,right=5pt,top=4pt,bottom=4pt,before skip=8pt,after skip=10pt}
+\newtcolorbox{trapbox}[1][Trap]{enhanced,colback=octctl,colframe=octamber,fonttitle=\sffamily\bfseries,title={#1},arc=2pt,boxrule=0.6pt,left=5pt,right=5pt,top=4pt,bottom=4pt,before skip=8pt,after skip=10pt}
+\newtcolorbox{notebox}[1][Design note]{enhanced,colback=octio,colframe=octpurple,fonttitle=\sffamily\bfseries,title={#1},arc=2pt,boxrule=0.6pt,left=5pt,right=5pt,top=4pt,bottom=4pt,before skip=8pt,after skip=10pt}
+\newtcolorbox{presenterbox}[1][Presenter note]{enhanced,colback=octteal!8,colframe=octteal,fonttitle=\sffamily\bfseries,title={#1},arc=2pt,boxrule=0.6pt,left=5pt,right=5pt,top=4pt,bottom=4pt,before skip=8pt,after skip=10pt}
 \newtcolorbox{findbox}{enhanced,colback=octpaper,colframe=octrule!50,arc=2pt,boxrule=0.5pt,left=5pt,right=5pt,top=3pt,bottom=3pt,before skip=6pt,after skip=8pt,fontupper=\small}
 
 % ---- macros ----

@@ -1,3 +1,135 @@
 \chapter{Configuration}\label{ch:configuration}
 
-\whatyoufind{To be written.}
+\whatyoufind{How a parameter travels from the command line to the deepest component; the file
+hierarchy and its \code{Extends} rule; the typed keys that let \code{-p} set anything without a
+schema; what is data and what is code, and why \code{-s} selects both; the presets and the one
+axis that is not a single override; and the sweep harness that turns all of this into
+reproducible experiments.}
+
+\section{One model for every component}
+
+Every component derives from \code{Configurable}: it reads its default parameters from its own
+CSV, a parent may override a child's defaults, and the command line overrides everything. A
+value can therefore be inherited, overridden or extended at any level, and the whole design
+space is reachable without recompiling (\cref{fig:configuration}). Two consequences follow. A
+designer sweeps the design space from the CLI without editing a file per experiment, which is
+what the sweep harness and the reproducibility scripts rely on. And defaults let a user focus
+only on the parameters they care about, trusting that the rest are configured properly.
+
+\figmed{Configuration2.pdf}{Hierarchical propagation of parameters: from the command line
+through the top-level system module down to each sub-component, each level able to override
+what it passes on.}{fig:configuration}{0.5}
+
+\section{Files and inheritance}
+
+Each simulation module is defined by three files: a C++ source, a header, and a CSV holding the
+default values of its parameters. A module derived from another inherits the parent's defaults
+through an \code{Extends} row and overrides or adds in its own file; a module made of
+sub-modules may override their defaults under a prefix. The chain for the shipped L1 is:
+
+\begin{lstlisting}[style=plain]
+configuration/CacheControllers/BaseController.csv          defaults every controller shares
+configuration/CacheControllers/CacheController.csv         Extends,BaseController + overrides
+configuration/CacheControllers/CacheControllerExclusive.csv Extends,CacheController
+configuration/SystemConfigurations/MultiCoreSystem.csv     the system: instances + per-instance overrides
+\end{lstlisting}
+
+A system CSV overrides per instance: \code{cache\_controller[*].num\_mshr(i),16} applies to every
+L1, \code{cache\_controller[2].num\_mshr(i),4} to one. Sub-components use dotted prefixes:
+\code{llc\_controller.m\_data\_handler.cache\_size(i)} reaches the LLC's data handler,
+\code{bus[0].interconnect\_controller.arbiter\_type(s)} the first bus's controller, and
+\code{cache\_controller[*].dprint.enable(i)} every L1's debugger. The resolution order is the
+CSV hierarchy first, then the system file, then the command line.
+
+\section{Typed keys}
+
+The suffix of a key is the type of its value: \code{(i)} an integer, \code{(s)} a string,
+\code{(vi)} a list of integers, \code{(vs)} a list of strings. Values follow in the next cells;
+a cell beginning with \code{\#} is a comment. The type travels with the key, which is what lets
+\code{-p} set \emph{any} key without a schema:
+
+\begin{lstlisting}[style=shell]
+-p "cache_controller[*].num_mshr(i)=4"
+-p "bus_type(vs)=TripleBus,Bus"
+-p "llc_controller.m_data_handler.way_partition(s)=0:0;1-3:1"
+\end{lstlisting}
+
+\Cref{app:config-keys} lists every key that ships, file by file, with its type, default and
+comment.
+
+\section{Data and code}
+
+\code{MultiCoreSystem.csv} parameterises \file{src/SystemConfigurations/MultiCoreSystem.cpp}.
+That C++ decides what objects exist and how they are wired: a loop creating one L1 per core on
+\code{bus[0]}, one LLC between \code{bus[0]} and \code{bus[1]}, memory beyond. Every other
+choice --- protocol, arbiter, geometry, queue depths, memory model, way partition, debugger
+scope --- is data. So \code{-s <name>} selects \emph{both} a C++ class and its CSV, by the same
+name; a \code{MyConfig.csv} cannot be selected with \code{-s MyConfig} unless a \code{MyConfig}
+class exists. That boundary --- data below, wiring in C++ --- is what the three-level-cache
+exercise crosses (\cref{ch:extending}).
+
+The command line is parsed by \code{CLParser}: \code{-s <system>} names the system,
+\code{-p "<key>=<value>"} overrides one key and may be repeated; \cref{app:cli} has the full
+reference.
+
+\section{Presets, and the protocol axis}
+
+\file{configuration/SystemConfigurations/} also holds presets that are never selected directly:
+\file{MultiCoreSystem_Snoop.csv} (snoop MSI), \file{MultiCoreSystem_Directory.csv} (directory
+MSI, pinned to an FCFS bus), \file{MultiCoreSystem_Mesh.csv} (the mesh). \code{run\_octopus.sh
+--protocol} \emph{copies} the chosen one over \file{MultiCoreSystem.csv}, which is why
+\code{git checkout -- configuration/} is the reset for everything in this chapter.
+
+\begin{trapbox}[{The protocol is five coupled keys, not one}]
+A protocol is \code{cache\_controller\_type}, \code{cache\_controller[*].protocol\_type},
+\code{cache\_controller[*].fsm\_filename}, \code{llc\_controller.protocol\_type} and
+\code{llc\_controller.fsm\_filename} together. Every other axis in \cref{tab:axes} is a single
+\code{-p}; this one is not. Overriding fewer than five --- the two \code{fsm\_filename} keys,
+say, which is the obvious thing to try --- faults or crashes even for MESI. Switch protocol by
+selecting a preset.
+\end{trapbox}
+
+\begin{table}[htbp]\centering\small
+\caption{The configuration axes that ship, with the key that moves each.}\label{tab:axes}
+\begin{tabularx}{\textwidth}{@{}lYp{0.3\textwidth}@{}}
+\toprule axis & key & values \\ \midrule
+bus arbiter & \code{bus[0].interconnect\_controller.arbiter\_type} & \code{FCFSArbiter} \code{RRArbiter} \code{TDMArbiter} \\
+LLC port arbiter & \code{llc\_controller.arbiter\_type} & the same \\
+main memory & \code{main\_memory\_type} & \code{MainMemoryController} \code{MCsim} \\
+DRAM scheduler & \code{mcsim\_scheduler} & \code{FRFCFS} \code{FCFS} \code{BLISS} \code{AMC} \code{MAG} \ldots \\
+LLC geometry & \code{llc\_controller.m\_data\_handler.cache\_size}, \code{m\_ways\_count} & bytes, ways \\
+LLC way partition & \code{llc\_controller.m\_data\_handler.way\_partition} & e.g.\ \code{0:0;1-3:1} \\
+queues & \code{*.num\_mshr} \code{*.pwb\_size} \code{*.processing\_queue\_size} & integers, \code{-1} = unbounded \\
+out-of-order window & \code{cpu[*].m\_number\_of\_OoO\_requests} & integer \\
+coherence protocol & a whole preset & snoop MSI, snoop MESI, directory MSI \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{The sweep harness}
+
+\file{sweeps/} holds one script per axis --- \code{sweep\_arbiter.sh}, \code{sweep\_replacement.sh},
+\code{sweep\_cache.sh}, \code{sweep\_memory.sh}, and the root \code{sweep\_protocols.sh} for the
+coherence families --- each varying one axis against a fixed baseline (snoop MESI, TripleBus,
+LRU, FCFS bus, fixed-latency memory) and recording, per (value, benchmark), whether the run
+completed plus the latency metrics parsed from \code{Summary.csv}. Results land in
+\file{results/<axis>/<suite>.csv} with the columns \code{value, benchmark, status, avg, wcTotal,
+wcEff, wcL1stall, wcReqBus, wcL2stall, wcL2access, wcRespBus, wcDramBus, wcDRAM, wcL1access,
+finish, wcOldest}; \code{sweeps/plot\_results.py} draws them. Environment knobs select the suite
+(\code{SUITE=eembc|splash}), the fan-out (\code{JOBS}), a single benchmark (\code{BENCH}) and a
+wall-clock cap (\code{SAFETY}); \code{run\_overnight.sh} runs the whole matrix across both suites.
+
+Two facts shape how the harness runs. Octopus reads its entire configuration once, at process
+start-up, from a fixed path baked at compile time; so runs with \emph{different} configurations
+cannot share the tree and axis values are serial, while benchmarks within one value run in
+parallel. And the arbiter lives in the interconnect's \code{Extends} file, not the system CSV,
+so \code{sweep\_arbiter.sh} edits and restores \file{SplitBusController.csv}. Every edit is
+verified before a run starts, because a simulator that is still running keeps the file open on
+Windows and a silent failed edit would run the wrong configuration without any error.
+
+\begin{wherebox}
+\file{src/Configurable.cpp}, \file{header/Configurable.h} --- the parameter model;
+\file{src/CLParser.cpp} --- the command line; \file{configuration/} --- every CSV
+(\cref{app:config-keys}); \file{run_octopus.sh}, \file{sweeps/sweep_common.sh} --- preset
+selection and the harness; \file{REPRODUCIBILITY.md}, \file{sweeps/README.md}.
+\end{wherebox}

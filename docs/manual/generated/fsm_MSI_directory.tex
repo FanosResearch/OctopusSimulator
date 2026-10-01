@@ -23,7 +23,7 @@
 \begin{landscape}
 \begin{table}[p]\centering
 \caption{\texttt{MSI\_directory}: transitions as \texttt{actions/next\_state}; an empty cell ignores the event, \textcolor{octred}{Fault} aborts the run. \textbf{Bold} states are stable, \emph{italic} ones transient.}\label{fsm:MSI_directory}
-\begin{adjustbox}{max width=\linewidth}\scriptsize
+\begin{adjustbox}{max width=\linewidth}\small
 \begin{tabular}{@{}lllllllllllll@{}}
 \toprule \textbf{state} & \rotatebox{60}{\texttt{Load}} & \rotatebox{60}{\texttt{Store}} & \rotatebox{60}{\texttt{Replacement}} & \rotatebox{60}{\texttt{Fwd\_GetS}} & \rotatebox{60}{\texttt{Fwd\_GetM}} & \rotatebox{60}{\texttt{Inv}} & \rotatebox{60}{\texttt{Put\_Ack}} & \rotatebox{60}{\texttt{Data\_zeroAck}} & \rotatebox{60}{\texttt{Data\_nonZeroAck}} & \rotatebox{60}{\texttt{DataFromOwner}} & \rotatebox{60}{\texttt{InvAck}} & \rotatebox{60}{\texttt{lastInvAck}} \\ \midrule
 \textbf{I} & \texttt{GetS/IS\_d} & \texttt{GetM/IM\_ad} &  & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} \\

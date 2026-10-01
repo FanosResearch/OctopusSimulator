@@ -17,7 +17,7 @@
 \begin{landscape}
 \begin{table}[p]\centering
 \caption{\texttt{MSI\_LLC}: transitions as \texttt{actions/next\_state}; an empty cell ignores the event, \textcolor{octred}{Fault} aborts the run. \textbf{Bold} states are stable, \emph{italic} ones transient.}\label{fsm:MSI_LLC}
-\begin{adjustbox}{max width=\linewidth}\scriptsize
+\begin{adjustbox}{max width=\linewidth}\small
 \begin{tabular}{@{}lllllllll@{}}
 \toprule \textbf{state} & \rotatebox{60}{\texttt{GetS}} & \rotatebox{60}{\texttt{GetM}} & \rotatebox{60}{\texttt{Replacement}} & \rotatebox{60}{\texttt{PutM\_fromOwner}} & \rotatebox{60}{\texttt{PutM\_fromNonOwner}} & \rotatebox{60}{\texttt{Data\_fromLowerInterface}} & \rotatebox{60}{\texttt{Data\_fromUpperInterface}} & \rotatebox{60}{\texttt{Own\_Invalidation}} \\ \midrule
 \textbf{N} & \texttt{GetData/NIorS\_d} & \texttt{GetData/SetOwner/NM\_d} &  & \textcolor{octred}{Fault} &  & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} \\

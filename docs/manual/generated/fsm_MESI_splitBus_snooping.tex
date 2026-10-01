@@ -32,7 +32,7 @@
 \begin{landscape}
 \begin{table}[p]\centering
 \caption{\texttt{MESI\_splitBus\_snooping}: transitions as \texttt{actions/next\_state}; an empty cell ignores the event, \textcolor{octred}{Fault} aborts the run. \textbf{Bold} states are stable, \emph{italic} ones transient.}\label{fsm:MESI_splitBus_snooping}
-\begin{adjustbox}{max width=\linewidth}\scriptsize
+\begin{adjustbox}{max width=\linewidth}\small
 \begin{tabular}{@{}lllllllllllll@{}}
 \toprule \textbf{state} & \rotatebox{60}{\texttt{Load}} & \rotatebox{60}{\texttt{Store}} & \rotatebox{60}{\texttt{Replacement}} & \rotatebox{60}{\texttt{Own\_GetS}} & \rotatebox{60}{\texttt{Own\_GetM}} & \rotatebox{60}{\texttt{Own\_PutM}} & \rotatebox{60}{\texttt{Other\_GetS}} & \rotatebox{60}{\texttt{Other\_GetM}} & \rotatebox{60}{\texttt{Other\_PutM}} & \rotatebox{60}{\texttt{OwnData}} & \rotatebox{60}{\texttt{Invalidation}} & \rotatebox{60}{\texttt{OwnData\_Execlusive}} \\ \midrule
 \textbf{I} & \texttt{GetS/IS\_ad} & \texttt{GetM/IM\_ad} &  & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} &  &  &  & \textcolor{octred}{Fault} &  & \textcolor{octred}{Fault} \\

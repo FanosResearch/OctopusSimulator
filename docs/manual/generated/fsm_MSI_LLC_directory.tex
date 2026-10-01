@@ -22,7 +22,7 @@
 \begin{landscape}
 \begin{table}[p]\centering
 \caption{\texttt{MSI\_LLC\_directory}: transitions as \texttt{actions/next\_state}; an empty cell ignores the event, \textcolor{octred}{Fault} aborts the run. \textbf{Bold} states are stable, \emph{italic} ones transient.}\label{fsm:MSI_LLC_directory}
-\begin{adjustbox}{max width=\linewidth}\scriptsize
+\begin{adjustbox}{max width=\linewidth}\small
 \begin{tabular}{@{}llllllllllll@{}}
 \toprule \textbf{state} & \rotatebox{60}{\texttt{GetS}} & \rotatebox{60}{\texttt{GetM}} & \rotatebox{60}{\texttt{Replacement}} & \rotatebox{60}{\texttt{PutS}} & \rotatebox{60}{\texttt{last\_PutS}} & \rotatebox{60}{\texttt{InvAck}} & \rotatebox{60}{\texttt{last\_InvAck}} & \rotatebox{60}{\texttt{PutM\_Data\_fromOwner}} & \rotatebox{60}{\texttt{PutM\_Data\_fromNonOwner}} & \rotatebox{60}{\texttt{Data\_fromLowerInterface}} & \rotatebox{60}{\texttt{Data\_fromUpperInterface}} \\ \midrule
 \textbf{N} & \texttt{GetData/IncSharers/NS\_d} & \texttt{SetOwner/GetData/NM\_d} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \texttt{PutAck/} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} \\

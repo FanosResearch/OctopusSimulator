@@ -35,7 +35,7 @@ they are realised through two base classes that every component inherits
 
 \begin{table}[htbp]\centering\small
 \caption{The two base classes every component inherits.}\label{tab:base-classes}
-\begin{tabularx}{\textwidth}{@{}lX@{}}
+\begin{tabularx}{\textwidth}{@{}lY@{}}
 \toprule base class & gives every component \\ \midrule
 \code{ClockedObj} & \code{m\_clk\_period} and \code{cycleProcess()}: the component can be advanced one tick by the \code{ClockManager} \\
 \code{Configurable} & \code{name}, \code{parent\_name}, \code{parameters}, \code{parseFile()}: hierarchical parameters read from CSV and overridable from the CLI \\
@@ -87,7 +87,7 @@ through configurable interconnects to a shared LLC and main memory (\cref{fig:or
 
 \begin{table}[htbp]\centering\small
 \caption{Roles and the classes that play them.}\label{tab:roles}
-\begin{tabularx}{\textwidth}{@{}lp{0.47\textwidth}X@{}}
+\begin{tabularx}{\textwidth}{@{}lp{0.47\textwidth}Y@{}}
 \toprule role & class(es) & notes \\ \midrule
 clock & \code{ClockManager}, \code{ClockedObj} & drives \code{cycleProcess()} each tick \\
 configuration & \code{Configurable} & hierarchical CSV + CLI parameters \\

@@ -1,0 +1,11 @@
+% A DebugPrint instance's life: disabled ones leave the clock loop at construction.
+\begin{tikzpicture}[font=\sffamily\footnotesize, >=Latex, node distance=6mm and 14mm,
+  st/.style={draw=octrule, fill=white, rounded corners=3pt, minimum height=8mm, inner sep=5pt, align=center},
+  w/.style={->, thick, octink}, l/.style={font=\sffamily\scriptsize, text=octquiet, align=center}]
+  \node[st] (c) {constructed\\\scriptsize\code{DebugPrint(map, source\_name, ...)}};
+  \node[st, fill=octmem, right=of c, yshift=9mm] (a) {active\\\scriptsize target opened or shared};
+  \node[st, draw=octquiet, text=octquiet, right=of c, yshift=-9mm] (d) {disabled\\\scriptsize deregistered from the clock: zero cost};
+  \draw[w] (c) -- node[l, above, sloped] {\code{enable = 1}} (a);
+  \draw[w] (c) -- node[l, below, sloped] {\code{enable = 0}} (d);
+  \draw[w] (a.north) to[out=60, in=120, looseness=5] node[l, above] {\code{print(...)} if \code{condition} passes; \code{transition(...)} on every FSM step} (a.north east);
+\end{tikzpicture}

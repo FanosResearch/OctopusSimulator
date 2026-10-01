@@ -47,7 +47,7 @@ and the columns are differences of \emph{named} stamps, never inferences from po
 
 \begin{table}[htbp]\centering\small
 \caption{Where each Logger stamp is taken.}\label{tab:stamps}
-\begin{tabularx}{\textwidth}{@{}>{\ttfamily}lX@{}}
+\begin{tabularx}{\textwidth}{@{}>{\ttfamily}p{0.3\textwidth}Y@{}}
 \toprule \normalfont stamp & taken by \\ \midrule
 CPU.ENTER & \code{CPU::addRequest}: the request is issued (and bound to its core) \\
 L1.ENTER & \code{BaseController::processLogic} when an L1 admits a request from below \\
@@ -74,7 +74,7 @@ runs alongside the response and lands in no column.}{fig:request-timeline}
 \caption{The \code{LatencyReport} columns, in report order, as differences of stamps. The
 nine latency columns tile exactly to \col{Total}; a stamp a request never reaches makes its
 column 0.}\label{tab:columns}
-\begin{tabularx}{\textwidth}{@{}lX@{}}
+\begin{tabularx}{\textwidth}{@{}lY@{}}
 \toprule column & definition \\ \midrule
 \col{CPU Latency} & \stamp{CPU.ENTER} $-$ \col{Ready Cycle}: the wait inside the core before the request could issue (the out-of-order window). Lies \emph{before} Total \\
 \col{L1 Stall} & \stamp{L1.ENTER} $-$ \stamp{CPU.ENTER} \\

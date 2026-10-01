@@ -1,0 +1,36 @@
+% The same three ready requests under FCFS, round-robin and TDM on one request lane
+% (slot = 2 cycles). Core 0 has two requests ready at cycle 0, core 1 one.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, x=9mm, y=1mm]
+  \tikzset{slot/.style={draw=octrule, minimum height=5mm, anchor=west, inner sep=0, font=\sffamily\scriptsize\bfseries, text=white},
+           c0/.style={slot, fill=octteal}, c1/.style={slot, fill=octamber}, idle/.style={slot, fill=octpaper, text=octquiet, draw=octquiet, densely dashed},
+           rowl/.style={anchor=east, font=\sffamily\footnotesize\bfseries}}
+  % axis
+  \foreach \t in {0,...,10} { \draw[octquiet] (\t, 2) -- (\t, 0); \node[below, text=octquiet] at (\t, 0) {\t}; }
+  \draw[octquiet] (0, 2) -- (10, 2);
+  \node[text=octquiet] at (5, -6) {cycle (request-lane slot = 2 cycles)};
+  % ready marks
+  \node[anchor=east, text=octquiet] at (-0.3, 40) {ready at 0:};
+  \node[c0, minimum width=9mm] at (0, 40) {C0 a};
+  \node[c0, minimum width=9mm] at (1.1, 40) {C0 b};
+  \node[c1, minimum width=9mm] at (2.2, 40) {C1};
+  % FCFS
+  \node[rowl] at (-0.3, 30) {FCFS};
+  \node[c0, minimum width=18mm] at (0, 30) {C0 a};
+  \node[c0, minimum width=18mm] at (2, 30) {C0 b};
+  \node[c1, minimum width=18mm] at (4, 30) {C1};
+  \node[anchor=west, text=octquiet] at (6.2, 30) {arrival order; C1 waits 4};
+  % RR
+  \node[rowl] at (-0.3, 20) {RR};
+  \node[c0, minimum width=18mm] at (0, 20) {C0 a};
+  \node[c1, minimum width=18mm] at (2, 20) {C1};
+  \node[c0, minimum width=18mm] at (4, 20) {C0 b};
+  \node[anchor=west, text=octquiet] at (6.2, 20) {one slot per core per round; C1 waits 2};
+  % TDM
+  \node[rowl] at (-0.3, 10) {TDM};
+  \node[c0, minimum width=18mm] at (0, 10) {C0 a};
+  \node[c1, minimum width=18mm] at (2, 10) {C1};
+  \node[idle, minimum width=18mm] at (4, 10) {slot 2 idle};
+  \node[idle, minimum width=18mm] at (6, 10) {slot 3 idle};
+  \node[c0, minimum width=18mm] at (8, 10) {C0 b};
+  \node[anchor=west, text=octquiet, text width=20mm, align=left] at (10.1, 10) {fixed slots; C0 b waits 8, but never more};
+\end{tikzpicture}

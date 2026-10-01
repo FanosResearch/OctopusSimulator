@@ -1,3 +1,220 @@
 \chapter{Monitoring: Logger, Debugger, trace and visualizer}\label{ch:monitoring}
 
-\whatyoufind{To be written.}
+\whatyoufind{The four ways to see inside a run. The Logger: automatic, global, fixed-format,
+one row per request with its latency split by stage and the per-core worst cases. The
+Debugger: opt-in, per-component, filterable, free-format, the tool for one address or one
+coherence bug. The raw event trace: every message of every kind, binary, for the resource
+lanes and the per-line transition table. And the visualizer that draws all three.}
+
+\section{The Logger}
+
+The Logger performs \emph{latency logging}: it silently tracks every request as it traverses
+the hierarchy and, when the request completes, decomposes its end-to-end latency into the
+stages it passed through. It is passive --- it only reads clocks and records events --- so it
+never changes any timing.
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/stamp-map}\end{adjustbox}
+\caption{The Logger's view of one request: a chain of self-describing events.}
+\label{fig:stamp-map}
+\end{figure}
+
+\paragraph{Self-describing events.} Each in-flight request, keyed by \code{msg\_id}, owns a
+time-ordered list of events, and every event records \emph{which component} stamped it and
+\emph{which phase} (\cref{fig:stamp-map}):
+
+\begin{lstlisting}[style=cpp]
+enum class Role  : uint8_t { CPU, L1, REQ_BUS, RESP_BUS, LLC, MEM_BUS, DRAM };
+enum class Phase : uint8_t { ENTER, SERVICE, EXIT };
+struct LogEvent  { uint32_t comp_id; Role role; Phase phase; uint64_t cycle; };
+\end{lstlisting}
+
+The per-stage decomposition is a generic walk over that list, never an inference from a
+checkpoint's position. A previous design multiplexed several resources into two shared vectors
+and recovered ``which is which'' by index; it mislabelled stages whenever a stamp was
+conditional or an extra event appeared. Named events remove the ambiguity, and adding a level
+or an interconnect is a matter of stamping its own \stamp{ENTER}/\stamp{SERVICE}/\stamp{EXIT}.
+
+\paragraph{The clock-domain trick.} Every cycle \code{CPU::cycleProcess} tells the Logger that
+core's current cycle; \code{addRequest} binds a request to its core; every later event records
+the \emph{originating core's} clock, whichever component stamps it. All stages of a request are
+therefore measured in one clock and no per-component bookkeeping is needed.
+\Cref{ch:request-end-to-end} lists where each stamp is taken and defines every column from them.
+
+\paragraph{Reports.} At the end of a run the Logger writes, per core,
+\code{LatencyReport\_C<n>.csv} --- one row per completed request, then a worst-case footer and
+an averages footer --- and one cross-core \code{Summary.csv} with every stage's worst case,
+the average, the finish cycle and the worst head-of-queue latency per core. A periodic task
+(\cref{ch:tasks-and-demo}) adds \code{JobReport\_C<n>.csv}. \Cref{app:formats} has the columns.
+
+\paragraph{Effective latency.} \col{Total} double-counts when requests overlap under an
+out-of-order core. \col{Effective} credits only the part of a request that does not overlap the
+previous request's completion, so summing it recovers the true added execution time; the
+per-core \emph{Average Latency} is its mean.
+
+\paragraph{Mechanism trackers.} Seven columns after \col{Oldest} attribute a stall to its cause
+(\cref{tab:trackers}). They are what \code{sweeps/analyze\_mechanisms.sh} aggregates, and what
+the visualizer's class and ``ahead'' filters read.
+
+\begin{table}[htbp]\centering\small
+\caption{The mechanism tracker columns of a \code{LatencyReport} row.}\label{tab:trackers}
+\begin{tabularx}{\textwidth}{@{}lY@{}}
+\toprule column & meaning \\ \midrule
+\col{LLC Arrival State} & the line's \code{MESI\_LLC} state id when the request arrived at the LLC: $-2$ never reached the LLC (an L1 hit), $-1$ absent, stable (\state{I}=3, \state{S}=4, \state{EorM}=5) admitted at once, transient (\state{IorS\_a}=6, \state{MN\_d}=7, \state{S\_d}=8, \state{I\_d}=9, \state{N\_a}=10) a coherence round trip, \state{NE\_d}=1 / \state{NM\_d}=2 a DRAM fetch already in flight: a \emph{coalesced} hit if its own \col{DRAM} is 0 \\
+\col{LLC Gate} & 1 if an older demand request to the same line was already queued at the LLC (the per-line FCFS gate held it) \\
+\col{Resp Ahead} & younger own-core, bus-served responses granted on the response lane between this request's emit and its grant \\
+\col{Resp Ahead Refills} & how many of those were DRAM misses, refills that returned faster than this request's LLC path \\
+\col{Array Ahead} & accesses served at the LLC array port between this request's park and its grant; 0 if it never parked \\
+\col{Array Ahead Writes} & how many of those were data writes: L1 write-backs, snooped supplies, fills \\
+\col{LLC Stall State} & the line's state at the \emph{first} cycle the LLC FSM judged the request not ready; $-2$ = never stalled by the FSM, so an \col{L2 Stall} $> 1$ with $-2$ came from the per-line gate \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Switches.} \env{OCTOPUS\_NO\_LOG}\code{=1} skips per-request logging but still writes
+\code{Summary.csv}, for correctness sweeps where only termination matters.
+\env{OCTOPUS\_EVENT\_DEBUG}\code{=1} prints any tiling violation and the end-of-run tally.
+\env{OCTOPUS\_EVENT\_DUMP}\code{=N} and \env{OCTOPUS\_EVENT\_DUMP\_MIN} print raw timelines
+(\cref{ch:request-end-to-end}).
+
+\section{The Debugger}
+
+\code{DebugPrint} is the second facility: opt-in, per-component, filterable, free-format. It
+answers ``what exactly happened to this message, or at this component?'' --- the tool for
+tracing a coherence bug, watching one address, or logging a rare event.
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=0.9\textwidth}\input{figures/tikz/debugger-aggregation}\end{adjustbox}
+\caption{Every component owns a \code{DebugPrint}; instances that share a \code{target} interleave
+into one file, distinct targets give per-component files, an empty target prints to stdout.}
+\label{fig:debugger-aggregation}
+\end{figure}
+
+\paragraph{Instances and output.} Every cache controller builds one in \code{BaseController}
+under the \code{dprint} prefix, tagged with its \code{source\_name} (\code{CacheController2}).
+A static map keys open files by name, so several components pointed at the same \key{target}
+produce one aggregated report whose \code{Name} and \code{Clock} columns tell the lines apart
+(\cref{fig:debugger-aggregation}).
+
+\paragraph{Three kinds of print.} A \emph{general event print}, \code{print(NULL, "queue
+FULL")}, fires on any event. A \emph{message-associated print}, \code{print(\&msg, "...")},
+emits a configurable preamble of identity columns (\key{print\_name}, \key{print\_clk},
+\key{print\_msg\_id}, \key{print\_addr}, \key{print\_from}, \key{print\_to}, \key{print\_owner})
+and is subject to the filters. And the \emph{transition hook}, \code{transition(\&msg, id, old,
+event, next, stalled, fsm)}, which every protocol calls right after \code{getTransition}, prints
+the readable \code{I --Store--> IM\_ad (src, cv, data)} with the FSM's own names --- the snoop L1,
+the snoop LLC and the directory protocols all read the same way, and a stall shows as
+\code{old --event--> old [stall]}. Keep new protocols on this hook: it is the single place
+transitions are reported, and it is also what feeds the raw trace.
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/debugger-filter}\end{adjustbox}
+\caption{What \code{print} does, and the rule \code{condition} applies.}
+\label{fig:debugger-filter}
+\end{figure}
+
+\paragraph{Filters.} Four categories, each a list in the configuration: \key{cond\_addr}
+(compared as \code{(addr \& addr\_filter) == entry}, so the hex mask \code{FFFFFFC0} selects a
+64-byte line), \key{cond\_msg\_id}, \key{cond\_from}, \key{cond\_owner}. With no filter set
+everything prints; with any set, a message must match every active category and any value
+within one (\cref{fig:debugger-filter}). Note the units: \key{addr\_filter} is hex, but the
+\key{cond\_addr} entries and the \code{Addr} column are decimal.
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=0.85\textwidth}\input{figures/tikz/debugger-lifecycle}\end{adjustbox}
+\caption{A \code{DebugPrint}'s life. A disabled instance deregisters from the clock in its
+constructor, so observability costs nothing when off.}
+\label{fig:debugger-lifecycle}
+\end{figure}
+
+\paragraph{Zero cost when off.} A \code{DebugPrint} with \key{enable}\code{=0} removes itself
+from the clock loop in its constructor (\cref{fig:debugger-lifecycle}). Dozens of idle
+instances once dominated event dispatch --- about 57\,\% of all \code{cycleProcess} calls ---
+for the sake of a counter read only while printing; deregistering them makes instances free to
+leave in place throughout the code. Because every setting is an ordinary configuration key,
+enabling and scoping a trace needs no recompilation:
+
+\begin{lstlisting}[style=shell]
+-p "cache_controller[*].dprint.enable(i)=1" -p "llc_controller.dprint.enable(i)=1" \
+-p "cache_controller[*].dprint.target(s)=coh.csv" -p "llc_controller.dprint.target(s)=coh.csv" \
+-p "cache_controller[*].dprint.addr_filter(s)=FFFFFFC0" -p "cache_controller[*].dprint.cond_addr(vs)=36749952"
+\end{lstlisting}
+
+\section{The raw event trace}
+
+\env{OCTOPUS\_TRACE}\code{=<file>} appends every resource event of \emph{every} message --- CPU
+requests and the non-request traffic the per-request report cannot see: write-backs,
+back-invalidations, cache-to-cache supplies, fills, LLC evictions --- to a binary file at
+simulation speed, with no measurable slowdown. The \code{LatencyReport} stays the authoritative
+latency decomposition; the trace is what the visualizer's resource lanes and the per-line
+transition table are built from. It is zero-cost when the variable is unset.
+
+A record is 32 bytes: the global core cycle, \code{msg\_id}, address, the resource (the
+Logger's \code{Role}, extended with \code{SVC\_BUS}, \code{ARRAY}, \code{LLC\_QUEUE} and
+\code{FSM}), the phase, the message's \code{kind}, its owner core, the component id and a flags
+word. On an \code{ARRAY} record the flags carry the action that claimed the port and whether the
+claim \emph{cut in} while the port was busy (a fill or a write-back of a line resident in the
+MSHR or write-back buffer may; \cref{ch:cache-controller}); on an \code{FSM} record they carry
+the old and new state ids, and the phase is the event id, so the trace holds every coherence
+transition of every controller. \Cref{app:formats} has the field table.
+
+\paragraph{Giant runs.} \env{OCTOPUS\_TRACE\_WINDOW}\code{=t0:t1} keeps only the events inside a
+cycle window, so the region around a worst case found in a report can be traced on a
+billion-cycle run. Conversion is streamed in 64\,K-record chunks with bounded memory into
+Parquet parts the viewer reads as one table.
+
+\paragraph{Time base.} Bus events are stamped one cycle earlier in the \code{LatencyReport} than
+on the global clock the trace uses, because the buses tick before the CPUs within a timestamp;
+the occupancy builder shifts the bus lanes by $-1$ so they line up with the rows. Totals are
+unaffected.
+
+\section{Triage: when a run wedges}
+
+\env{OCTOPUS\_HANG\_DUMP}\code{=<cycles>} makes every controller that has processed nothing for
+that many cycles while its queue is non-empty dump, once, to stderr: each queued message with
+its readiness and its line's state, the pending-request lines, RX occupancy, and MSHR,
+write-back-buffer and data-access-buffer occupancy. It names the line and the transient state
+everyone is waiting on, and it finalizes the raw trace so the cycles into the stall are
+readable. The sequence that works: hang dump $\rightarrow$ address $\rightarrow$ an aggregated
+transition trace filtered to that address on the LLC and every L1 $\rightarrow$ the last few
+transitions before the stuck state. \env{MCSIM\_PROBE}\code{=<file>} does the same for the DRAM
+model: every request, command and completion with MCsim's own clock, so two builds can be
+diffed decision by decision.
+
+\section{The visualizer}
+
+\code{./octoviz.sh view <workload\_dir>} simulates a workload with the trace on, converts the
+run and opens \emph{octoviz} in the browser; \code{run}, \code{convert} and \code{serve} are the
+same steps separately, and \code{serve <dir>} shows every converted run under a directory, such
+as a sweep. It is a local web app (Python 3 with \code{duckdb} and \code{numpy}; data never
+leaves the machine) that shows a run as a pipeline:
+
+\begin{description}
+\item[Pipeline] one row per request in the window, sorted by issue, coloured segments per
+  stage, a mark where the request became the oldest of its core; hover for the row, click to
+  inspect.
+\item[Resource lanes] request lane, service lane, LLC array port, memory bus (both
+  directions), DRAM, response lane; each segment the occupying message, coloured by kind, core
+  or class, with cut-ins outlined dashed. Bright is the filtered set, dim is everything else, so
+  \emph{who is ahead of me} is visible.
+\item[Inspector] the row's fields, every request on the same line within $\pm2000$ cycles, and
+  every trace interval of the selected id.
+\item[Coherence transition table] every event a controller's FSM processed on one line, in
+  cycle order, with the state of every agent after it: one row is the line's whole state
+  vector.
+\item[Minimap and level of detail] request density over the run; above a window size the
+  server returns per-bin aggregates instead of rows, so a 98-million-request SPLASH run still
+  answers in milliseconds.
+\end{description}
+
+Filters --- cycle window, address with a mask, request id, cores, class, resources used, stall
+state, oldest-only, responses ahead --- are AND-combined and kept in the URL hash, so a view is
+a shareable link; views can be popped out into their own windows, which stay synchronised.
+
+\begin{wherebox}
+\file{header/Logger.h}, \file{src/Logger.cpp} --- the Logger, the trace writer, the reports;
+\file{header/DebugPrint.h}, \file{src/DebugPrint.cpp} --- the Debugger; \file{tools/octoviz/}
+--- \code{convert.py}, \code{occupancy.py}, \code{tracefile.py}, \code{server.py},
+\code{static/index.html}; \file{octoviz.sh}; \file{docs/Logger.md}, \file{docs/Debugger.md},
+\file{docs/Trace.md}, \file{docs/Visualizer.md}.
+\end{wherebox}

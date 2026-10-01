@@ -1,3 +1,61 @@
 \chapter{Command line, scripts and environment}\label{app:cli}
 
-To be written.
+\section{The simulator}
+
+\begin{lstlisting}[style=shell]
+./build/Octopus_Simulator -s <SystemClass> [-p "<key>=<value>"]...
+\end{lstlisting}
+
+\begin{description}
+\item[\code{-s <name>}] the system to build: a C++ class in \file{src/SystemConfigurations/} and
+  its CSV of the same name in \file{configuration/SystemConfigurations/}. \code{MultiCoreSystem}
+  (bus) and \code{MultiCoreSystem\_Mesh} ship.
+\item[\code{-p "<key>=<value>"}] override one configuration key; repeat for several. The key
+  carries its type suffix and, for an instance, its index or \code{[*]}
+  (\cref{ch:configuration}). Values with spaces or semicolons need the quotes.
+\end{description}
+
+The parser (\code{CLParser}) pairs each \code{-x} with the argument that follows it, so
+\code{-p key=value} and \code{-p "key=value"} are the same; it prints every argument it saw at
+start-up. The one key every run needs is \code{workload\_path(s)}: a directory holding
+\code{trace\_C<n>.trc.shared} per core (or \code{task\_C<n>.task.csv} for a periodic task); the
+reports are written into \code{<workload>/newLogger/}.
+
+\section{Scripts}
+
+\begin{table}[htbp]\centering\small
+\caption{The driver scripts at the repository root and under \code{scripts/}, \code{sweeps/},
+\code{demo/}.}\label{tab:scripts}
+\begin{tabularx}{\textwidth}{@{}>{\ttfamily\raggedright\arraybackslash}p{0.3\textwidth}Y@{}}
+\toprule \normalfont script & what it does \\ \midrule
+get\_benchmarks.sh & clones the benchmark repository (\code{FanosResearch/OctopusBMs}) into \file{BMs/} if absent and inflates the compressed SPLASH-2 traces; idempotent, called by every driver. \code{BMS\_SPARSE="eembc-traces"} clones only that suite \\
+scripts/check\_environment.sh & one PASS/FAIL line per component (compiler, cmake, xz, Python packages, binary, MCsim ini line endings, benchmarks), then a reference run whose request count and worst DRAM latency must match the committed numbers \\
+run\_octopus.sh & \code{--protocol snoop|directory --suite eembc|splash [--bench <name>] [--jobs N] [--safety <s>] [--out <dir>]}: copies the preset over \file{MultiCoreSystem.csv}, runs the suite in parallel and judges completion per core (own trace covered and footer written) \\
+run\_splash.sh, sweep\_protocols.sh & the SPLASH driver and the coherence-family sweep \\
+octoviz.sh & \code{run|convert|serve|view <dir> [-- <simulator args>]}: the visualizer entry point; \code{WINDOW=t0:t1}, \code{TRACE=0}, \code{PORT}, \code{TIMEOUT}, \code{SYSTEM} \\
+sweeps/sweep\_*.sh & one axis each (\code{arbiter}, \code{replacement}, \code{cache}, \code{memory}, \code{pcc\_ab}, \code{pcc\_par}); \code{SUITE}, \code{JOBS}, \code{BENCH}, \code{SAFETY}, \code{EXCLUDE}; \code{sweep\_all.sh} runs them all, \code{run\_overnight.sh} both suites \\
+sweeps/plot\_results.py, analyze\_*.sh & the figures and the mechanism / trace analyses over sweep output \\
+demo/run\_acts.sh & the three acts of the interference demo (\code{act1 act2 act3}); \code{demo/extract\_jobs.py}, \code{build\_page.py}, \code{live.sh} \\
+demo\_protocol.sh & the MI-versus-MESI example of \cref{ch:coherence-engine} \\
+docs/manual/build.sh & this manual \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Environment variables}
+
+\begin{table}[htbp]\centering\small
+\caption{Environment switches read by the simulator. All are zero-cost when unset.}\label{tab:env}
+\begin{tabularx}{\textwidth}{@{}>{\ttfamily\raggedright\arraybackslash}p{0.4\textwidth}Y@{}}
+\toprule \normalfont variable & effect \\ \midrule
+OCTOPUS\_TRACE=<file> & write the raw event trace (\cref{ch:monitoring}) \\
+OCTOPUS\_TRACE\_WINDOW=t0:t1 & keep only trace events inside this core-cycle window \\
+OCTOPUS\_EVENT\_DUMP=N & print the raw Logger timelines of the first $N$ slow requests (Total above the threshold, or any memory-bus crossing) \\
+OCTOPUS\_EVENT\_DUMP\_MIN=<cycles> & the Total threshold for the dump (default 100) \\
+OCTOPUS\_EVENT\_DEBUG=1 & report any request whose stages do not tile to Total, and the end-of-run ok/fail/noresp tally \\
+OCTOPUS\_NO\_LOG=1 & skip per-request logging; still write \code{Summary.csv} \\
+OCTOPUS\_HANG\_DUMP=<cycles> & dump every controller that has been idle with a non-empty queue for that long, and finalize the trace \\
+MCSIM\_PROBE=<file> & log every MCsim request, command and completion with the DRAM clock \\
+\bottomrule
+\end{tabularx}
+\end{table}

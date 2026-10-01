@@ -72,7 +72,7 @@ def emit(name):
     out.append(r"\begin{landscape}")
     out.append(r"\begin{table}[p]\centering")
     out.append(r"\caption{\texttt{%s}: transitions as \texttt{actions/next\_state}; an empty cell ignores the event, \textcolor{octred}{Fault} aborts the run. \textbf{Bold} states are stable, \emph{italic} ones transient.}\label{fsm:%s}" % (tex(name), name))
-    out.append(r"\begin{adjustbox}{max width=\linewidth}\scriptsize")
+    out.append(r"\begin{adjustbox}{max width=\linewidth}\small")
     out.append(r"\begin{tabular}{@{}l%s@{}}" % ("l" * len(events)))
     out.append(r"\toprule \textbf{state} & " + " & ".join(r"\rotatebox{60}{\texttt{%s}}" % tex(e) for e in events) + r" \\ \midrule")
     for r in trans:
