@@ -23,11 +23,12 @@ se_test [threads] [KiB per thread] [iterations]      # defaults: 4 1024 2000
 
 ## Build
 
-Needs the host packages `g++-aarch64-linux-gnu` (which pulls the gcc, libstdc++
+`se_test-static` is checked in, built from this `se_test.cpp`; rebuild only
+after changing the source. Building needs the host packages `g++-aarch64-linux-gnu` (which pulls the gcc, libstdc++
 and libc cross packages) and, for the smoke test, `qemu-user-static`:
 
 ```sh
-cd /home/guotong/gem5_resource/se_test
+cd gem5/se_test
 make                                    # se_test-static, -dynamic, -noroi
 make run-qemu                           # smoke test of the -noroi build
 ```
@@ -39,9 +40,9 @@ markers, so `libm5.a` does not have to be built. On an aarch64 host use
 ## Run under gem5
 
 ```sh
-cd /home/guotong/gem5_arm
-./build/ARM/gem5.opt -re -d se_test_o3_oct     /home/guotong/Octopus_stable/gem5/configs/se_arm.py
-./build/ARM/gem5.opt -re -d se_test_o3_classic /home/guotong/Octopus_stable/gem5/configs/se_arm.py --classic
+cd $GEM5_ROOT                       # gem5 built with this repository as EXTRAS
+./build/ARM/gem5.opt -re -d se_test_o3_oct     <this repository>/gem5/configs/se_arm.py
+./build/ARM/gem5.opt -re -d se_test_o3_classic <this repository>/gem5/configs/se_arm.py --classic
 ```
 
 `se_arm.py` takes the same options as `fs_arm.py` (`--octopus-config`,
@@ -50,7 +51,7 @@ cd /home/guotong/gem5_arm
 {o3,timing}`. Arguments for the binary go after `--`:
 
 ```sh
-./build/ARM/gem5.opt -re -d se_test_short /home/guotong/Octopus_stable/gem5/configs/se_arm.py -- 2 64 100
+./build/ARM/gem5.opt -re -d se_test_short <this repository>/gem5/configs/se_arm.py -- 2 64 100
 ```
 
 `se_test-dynamic` runs with `--workload-type dynamic`; the loader and libc are

@@ -38,14 +38,22 @@ export GEM5_ROOT=<your gem5 checkout>
 # gem5 with this repository linked in (once; minutes):
 (cd $GEM5_ROOT && scons EXTRAS=<this repository> build/ARM/gem5.opt -j$(nproc))
 
-make -C gem5/se_test                     # the self-checking SE test (aarch64, static)
 cd tutorial/04-gem5-and-fullsystem-stack/01-gem5-se
-make -C slam_demo                        # the demo (aarch64, static)
-make -C slam_demo steps                  # scenario data for the plots
+make -C slam_demo steps                  # scenario data for the plots (host g++)
 ```
 
-The aarch64 binaries need `g++-aarch64-linux-gnu`; the plots need Python with
-`numpy` and `matplotlib`. Both binaries are static, so gem5 SE needs no disk image.
+The two aarch64 binaries come prebuilt in the repository
+(`gem5/se_test/se_test-static` and `slam_demo/slam_demo`, both static, so gem5
+SE needs no disk image); `expected/` was produced with exactly these. Rebuild
+them only if you change `se_test.cpp` or `slam_demo.cpp`, which needs
+`g++-aarch64-linux-gnu`:
+
+```shell
+make -C gem5/se_test                     # from the repository root
+make -C slam_demo                        # from this folder
+```
+
+The plots need Python with `numpy` and `matplotlib`.
 
 `bash check.sh` (in this folder) runs Parts A and B and the demo's Solo
 configuration (about 5 minutes) and tells you whether everything works.
