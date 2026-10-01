@@ -88,6 +88,7 @@
 \newcommand{\figwide}[3]{\begin{figure}[htbp]\centering\includegraphics[width=\textwidth]{#1}\caption{#2}\label{#3}\end{figure}}
 \newcommand{\figmed}[4]{\begin{figure}[htbp]\centering\includegraphics[width=#4\textwidth]{#1}\caption{#2}\label{#3}\end{figure}}
 % a figure on a landscape page of its own: 24 cm wide, for drawings unreadable at text width
-\newcommand{\figpage}[3]{\begin{sidewaysfigure}\centering\includegraphics[width=24cm,height=14.5cm,keepaspectratio]{#1}\caption{#2}\label{#3}\end{sidewaysfigure}}
+% (pdflscape marks the page rotated, so a PDF viewer shows it upright)
+\newcommand{\figpage}[3]{\begin{landscape}\begin{figure}[p]\centering\includegraphics[width=24cm,height=14.5cm,keepaspectratio]{#1}\caption{#2}\label{#3}\end{figure}\end{landscape}}
 \newcommand{\gitcommit}{\input{generated/version.tex}\unskip}
 \newcommand{\whatyoufind}[1]{\begin{findbox}\textbf{\sffamily What you will find here.} #1\end{findbox}}

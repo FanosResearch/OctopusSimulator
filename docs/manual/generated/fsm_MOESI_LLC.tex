@@ -20,25 +20,25 @@
 \bottomrule\end{tabular}\end{table}
 
 \begin{landscape}
-\begin{table}[p]\centering
-\caption{\texttt{MOESI\_LLC}: transitions as \texttt{actions/next\_state}; an empty cell ignores the event, \textcolor{octred}{Fault} aborts the run. \textbf{Bold} states are stable, \emph{italic} ones transient.}\label{fsm:MOESI_LLC}
-\sbox0{\small\begin{tabular}{@{}lllllllll@{}}
-\toprule \textbf{state} & \rotatebox{60}{\texttt{GetS}} & \rotatebox{60}{\texttt{GetM}} & \rotatebox{60}{\texttt{Replacement}} & \rotatebox{60}{\texttt{PutM\_fromOwner}} & \rotatebox{60}{\texttt{PutM\_fromNonOwner}} & \rotatebox{60}{\texttt{Data\_fromLowerInterface}} & \rotatebox{60}{\texttt{Data\_fromUpperInterface}} & \rotatebox{60}{\texttt{Own\_Invalidation}} \\ \midrule
-\textbf{N} & \texttt{GetData/SetOwner/NE\_d} & \texttt{GetData/SetOwner/NM\_d} &  & \textcolor{octred}{Fault} &  & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \texttt{SaveData/N} \\
-\emph{NE\_d} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \texttt{SendExeclusiveData/E} & \textcolor{octred}{Fault} \\
-\emph{NM\_d} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \texttt{SendData/M} & \textcolor{octred}{Fault} \\
-\textbf{I} & \texttt{SendExeclusiveData/SetOwner/E} & \texttt{SendData/SetOwner/M} & \texttt{IssueInv/} & \textcolor{octred}{Fault} &  & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \texttt{WriteBack/N} \\
-\textbf{S} & \texttt{SendData/} & \texttt{SendData/SetOwner/M} & \texttt{IssueInv/} & \textcolor{octred}{Fault} &  & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \texttt{WriteBack/N} \\
-\textbf{E} & \texttt{ClearOwner/S} & \texttt{SetOwner/M} & \texttt{IssueInv/} & \texttt{ClearOwner/I} &  & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \texttt{ClearOwner/WriteBack/N} \\
-\emph{I\_a} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \texttt{ClearOwner/I} &  & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} \\
-\emph{MN\_d} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \textcolor{octred}{Fault} &  & \texttt{WriteBack/N} & \textcolor{octred}{Fault} & \texttt{SaveData/MN\_d} \\
-\emph{S\_d} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \textcolor{octred}{Fault} &  & \texttt{SaveData/S} & \textcolor{octred}{Fault} & \texttt{MN\_d} \\
-\emph{I\_d} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \textcolor{octred}{Fault} &  & \texttt{SaveData/I} & \textcolor{octred}{Fault} & \texttt{MN\_d} \\
-\textbf{O} &  & \texttt{SetOwner/M} & \texttt{IssueInv/} & \texttt{S\_d} &  & \texttt{SaveData/S} & \textcolor{octred}{Fault} & \texttt{ClearOwner/MN\_d} \\
-\emph{S\_a} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \texttt{ClearOwner/S} &  & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} \\
-\emph{O\_d} & \texttt{Stall/} & \texttt{Stall/} & \texttt{Stall/} & \textcolor{octred}{Fault} &  & \texttt{SaveData/O} & \textcolor{octred}{Fault} & \texttt{MN\_d} \\
-\textbf{M} & \texttt{O} & \texttt{SetOwner/M} & \texttt{IssueInv/} & \texttt{ClearOwner/I\_d} &  & \texttt{SaveData/I\_a} & \textcolor{octred}{Fault} & \texttt{ClearOwner/MN\_d} \\
-\bottomrule\end{tabular}}
-\ifdim\wd0>\linewidth \resizebox{\linewidth}{!}{\usebox0}\else\usebox0\fi
-\end{table}
+{\small\setlength{\tabcolsep}{4pt}
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{7.6mm}>{\raggedright\arraybackslash\ttfamily}p{37.7mm}>{\raggedright\arraybackslash\ttfamily}p{18.6mm}>{\raggedright\arraybackslash\ttfamily}p{18.6mm}>{\raggedright\arraybackslash\ttfamily}p{22.5mm}>{\raggedright\arraybackslash\ttfamily}p{11.0mm}>{\raggedright\arraybackslash\ttfamily}p{20.6mm}>{\raggedright\arraybackslash\ttfamily}p{37.7mm}>{\raggedright\arraybackslash\ttfamily}p{22.5mm}@{}}
+\caption{\texttt{MOESI\_LLC}: transitions as \texttt{actions/next\_state}; an empty cell ignores the event, \textcolor{octred}{Fault} aborts the run. \textbf{Bold} states are stable, \emph{italic} ones transient.}\label{fsm:MOESI_LLC}\\
+\toprule \textbf{state} & \rotatebox{60}{\texttt{GetS}} & \rotatebox{60}{\texttt{GetM}} & \rotatebox{60}{\texttt{Replacement}} & \rotatebox{60}{\texttt{PutM\_fromOwner}} & \rotatebox{60}{\texttt{PutM\_fromNonOwner}} & \rotatebox{60}{\texttt{Data\_fromLowerInterface}} & \rotatebox{60}{\texttt{Data\_fromUpperInterface}} & \rotatebox{60}{\texttt{Own\_Invalidation}} \\ \midrule \endfirsthead
+\multicolumn{9}{@{}l}{\emph{\texttt{MOESI\_LLC}, continued}} \\ \toprule \textbf{state} & \rotatebox{60}{\texttt{GetS}} & \rotatebox{60}{\texttt{GetM}} & \rotatebox{60}{\texttt{Replacement}} & \rotatebox{60}{\texttt{PutM\_fromOwner}} & \rotatebox{60}{\texttt{PutM\_fromNonOwner}} & \rotatebox{60}{\texttt{Data\_fromLowerInterface}} & \rotatebox{60}{\texttt{Data\_fromUpperInterface}} & \rotatebox{60}{\texttt{Own\_Invalidation}} \\ \midrule \endhead
+\bottomrule \endfoot
+\textbf{N} & GetData/\allowbreak{}SetOwner/\allowbreak{}NE\_d & GetData/\allowbreak{}SetOwner/\allowbreak{}NM\_d &  & \textcolor{octred}{Fault} &  & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & SaveData/\allowbreak{}N \\[2pt]
+\emph{NE\_d} & Stall/ & Stall/ & Stall/ & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & SendExeclusiveData/\allowbreak{}E & \textcolor{octred}{Fault} \\[2pt]
+\emph{NM\_d} & Stall/ & Stall/ & Stall/ & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & SendData/\allowbreak{}M & \textcolor{octred}{Fault} \\[2pt]
+\textbf{I} & SendExeclusiveData/\allowbreak{}SetOwner/\allowbreak{}E & SendData/\allowbreak{}SetOwner/\allowbreak{}M & IssueInv/ & \textcolor{octred}{Fault} &  & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & WriteBack/\allowbreak{}N \\[2pt]
+\textbf{S} & SendData/ & SendData/\allowbreak{}SetOwner/\allowbreak{}M & IssueInv/ & \textcolor{octred}{Fault} &  & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & WriteBack/\allowbreak{}N \\[2pt]
+\textbf{E} & ClearOwner/\allowbreak{}S & SetOwner/\allowbreak{}M & IssueInv/ & ClearOwner/\allowbreak{}I &  & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & ClearOwner/\allowbreak{}WriteBack/\allowbreak{}N \\[2pt]
+\emph{I\_a} & Stall/ & Stall/ & Stall/ & ClearOwner/\allowbreak{}I &  & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} \\[2pt]
+\emph{MN\_d} & Stall/ & Stall/ & Stall/ & \textcolor{octred}{Fault} &  & WriteBack/\allowbreak{}N & \textcolor{octred}{Fault} & SaveData/\allowbreak{}MN\_d \\[2pt]
+\emph{S\_d} & Stall/ & Stall/ & Stall/ & \textcolor{octred}{Fault} &  & SaveData/\allowbreak{}S & \textcolor{octred}{Fault} & MN\_d \\[2pt]
+\emph{I\_d} & Stall/ & Stall/ & Stall/ & \textcolor{octred}{Fault} &  & SaveData/\allowbreak{}I & \textcolor{octred}{Fault} & MN\_d \\[2pt]
+\textbf{O} &  & SetOwner/\allowbreak{}M & IssueInv/ & S\_d &  & SaveData/\allowbreak{}S & \textcolor{octred}{Fault} & ClearOwner/\allowbreak{}MN\_d \\[2pt]
+\emph{S\_a} & Stall/ & Stall/ & Stall/ & ClearOwner/\allowbreak{}S &  & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} & \textcolor{octred}{Fault} \\[2pt]
+\emph{O\_d} & Stall/ & Stall/ & Stall/ & \textcolor{octred}{Fault} &  & SaveData/\allowbreak{}O & \textcolor{octred}{Fault} & MN\_d \\[2pt]
+\textbf{M} & O & SetOwner/\allowbreak{}M & IssueInv/ & ClearOwner/\allowbreak{}I\_d &  & SaveData/\allowbreak{}I\_a & \textcolor{octred}{Fault} & ClearOwner/\allowbreak{}MN\_d \\[2pt]
+\end{longtable}}
 \end{landscape}

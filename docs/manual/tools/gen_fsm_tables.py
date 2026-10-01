@@ -68,21 +68,54 @@ def emit(name):
         out.append(" & ".join(col) + r" \\")
     out.append(r"\bottomrule\end{tabular}\end{table}")
     out.append("")
-    # transition table: a landscape page, scaled down to the line width if it is wider
-    out.append(r"\begin{landscape}")
-    out.append(r"\begin{table}[p]\centering")
-    out.append(r"\caption{\texttt{%s}: transitions as \texttt{actions/next\_state}; an empty cell ignores the event, \textcolor{octred}{Fault} aborts the run. \textbf{Bold} states are stable, \emph{italic} ones transient.}\label{fsm:%s}" % (tex(name), name))
-    # the landscape text width is the portrait text height; scale down only when wider
-    out.append(r"\sbox0{\small\begin{tabular}{@{}l%s@{}}" % ("l" * len(events)))
-    out.append(r"\toprule \textbf{state} & " + " & ".join(r"\rotatebox{60}{\texttt{%s}}" % tex(e) for e in events) + r" \\ \midrule")
+    # transition table on landscape pages, never scaled: each event column is as wide as its
+    # longest single action, and a cell wraps after the '/' between actions. The font is the
+    # largest that fits the landscape line; the table runs over several pages if it must.
+    rows = []
     for r in trans:
-        st, stable, valid = r[0], r[1], r[2]
         cells = r[3:] + [""] * (len(events) - len(r[3:]))
+        rows.append((r[0], r[1], cells))
+    def tokens(c):
+        parts = [p for p in c.split("/")]
+        return [p + "/" for p in parts[:-1]] + ([parts[-1]] if parts[-1] else [])
+    longest = []
+    for j in range(len(events)):
+        L = 4
+        for _, _, cells in rows:
+            c = cells[j]
+            if c in ("Fault/", "Fault"):
+                L = max(L, 5)
+            elif c:
+                L = max(L, max(len(t) for t in tokens(c)))
+        longest.append(L)
+    state_len = max(len(st) for st, _, _ in rows)
+    LINE_MM, SEP_MM = 253.0, 2.8                       # landscape text width; 2 x 4pt column padding
+    for size, pt in ((r"\small", 9.0), (r"\footnotesize", 8.0), (r"\scriptsize", 7.0)):
+        ch = 0.6 * pt * 0.3528                          # IBM Plex Mono advance width, mm
+        widths = [max(L, 4) * ch + 1.5 for L in longest]   # + slack so neighbours never touch
+        total = state_len * ch + SEP_MM + sum(w + SEP_MM for w in widths)
+        if total <= LINE_MM:
+            break
+    spec = "@{}>{\\raggedright\\arraybackslash}p{%.1fmm}" % (state_len * ch) + "".join(
+        ">{\\raggedright\\arraybackslash\\ttfamily}p{%.1fmm}" % w for w in widths) + "@{}"
+    def wcell(c):
+        if not c:
+            return ""
+        if c in ("Fault/", "Fault"):
+            return r"\textcolor{octred}{Fault}"
+        return r"\allowbreak{}".join(tex(t) for t in tokens(c))
+    out.append(r"\begin{landscape}")
+    out.append(r"{%s\setlength{\tabcolsep}{4pt}" % size)
+    out.append(r"\begin{longtable}{%s}" % spec)
+    out.append(r"\caption{\texttt{%s}: transitions as \texttt{actions/next\_state}; an empty cell ignores the event, \textcolor{octred}{Fault} aborts the run. \textbf{Bold} states are stable, \emph{italic} ones transient.}\label{fsm:%s}\\" % (tex(name), name))
+    hdr = r"\toprule \textbf{state} & " + " & ".join(r"\rotatebox{60}{\texttt{%s}}" % tex(e) for e in events) + r" \\ \midrule"
+    out.append(hdr + r" \endfirsthead")
+    out.append(r"\multicolumn{%d}{@{}l}{\emph{\texttt{%s}, continued}} \\ " % (len(events) + 1, tex(name)) + hdr + r" \endhead")
+    out.append(r"\bottomrule \endfoot")
+    for st, stable, cells in rows:
         mark = r"\textbf{%s}" % tex(st) if stable == "1" else r"\emph{%s}" % tex(st)
-        out.append(mark + " & " + " & ".join(cell(c) for c in cells) + r" \\")
-    out.append(r"\bottomrule\end{tabular}}")
-    out.append(r"\ifdim\wd0>\linewidth \resizebox{\linewidth}{!}{\usebox0}\else\usebox0\fi")
-    out.append(r"\end{table}")
+        out.append(mark + " & " + " & ".join(wcell(c) for c in cells) + r" \\[2pt]")
+    out.append(r"\end{longtable}}")
     out.append(r"\end{landscape}")
     p = os.path.join(OUT_DIR, "fsm_%s.tex" % name)
     io.open(p, "w", encoding="utf-8", newline="\n").write("\n".join(out) + "\n")
