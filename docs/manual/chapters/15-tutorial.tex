@@ -1,8 +1,7 @@
 \chapter{Hands-on tutorial}\label{ch:tutorial}
 
 \whatyoufind{The five exercises of the hands-on tutorial as they ship under \file{tutorial/},
-in order, each with its goal, its commands, what to look at and the trap it contains; and, in
-the presenter boxes, the timings and the things a room will hit.}
+in order, each with its goal, its commands, what to look at and the trap it contains.}
 
 \section{How the exercises are built}
 
@@ -23,14 +22,11 @@ git checkout -- configuration/         # put every configuration file back as sh
 Fell behind? \code{bash tutorial/solutions/apply.sh <exercise>} applies the reference solution
 for that exercise so you can continue with the next one.
 
-\begin{presenterbox}[The session's shape]
-Two blocks. Block 1, standalone Octopus: setup and first run (15 min), exploration (25 min),
-the configuration model (10 min), extending Octopus (45 min, one exercise each). Block 2, the
-full-system stack: gem5 SE mode (15--20 min) and full-system Arm from a checkpoint (25--30 min),
-with the pre-warm launched at the start of the block. State the ground rules once: the check
-script's two numbers are exact; anyone whose numbers differ has a real difference; the reset
-command exists.
-\end{presenterbox}
+The exercises come in two blocks. The first runs Octopus standalone: setup and first run
+(about 15 minutes), exploration (25), the configuration model (10) and extending Octopus (45,
+one exercise of three). The second puts the same hierarchy behind gem5: syscall-emulation mode
+(15--20) and full-system Arm from a checkpoint (25--30, plus a take-home), whose pre-warm is
+launched at the start of the block.
 
 \section{00 --- Setup and first run}
 
@@ -41,11 +37,8 @@ run \code{a2time01} on the shipped configuration; read \code{Summary.csv} and th
 \code{LatencyReport\_C0.csv} with \cref{fig:system-miss,fig:system-hit,fig:request-timeline}
 open; run \code{check.sh}, which compares \code{Summary.csv} byte for byte against the
 reference; then open the visualizer and find the pipeline, the lanes and the transition table.
-
-\begin{presenterbox}
-The trap to state here, because the next exercise triggers it: \code{run\_octopus.sh
---protocol} copies a preset over \file{MultiCoreSystem.csv}; hand edits vanish.
-\end{presenterbox}
+One thing to know before the next exercise: \code{run\_octopus.sh --protocol} copies a preset
+over \file{MultiCoreSystem.csv}, so hand edits to that file vanish.
 
 \section{01 --- Exploration, one axis at a time}
 
@@ -70,14 +63,11 @@ last in exactly one parameter. The \code{part} row is the one with a story behin
 (\cref{ch:tasks-and-demo}). The protocol is the one axis that is not a \code{-p}: switch it by
 preset with \code{run\_octopus.sh --protocol snoop|directory} (\cref{ch:configuration}). If you
 finish early, run the same six on \code{cacheb01-trace}, where all four cores fight over one
-block and the arbiter rows spread out.
-
-\begin{presenterbox}
-Measured on \code{a2time01}: the fixed-latency model reports a worst DRAM of exactly the
-configured latency, MCsim 359 --- a good moment to say the fixed model is optimistic exactly
-where you would expect. Anyone who tries to switch protocol by hand and reports a fault has
-almost always hit the five-key coupling, not a protocol bug.
-\end{presenterbox}
+block and the arbiter rows spread out. Two things the numbers will show: the fixed-latency
+model reports a worst DRAM of exactly the configured latency where MCsim reports 359 on the
+same trace --- the fixed model is optimistic exactly where you would expect --- and a fault
+after switching the protocol by hand is almost always the five-key coupling, not a protocol
+bug.
 
 \section{02 --- The configuration model}
 
@@ -129,17 +119,16 @@ relinking \code{gem5.opt}; both exercises vary configuration only.
   region of interest, write the checkpoint --- with its real durations.
 \end{description}
 
-\begin{presenterbox}[Traps, collected]
+\begin{trapbox}[{Traps, collected}]
 The preset copy over \file{MultiCoreSystem.csv}; the protocol as five coupled keys; the FSM row
 order; the arbiter registered in the wrong controller; directory under TDM starves one core, so
 the directory preset pins FCFS and only a hand override reaches it; a run that wedges leaves a
 readable trace only because \env{OCTOPUS\_HANG\_DUMP} finalizes it; and on Windows in Git Bash
 the workload path wants \code{cygpath -m}.
-\end{presenterbox}
+\end{trapbox}
 
 \begin{wherebox}
 \file{tutorial/README.md} and \file{tutorial/0*/README.md} --- the exercises;
 \file{tutorial/*/check.sh}, \file{expected/} --- the checks; \file{tutorial/solutions/} --- the
-patches and \code{apply.sh}; \file{docs/TutorialExercises.md} --- the presenter's plan with
-measured timings.
+patches and \code{apply.sh}.
 \end{wherebox}
