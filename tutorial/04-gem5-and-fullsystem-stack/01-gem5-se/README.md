@@ -33,33 +33,18 @@ instruction caches are Octopus ids 0–3, data caches 4–7, the LLC is 10).
 
 ## Step 1 — set up
 
-In the dev container (or a codespace) everything is ready: `gem5` is on the
-`PATH`, built with this repository as an EXTRAS module, and links the
-`build/libOctopus.so` that the container builds on creation. Commands below run
-from the repository root unless they `cd`.
+In the dev container everything is ready: `gem5` is on the `PATH`. Commands
+below run from the repository root unless they `cd`. Outside the container, see
+the folder README (`../README.md`).
 
-Outside the container, build the same gem5 once with `gem5/get_gem5.sh` (see the
-folder README, `../README.md`) and use `$GEM5_ROOT/build/ARM/gem5.opt` wherever
-this page says `gem5` (the scripts pick it up from `GEM5_ROOT`):
-
-```shell
-bash gem5/get_gem5.sh
-export GEM5_ROOT=<the directory it printed>
-```
-
-The two aarch64 binaries come prebuilt in the repository
-(`gem5/se_test/se_test-static` and `slam_demo/slam_demo`, both static, so gem5
-SE needs no disk image); `expected/` was produced with exactly these. Rebuild
-them only if you change `se_test.cpp` or `slam_demo.cpp`. That needs
-`g++-aarch64-linux-gnu`, which the container has; the m5ops come from
-`gem5/m5ops/`:
+The two aarch64 binaries come prebuilt (`gem5/se_test/se_test-static` and
+`slam_demo/slam_demo`; static, so gem5 SE needs no disk image), and `expected/`
+was produced with exactly these. Rebuild them only after changing their source:
 
 ```shell
 make -C gem5/se_test
 make -C tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/slam_demo
 ```
-
-The plots need Python with `numpy` and `matplotlib`.
 
 `bash tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/check.sh` runs Parts A and B
 and the demo's Solo configuration (about 5 minutes) and tells you whether
@@ -170,10 +155,7 @@ What the demo reports:
   position *at that scan*; the RMSE over the run is the headline (ATE).
 
 `python tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/slam_demo/viz/slam_steps.py`
-draws the algorithm step by step (scan, grid, matching, keyframes, timeline)
-from the shipped `slam_demo/viz/steps.json`;
-`make -C tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/slam_demo steps` regenerates it
-from a run on your machine.
+draws the algorithm step by step (scan, grid, matching, keyframes, timeline).
 
 ### The configurations (`run_matrix.sh`)
 
@@ -192,12 +174,6 @@ cd tutorial/04-gem5-and-fullsystem-stack/01-gem5-se
 bash run_matrix.sh                   # all seven in parallel, ~10 min on 7+ cores
 python slam_demo/viz/plot_matrix.py  # figures/ from runs/
 ```
-
-No gem5 at hand? `expected/runs/<config>/` holds the reference runs' `simout.txt`
-(and `breakdown.csv`), and `slam_demo/viz/steps.json` (the scenario, made by
-`make -C slam_demo steps`) is shipped too, so
-`python slam_demo/viz/plot_matrix.py --runs-dir expected/runs` redraws
-`expected/figures/` exactly.
 
 The partition `way_partition(s)=1:0;5:0` names Octopus requester ids: gem5 SE
 gives each new thread the next free core, the aggressor thread is created first
