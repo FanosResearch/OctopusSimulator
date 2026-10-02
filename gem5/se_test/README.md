@@ -1,9 +1,8 @@
 # SE-mode test for the Octopus/gem5 bridge
 
-The SE counterpart of `llsc_wfe_test`: one self-checking aarch64 binary that
-gem5 loads directly. No kernel, disk image or checkpoint is involved, so a run
-takes about a minute; this is the quick check for bridge or protocol changes
-before an FS run.
+One self-checking aarch64 binary that gem5 loads directly. No kernel, disk
+image or checkpoint is involved, so a run takes about a minute; this is the
+quick check for bridge or protocol changes before an FS run.
 
 | | |
 | --- | --- |

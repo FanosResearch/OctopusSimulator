@@ -307,6 +307,3 @@ the failure (dropped, keyframes mapped) and look at the trajectories.
 - The DRAM scheduler is a third knob: `--octopus-param 'mcsim_scheduler(s)=BLISS'`
   (any directory under `src/MCsim/system/`). It matters only when the SLAM's own
   requests reach DRAM, i.e. with the heavy aggressor and no partition.
-- `docs/StateAndData.md` explains what changes once a data array has a latency
-  and real data flows, and why `MultiCoreSystem_gem5.csv` sets `line_interlock`
-  and a pipelined LLC array.
