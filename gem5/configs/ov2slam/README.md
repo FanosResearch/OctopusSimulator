@@ -15,7 +15,8 @@ that a new clip, new bag flags or a new parameter file never repeat the boot.
 gem5.opt checkpoints.py --stage env --resources /opt/gem5-resources
 # per clip: restore, play, checkpoint at the first stereo pair, run to the end (~20 min + clip)
 gem5.opt checkpoints.py --stage roi --clip 1s --resources /opt/gem5-resources
-# measured run: point fs_arm.py's checkpoint= at ov2_start_trim_1s
+# measured run: O3 + Octopus from that checkpoint (add --classic for the gem5 baseline)
+gem5.opt ../fs_arm.py --clip 1s --resources /opt/gem5-resources
 ```
 
 Checkpoints land next to the resources (`--checkpoint-dir` to change that):
