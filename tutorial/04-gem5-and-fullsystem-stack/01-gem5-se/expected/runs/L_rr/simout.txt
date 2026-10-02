@@ -1,95 +1,65 @@
 Global frequency set at 1000000000000 ticks per second
 ClockManager: registered clock periods (ns): 50x10 100x18
 ClockManager: min period = 50 ns, clkStep() granularity = 50 ns
-Redirecting stdout to /home/guotong/Octopus_esweek/tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/runs/L_rr/simout.txt
-Redirecting stderr to /home/guotong/Octopus_esweek/tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/runs/L_rr/simerr.txt
+Redirecting stdout to /tmp/claude-1000/-home-guotong-Octopus-esweek/9ff9b5da-2464-4ff1-968a-3aa79c6f2c4a/scratchpad/ref/L_rr/simout.txt
+Redirecting stderr to /tmp/claude-1000/-home-guotong-Octopus-esweek/9ff9b5da-2464-4ff1-968a-3aa79c6f2c4a/scratchpad/ref/L_rr/simerr.txt
 gem5 Simulator System.  https://www.gem5.org
 gem5 is copyrighted software; use the --copyright option for details.
 
 gem5 version 25.1.0.1
-gem5 compiled Sep 30 2026 19:36:56
-gem5 started Sep 30 2026 23:55:45
-gem5 executing on ubuntu2404, pid 2875679
-command line: /home/guotong/gem5_arm/build/ARM/gem5.opt.esweek -re -d /home/guotong/Octopus_esweek/tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/runs/L_rr /home/guotong/Octopus_esweek/gem5/configs/se_arm.py --num-cores 4 --octopus-param 'bus[0].interconnect_controller.arbiter_type(s)=RRArbiter' --octopus-param 'llc_controller.arbiter_type(s)=RRArbiter' --binary /home/guotong/Octopus_esweek/tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/slam_demo/slam_demo -- --period-us 80 --dump --aggr 1 --aggr-write --aggr-kib 2048
+gem5 compiled Oct  1 2026 00:40:10
+gem5 started Oct  2 2026 09:47:28
+gem5 executing on ubuntu2404, pid 482674
+command line: /home/guotong/gem5_arm/build/ARM/gem5.opt.esweek -re -d /tmp/claude-1000/-home-guotong-Octopus-esweek/9ff9b5da-2464-4ff1-968a-3aa79c6f2c4a/scratchpad/ref/L_rr /home/guotong/Octopus_esweek/gem5/configs/se_arm.py --num-cores 4 --octopus-param 'bus[0].interconnect_controller.arbiter_type(s)=RRArbiter' --octopus-param 'llc_controller.arbiter_type(s)=RRArbiter' --octopus-param 'cpu[*].log_requests(i)=1' --binary /home/guotong/Octopus_esweek/tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/slam_demo/slam_demo -- --period-us 80 --dump --aggr 1 --aggr-write --aggr-kib 2048
 
 info: Standard input is not a terminal, disabling listeners.
 Running /home/guotong/Octopus_esweek/tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/slam_demo/slam_demo --period-us 80 --dump --aggr 1 --aggr-write --aggr-kib 2048 on 4 o3 core(s), Octopus caches, preset MultiCoreSystem_gem5
-slam_demo: 40 scans, period 80 us, keyframe every 2, 1 co-runner(s) x 2048 KiB write
-[RT]   roi 3.23 ms, scans tracked 39/39, dropped 0, tracking lost 0, keyframes mapped 19/19, max mapper backlog 1
-[TIME] front-end us per scan: p50 54.5 max 58.1; mapper us per keyframe: p50 143.4 max 150.3
-[AGGR] co-runner 0: 19188 MB/s
-[ATE]  position error: median 0.050 m, rmse 0.055 m, max 0.083 m
+slam_demo: 20 scans, period 80 us, keyframe every 2, 1 co-runner(s) x 2048 KiB write
+[RT]   roi 1.64 ms, scans tracked 19/19, dropped 0, tracking lost 0, keyframes mapped 9/9, max mapper backlog 1
+[TIME] front-end us per scan: p50 53.4 max 55.8; mapper us per keyframe: p50 145.2 max 149.3
+[AGGR] co-runner 0: 19224 MB/s
+[ATE]  position error: median 0.038 m, rmse 0.042 m, max 0.083 m
 SCAN,0,1,0,36.0306,2.6844,36.0306,2.6844,0.0000,0.00
-SCAN,1,1,0,36.2211,2.7812,36.1807,2.7087,0.0830,49.64
-SCAN,2,1,0,36.4211,2.8762,36.4027,2.8982,0.0287,46.99
-SCAN,3,1,0,36.6212,2.9647,36.6008,2.9599,0.0209,52.64
-SCAN,4,1,0,36.8371,3.0453,36.8153,3.0470,0.0218,54.41
-SCAN,5,1,0,37.0594,3.1144,37.0276,3.1057,0.0329,55.13
-SCAN,6,1,0,37.2874,3.1702,37.2501,3.1742,0.0376,54.14
-SCAN,7,1,0,37.5207,3.2120,37.4726,3.2268,0.0503,55.01
-SCAN,8,1,0,37.7588,3.2398,37.7258,3.2551,0.0363,55.13
-SCAN,9,1,0,38.0011,3.2549,37.9760,3.2744,0.0318,55.80
-SCAN,10,1,0,38.2476,3.2595,38.2233,3.2818,0.0330,55.41
-SCAN,11,1,0,38.4980,3.2569,38.4660,3.2764,0.0374,54.02
-SCAN,12,1,0,38.7517,3.2511,38.7164,3.2679,0.0391,53.46
-SCAN,13,1,0,39.0081,3.2468,38.9788,3.2639,0.0339,51.95
-SCAN,14,1,0,39.2616,3.2478,39.2301,3.2666,0.0367,52.02
-SCAN,15,1,0,39.5117,3.2591,39.4803,3.2823,0.0390,51.85
-SCAN,16,1,0,39.7571,3.2860,39.7242,3.3105,0.0411,52.64
-SCAN,17,1,0,39.9918,3.3309,39.9564,3.3613,0.0466,52.60
-SCAN,18,1,0,40.2139,3.3977,40.1777,3.4200,0.0425,52.84
-SCAN,19,1,0,40.4241,3.4912,40.3905,3.5202,0.0444,52.89
-SCAN,20,1,0,40.6085,3.6051,40.5744,3.6355,0.0457,54.16
-SCAN,21,1,0,40.7709,3.7433,40.7399,3.7840,0.0512,54.43
-SCAN,22,1,0,40.9032,3.8983,40.8674,3.9229,0.0434,54.87
-SCAN,23,1,0,41.0040,4.0655,40.9637,4.1039,0.0556,55.11
-SCAN,24,1,0,41.0768,4.2435,41.0343,4.2791,0.0554,54.81
-SCAN,25,1,0,41.1189,4.4213,41.0766,4.4634,0.0597,55.02
-SCAN,26,1,0,41.1385,4.6011,41.0981,4.6431,0.0583,53.96
-SCAN,27,1,0,41.1366,4.7726,41.0902,4.8138,0.0619,54.50
-SCAN,28,1,0,41.1224,4.9412,41.0713,4.9824,0.0656,54.64
-SCAN,29,1,0,41.1014,5.1062,41.0545,5.1457,0.0613,54.26
-SCAN,30,1,0,41.0777,5.2636,41.0241,5.3036,0.0668,54.53
-SCAN,31,1,0,41.0577,5.4186,41.0051,5.4565,0.0649,54.87
-SCAN,32,1,0,41.0457,5.5727,40.9909,5.6129,0.0680,55.30
-SCAN,33,1,0,41.0441,5.7232,40.9893,5.7694,0.0716,55.27
-SCAN,34,1,0,41.0570,5.8831,41.0005,5.9310,0.0741,56.16
-SCAN,35,1,0,41.0847,6.0502,41.0247,6.0908,0.0724,56.32
-SCAN,36,1,0,41.1265,6.2202,41.0632,6.2578,0.0735,56.22
-SCAN,37,1,0,41.1822,6.4022,41.1156,6.4500,0.0820,57.25
-SCAN,38,1,0,41.2500,6.5994,41.1823,6.6425,0.0803,56.94
-SCAN,39,1,0,41.3263,6.7948,41.2530,6.8344,0.0833,58.12
-KF,0,2,145.68
-KF,1,4,142.71
-KF,2,6,143.37
-KF,3,8,142.63
-KF,4,10,145.93
-KF,5,12,149.12
-KF,6,14,150.29
-KF,7,16,147.87
-KF,8,18,147.09
-KF,9,20,144.76
-KF,10,22,143.42
-KF,11,24,143.89
-KF,12,26,143.04
-KF,13,28,143.82
-KF,14,30,142.32
-KF,15,32,139.79
-KF,16,34,137.22
-KF,17,36,136.51
-KF,18,38,134.71
-board.cache_hierarchy.l1d_caches0: 23366 invalidation snoops sent to the CPU
-board.cache_hierarchy.l1d_caches0: 8 data operations were held back behind an older overlapping write from the same core
-board.cache_hierarchy.l1d_caches0: 151 CPU-port refusals while the Octopus L1 was blocked
-board.cache_hierarchy.l1d_caches0: 8 exclusive loads, 4 exclusive stores, 377 LSE atomics
-controller 4: queue peak 32 of 64, intake refusals (queue full) 0, admit-fail cycles (MSHR/PWB full) 22818
-controller 5: queue peak 19 of 64, intake refusals (queue full) 0, admit-fail cycles (MSHR/PWB full) 6655392
-board.cache_hierarchy.l1d_caches1: 1026766 invalidation snoops sent to the CPU
-board.cache_hierarchy.l1d_caches1: 60225 CPU-port refusals while the Octopus L1 was blocked
-board.cache_hierarchy.l1d_caches1: 0 exclusive loads, 0 exclusive stores, 16398 LSE atomics
-board.cache_hierarchy.l1d_caches2: 132 invalidation snoops sent to the CPU
-board.cache_hierarchy.l1d_caches2: 0 exclusive loads, 0 exclusive stores, 36 LSE atomics
-board.cache_hierarchy.l1d_caches3: 11068 invalidation snoops sent to the CPU
+SCAN,1,1,0,36.2211,2.7812,36.1807,2.7087,0.0830,49.85
+SCAN,2,1,0,36.4211,2.8762,36.4027,2.8982,0.0287,47.34
+SCAN,3,1,0,36.6212,2.9647,36.6008,2.9599,0.0209,52.84
+SCAN,4,1,0,36.8371,3.0453,36.8153,3.0470,0.0218,54.90
+SCAN,5,1,0,37.0594,3.1144,37.0271,3.1036,0.0340,55.51
+SCAN,6,1,0,37.2874,3.1702,37.2491,3.1766,0.0388,54.43
+SCAN,7,1,0,37.5207,3.2120,37.4722,3.2232,0.0498,55.06
+SCAN,8,1,0,37.7588,3.2398,37.7203,3.2583,0.0427,55.36
+SCAN,9,1,0,38.0011,3.2549,37.9695,3.2755,0.0377,55.77
+SCAN,10,1,0,38.2476,3.2595,38.2157,3.2769,0.0364,55.36
+SCAN,11,1,0,38.4980,3.2569,38.4680,3.2679,0.0319,53.54
+SCAN,12,1,0,38.7517,3.2511,38.7211,3.2680,0.0349,53.61
+SCAN,13,1,0,39.0081,3.2468,38.9774,3.2682,0.0374,52.45
+SCAN,14,1,0,39.2616,3.2478,39.2288,3.2660,0.0375,51.60
+SCAN,15,1,0,39.5117,3.2591,39.4748,3.2833,0.0441,52.17
+SCAN,16,1,0,39.7571,3.2860,39.7254,3.3095,0.0395,53.41
+SCAN,17,1,0,39.9918,3.3309,39.9509,3.3587,0.0494,52.98
+SCAN,18,1,0,40.2139,3.3977,40.1703,3.4173,0.0478,53.01
+SCAN,19,1,0,40.4241,3.4912,40.3926,3.5154,0.0398,52.47
+KF,0,2,144.95
+KF,1,4,141.99
+KF,2,6,142.69
+KF,3,8,142.03
+KF,4,10,145.17
+KF,5,12,148.17
+KF,6,14,149.31
+KF,7,16,147.28
+KF,8,18,146.48
+board.cache_hierarchy.l1d_caches0: 22302 invalidation snoops sent to the CPU
+board.cache_hierarchy.l1d_caches0: 9 data operations were held back behind an older overlapping write from the same core
+board.cache_hierarchy.l1d_caches0: 144 CPU-port refusals while the Octopus L1 was blocked
+board.cache_hierarchy.l1d_caches0: 18 exclusive loads, 4 exclusive stores, 311 LSE atomics
+controller 4: queue peak 32 of 64, intake refusals (queue full) 0, admit-fail cycles (MSHR/PWB full) 22736
+controller 5: queue peak 26 of 64, intake refusals (queue full) 0, admit-fail cycles (MSHR/PWB full) 3591720
+board.cache_hierarchy.l1d_caches1: 541899 invalidation snoops sent to the CPU
+board.cache_hierarchy.l1d_caches1: 32521 CPU-port refusals while the Octopus L1 was blocked
+board.cache_hierarchy.l1d_caches1: 0 exclusive loads, 0 exclusive stores, 8718 LSE atomics
+board.cache_hierarchy.l1d_caches2: 64 invalidation snoops sent to the CPU
+board.cache_hierarchy.l1d_caches2: 0 exclusive loads, 0 exclusive stores, 32 LSE atomics
+board.cache_hierarchy.l1d_caches3: 4057 invalidation snoops sent to the CPU
 board.cache_hierarchy.l1d_caches3: 0 exclusive loads, 0 exclusive stores, 26 LSE atomics
 exit event: the binary has exited
-Simulation ended: exiting with last active thread context at tick 7974838845
+Simulation ended: exiting with last active thread context at tick 5962907790
