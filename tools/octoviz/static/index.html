@@ -92,7 +92,7 @@
   <label>lane colour <select id="lanecolor"><option value="core">by core</option><option value="cls">by class</option><option value="kind">by kind (trace)</option></select></label>
   <label>more <span class="chk"><label><input type="checkbox" id="oldest">oldest only</label><label>resp-ahead ≥ <input id="ahead" type="number" style="min-width:50px;width:50px"></label><label><input type="checkbox" id="context" checked>context lanes</label></span></label>
   <button id="go">Apply</button>
-  <label class="keep">Wheel action <select id="wheel-mode"><option value="pan">Pan (Ctrl: zoom)</option><option value="zoom">Zoom (Ctrl: pan)</option></select></label>
+  <label class="keep">Wheel action <select id="wheel-mode"><option value="zoom">Zoom (Ctrl: pan)</option><option value="pan">Pan (Ctrl: zoom)</option></select></label>
 </div>
 <div id="views">views
   <span class="vb" data-view="pipeline" aria-pressed="true">pipeline<span class="pop" title="open in a new window">⧉</span></span>
@@ -418,7 +418,7 @@ $("#time-scroll").addEventListener("scroll", () => {
   view.t1 = view.t0 + span;
   schedule();
 });
-try { $("#wheel-mode").value = localStorage.getItem("octoviz-wheel-mode") === "zoom" ? "zoom" : "pan"; } catch (_) {}
+try { $("#wheel-mode").value = localStorage.getItem("octoviz-wheel-mode") === "pan" ? "pan" : "zoom"; } catch (_) {}
 $("#wheel-mode").addEventListener("change", () => {
   try { localStorage.setItem("octoviz-wheel-mode", $("#wheel-mode").value); } catch (_) {}
 });

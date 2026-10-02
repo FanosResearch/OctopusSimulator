@@ -20,8 +20,7 @@ Eight `[PASS]` lines ending with:
 ALL CHECKS PASSED
 ```
 
-Those two numbers are exact. Anyone in the room whose numbers differ has a real
-difference, not noise — say so, and we'll look. (The commonest cause is an edited file
+Those two numbers are exact. If the environment is set up correctly, the final check should not fail. (The commonest cause is an edited file
 under `configuration/`; `git checkout -- configuration/` puts everything back.)
 
 If you are not in a codespace and the simulator is not built yet:
@@ -35,8 +34,13 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j$(nproc)
 `a2time01` from EEMBC, four cores, on the configuration as shipped: snooping MESI,
 an FCFS-arbitrated split bus, fixed-latency memory.
 
+For convenience, we set a variable to automatically choose the benchmark:
 ```shell
 W=$PWD/BMs/eembc-traces/a2time01-trace
+```
+
+Then run the benchmark with the simulator:
+```shell
 ./build/Octopus_Simulator -s MultiCoreSystem \
   -p "workload_path(s)=$W/" \
   -o tutorial/00-setup-and-first-run/output --trace

@@ -39,7 +39,7 @@ python3 sweeps/plot_axis.py tutorial/01-exploration/output/Arbiter
 ```
 
 The plotter reads each setting's `Summary.csv` and writes PNG/PDF charts and
-`metrics.csv` under `Arbiter/figures/`. It requires matplotlib and NumPy. The
+`metrics.csv` under `Arbiter/figures/`.  The
 comparison chart shows finish cycle, mean effective latency, and worst-case total
 latency. The stage chart shows where the worst delays occur. Stage maxima are
 independent; do not add them to obtain worst-case total latency.
@@ -66,21 +66,17 @@ also finish first? Use the timeline to investigate the differences.
 Use the same layout, `output/<axis>/<setting>/`, for the other experiments. Two other possible axes you can explore are `Memory` simulation and cache `Partition`.
 
 For whichever axis you choose, also record the unmodified baseline in that axis's
-`Baseline/` folder. For example, for `Memory`:
-
-```shell
-./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
-  -o tutorial/01-exploration/output/Memory/Baseline --trace
-python3 sweeps/plot_axis.py tutorial/01-exploration/output/Memory
-```
-
-For partitioning, use `Partition/Baseline` instead and
-plot that axis directory. Keep the benchmark and all unrelated settings fixed.
+`Baseline/` folder. Keep the benchmark and all unrelated settings fixed.
 The memory experiment selects the memory model and its scheduler together;
 these commands are independent variations of the baseline, not cumulative edits.
 
 ### Full DRAM simulation with MCSim (FRFCFS arbiter)
 ```shell
+# Baseline: fixed-latency memory
+./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
+  -o tutorial/01-exploration/output/Memory/Baseline --trace
+
+# Full DRAM simulation
 ./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
   -p "main_memory_type(s)=MCsim" -p "mcsim_scheduler(s)=FRFCFS" \
   -o tutorial/01-exploration/output/Memory/MCsim --trace
@@ -89,6 +85,11 @@ _Baseline value: Fixed-latency model (`MainMemoryController`)_
 
 ### Way partitioning
 ```shell
+# Baseline: no partitioning
+./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
+  -o tutorial/01-exploration/output/Partition/Baseline --trace
+
+# Reserve LLC ways
 ./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
   -p "llc_controller.m_data_handler.way_partition(s)=0:0;1-3:1" \
   -o tutorial/01-exploration/output/Partition/Reserved --trace
