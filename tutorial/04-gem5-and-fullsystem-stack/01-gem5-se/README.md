@@ -45,8 +45,9 @@ make -C slam_demo steps                  # scenario data for the plots (host g++
 The two aarch64 binaries come prebuilt in the repository
 (`gem5/se_test/se_test-static` and `slam_demo/slam_demo`, both static, so gem5
 SE needs no disk image); `expected/` was produced with exactly these. Rebuild
-them only if you change `se_test.cpp` or `slam_demo.cpp`, which needs
-`g++-aarch64-linux-gnu`:
+them only if you change `se_test.cpp` or `slam_demo.cpp`. That needs
+`g++-aarch64-linux-gnu`, which the container has; the m5ops come from
+`gem5/m5ops/`:
 
 ```shell
 make -C gem5/se_test                     # from the repository root
