@@ -7,14 +7,14 @@ hierarchy, unchanged, sits behind it.
 | folder | what | time | status |
 |---|---|---|---|
 | `01-gem5-se/` | gem5 in syscall-emulation mode driving Octopus: a self-checking test, then a real-time SLAM under memory interference and two mitigations (round-robin arbitration, LLC way partitioning) | 20 min + runs in the background | ready |
-| `02-full-system-arm/` | ARM Linux under gem5, restored from a checkpoint, with Octopus as its memory system | 25–30 min + take-home | plan: the checkpoint and `prewarm.sh` are not in place yet |
+| `02-full-system-arm/` | ARM Linux under gem5, restored from a checkpoint, with Octopus as its memory system | 25–30 min + take-home | ready: unpack the disk image first (`bash gem5/get_disk_image.sh`) |
 
 ## What the dev container has
 
 | | |
 |---|---|
 | `gem5` | on the `PATH`: gem5 25.1.0.1 for ARM with Octopus linked in (`gem5 -re -d <out> <config.py> ...`) |
-| `/opt/gem5-resources/` | the ARM kernel, bootloader and Ubuntu disk image for full system (`gem5/configs/fs_arm.py`) |
+| `/opt/gem5-resources/` | for full system (`gem5/configs/fs_arm.py`): the ARM kernel and bootloader, the ov2slam ROI checkpoints, and the Ubuntu disk image, compressed (`gem5/get_disk_image.sh` unpacks it) |
 | `g++-aarch64-linux-gnu` | the cross compiler for the workloads; their m5ops are in `gem5/m5ops/`, so no gem5 checkout is needed to rebuild them |
 | prebuilt workloads | `gem5/se_test/se_test-static` and `01-gem5-se/slam_demo/slam_demo`, the binaries the reference results were made with |
 
@@ -47,5 +47,5 @@ export GEM5_ROOT=<that directory>    # the tutorial scripts then use $GEM5_ROOT/
 ```
 
 Use `$GEM5_ROOT/build/ARM/gem5.opt` wherever the exercises say `gem5`. The full-system
-exercise also needs the kernel, bootloader and disk image under `/opt/gem5-resources/`
-(see `gem5/configs/fs_arm.py`).
+exercise also needs the kernel, bootloader, disk image and checkpoints in one directory,
+given to `gem5/configs/fs_arm.py` with `--resources`.
