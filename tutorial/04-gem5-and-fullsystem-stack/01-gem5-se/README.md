@@ -33,13 +33,17 @@ instruction caches are Octopus ids 0–3, data caches 4–7, the LLC is 10).
 
 ## Step 1 — set up
 
-In the dev container everything is ready: `gem5` is on the `PATH`. Commands
-below run from the repository root unless they `cd`. Outside the container, see
-the folder README (`../README.md`).
+> **In a codespace or the dev container, there is nothing to set up:** `gem5`
+> is on the `PATH` and the two workloads are prebuilt. Run `check.sh` (below)
+> and go on to Part A.
+
+Commands run from the repository root unless they `cd`. Outside the container,
+build gem5 first (folder README, `../README.md`, "gem5 outside the container").
 
 The two aarch64 binaries come prebuilt (`gem5/se_test/se_test-static` and
 `slam_demo/slam_demo`; static, so gem5 SE needs no disk image), and `expected/`
-was produced with exactly these. Rebuild them only after changing their source:
+was produced with exactly these. Rebuild them only after changing their source
+(skip this otherwise):
 
 ```shell
 make -C gem5/se_test
@@ -47,7 +51,7 @@ make -C tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/slam_demo
 ```
 
 `bash tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/check.sh` runs Parts A and B
-and the demo's Solo configuration (about 5 minutes) and tells you whether
+and the demo's Solo configuration (about 3 minutes) and tells you whether
 everything works.
 
 ## Part A — `se_test`

@@ -36,6 +36,8 @@ carries the gem5 binary, not its source, so that work happens outside it.
 
 ## gem5 outside the container
 
+Skip this section in a codespace or the dev container: their gem5 is ready.
+
 `gem5/get_gem5.sh` builds the same gem5 from scratch: it clones gem5 v25.1.0.1,
 applies the patch in `gem5/patches/`, and builds it with this repository as an
 `EXTRAS` module. Build Octopus first; the gem5 build itself is long, tens of
