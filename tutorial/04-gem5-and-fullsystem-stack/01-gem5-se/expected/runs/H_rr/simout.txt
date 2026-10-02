@@ -10,7 +10,7 @@ gem5 version 25.1.0.1
 gem5 compiled Sep 30 2026 19:36:56
 gem5 started Sep 30 2026 23:55:45
 gem5 executing on ubuntu2404, pid 2875681
-command line: /home/guotong/gem5_arm/build/ARM/gem5.opt.esweek -re -d /home/guotong/Octopus_esweek/tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/runs/H_rr /home/guotong/Octopus_esweek/gem5/configs/se_arm.py --num-cores 4 --octopus-param 'bus[0].interconnect_controller.arbiter_type(s)=RRArbiter' --octopus-param 'llc_controller.arbiter_type(s)=RRArbiter' --octopus-param 'llc_controller.arbiter_candidates_ids(vi)=0,1,2,3,4,5,6,7,10' --binary /home/guotong/Octopus_esweek/tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/slam_demo/slam_demo -- --period-us 80 --dump --aggr 1 --aggr-kib 16384
+command line: /home/guotong/gem5_arm/build/ARM/gem5.opt.esweek -re -d /home/guotong/Octopus_esweek/tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/runs/H_rr /home/guotong/Octopus_esweek/gem5/configs/se_arm.py --num-cores 4 --octopus-param 'bus[0].interconnect_controller.arbiter_type(s)=RRArbiter' --octopus-param 'llc_controller.arbiter_type(s)=RRArbiter' --binary /home/guotong/Octopus_esweek/tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/slam_demo/slam_demo -- --period-us 80 --dump --aggr 1 --aggr-kib 16384
 
 info: Standard input is not a terminal, disabling listeners.
 Running /home/guotong/Octopus_esweek/tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/slam_demo/slam_demo --period-us 80 --dump --aggr 1 --aggr-kib 16384 on 4 o3 core(s), Octopus caches, preset MultiCoreSystem_gem5

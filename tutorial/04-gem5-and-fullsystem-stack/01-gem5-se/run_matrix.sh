@@ -34,8 +34,7 @@ DEMO=$HERE/slam_demo/slam_demo
 [ -x "$DEMO" ] || { echo "build the demo first: make -C $HERE/slam_demo"; exit 1; }
 
 RR=(--octopus-param 'bus[0].interconnect_controller.arbiter_type(s)=RRArbiter'
-    --octopus-param 'llc_controller.arbiter_type(s)=RRArbiter'
-    --octopus-param 'llc_controller.arbiter_candidates_ids(vi)=0,1,2,3,4,5,6,7,10')
+    --octopus-param 'llc_controller.arbiter_type(s)=RRArbiter')
 PART=(--octopus-param 'llc_controller.m_data_handler.way_partition(s)=1:0;5:0')
 LIGHT=(--aggr 1 --aggr-write --aggr-kib 2048)
 HEAVY=(--aggr 1 --aggr-kib 16384)
