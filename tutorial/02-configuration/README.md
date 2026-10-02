@@ -48,7 +48,7 @@ W=$PWD/BMs/eembc-traces/a2time01-trace
 
 ./build/Octopus_Simulator -s MultiCoreSystem \
   -p "workload_path(s)=$W/" \
-  -o tutorial/02-configuration/output/Latency/Baseline --trace --PrintConfig
+  -o tutorial/02-configuration/output/Latency/0_Baseline --trace --PrintConfig
 ```
 
 Use no `-c` here: these runs read `MultiCoreSystem.csv`. Each run saves reports and
@@ -74,22 +74,22 @@ Run each command immediately after its matching edit, before making the next edi
 # After step 1: parent controller defaults.
 ./build/Octopus_Simulator -s MultiCoreSystem \
   -p "workload_path(s)=$W/" \
-  -o tutorial/02-configuration/output/Latency/Parent --trace --PrintConfig
+  -o tutorial/02-configuration/output/Latency/1_Parent --trace --PrintConfig
 
 # After step 2: split-bus controller override.
 ./build/Octopus_Simulator -s MultiCoreSystem \
   -p "workload_path(s)=$W/" \
-  -o tutorial/02-configuration/output/Latency/Controller --trace --PrintConfig
+  -o tutorial/02-configuration/output/Latency/2_Controller --trace --PrintConfig
 
 # After step 3: bus-level override.
 ./build/Octopus_Simulator -s MultiCoreSystem \
   -p "workload_path(s)=$W/" \
-  -o tutorial/02-configuration/output/Latency/Bus --trace --PrintConfig
+  -o tutorial/02-configuration/output/Latency/3_Bus --trace --PrintConfig
 
 # After step 4: system override for every bus.
 ./build/Octopus_Simulator -s MultiCoreSystem \
   -p "workload_path(s)=$W/" \
-  -o tutorial/02-configuration/output/Latency/All --trace --PrintConfig
+  -o tutorial/02-configuration/output/Latency/4_All --trace --PrintConfig
 ```
 
 The configured `(bus[0], bus[1])` request latencies become `(4,4)`, `(8,4)`, `(16,16)`,
@@ -133,7 +133,7 @@ bus[1].interconnect_controller.m_request_latency(i),48
 ```shell
 ./build/Octopus_Simulator -s MultiCoreSystem \
   -p "workload_path(s)=$W/" \
-  -o tutorial/02-configuration/output/Latency/PerBus --trace --PrintConfig
+  -o tutorial/02-configuration/output/Latency/5_PerBus --trace --PrintConfig
 ```
 
 The configured request latencies are now `(32,48)`. Compare both bus-delay rows
@@ -150,7 +150,7 @@ integers, `(vs)` vector of strings. CSV rows use a comma; `-p` uses `=`.
 ./build/Octopus_Simulator -s MultiCoreSystem \
   -p "workload_path(s)=$W/" \
   -p "bus[0].interconnect_controller.m_request_latency(i)=64" \
-  -o tutorial/02-configuration/output/Latency/CLI --trace --PrintConfig
+  -o tutorial/02-configuration/output/Latency/6_CLI --trace --PrintConfig
 ```
 
 The configured request latencies are now `(64,48)`. Command-line overrides take
