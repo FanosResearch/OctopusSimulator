@@ -282,9 +282,12 @@ llc_controller.protocol_type(s)=SNOOP_LLC_MESI
 llc_controller.fsm_filename(s)=MESI_LLC
 ```
 
-Rebuilding after a change to the library: `cmake --build build` in
-`${root}/OctopusSimulator`, then the `scons` line above (it relinks only the
-bridge).
+gem5 loads Octopus as a shared library (`build/libOctopus.so`), so a change to
+the library needs only `cmake --build build` in `${root}/OctopusSimulator`; the
+next gem5 run uses it. Rerun the `scons` line above only after a change to the
+bridge (`gem5/octopus.cc`, `gem5/octopus.hh`, `gem5/Octopus.py`) or to the
+headers it compiles in (`header/ExternalCPU.h`, `header/CacheSim.h` and what
+they include).
 
 Standalone Octopus tests (single binaries against `build/libOctopus.so`, no gem5):
 ```shell

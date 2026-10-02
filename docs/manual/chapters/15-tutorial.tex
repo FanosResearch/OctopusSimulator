@@ -102,9 +102,9 @@ instructions and the answer key. \Cref{ch:extending} has each in full.
 \section{04 --- gem5 and the full-system stack}
 
 Everything so far ran Octopus standalone; here the request source is gem5 and the same
-hierarchy, unchanged, sits behind it (\cref{ch:integration-modes}). The one constraint to know
-first: Octopus is compiled into gem5 as an \code{EXTRAS} module, so an Octopus C++ edit means
-relinking \code{gem5.opt}; both exercises vary configuration only.
+hierarchy, unchanged, sits behind it (\cref{ch:integration-modes}). gem5 loads Octopus as a
+shared library, so an Octopus C++ edit reaches gem5 after \code{cmake --build build}, without
+rebuilding gem5; both exercises vary configuration only.
 
 \begin{description}
 \item[01 --- gem5 + Octopus in SE mode] (20 min, with runs in the background). Three parts
