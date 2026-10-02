@@ -9,7 +9,7 @@ real-time task, and what the hierarchy's knobs can do about it.
 |---|---|---|
 | A | `se_test`: one SE run, then the same run with a different bus arbiter | 5 min |
 | B | two views of one run: gem5's statistics next to Octopus's own reports | 5 min |
-| C | the interference demo: seven configurations, then the plots | 15 min (runs in the background) |
+| C | the interference demo: four configurations, one per core, then the plots | 10 min (runs in the background) |
 
 ## The journey of a memory request
 
@@ -31,37 +31,33 @@ changed. The gem5 side is `gem5/octopus.cc` (a SimObject per L1) and
 `configuration/SystemConfigurations/MultiCoreSystem_gem5.csv` (4 cores, 8 L1s:
 instruction caches are Octopus ids 0–3, data caches 4–7, the LLC is 10).
 
-## Step 1 — build
+## Step 1 — set up
+
+> **In a codespace or the dev container, there is nothing to set up:** `gem5`
+> is on the `PATH` and the two workloads are prebuilt. Run `check.sh` (below)
+> and go on to Part A.
+
+Commands run from the repository root unless they `cd`. Outside the container,
+build gem5 first (folder README, `../README.md`, "gem5 outside the container").
+
+The two aarch64 binaries come prebuilt (`gem5/se_test/se_test-static` and
+`slam_demo/slam_demo`; static, so gem5 SE needs no disk image), and `expected/`
+was produced with exactly these. Rebuild them only after changing their source
+(skip this otherwise):
 
 ```shell
-export GEM5_ROOT=<your gem5 checkout>
-# gem5 with this repository linked in (once; minutes):
-(cd $GEM5_ROOT && scons EXTRAS=<this repository> build/ARM/gem5.opt -j$(nproc))
-
-cd tutorial/04-gem5-and-fullsystem-stack/01-gem5-se
-make -C slam_demo steps                  # scenario data for the plots (host g++)
+make -C gem5/se_test
+make -C tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/slam_demo
 ```
 
-The two aarch64 binaries come prebuilt in the repository
-(`gem5/se_test/se_test-static` and `slam_demo/slam_demo`, both static, so gem5
-SE needs no disk image); `expected/` was produced with exactly these. Rebuild
-them only if you change `se_test.cpp` or `slam_demo.cpp`, which needs
-`g++-aarch64-linux-gnu`:
-
-```shell
-make -C gem5/se_test                     # from the repository root
-make -C slam_demo                        # from this folder
-```
-
-The plots need Python with `numpy` and `matplotlib`.
-
-`bash check.sh` (in this folder) runs Parts A and B and the demo's Solo
-configuration (about 5 minutes) and tells you whether everything works.
+`bash tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/check.sh` runs Parts A and B
+and the demo's Solo configuration (about 3 minutes) and tells you whether
+everything works.
 
 ## Part A — `se_test`
 
 ```shell
-$GEM5_ROOT/build/ARM/gem5.opt -re -d m5out_se gem5/configs/se_arm.py
+gem5 -re -d m5out_se gem5/configs/se_arm.py
 tail -5 m5out_se/simout.txt          # RESULT: PASS
 ```
 
@@ -74,7 +70,7 @@ cache-to-cache data). Every phase checks its own result.
 Now change one thing, the L1↔LLC bus arbiter, from the command line:
 
 ```shell
-$GEM5_ROOT/build/ARM/gem5.opt -re -d m5out_se_rr gem5/configs/se_arm.py \
+gem5 -re -d m5out_se_rr gem5/configs/se_arm.py \
     --octopus-param 'bus[0].interconnect_controller.arbiter_type(s)=RRArbiter'
 grep simTicks m5out_se/stats.txt m5out_se_rr/stats.txt
 ```
@@ -92,7 +88,7 @@ request; `Summary.csv`, worst cases per core). Octopus writes them under gem5
 too when asked:
 
 ```shell
-$GEM5_ROOT/build/ARM/gem5.opt -re -d m5out_views gem5/configs/se_arm.py \
+gem5 -re -d m5out_views gem5/configs/se_arm.py \
     --octopus-param 'cpu[*].log_requests(i)=1'
 bash tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/compare_views.sh m5out_views
 ```
@@ -135,8 +131,8 @@ slows it down; accuracy against ground truth is the end metric.
 
 ### The workload (`slam_demo/slam_demo.cpp`)
 
-A 2D lidar SLAM (Hector-style scan matching on an occupancy grid) drives 40
-scans through a corner of a corridor loop. Four threads, one per core:
+A 2D lidar SLAM (Hector-style scan matching on an occupancy grid) drives 20
+scans along a corridor of an indoor loop. Four threads, one per core:
 
 | core | thread | does |
 |---|---|---|
@@ -162,25 +158,29 @@ What the demo reports:
 - **position error**: per scan, the distance between the estimated and the true
   position *at that scan*; the RMSE over the run is the headline (ATE).
 
-`python slam_demo/viz/slam_steps.py` draws the algorithm step by step (scan,
-grid, matching, keyframes, timeline) from a run on this machine.
+`python tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/slam_demo/viz/slam_steps.py`
+draws the algorithm step by step (scan, grid, matching, keyframes, timeline).
 
 ### The configurations (`run_matrix.sh`)
 
+Two aggressors, each hurting the SLAM in its own way. Round-robin arbitration
+answers the first and not the second; way partitioning answers the second.
+
 | config | aggressor | contends for | Octopus options |
 |---|---|---|---|
-| `A_solo` | none | | |
 | `L_fcfs` | **light**: 2 MiB write sweep, fits the LLC | bus and LLC queues | |
 | `L_rr` | light | | round-robin bus and LLC arbitration |
-| `H_fcfs` | **heavy**: 16 MiB read sweep, twice the LLC | LLC capacity: evictions, and back-invalidations of the SLAM's L1 lines | |
-| `H_rr` | heavy | | round-robin |
+| `H_rr` | **heavy**: 16 MiB read sweep, twice the LLC | LLC capacity: evictions, and back-invalidations of the SLAM's L1 lines | round-robin bus and LLC arbitration |
 | `H_part` | heavy | | LLC way partitioning: the aggressor fills only way 0 |
-| `H_rr_part` | heavy | | both |
 
 ```shell
-bash run_matrix.sh                   # all seven in parallel, ~10 min on 7+ cores
+cd tutorial/04-gem5-and-fullsystem-stack/01-gem5-se
+bash run_matrix.sh                   # the four in parallel, one per core
 python slam_demo/viz/plot_matrix.py  # figures/ from runs/
 ```
+
+The plots compare against the SLAM alone, the run `check.sh` makes; its
+reference is `expected/runs/A_solo` (`bash run_matrix.sh A_solo` reruns it).
 
 The partition `way_partition(s)=1:0;5:0` names Octopus requester ids: gem5 SE
 gives each new thread the next free core, the aggressor thread is created first
@@ -192,31 +192,29 @@ Reference results (`expected/summary.txt`, figures in `expected/figures/`):
 
 | config | dropped | keyframes mapped | front-end µs, median / max | mapper µs per keyframe, median / max | error RMSE | aggressor |
 |---|---|---|---|---|---|---|
-| Solo | 0 | 19/19 | 54.5 / 57.8 | 143 / 150 | 5.4 cm | |
-| light | 0 | 19/19 | 61.5 / 71.3 | 152 / 184 | 8.7 cm | 19.2 GB/s |
-| light + RR | 0 | 19/19 | 54.5 / 58.1 | 143 / 150 | 5.5 cm | 19.2 GB/s |
-| heavy | 8 | 2/15 | 71 / 422 | 1555 | *failed* | 8.8 GB/s |
-| heavy + RR | 9 | 2/15 | 79 / 422 | 1505 | *failed* | 8.8 GB/s |
-| heavy + partition | 0 | 19/19 | 55.0 / 85.4 | 143 / 150 | 9.7 cm | 8.1 GB/s |
-| heavy + RR + partition | 0 | 19/19 | 54.9 / 85.4 | 143 / 150 | 9.5 cm | 8.1 GB/s |
+| Solo | 0 | 9/9 | 53.5 / 56.1 | 145 / 150 | 4.2 cm | |
+| light | 0 | 9/9 | 60.4 / 64.6 | 154 / 183 | 6.7 cm | 19.3 GB/s |
+| light + RR | 0 | 9/9 | 53.4 / 55.8 | 145 / 149 | 4.2 cm | 19.2 GB/s |
+| heavy + RR | 6 | 1/6 | 76 / 458 | 1414 | *failed* | 9.2 GB/s |
+| heavy + partition | 0 | 9/9 | 54.1 / 56.4 | 147 / 149 | 6.7 cm | 8.1 GB/s |
 
-Your numbers for the working configurations should match these closely. The
-two failed ones vary from build to build (in our runs, 6 to 11 dropped scans,
-2 of 14–16 keyframes, errors from 2 to 12 m): once the map stops growing, tiny
-timing differences decide where the estimate drifts.
+The working configurations reproduce closely. The failed one varies from run
+to run: once the map stops growing, small timing differences decide where the
+estimate drifts.
 
 - The **light** aggressor slows both SLAM threads (front-end +13 %, the mapper's
-  worst keyframe +23 %) and the error rises by 60 % without a single dropped
+  worst keyframe +22 %) and the error rises by 60 % without a single dropped
   scan: the stale-map path. **Round-robin** arbitration undoes it completely,
   and the aggressor keeps its full bandwidth: under FCFS the SLAM's requests
-  queued behind the aggressor's; under round-robin each requester takes its
+  queue behind the aggressor's; under round-robin each requester takes its
   turn.
 - The **heavy** aggressor moves less data (it waits on DRAM) but evicts the
   SLAM's lines from the inclusive LLC, and with them from its L1s. The mapper
-  slows down tenfold and writes 2 keyframes; the front-end drops scans and
-  matches against a map that ends near the start: tracking fails. Round-robin
-  cannot help, nothing is queueing. **Way partitioning** keeps the aggressor
-  out of the SLAM's ways and tracking is back, the aggressor still at 8.1 GB/s.
+  slows down tenfold and writes 1 keyframe; the front-end drops scans and
+  matches against a map that ends near the start: tracking fails, round-robin
+  or not, since nothing is queueing for it to reorder. **Way partitioning**
+  keeps the aggressor out of the SLAM's ways and tracking is back, the
+  aggressor still at 8.1 GB/s.
 
 ### Where the time goes: Octopus's own reports
 
@@ -225,7 +223,7 @@ rerun the matrix with Octopus's per-request reports (Part B), reduce them, and
 plot again.
 
 ```shell
-LOG=1 bash run_matrix.sh                       # about 1 GB of reports per run, 2x the time
+LOG=1 bash run_matrix.sh                       # about 300 MB of reports per run, 2x the time
 for d in runs/*/; do bash slam_demo/viz/reduce_reports.sh $d --delete; done
 python slam_demo/viz/plot_matrix.py            # adds figures/5_memory_breakdown.png
 ```
@@ -233,21 +231,22 @@ python slam_demo/viz/plot_matrix.py            # adds figures/5_memory_breakdown
 `reduce_reports.sh` keeps, per core, the requests that left the L1 (the
 spinning threads hit their L1 millions of times, which would drown the rest)
 and their mean time per `LatencyReport` stage, in `runs/<config>/breakdown.csv`
-(reference: `expected/breakdown/`, `expected/figures/5_memory_breakdown.png`).
-Logging does not change the simulation: the logged runs give the same numbers.
+(reference: `expected/runs/<config>/breakdown.csv`,
+`expected/figures/5_memory_breakdown.png`). Logging does not change the
+simulation: the logged runs give the same numbers.
 
 | config | front-end core: cycles per request past the L1 | of which | reached DRAM |
 |---|---|---|---|
-| Solo | 13 | response bus 5 | 203 |
-| light | 143 | **response bus 128** | 200 |
-| light + RR | 16 | response bus 8 | 202 |
-| heavy | 2207 | **DRAM 2071**, LLC queue 114 | **2096** |
-| heavy + partition | 60 | DRAM 42 | 201 |
+| Solo | 15 | response bus 5 | 209 |
+| light | 147 | **response bus 130** | 202 |
+| light + RR | 19 | response bus 8 | 207 |
+| heavy + RR | 1952 | **DRAM 1849**, LLC queue 85 | **1450** |
+| heavy + partition | 101 | DRAM 85 | 207 |
 
 - **Light aggressor:** the SLAM's requests wait for the response bus behind
   the aggressor's stream of LLC refills, about 25 times longer than alone.
   Round-robin gives each requester its turn, and the wait is back to Solo.
-- **Heavy aggressor:** ten times more of the SLAM's requests reach DRAM (its
+- **Heavy aggressor:** seven times more of the SLAM's requests reach DRAM (its
   lines were evicted from the LLC), and each waits there behind the
   aggressor's misses. Partitioning brings the count of DRAM requests back to
   Solo; the few left still queue behind the aggressor at DRAM, which is the
@@ -284,16 +283,8 @@ the failure (dropped, keyframes mapped) and look at the trajectories.
   another path) moves its code and data in memory and shifts timing slightly,
   which is why your numbers can differ from `expected/` in the last digits.
 
-## What you will *not* be able to do here
-
-Change Octopus C++ and see it under gem5 without relinking `gem5.opt` (see the
-parent README).
-
 ## Going further
 
 - The DRAM scheduler is a third knob: `--octopus-param 'mcsim_scheduler(s)=BLISS'`
   (any directory under `src/MCsim/system/`). It matters only when the SLAM's own
   requests reach DRAM, i.e. with the heavy aggressor and no partition.
-- `docs/StateAndData.md` explains what changes once a data array has a latency
-  and real data flows, and why `MultiCoreSystem_gem5.csv` sets `line_interlock`
-  and a pipelined LLC array.

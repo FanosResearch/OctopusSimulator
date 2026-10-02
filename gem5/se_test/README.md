@@ -1,9 +1,8 @@
 # SE-mode test for the Octopus/gem5 bridge
 
-The SE counterpart of `llsc_wfe_test`: one self-checking aarch64 binary that
-gem5 loads directly. No kernel, disk image or checkpoint is involved, so a run
-takes about a minute; this is the quick check for bridge or protocol changes
-before an FS run.
+One self-checking aarch64 binary that gem5 loads directly. No kernel, disk
+image or checkpoint is involved, so a run takes about a minute; this is the
+quick check for bridge or protocol changes before an FS run.
 
 | | |
 | --- | --- |
@@ -33,16 +32,20 @@ make                                    # se_test-static, -dynamic, -noroi
 make run-qemu                           # smoke test of the -noroi build
 ```
 
-`make` assembles gem5's own `util/m5/src/abi/arm64/m5op.S` for the ROI
-markers, so `libm5.a` does not have to be built. On an aarch64 host use
-`make CROSS=`.
+`make` assembles gem5's own `util/m5/src/abi/arm64/m5op.S`, copied into
+`gem5/m5ops/`, for the ROI markers, so neither a gem5 checkout nor `libm5.a` is
+needed (`make GEM5=<gem5 checkout>` uses that checkout's copy instead). On an
+aarch64 host use `make CROSS=`.
 
 ## Run under gem5
 
+From the repository root, with the dev container's `gem5` (elsewhere,
+`$GEM5_ROOT/build/ARM/gem5.opt`, a gem5 built with this repository as EXTRAS,
+e.g. by `gem5/get_gem5.sh`):
+
 ```sh
-cd $GEM5_ROOT                       # gem5 built with this repository as EXTRAS
-./build/ARM/gem5.opt -re -d se_test_o3_oct     <this repository>/gem5/configs/se_arm.py
-./build/ARM/gem5.opt -re -d se_test_o3_classic <this repository>/gem5/configs/se_arm.py --classic
+gem5 -re -d se_test_o3_oct     gem5/configs/se_arm.py
+gem5 -re -d se_test_o3_classic gem5/configs/se_arm.py --classic
 ```
 
 `se_arm.py` takes the same options as `fs_arm.py` (`--octopus-config`,
@@ -51,7 +54,7 @@ cd $GEM5_ROOT                       # gem5 built with this repository as EXTRAS
 {o3,timing}`. Arguments for the binary go after `--`:
 
 ```sh
-./build/ARM/gem5.opt -re -d se_test_short <this repository>/gem5/configs/se_arm.py -- 2 64 100
+gem5 -re -d se_test_short gem5/configs/se_arm.py -- 2 64 100
 ```
 
 `se_test-dynamic` runs with `--workload-type dynamic`; the loader and libc are

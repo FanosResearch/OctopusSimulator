@@ -280,7 +280,7 @@ def fig_world(plt, d, rp):
     ax.add_patch(plt.Rectangle((I, I), W - 2 * I, H - 2 * I, color=COL["block"], zorder=0))
     draw_walls(ax, d["walls"])
     xs, ys = zip(*[(p[0], p[1]) for p in rp.gt])
-    ax.plot(xs, ys, "-", color=COL["est"], lw=2.5, label="true path, 40 scans (0.2 m apart)")
+    ax.plot(xs, ys, "-", color=COL["est"], lw=2.5, label="true path, 20 scans (0.2 m apart)")
     ax.plot(xs, ys, ".", color=COL["est"], ms=5)
     robot(ax, rp.gt[0], COL["est"], 0.8)
     ax.text(W / 2, H / 2, "inner block (solid)", ha="center", va="center", color="#555")
@@ -292,7 +292,7 @@ def fig_world(plt, d, rp):
     ax.legend(loc="upper left")
     caption(fig, "The simulated floor is 44 x 20 m. The black lines are walls: the outer "
             "rectangle, the inner block, and ~140 boxes (4 segments each). The robot follows "
-            "a scripted path through the bottom-right corner, 40 scans about 0.2 m apart, "
+            "a scripted path along the bottom corridor, 20 scans about 0.2 m apart, "
             "with small speed changes and a side-to-side weave. The SLAM never sees these "
             "walls or this path; it only gets the lidar distances (step 2). The path is the "
             "ground truth the estimate is scored against.")
@@ -495,7 +495,8 @@ def fig_matching(plt, d, rp, k):
 
 
 def fig_keyframes(plt, d, rp):
-    picks = [0, 3, 8, 13, len(rp.kf_scan)]
+    n_kf = len(rp.kf_scan)
+    picks = [0, max(1, n_kf // 4), n_kf // 2, 3 * n_kf // 4, n_kf]
     fig, axs = plt.subplots(1, len(picks), figsize=(17, 4.8))
     xs = [p[0] for p in rp.gt]
     ys = [p[1] for p in rp.gt]
@@ -517,7 +518,7 @@ def fig_keyframes(plt, d, rp):
     caption(fig, "A keyframe is a tracked scan that the front-end also hands to the mapper, "
             "together with its estimated pose (squares). In the demo that is every 2nd "
             "tracked scan. Before the run, scan 0 is written at its true pose so the map "
-            "starts in the right place. As the robot turns the corner, new walls only appear "
+            "starts in the right place. As the robot moves on, new walls only appear "
             "once a keyframe that saw them has been written. If the mapper is late, the "
             "front-end keeps matching against an older map (like the left panels) while the "
             "robot is already in the next area.", 170)
@@ -629,7 +630,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--data", default=os.path.join(here, "steps.json"))
     ap.add_argument("--out", default=os.path.join(here, "out"))
-    ap.add_argument("--scan", type=int, default=20, help="scan used in steps 2, 4, 5")
+    ap.add_argument("--scan", type=int, default=10, help="scan used in steps 2, 4, 5")
     ap.add_argument("--show", action="store_true", help="also open the figures in windows")
     a = ap.parse_args()
     if not a.show:

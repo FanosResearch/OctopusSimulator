@@ -282,17 +282,20 @@ llc_controller.protocol_type(s)=SNOOP_LLC_MESI
 llc_controller.fsm_filename(s)=MESI_LLC
 ```
 
-Rebuilding after a change to the library: `cmake --build build` in
-`${root}/OctopusSimulator`, then the `scons` line above (it relinks only the
-bridge).
+gem5 loads Octopus as a shared library (`build/libOctopus.so`), so a change to
+the library needs only `cmake --build build` in `${root}/OctopusSimulator`; the
+next gem5 run uses it. Rerun the `scons` line above only after a change to the
+bridge (`gem5/octopus.cc`, `gem5/octopus.hh`, `gem5/Octopus.py`) or to the
+headers it compiles in (`header/ExternalCPU.h`, `header/CacheSim.h` and what
+they include).
 
-Standalone harnesses (single binaries against `build/libOctopus.so`, no gem5):
+Standalone Octopus tests (single binaries against `build/libOctopus.so`, no gem5):
 ```shell
 cd ${root}/OctopusSimulator
-gem5/harness/build.sh
-gem5/harness/l1 /tmp/octlog                       # hit and miss latencies, same-line bursts
-gem5/harness/reorder /tmp/octlog "cache_controller[*].m_data_handler.m_data_access_latency(i)=10"
-gem5/harness/stress /tmp/octlog --seed=2          # multi-core random contention, hang detector
+gem5/octopus_test/build.sh
+gem5/octopus_test/l1 /tmp/octlog                  # hit and miss latencies, same-line bursts
+gem5/octopus_test/reorder /tmp/octlog "cache_controller[*].m_data_handler.m_data_access_latency(i)=10"
+gem5/octopus_test/stress /tmp/octlog --seed=2     # multi-core random contention, hang detector
 ```
 Each takes a log directory and optional `name(type)=value` overrides. Debug
 aids for any run: `OCTOPUS_TRACE_ADDR=<addr>` (or `1` for every line) prints

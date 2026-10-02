@@ -2,8 +2,9 @@
 # 04/01 check: gem5 SE drives Octopus correctly, gem5 and Octopus count the same
 # requests, and the SLAM demo tracks when it runs alone. Runs se_test (FCFS with
 # Octopus logging, then round-robin bus) and the Solo demo, all in parallel;
-# about 5 minutes. Needs gem5 built with this repository as an EXTRAS
-# module (GEM5_ROOT or GEM5_BIN); the two aarch64 binaries ship prebuilt.
+# about 5 minutes. Uses the gem5 on PATH (the dev container's), or GEM5_BIN, or
+# $GEM5_ROOT/build/ARM/gem5.opt: a gem5 built with this repository as an EXTRAS
+# module. The two aarch64 binaries ship prebuilt.
 #
 # gem5 timing depends on the gem5 build, so this checks behaviour, not cycle
 # counts: se_test's self-checks pass, and the demo drops no scan, maps every
@@ -11,16 +12,15 @@
 # the full matrix are in expected/summary.txt.
 
 set -uo pipefail
-GEM5_ROOT=${GEM5_ROOT:-}
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
-GEM5_BIN=${GEM5_BIN:-$GEM5_ROOT/build/ARM/gem5.opt}
+GEM5_BIN=${GEM5_BIN:-$([ -n "${GEM5_ROOT:-}" ] && echo "$GEM5_ROOT/build/ARM/gem5.opt" || command -v gem5 || true)}
 CONFIG="$ROOT/gem5/configs/se_arm.py"
 SE_TEST="$ROOT/gem5/se_test/se_test-static"
 DEMO="$HERE/slam_demo/slam_demo"
 OUT="$HERE/runs/check"
 
-[ -x "$GEM5_BIN" ] || { echo "[FAIL] gem5 not found: set GEM5_ROOT or GEM5_BIN"; exit 1; }
+[ -x "$GEM5_BIN" ] || { echo "[FAIL] gem5 not found: not on PATH, and neither GEM5_BIN nor GEM5_ROOT set"; exit 1; }
 [ -x "$SE_TEST" ] || { echo "[FAIL] se_test not built: make -C $ROOT/gem5/se_test"; exit 1; }
 [ -x "$DEMO" ] || { echo "[FAIL] slam_demo not built: make -C $HERE/slam_demo"; exit 1; }
 rm -rf "$OUT"; mkdir -p "$OUT"

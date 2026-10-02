@@ -1,37 +1,26 @@
-# Reference results: gem5 v25.1.0.1 (ARM, O3), this branch's library, bash run_matrix.sh
-# (SE, 4 cores, period 80 us, keyframe every 2nd scan, 40 scans).
-# Working configurations reproduce closely; failed runs (heavy, heavy + RR) vary run to run.
+# Reference results: gem5 v25.1.0.1 (ARM, O3), this branch's library, LOG=1 bash run_matrix.sh A_solo L_fcfs L_rr H_rr H_part
+# (SE, 4 cores, period 80 us, keyframe every 2nd scan, 20 scans).
 == A_solo
-[RT]   roi 3.23 ms, scans tracked 39/39, dropped 0, tracking lost 0, keyframes mapped 19/19, max mapper backlog 1
-[TIME] front-end us per scan: p50 54.5 max 57.8; mapper us per keyframe: p50 143.3 max 150.1
-[ATE]  position error: median 0.047 m, rmse 0.054 m, max 0.083 m
+[RT]   roi 1.64 ms, scans tracked 19/19, dropped 0, tracking lost 0, keyframes mapped 9/9, max mapper backlog 1
+[TIME] front-end us per scan: p50 53.5 max 56.1; mapper us per keyframe: p50 145.1 max 149.6
+[ATE]  position error: median 0.040 m, rmse 0.042 m, max 0.083 m
 == L_fcfs
-[RT]   roi 3.25 ms, scans tracked 39/39, dropped 0, tracking lost 0, keyframes mapped 19/19, max mapper backlog 1
-[TIME] front-end us per scan: p50 61.5 max 71.3; mapper us per keyframe: p50 151.6 max 184.0
-[AGGR] co-runner 0: 19226 MB/s
-[ATE]  position error: median 0.086 m, rmse 0.087 m, max 0.122 m
+[RT]   roi 1.66 ms, scans tracked 19/19, dropped 0, tracking lost 0, keyframes mapped 9/9, max mapper backlog 1
+[TIME] front-end us per scan: p50 60.4 max 64.6; mapper us per keyframe: p50 154.1 max 183.4
+[AGGR] co-runner 0: 19300 MB/s
+[ATE]  position error: median 0.063 m, rmse 0.067 m, max 0.086 m
 == L_rr
-[RT]   roi 3.23 ms, scans tracked 39/39, dropped 0, tracking lost 0, keyframes mapped 19/19, max mapper backlog 1
-[TIME] front-end us per scan: p50 54.5 max 58.1; mapper us per keyframe: p50 143.4 max 150.3
-[AGGR] co-runner 0: 19188 MB/s
-[ATE]  position error: median 0.050 m, rmse 0.055 m, max 0.083 m
-== H_fcfs
-[RT]   roi 3.79 ms, scans tracked 31/39, dropped 8, tracking lost 0, keyframes mapped 2/15, max mapper backlog 7
-[TIME] front-end us per scan: p50 70.9 max 422.0; mapper us per keyframe: p50 1554.9 max 1554.9
-[AGGR] co-runner 0: 8759 MB/s
-[ATE]  position error: median 1.973 m, rmse 6.489 m, max 12.152 m
+[RT]   roi 1.64 ms, scans tracked 19/19, dropped 0, tracking lost 0, keyframes mapped 9/9, max mapper backlog 1
+[TIME] front-end us per scan: p50 53.4 max 55.8; mapper us per keyframe: p50 145.2 max 149.3
+[AGGR] co-runner 0: 19224 MB/s
+[ATE]  position error: median 0.038 m, rmse 0.042 m, max 0.083 m
 == H_rr
-[RT]   roi 3.72 ms, scans tracked 30/39, dropped 9, tracking lost 7, keyframes mapped 2/15, max mapper backlog 7
-[TIME] front-end us per scan: p50 78.8 max 422.0; mapper us per keyframe: p50 1505.1 max 1505.1
-[AGGR] co-runner 0: 8773 MB/s
-[ATE]  position error: median 3.224 m, rmse 4.693 m, max 12.862 m
+[RT]   roi 2.23 ms, scans tracked 13/19, dropped 6, tracking lost 0, keyframes mapped 1/6, max mapper backlog 1
+[TIME] front-end us per scan: p50 76.2 max 457.7; mapper us per keyframe: p50 1414.3 max 1414.3
+[AGGR] co-runner 0: 9165 MB/s
+[ATE]  position error: median 0.732 m, rmse 0.720 m, max 1.172 m
 == H_part
-[RT]   roi 3.24 ms, scans tracked 39/39, dropped 0, tracking lost 0, keyframes mapped 19/19, max mapper backlog 1
-[TIME] front-end us per scan: p50 55.0 max 85.4; mapper us per keyframe: p50 143.2 max 150.0
-[AGGR] co-runner 0: 8099 MB/s
-[ATE]  position error: median 0.098 m, rmse 0.097 m, max 0.142 m
-== H_rr_part
-[RT]   roi 3.23 ms, scans tracked 39/39, dropped 0, tracking lost 0, keyframes mapped 19/19, max mapper backlog 1
-[TIME] front-end us per scan: p50 54.9 max 85.4; mapper us per keyframe: p50 143.2 max 150.3
-[AGGR] co-runner 0: 8091 MB/s
-[ATE]  position error: median 0.090 m, rmse 0.095 m, max 0.146 m
+[RT]   roi 1.65 ms, scans tracked 19/19, dropped 0, tracking lost 0, keyframes mapped 9/9, max mapper backlog 1
+[TIME] front-end us per scan: p50 54.1 max 56.4; mapper us per keyframe: p50 146.5 max 149.4
+[AGGR] co-runner 0: 8112 MB/s
+[ATE]  position error: median 0.066 m, rmse 0.067 m, max 0.088 m
