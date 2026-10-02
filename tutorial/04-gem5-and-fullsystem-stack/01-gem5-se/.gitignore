@@ -3,7 +3,6 @@ slam_demo/slam_demo-noroi
 slam_demo/slam_demo-host
 slam_demo/m5op.o
 slam_demo/viz/dump_steps
-slam_demo/viz/steps.json
 slam_demo/viz/out/
 /runs/
 /figures/

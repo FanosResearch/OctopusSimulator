@@ -162,8 +162,11 @@ What the demo reports:
 - **position error**: per scan, the distance between the estimated and the true
   position *at that scan*; the RMSE over the run is the headline (ATE).
 
-`python slam_demo/viz/slam_steps.py` draws the algorithm step by step (scan,
-grid, matching, keyframes, timeline) from a run on this machine.
+`python tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/slam_demo/viz/slam_steps.py`
+draws the algorithm step by step (scan, grid, matching, keyframes, timeline)
+from the shipped `slam_demo/viz/steps.json`;
+`make -C tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/slam_demo steps` regenerates it
+from a run on your machine.
 
 ### The configurations (`run_matrix.sh`)
 
@@ -181,6 +184,12 @@ grid, matching, keyframes, timeline) from a run on this machine.
 bash run_matrix.sh                   # all seven in parallel, ~10 min on 7+ cores
 python slam_demo/viz/plot_matrix.py  # figures/ from runs/
 ```
+
+No gem5 at hand? `expected/runs/<config>/` holds the reference runs' `simout.txt`
+(and `breakdown.csv`), and `slam_demo/viz/steps.json` (the scenario, made by
+`make -C slam_demo steps`) is shipped too, so
+`python slam_demo/viz/plot_matrix.py --runs-dir expected/runs` redraws
+`expected/figures/` exactly.
 
 The partition `way_partition(s)=1:0;5:0` names Octopus requester ids: gem5 SE
 gives each new thread the next free core, the aggressor thread is created first
@@ -233,7 +242,8 @@ python slam_demo/viz/plot_matrix.py            # adds figures/5_memory_breakdown
 `reduce_reports.sh` keeps, per core, the requests that left the L1 (the
 spinning threads hit their L1 millions of times, which would drown the rest)
 and their mean time per `LatencyReport` stage, in `runs/<config>/breakdown.csv`
-(reference: `expected/breakdown/`, `expected/figures/5_memory_breakdown.png`).
+(reference: `expected/runs/<config>/breakdown.csv`,
+`expected/figures/5_memory_breakdown.png`).
 Logging does not change the simulation: the logged runs give the same numbers.
 
 | config | front-end core: cycles per request past the L1 | of which | reached DRAM |

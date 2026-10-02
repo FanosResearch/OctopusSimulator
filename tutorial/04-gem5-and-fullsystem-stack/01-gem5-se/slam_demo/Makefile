@@ -48,4 +48,4 @@ viz/steps.json: viz/dump_steps
 	cd viz && ./dump_steps
 
 clean:
-	rm -f slam_demo slam_demo-noroi slam_demo-host m5op.o viz/dump_steps viz/steps.json
+	rm -f slam_demo slam_demo-noroi slam_demo-host m5op.o viz/dump_steps
