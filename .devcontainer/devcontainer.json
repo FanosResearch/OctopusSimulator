@@ -1,6 +1,6 @@
 {
   "name": "Octopus tutorial",
-  "image": "ghcr.io/fanosresearch/esweek:latest",
+  "image": "ghcr.io/fanosresearch/esweek:test",
 
   "hostRequirements": { "cpus": 4, "memory": "16gb", "storage": "32gb" },
 
