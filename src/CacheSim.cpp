@@ -9,6 +9,7 @@
 #include "../header/CacheSim.h"
 #include <filesystem>
 #include <fstream>
+#include <memory>
 
 using namespace std;
 
@@ -29,6 +30,24 @@ namespace octopus
             }
         }
         
+        // Route only configuration printing into the run directory. Restore stdout
+        // and close the file even if construction throws.
+        unique_ptr<FILE, void (*)(FILE*)> config_log(nullptr, [](FILE* file) {
+            Configurable::print_config_output = stdout;
+            fclose(file);
+        });
+        if (print_config && !output_dir.empty())
+        {
+            const auto path = std::filesystem::path(output_dir) / "config.log";
+            config_log.reset(fopen(path.string().c_str(), "w"));
+            if (!config_log)
+            {
+                cerr << "Cannot write configuration log: " << path << endl;
+                exit(1);
+            }
+            Configurable::print_config_output = config_log.get();
+        }
+
         // Bare names select built-in presets; paths with a directory component
         // are relative to the caller (or absolute). Only system defaults change.
         std::filesystem::path config_file;
@@ -56,6 +75,8 @@ namespace octopus
             cout << "Error wrong system configuration." << endl;
             exit(0);
         }
+
+        config_log.reset();
 
         // System constructors supply the default; override before any clocked
         // component initializes or writes reports. Applies to both topologies.

@@ -216,7 +216,8 @@ directory. Relative workload paths inside the CSV remain project-root-relative,
 even for a custom CSV stored elsewhere.
 
 When running the binary directly, use `-o <directory>` to write the logger CSVs
-(`LatencyReport_C*.csv`, `Summary.csv`, and task `JobReport_C*.csv`) to a separate
+(`LatencyReport_C*.csv`, `Summary.csv`, `Summary_transposed.csv`, and task
+`JobReport_C*.csv`) to a separate
 directory. Missing directories are created; relative paths resolve from the current
 working directory. Without `-o`, reports still go to `<workload_path>/newLogger`.
 Reusing an output directory overwrites reports with matching names. For example:
@@ -225,6 +226,14 @@ Reusing an output directory overwrites reports with matching names. For example:
 ./build/Octopus_Simulator -s MultiCoreSystem -o results/rr \
   -p "bus[0].interconnect_controller.arbiter_type(s)=RRArbiter"
 ```
+
+`Summary_transposed.csv` presents the same summary values with metrics as rows
+and cores as columns, ordered by core ID. `Summary.csv` retains its existing
+format for scripts and the visualizer.
+
+Add `--PrintConfig` to save resolved component settings to `<output-directory>/config.log`
+when using `-o`. The log is plain text and is replaced on each flagged run. Without
+`-o`, configuration printing goes to stdout.
 
 This also works with `-s MultiCoreSystem_Mesh`. Add `--trace` to record raw events
 as `trace.bin` (plus `trace.bin.names`) in the same output directory:

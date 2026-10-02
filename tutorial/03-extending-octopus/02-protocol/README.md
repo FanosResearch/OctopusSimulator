@@ -1,58 +1,133 @@
-# 03/02 — Change a coherence protocol
+# 03/02 — Add a coherence protocol with a CSV
 
-**Goal:** edit a protocol's finite-state machine and see the effect. No compiler
-involved: the FSM is a CSV read at startup. About 30 minutes.
+**Goal:** read a protocol FSM, compare MI with MSI, and select MI through a system
+configuration CSV. No C++ changes or rebuild. About 20 minutes; run from the
+project root.
 
-## Where the protocol lives
+## 1. Read the FSM layout
 
-`Protocols_FSM/*.csv`. One table per agent: `MESI_splitBus_snooping.csv` is the L1,
-`MESI_LLC.csv` the LLC. Each file has three lists (events, actions, states) and then
-the transition table — one row per state, one column per event, each cell
-`Action1/Action2/NextState`. Open the L1 one and find the row for `S` and the column
-for `Store`.
+Protocol tables live in `Protocols_FSM/`. L1 and LLC controllers load separate
+files: snooping MSI uses `MSI_splitBus_snooping.csv` at L1 and `MSI_LLC.csv` at LLC.
 
-The snooping L1's event vocabulary, exactly:
+Open `Protocols_FSM/MSI_splitBus_snooping.csv`. Each file contains:
 
-```
-Load  Store  Replacement  Own_GetS  Own_GetM  Own_PutM
-Other_GetS  Other_GetM  Other_PutM  OwnData  Invalidation  OwnData_Exclusive
-```
+- `EventNum,Event`: the numbered events recognized by the protocol handler.
+- `ActionNum,Action`: the numbered actions the handler can execute.
+- `StateNum,State`: stable and transient states with their numeric IDs.
+- `State,stable,isDataValid,...`: the transition table, one row per state and
+  one column per event. The two flags identify stable states and valid data.
 
-## Two exercises — pick one
+A transition cell contains actions separated by `/`, followed by the next state:
 
-**A. Read the difference between MESI and MOESI.** Diff
-`MESI_splitBus_snooping.csv` against `MOESI_splitBus_snooping.csv`. Find the `O`
-state, list every transition into and out of it, and explain in one sentence what
-the O state buys and what it costs. Then run both on `cacheb01` and check your
-sentence against the response-bus column.
+| Cell | Meaning |
+|---|---|
+| `GetM/IM_ad` | Issue `GetM`, then enter `IM_ad` |
+| `Hit/Data2Req/I` | Execute `Hit` and `Data2Req`, then enter `I` |
+| `Hit/` | Execute `Hit`, keeping the current state |
+| `IM_d` | Change state without an action |
+| Empty | No action; keep the current state |
+| `Fault/` | Report an unexpected event |
 
-**B. Add a transient state.** Pick a race the table handles with a `Stall/` and
-handle it with an explicit state instead. Add the state, add its row, run
-`a2time01`, and confirm the result is identical (it should be — you have only
-changed *how* the case is handled, not *what* happens).
+Keep transition rows in **state-ID order** and event columns in **event-ID order**;
+lookup uses their positions. Preserve the blank lines separating the numbered
+lists. CSV names and IDs must match the handler's supported events and actions.
 
-## The trap — worth reading twice
+Find state `I` and event `Load`. What request does MSI issue, and which transient
+state does it enter while waiting?
 
-`FSMReader` indexes transition rows **by position**, not by name. When you add a
-state, its row must be appended **last**, so that its position matches the number
-you gave it in the state list. Put it anywhere else and the FSM silently runs another
-state's transitions — no error, just wrong results. This is the single most likely
-way this exercise goes wrong.
+## 2. Compare the supplied MI example
 
-Two smaller ones: the L1 and LLC tables are a **matched pair** (a MESI L1 with an MSI
-LLC faults with "Wrong destination"); and on this branch protocols are switched by
-preset, not by `-p` — see `01-exploration`.
+Open this exercise's [MI_splitBus_snooping.csv](MI_splitBus_snooping.csv) beside
+`Protocols_FSM/MSI_splitBus_snooping.csv`.
 
-## Checking
+| Behavior | MSI | MI |
+|---|---|---|
+| Stable states | Modified, Shared, Invalid | Modified, Invalid |
+| Load in `I` | `GetS/IS_ad` | `GetM/IM_ad` |
+| Load in `M` | `Hit/` | `Hit/` |
+| Read sharing | Multiple caches can hold `S` copies | One cache owns the line in `M` |
 
-Both exercises end with a run whose `Summary.csv` you compare to a run *before* your
-edit. Keep the before-copy:
+MI requests exclusive ownership even for a load. It removes the shared state and
+its acquisition paths, retaining transient states for outstanding transactions.
+A second core reading the same line must obtain ownership from the first.
+
+Find MI's `M` row and `Other_GetM` column: `Data2Req/I` supplies the line to the
+requester and invalidates the old copy. Compare MSI's `M` / `Other_GetS` cell.
+Predict what happens when two cores repeatedly read the same line.
+
+MI uses MSI's existing event/action vocabulary, so it can reuse the `SNOOP_MSI`
+handler and MSI LLC table. Adding new event or action semantics would require C++
+changes; editing a table alone does not implement new handler behavior.
+
+## 3. Install the table and select it in the config
+
+The loader resolves `fsm_filename` under `Protocols_FSM/` and appends `.csv`.
+Copy the tutorial table there under its own name:
 
 ```shell
-W=$PWD/BMs/eembc-traces/a2time01-trace
-./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" >/dev/null 2>&1
-cp $W/newLogger/Summary.csv /tmp/before.csv
-# ... edit the FSM ...
-./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" >/dev/null 2>&1
-diff /tmp/before.csv $W/newLogger/Summary.csv && echo identical
+cp tutorial/03-extending-octopus/02-protocol/MI_splitBus_snooping.csv \
+  Protocols_FSM/Tutorial_MI_splitBus_snooping.csv
 ```
+
+Open [MultiCoreSystem_Snoop_MI.csv](MultiCoreSystem_Snoop_MI.csv) in this exercise.
+It is the snoop MSI preset with the L1 table changed:
+
+```csv
+cache_controller[*].fsm_filename(s),Tutorial_MI_splitBus_snooping
+```
+
+Check the matching settings in that file:
+
+```csv
+cache_controller_type(s),CacheController
+cache_controller[*].protocol_type(s),SNOOP_MSI
+llc_controller_type(s),CacheController_End2End
+llc_controller.protocol_type(s),SNOOP_LLC_MSI
+llc_controller.fsm_filename(s),MSI_LLC
+```
+
+`[*]` selects the MI table for every private L1. `protocol_type` selects the C++
+handler; `fsm_filename` selects its transition table. There is no `SNOOP_MI` handler
+needed for this example.
+
+## 4. Run MSI and MI on the same workload
+
+The supplied `mi_pingpong` workload has cores 0 and 1 repeatedly read line
+`0x1000`; cores 2 and 3 have no memory accesses. Exercise 00 prepares the benchmark
+traces; if this workload is missing, run `bash get_benchmarks.sh BMs/eembc-traces`.
+
+```shell
+W=$PWD/BMs/eembc-traces/mi_pingpong
+# Windows/Git Bash: W=$(cygpath -m "$PWD/BMs/eembc-traces/mi_pingpong")
+
+./build/Octopus_Simulator -s MultiCoreSystem -c MultiCoreSystem_Snoop \
+  -p "workload_path(s)=$W/" \
+  -o tutorial/03-extending-octopus/02-protocol/output/MSI --trace
+
+./build/Octopus_Simulator -s MultiCoreSystem \
+  -c ./tutorial/03-extending-octopus/02-protocol/MultiCoreSystem_Snoop_MI.csv \
+  -p "workload_path(s)=$W/" \
+  -o tutorial/03-extending-octopus/02-protocol/output/MI --trace
+```
+
+Both commands use the same C++ system wiring. `-c` selects the system CSV; the
+second run selects MI through that CSV, without changing `MultiCoreSystem.csv`.
+
+## 5. Check your prediction
+
+```shell
+python3 sweeps/plot_axis.py tutorial/03-extending-octopus/02-protocol/output
+./octoviz.sh serve tutorial/03-extending-octopus/02-protocol/output
+```
+
+The plotter requires matplotlib and NumPy. Read `Summary_transposed.csv` in each
+run directory to compare finish cycle and request/response bus delays, then filter
+the coherence transitions to address `0x1000`.
+
+- Does MSI's first load follow `I → IS_ad`, while MI follows `I → IM_ad`?
+- Where does MSI allow shared copies? Where does MI transfer ownership?
+- Does the extra ownership traffic explain the difference in completion time?
+
+Use the largest finish cycle across cores. Do not expect zero contention simply
+because the trace contains only reads. If you rerun an already converted setting,
+refresh it with `./octoviz.sh convert <setting-directory>`.

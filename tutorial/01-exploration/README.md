@@ -8,27 +8,28 @@ re-run (a few seconds), watch one number move. About 25 minutes.
 Run these commands from the **project root**, using the shipped configuration
 from exercise 00. Each invocation starts from that same CSV baseline: `-p`
 overrides apply only to that run, not to the next command.
+`-o` creates each setting's output directory for the statistics and visualizer data.
 
 ```shell
 W=$PWD/BMs/eembc-traces/a2time01-trace
 # Windows/Git Bash: W=$(cygpath -m "$PWD/BMs/eembc-traces/a2time01-trace")
 
+# First-come-first-serve arbiter
 ./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
   -p "bus[0].interconnect_controller.arbiter_type(s)=FCFSArbiter" \
   -o tutorial/01-exploration/output/Arbiter/FCFS --trace
 
+# Round-robin arbiter
 ./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
   -p "bus[0].interconnect_controller.arbiter_type(s)=RRArbiter" \
   -o tutorial/01-exploration/output/Arbiter/RR --trace
 
+# Time division multiplexed arbiter
 ./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
   -p "bus[0].interconnect_controller.arbiter_type(s)=TDMArbiter" \
   -o tutorial/01-exploration/output/Arbiter/TDM --trace
 ```
 
-`-o` creates each setting's directory. Its CSVs and trace stay together, so there
-is no need to copy reports before the next run. Reusing the same output path
-replaces that setting's reports. `output/` is Git-ignored.
 
 ## 2. Compare the saved settings
 
@@ -48,8 +49,8 @@ FCFS, RR, or TDM. Neither command reruns the simulator. If you rerun a setting
 that has already been converted, refresh it explicitly with
 `./octoviz.sh convert <setting-directory>` before viewing it again.
 
-Compare these values (worst cases and finish are maxima across **all cores**,
-not just the first row of `Summary.csv`):
+Open each setting's `Summary_transposed.csv` to compare these values. Worst cases
+and finish are maxima across **all core columns**, not just Core 0:
 
 | arbiter | worst total | worst request bus | worst response bus | finish cycle |
 |---|---|---|---|---|

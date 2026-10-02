@@ -80,6 +80,8 @@ namespace octopus
         std::map<uint64_t, std::ofstream> report_files; //core_id is the key, and the value is the report file handler
         std::map<uint64_t, std::ofstream> job_files;    //JobReport_C<n>.csv of the cores running a periodic task
         std::ofstream summary_file;                     //To report the worst-case values of all the cores
+        std::vector<std::string> summary_metrics;
+        std::map<uint64_t, std::vector<std::string>> summary_values;
         
         std::map<uint64_t, uint64_t> core_clk_count; //core_id is the key, and the value is the report file handler
 
@@ -101,6 +103,7 @@ namespace octopus
         Logger();
         void prepareReportFile(uint64_t core_id);
         void initializeStats(uint64_t core_id);
+        void writeTransposedSummary();
         void logMax(uint64_t latency, uint64_t* max_latency);
 
         // Build the per-request report row from the message's event timeline:

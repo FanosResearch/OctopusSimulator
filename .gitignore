@@ -71,5 +71,8 @@ demo/workloads/*/.out*
 
 # Generated output for the arbiter extension exercise
 /tutorial/03-extending-octopus/01-arbiter/output/
+
+# Generated output for the protocol extension exercise
+/tutorial/03-extending-octopus/02-protocol/output/
 header/Arbiters/WRRArbiter.h
 src/Arbiters/WRRArbiter.cpp

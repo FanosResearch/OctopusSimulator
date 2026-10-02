@@ -84,7 +84,7 @@ whose ID is the `owner` parameter.
        -p "bus[0].interconnect_controller.arbiter_type(s)=WRRArbiter" \
        -o "$OUT/WRR" --trace
 
-   diff -u "$OUT/RR/Summary.csv" "$OUT/WRR/Summary.csv"
+   diff -u "$OUT/RR/Summary_transposed.csv" "$OUT/WRR/Summary_transposed.csv"
    ```
 
    This overwrites the initial WRR reports with your weighted version while keeping
@@ -95,7 +95,7 @@ whose ID is the `owner` parameter.
 succession. You want instead for Core 0 to be picked twice in
 each round of this process. You may also need to modify `elect`.
 
-  Compare the two `Summary.csv` files to see how Core 0's performance
+  Compare the two `Summary_transposed.csv` files to see how Core 0's performance
   changes, now that WRR gives it extra service.  
 
    Optionally plot the saved runs:

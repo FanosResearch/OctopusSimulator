@@ -14,6 +14,7 @@ using namespace std;
 namespace octopus
 {   
     bool Configurable::print_config_global = false;
+    FILE* Configurable::print_config_output = stdout;
 
     Configurable::Configurable(string config_path, string name, string pname, bool skip_print) : name(name), parent_name(pname)
     { 
@@ -297,67 +298,67 @@ namespace octopus
         if(!Configurable::print_config_global)
             return;
 
-        printf("--------------------------------------------\n");
+        fprintf(print_config_output, "--------------------------------------------\n");
         for(auto [key, param] : parameters)
         {
             if(!parent_name.empty())
-                printf("\033[1;34m%s.", parent_name.c_str());
-            printf("\033[1;32m%s\033[0m.%s = ", name.c_str(), param.name.c_str());
+                fprintf(print_config_output, print_config_output == stdout ? "\033[1;34m%s." : "%s.", parent_name.c_str());
+            fprintf(print_config_output, print_config_output == stdout ? "\033[1;32m%s\033[0m.%s = " : "%s.%s = ", name.c_str(), param.name.c_str());
             switch(param.type)
             {
                 case Parameter::Type::Integer:
-                    printf("%d\n", std::get<int>(param.value));
+                    fprintf(print_config_output, "%d\n", std::get<int>(param.value));
                     break;
                 case Parameter::Type::Double:
-                    printf("%lf\n", std::get<double>(param.value));
+                    fprintf(print_config_output, "%lf\n", std::get<double>(param.value));
                     break;
                 case Parameter::Type::String:
-                    printf("%s\n", std::get<string>(param.value).c_str());
+                    fprintf(print_config_output, "%s\n", std::get<string>(param.value).c_str());
                     break;
                 case Parameter::Type::Vector_Integer:
                 {
                     auto vec = std::get<vector<int>>(param.value);
-                    printf("[");
+                    fprintf(print_config_output, "[");
                     for(int i = 0; i < vec.size(); i++)
                     {
                         if(i < (vec.size() - 1))
-                            printf("%d, ", vec[i]);
+                            fprintf(print_config_output, "%d, ", vec[i]);
                         else
-                            printf("%d", vec[i]);
+                            fprintf(print_config_output, "%d", vec[i]);
                     }
-                    printf("]\n");
+                    fprintf(print_config_output, "]\n");
                     break;
                 }
                 case Parameter::Type::Vector_Double:
                 {
                     auto vec = std::get<vector<double>>(param.value);
-                    printf("[");
+                    fprintf(print_config_output, "[");
                     for(int i = 0; i < vec.size(); i++)
                     {
                         if(i < (vec.size() - 1))
-                            printf("%lf, ", vec[i]);
+                            fprintf(print_config_output, "%lf, ", vec[i]);
                         else
-                            printf("%lf", vec[i]);
+                            fprintf(print_config_output, "%lf", vec[i]);
                     }
-                    printf("]\n");
+                    fprintf(print_config_output, "]\n");
                     break;
                 }
                 case Parameter::Type::Vector_String:
                 {
                     auto vec = std::get<vector<string>>(param.value);
-                    printf("[");
+                    fprintf(print_config_output, "[");
                     for(int i = 0; i < vec.size(); i++)
                     {
                         if(i < (vec.size() - 1))
-                            printf("%s, ", vec[i].c_str());
+                            fprintf(print_config_output, "%s, ", vec[i].c_str());
                         else
-                            printf("%s", vec[i].c_str());
+                            fprintf(print_config_output, "%s", vec[i].c_str());
                     }
-                    printf("]\n");
+                    fprintf(print_config_output, "]\n");
                     break;
                 }
             }
         }
-        printf("--------------------------------------------\n");
+        fprintf(print_config_output, "--------------------------------------------\n");
     }
 }

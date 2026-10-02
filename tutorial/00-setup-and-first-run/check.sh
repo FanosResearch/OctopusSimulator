@@ -21,7 +21,7 @@ if diff -u <(tr -d '\r' < "$REFERENCE") <(tr -d '\r' < "$REPORT"); then
   exit 0
 fi
 echo "[FAIL] 00 first run: output/Summary.csv differs from the reference"
-echo "       Check that the run completed and used the shipped MESI/TDM baseline."
+echo "       Check that the run completed and used the shipped MESI/FCFS baseline."
 if ! git -C "$ROOT" diff HEAD --quiet -- configuration 2>/dev/null; then
   echo "       configuration/ has local changes; inspect them with git diff HEAD -- configuration/"
 fi

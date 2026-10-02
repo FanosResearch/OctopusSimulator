@@ -16,7 +16,7 @@ bash scripts/check_environment.sh
 Eight `[PASS]` lines ending with:
 
 ```
-[PASS] sample run     15364 requests, worst DRAM 359 cycles
+[PASS] sample run     15364 requests, worst DRAM 377 cycles
 ALL CHECKS PASSED
 ```
 
@@ -33,7 +33,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j$(nproc)
 ## 2. Run one benchmark
 
 `a2time01` from EEMBC, four cores, on the configuration as shipped: snooping MESI,
-a TDM-arbitrated split bus, fixed-latency memory.
+an FCFS-arbitrated split bus, fixed-latency memory.
 
 ```shell
 W=$PWD/BMs/eembc-traces/a2time01-trace
@@ -64,12 +64,13 @@ The saved run is in this exercise’s Git-ignored `output/` directory; `expected
 remains the reference:
 
 ```shell
-column -s, -t tutorial/00-setup-and-first-run/output/Summary.csv | less -S       # one row per core, worst cases
+column -s, -t tutorial/00-setup-and-first-run/output/Summary_transposed.csv | less -S   # metrics as rows, cores as columns
 head -3 tutorial/00-setup-and-first-run/output/LatencyReport_C0.csv | column -s, -t   # one row per request
 ```
 
-`Summary.csv` gives, per core, the worst-case latency of every stage and the finish
-cycle. `LatencyReport_C<n>.csv` has one row per memory request with its latency split
+`Summary_transposed.csv` shows one metric per row and one column per core,
+including worst-case stage latencies and finish cycle. `Summary.csv` contains the
+same values in the original layout for scripts and checks. `LatencyReport_C<n>.csv` has one row per memory request with its latency split
 into stages: CPU, L1 stall, request bus, L2 stall, L2 access, response bus, L2–DRAM
 bus, DRAM, L1 access. A total tells you a core was slow; the stages tell you **which
 shared resource** made it slow. That decomposition is the reason the tool exists.

@@ -83,6 +83,7 @@ namespace octopus
         Configurable(std::vector<std::string> cl_params, std::string config_path, std::string name, std::string pname = "");
 
         static bool print_config_global;
+        static FILE* print_config_output;
     };
 }
 
