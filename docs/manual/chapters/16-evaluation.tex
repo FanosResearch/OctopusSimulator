@@ -1,0 +1,47 @@
+\chapter{Evaluation}\label{ch:evaluation}
+
+\whatyoufind{What the sweep harness measures and the figures this chapter will carry once the
+sweeps have been re-run on the current code. The numbers themselves are deliberately absent:
+the results and figures currently under \file{results/} were produced before the inclusive-LLC
+eviction and bus-ordering fixes and are stale.}
+
+\section{What is measured}
+
+Every sweep script varies one axis against the fixed baseline --- snoop MESI, TripleBus, LRU,
+FCFS bus, fixed-latency memory, default geometry --- over the EEMBC suite (and, for the
+non-memory axes, SPLASH-2), and records per (value, benchmark) whether the run completed and the
+worst case of every stage, the average effective latency, the finish cycle and the worst
+head-of-queue latency (\cref{ch:configuration}, \cref{app:formats}). The per-axis component
+shows \emph{where} a knob acts: the arbiter moves the bus columns, the LLC capacity the DRAM
+column, the memory model the DRAM column again by a different amount, replacement almost
+nothing.
+
+\section{The figures to come}
+
+\begin{itemize}
+\item \textbf{Per-request worst-case latency by stage, across axes} --- the stacked bars that
+  show which shared resource a knob moves (\code{fig1\_stage\_breakdown}).
+\item \textbf{Mean versus worst-case latency by bus arbiter} --- FCFS, RR and TDM on a log
+  scale: the predictability-for-throughput trade (\code{fig4\_wcet\_vs\_avg}).
+\item \textbf{LLC capacity and the DRAM column} (\code{fig2\_cache\_capacity}); \textbf{fixed
+  latency against MCsim} (\code{fig3\_memory\_dram}); \textbf{normalised latency across axes}
+  (\code{fig5\_normalized}); \textbf{the axis-by-metric heatmap} (\code{fig6\_config\_heatmap});
+  \textbf{completion status per configuration and benchmark} (\code{fig7\_status\_matrix}).
+\item \textbf{The three acts of the demo} in numbers (\cref{tab:acts} already carries them).
+\item \textbf{Analytical against measured}: the per-resource bound summed, against the measured
+  worst case of the oldest request, which is the additive-latency argument of
+  \cref{ch:introduction} made on this simulator.
+\end{itemize}
+
+\section{Reproducing}
+
+\begin{lstlisting}[style=shell]
+bash sweeps/sweep_all.sh                 # every single-axis sweep, EEMBC
+bash sweeps/run_overnight.sh             # both suites, giants once under baseline
+python sweeps/plot_results.py            # results/figures/*.{png,pdf}
+\end{lstlisting}
+
+\file{REPRODUCIBILITY.md} gives the runtime expectations per axis and suite and the artifact
+map from figure to script; \file{results/README.md} explains the layout and the columns. When
+the sweeps have been re-run, this chapter embeds the figures from \file{results/figures/} and
+replaces this note.

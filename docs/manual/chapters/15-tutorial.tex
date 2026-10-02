@@ -1,0 +1,145 @@
+\chapter{Hands-on tutorial}\label{ch:tutorial}
+
+\whatyoufind{The five exercises of the hands-on tutorial as they ship under \file{tutorial/},
+in order, each with its goal, its commands, what to look at and the trap it contains.}
+
+\section{How the exercises are built}
+
+Each exercise folder has the same shape: a \file{README.md} with the exact commands and what
+you should see, a \file{check.sh} that runs the exercise and says in one line whether it worked,
+an \file{expected/} directory holding the reference result it compares against, and where
+needed a \file{start.sh} that puts the starting files in place. The simulator is deterministic
+and platform-independent --- the same inputs give the same cycle counts on Linux, Windows and in
+a codespace, to the last digit --- so \file{check.sh} is an equality test, not a smoke test: if
+your numbers differ from the reference, something real changed, usually a file under
+\file{configuration/}. Two commands to remember throughout:
+
+\begin{lstlisting}[style=shell]
+bash scripts/check_environment.sh      # is my environment healthy?
+git checkout -- configuration/         # put every configuration file back as shipped
+\end{lstlisting}
+
+Fell behind? \code{bash tutorial/solutions/apply.sh <exercise>} applies the reference solution
+for that exercise so you can continue with the next one.
+
+The exercises come in two blocks. The first runs Octopus standalone: setup and first run
+(about 15 minutes), exploration (25), the configuration model (10) and extending Octopus (45,
+one exercise of three). The second puts the same hierarchy behind gem5: syscall-emulation mode
+(15--20) and full-system Arm from a checkpoint (25--30, plus a take-home), whose pre-warm is
+launched at the start of the block.
+
+\section{00 --- Setup and first run}
+
+Goal: a working environment, one completed simulation, and a first read of its output.
+\cref{ch:getting-started} is this exercise in full: run \code{scripts/check\_environment.sh}
+and expect eight \code{[PASS]} lines ending in \emph{15364 requests, worst DRAM 377 cycles};
+run \code{a2time01} on the shipped configuration; read \code{Summary.csv} and the first rows of
+\code{LatencyReport\_C0.csv} with \cref{fig:system-miss,fig:system-hit,fig:request-timeline}
+open; run \code{check.sh}, which compares \code{Summary.csv} byte for byte against the
+reference; then open the visualizer and find the pipeline, the lanes and the transition table.
+One thing to know before the next exercise: \code{run\_octopus.sh --protocol} copies a preset
+over \file{MultiCoreSystem.csv}, so hand edits to that file vanish.
+
+\section{01 --- Exploration, one axis at a time}
+
+Goal: convince yourself the axes really are independent. Change one thing, re-run in seconds,
+watch one number move. The helper runs \code{a2time01} with any overrides and prints the three
+numbers worth comparing:
+
+\begin{lstlisting}[style=shell]
+W=$PWD/BMs/eembc-traces/a2time01-trace
+run(){ ./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" "$@" >/dev/null 2>&1 \
+       && awk -F, 'NR==2{print "  worst total="$10"  worst DRAM="$8"  finish="$13}' $W/newLogger/Summary.csv; }
+echo FCFS;  run -p "bus[0].interconnect_controller.arbiter_type(s)=FCFSArbiter"
+echo RR;    run -p "bus[0].interconnect_controller.arbiter_type(s)=RRArbiter"
+echo TDM;   run -p "bus[0].interconnect_controller.arbiter_type(s)=TDMArbiter"
+echo MCsim; run -p "main_memory_type(s)=MCsim" -p "mcsim_scheduler(s)=FRFCFS"
+echo MSHR4; run -p "cache_controller[*].num_mshr(i)=4"
+echo part;  run -p "llc_controller.m_data_handler.way_partition(s)=0:0;1-3:1"
+\end{lstlisting}
+
+Fill in a table as you go; the point is not the numbers but that each row differs from the
+last in exactly one parameter. The \code{part} row is the one with a story behind it
+(\cref{ch:tasks-and-demo}). The protocol is the one axis that is not a \code{-p}: switch it by
+preset with \code{run\_octopus.sh --protocol snoop|directory} (\cref{ch:configuration}). If you
+finish early, run the same six on \code{cacheb01-trace}, where all four cores fight over one
+block and the arbiter rows spread out. Two things the numbers will show: the fixed-latency
+model reports a worst DRAM of exactly the configured latency where MCsim reports 377 on the
+same trace --- the fixed model is optimistic exactly where you would expect --- and a fault
+after switching the protocol by hand is almost always the five-key coupling, not a protocol
+bug.
+
+\section{02 --- The configuration model}
+
+Goal: understand why configuration looks the way it does, so the extension exercises make
+sense. Ten minutes of reading, nothing to build: open the four files of the L1's chain
+(\cref{ch:configuration}) --- the base controller, the cache controller, the exclusive
+controller and the system CSV --- in that order and follow one key through \code{Extends} and
+the per-instance overrides; read the typed suffixes; find where the L1 MSHR depth is set, override it
+to 1 with \code{-p} and watch the L1 stall column grow; see that \code{-s} selects a C++ class
+and a CSV by the same name, which is the boundary the third exercise of 03 crosses; and look at
+\code{git diff} after a \code{run\_octopus.sh --protocol} to see exactly which five keys a
+protocol is. \Cref{ch:configuration} is the chapter.
+
+\section{03 --- Extending Octopus}
+
+Three exercises of different natures; pick one, because 45 minutes is enough for one done
+properly. All three edit the real source tree, not a copy (\file{src/Arbiters/},
+\file{Protocols_FSM/} and \file{src/SystemConfigurations/}); the exercise folders hold only the
+instructions and the answer key. \Cref{ch:extending} has each in full.
+
+\begin{description}
+\item[01 --- a bus arbiter] (C++, small, well-fenced; a fifty-second rebuild). Weighted
+  round-robin from a copy of \code{RRArbiter}; the trap is registering the name in
+  \code{SplitBusController.cpp}, the bus you are measuring, not in the mesh's controller.
+\item[02 --- a coherence protocol] (CSV only; no rebuild). Read the \state{O} state out of the
+  MESI/MOESI diff, or replace a \code{Stall/} with an explicit transient state; the trap is the
+  row order.
+\item[03 --- a third cache level] (a new system class; driven from the front). The boundary
+  between data and code, crossed; the open question is who snoops for an L1 behind a private L2.
+\end{description}
+
+\section{04 --- gem5 and the full-system stack}
+
+Everything so far ran Octopus standalone; here the request source is gem5 and the same
+hierarchy, unchanged, sits behind it (\cref{ch:integration-modes}). The one constraint to know
+first: Octopus is compiled into gem5 as an \code{EXTRAS} module, so an Octopus C++ edit means
+relinking \code{gem5.opt}; both exercises vary configuration only.
+
+\begin{description}
+\item[01 --- gem5 + Octopus in SE mode] (20 min, with runs in the background). Three parts
+  on real programs under gem5's out-of-order cores. \emph{A}: \code{se\_test}, a self-checking
+  four-thread program, once as shipped and once with the bus arbiter changed by
+  \code{--octopus-param}, nothing rebuilt. \emph{B}: two views of one run, gem5's
+  \code{stats.txt} next to Octopus's own \code{newLogger/} reports written under gem5, with
+  equal request counts and latencies that agree to a cycle. \emph{C}: a small real-time SLAM
+  --- a sensor thread releasing scans on a period, a mapper and a front-end --- under a
+  co-running memory aggressor, in seven configurations: alone, a light aggressor that fits the
+  LLC with FCFS and with round-robin arbitration, and a heavy one that sweeps twice the LLC
+  with FCFS, round-robin, LLC way partitioning and both. Timing becomes tracking error: the
+  light aggressor's queueing is undone by round-robin, the heavy one's evictions through the
+  inclusive LLC make tracking fail and only way partitioning brings it back. Octopus's
+  per-request reports then say why, stage by stage.
+\item[02 --- full-system Arm Linux] (25--30 min plus a take-home). The pre-warm, launched at the
+  start of the block, restores a checkpoint taken past boot and starts the workload; the
+  walkthrough covers what the checkpoint contains, why booting is separated from measuring and
+  how LL/SC and the LSE atomics reach the protocol; then everyone tails their own log and opens
+  the \code{LatencyReport} it is writing. The take-home is the full journey --- boot, reach the
+  region of interest, write the checkpoint --- with its real durations.
+\end{description}
+
+\begin{trapbox}[{Traps, collected}]
+The preset copy over \file{MultiCoreSystem.csv}; the protocol as five coupled keys; the FSM row
+order; the arbiter registered in the wrong controller; directory under TDM starves one core, so
+the directory preset pins FCFS and only a hand override reaches it; a run that wedges leaves a
+readable trace only because \env{OCTOPUS\_HANG\_DUMP} finalizes it; and on Windows in Git Bash
+the workload path wants \code{cygpath -m}.
+\end{trapbox}
+
+\begin{wherebox}
+\begin{itemize}[nosep,leftmargin=1.2em]
+\item \file{tutorial/README.md} --- the index
+\item \file{tutorial/00-setup-and-first-run/}, \file{tutorial/01-exploration/}, \file{tutorial/02-configuration/}, \file{tutorial/03-extending-octopus/}, \file{tutorial/04-gem5-and-fullsystem-stack/} --- the exercises, each with its \file{README.md}, \file{check.sh} and \file{expected/}
+\item \file{tutorial/solutions/} --- the patches and \code{apply.sh}
+\end{itemize}
+\end{wherebox}

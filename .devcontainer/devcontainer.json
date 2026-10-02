@@ -1,8 +1,8 @@
 {
   "name": "Octopus tutorial",
-  "image": "mcr.microsoft.com/devcontainers/cpp:1-ubuntu-24.04",
+  "image": "ghcr.io/fanosresearch/esweek:latest",
 
-  "hostRequirements": { "cpus": 4, "memory": "8gb", "storage": "32gb" },
+  "hostRequirements": { "cpus": 4, "memory": "16gb", "storage": "32gb" },
 
   // The visualizer serves on 8765 (octoviz.sh).
   //

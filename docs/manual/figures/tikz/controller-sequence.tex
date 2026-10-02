@@ -1,0 +1,23 @@
+% One message through a cache controller: queue -> protocol handler -> FSMReader -> actions.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex,
+  head/.style={draw=octrule, fill=octmem, rounded corners=2pt, minimum width=30mm, minimum height=7mm, font=\sffamily\footnotesize\bfseries},
+  life/.style={octquiet, densely dashed},
+  act/.style={fill=octctl, draw=octamber, inner sep=0, minimum width=2mm},
+  m/.style={->, thick, octink}, ret/.style={->, thick, octquiet, densely dashed},
+  lbl/.style={font=\ttfamily\scriptsize, fill=octpaper, inner sep=1.5pt},
+  sl/.style={font=\ttfamily\scriptsize, anchor=west, inner sep=1.5pt}]
+  \foreach \x/\n/\t in {0/q/Processing queue, 48/ph/Protocol handler, 96/fsm/FSMReader, 150/dh/{Data handler, interfaces}}
+    { \node[head] (\n) at (\x mm, 0) {\t}; \draw[life] (\n.south) -- ++(0,-58mm); }
+  \node[act, minimum height=44mm] at (48mm, -29mm) {};
+  \node[act, minimum height=5mm] at (96mm, -22.5mm) {};
+  \draw[m] (0,-8mm) -- node[lbl, above] {processRequest(msg)} (47mm,-8mm);
+  \draw[m] (49mm,-12mm) -- ++(8mm,0) -- ++(0,4mm) -- ++(-8mm,0);
+  \node[sl] at (58mm,-10mm) {readEvent(msg) $\rightarrow$ event};
+  \draw[m] (49mm,-20mm) -- node[lbl, above] {getTransition(state, event)} (95mm,-20mm);
+  \draw[ret] (95mm,-25mm) -- node[lbl, below] {next\_state, actions[]} (49mm,-25mm);
+  \draw[m] (49mm,-34mm) -- ++(8mm,0) -- ++(0,4mm) -- ++(-8mm,0);
+  \node[sl] at (58mm,-32mm) {handleAction(actions) $\rightarrow$ ControllerAction[]};
+  \draw[ret] (47mm,-44mm) -- node[lbl, above] {ControllerAction[]} (0,-44mm);
+  \draw[m] (0,-52mm) -- node[lbl, above] {SEND\_BUS\_MSG, UPDATE\_CACHE\_LINE, WRITE\_BACK, HIT\_Action, \ldots} (149mm,-52mm);
+  \node[text=octquiet, align=left, anchor=west] at (2mm,-57mm) {the controller executes the actions; it never knows which protocol asked for them};
+\end{tikzpicture}

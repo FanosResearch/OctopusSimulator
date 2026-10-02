@@ -71,6 +71,37 @@ namespace octopus
         if (!m_trace) std::exit(1);
     }
 
+    void Logger::resetReports()
+    {
+        for (auto &f : report_files)
+            f.second.close();
+        report_files.clear();
+        if (summary_file.is_open())
+            summary_file.close();
+        summary_metrics.clear();
+        summary_values.clear();
+        grant_hist.clear();
+        event_log.clear();
+        event_core.clear();
+        event_meta.clear();
+        worst_case_l1_stall.clear();
+        worst_case_req_bus_latency.clear();
+        worst_case_l2_stall.clear();
+        worst_case_l2_access.clear();
+        worst_case_resp_bus_latency.clear();
+        worst_case_l2_dram_bus.clear();
+        worst_case_dram_latency.clear();
+        worst_case_l1_access.clear();
+        worst_case_latency.clear();
+        max_effective_latency.clear();
+        average_latency.clear();
+        num_request.clear();
+        last_checkpoint.clear();
+        issue_order.clear();
+        oldest_start.clear();
+        worst_case_oldest_latency.clear();
+    }
+
     void Logger::registerReportPath(string file_path)
     {
         this->report_file_path = file_path;

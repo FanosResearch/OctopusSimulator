@@ -1,0 +1,150 @@
+\chapter{System organization}\label{ch:system-organization}
+
+\whatyoufind{The four principles the simulator is built on and the two base classes that
+carry them; the clock model, which is the reason every latency it reports is comparable; the
+map of components and the classes behind them; and the exact system that
+\file{MultiCoreSystem.csv} builds when you run the shipped configuration --- the system every
+later chapter's figures are drawn on.}
+
+\section{Design principles}
+
+Octopus models a multicore memory hierarchy as a \emph{network of clocked, configurable
+components} joined by bounded, back-pressured \emph{interfaces}. A memory request is a
+first-class \code{Message} object that travels this network; a single global clock steps every
+component; and every hop is timestamped for the Logger. Four principles shape the code, and
+they are realised through two base classes that every component inherits
+(\cref{tab:base-classes}).
+
+\begin{itemize}
+\item \textbf{Modularity.} Each component is self-contained behind a narrow interface, so
+  changing one does not ripple into others. A cache controller does not know whether it is an
+  L1 or the LLC, nor which protocol it runs; a bus does not know what it carries.
+\item \textbf{Extensibility.} Inheritance and polymorphism: a new arbiter, replacement policy,
+  topology or memory model is a subclass with a handful of virtual methods; a new coherence
+  protocol is a CSV file. The effect shows in the code size of protocols derived from a common
+  family (\cref{ch:coherence-engine}).
+\item \textbf{Configurability.} Every component derives from \code{Configurable}: it reads its
+  defaults from its own CSV, a parent may override a child's, and the command line overrides
+  everything, so the whole design space is reachable without recompiling
+  (\cref{ch:configuration}).
+\item \textbf{Integrability.} The two endpoints --- the request source and the memory sink ---
+  are swappable for external simulators: a trace-driven CPU or gem5 on one side, a fixed-latency
+  model or MCsim's DDR controllers on the other, with the hierarchy between them unchanged
+  (\cref{ch:integration-modes}).
+\end{itemize}
+
+\begin{table}[htbp]\centering\small
+\caption{The two base classes every component inherits.}\label{tab:base-classes}
+\begin{tabularx}{\textwidth}{@{}lY@{}}
+\toprule base class & gives every component \\ \midrule
+\code{ClockedObj} & \code{m\_clk\_period} and \code{cycleProcess()}: the component can be advanced one tick by the \code{ClockManager} \\
+\code{Configurable} & \code{name}, \code{parent\_name}, \code{parameters}, \code{parseFile()}: hierarchical parameters read from CSV and overridable from the CLI \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{The clock model}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/clock-loop}\end{adjustbox}
+\caption{The clock model. One \code{ClockManager} advances every \code{ClockedObj} by one tick;
+components exchange messages only through interfaces, which the next component drains on its
+own tick.}
+\label{fig:clock-loop}
+\end{figure}
+
+The \code{ClockManager} owns the simulation loop. On each \code{clkStep} it advances every
+\code{ClockedObj} whose period has elapsed by calling its \code{cycleProcess()}
+(\cref{fig:clock-loop}). Components never call each other synchronously: they communicate only by
+placing \code{Message}s into interfaces, which the receiving component drains when it is next
+stepped. That decoupling is what makes the hierarchy modular and back-pressured --- an interface
+that is full simply refuses the push, and the sender tries again on its next tick.
+
+Because all components step under one manager, latencies are consistent system-wide: the Logger
+measures every stage of a request in the \emph{originating core's} clock, whichever component
+stamps it (\cref{ch:monitoring}). Each component carries its own \code{m\_clk\_period}, so a
+memory model may legitimately tick at a different rate from the cores; in the shipped
+configuration every period is 100 and one tick is one cycle everywhere.
+
+\section{Component map}
+
+\figmed{SystemConfiguration3.pdf}{What a configured system can contain: clusters of cores with
+private caches on direct interconnects, further cache levels inside or across clusters, a
+shared last-level cache and main memory --- all of it chosen by configuration, not
+hard-coded.}{fig:organization}{0.62}
+
+A system is clusters of CPU cores, each with private caches and a direct interconnect, joined
+through configurable interconnects to a shared LLC and main memory (\cref{fig:organization}).
+\Cref{tab:roles} names the class behind each role; \cref{fig:classes} shows how they relate.
+
+\begin{table}[htbp]\centering\small
+\caption{Roles and the classes that play them.}\label{tab:roles}
+\begin{tabularx}{\textwidth}{@{}l>{\raggedright\arraybackslash}p{0.47\textwidth}Y@{}}
+\toprule role & class(es) & notes \\ \midrule
+clock & \code{ClockManager}, \code{ClockedObj} & drives \code{cycleProcess()} each tick \\
+configuration & \code{Configurable} & hierarchical CSV + CLI parameters \\
+core & \code{CPU} (trace), \code{ExternalCPU} (gem5) & issues \code{Message}s; the trace CPU has an out-of-order window of \key{m\_number\_of\_OoO\_requests} \\
+transport & \code{CommunicationInterface} & \code{pushMessage} / \code{peekMessage} / \code{popFrontMessage}; bounded \\
+message & \code{Message} & \code{msg\_id}, \code{addr}, \code{cycle}, \code{owner}, \code{source}, \code{data}, \code{kind} \\
+cache & \code{BaseController} $\rightarrow$ \code{CacheController} $\rightarrow$ \code{CacheControllerExclusive}, \code{CacheController\_End2End}, \code{CacheControllerDirectory} & processing queue + handlers (\cref{ch:cache-controller}) \\
+coherence & \code{CoherenceProtocolHandler} $\rightarrow$ MSI / MESI / MOESI, their LLC and directory variants & driven by \code{FSMReader} (\cref{ch:coherence-engine}) \\
+data & \code{CacheDataHandler} $\rightarrow$ \code{CacheDataHandler\_COTS} & array, MSHRs, write-back buffer, replacement, port arbiter \\
+interconnect & \code{InterconnectTopology} + \code{InterconnectController} + \code{Arbiter} & bus, mesh, NoC (\cref{ch:interconnects}) \\
+memory & \code{MainMemoryController} (fixed latency), \code{MCsimInterface} & the sink (\cref{ch:main-memory}) \\
+monitoring & \code{Logger}, \code{DebugPrint} & \cref{ch:monitoring} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\figwide{Octopus.pdf}{The class diagram. Cache-related classes in red, interconnect-related in
+blue, utilities in white.}{fig:classes}
+
+\section{The system as shipped}\label{sec:shipped-system}
+
+\begin{figure}[htbp]\centering
+\input{figures/tikz/shipped-system}
+\caption{The system \code{MultiCoreSystem.csv} builds. Four trace-driven cores with private
+MESI L1s on a TripleBus, one shared inclusive LLC, a point-to-point memory bus and a
+fixed-latency main memory. Every number is a configuration key (\cref{app:config-keys}).}
+\label{fig:shipped-system}
+\end{figure}
+
+Running the simulator with \code{-s MultiCoreSystem} instantiates the C++ system class of
+that name; the CSV of the same name in \file{configuration/SystemConfigurations/} then
+configures it. \Cref{fig:shipped-system} is that
+system; it is the one every route, datapath and sequence figure in this manual is drawn on, and
+the one the tutorial runs first. The points that matter when reading a report:
+
+\begin{itemize}
+\item \textbf{Four cores} (\key{num\_cores}), each a trace-driven \code{CPU} with an
+  out-of-order window of eight outstanding requests, and each with a private L1 of
+  \code{CacheControllerExclusive} running snoop MESI --- 16\,KB, direct-mapped, 64-byte lines,
+  an untimed data port, 16 MSHRs, an 8-entry write-back buffer and a 16-deep processing queue.
+\item \textbf{\code{bus[0]}} is a TripleBus under a \code{SplitBusController}: three lanes ---
+  request, response, service --- each with its own arbiter, TDM by default
+  (\file{SplitBusController.csv}); 256-deep buffers with 128 entries reserved for in-flight
+  responses so that the request lane stalls before responses can overflow.
+\item \textbf{The LLC} (id 10) is a \code{CacheController\_End2End}: shared, inclusive, 32\,KB,
+  2-way, 64-byte lines, a 10-cycle data port with an FCFS port arbiter, 64 MSHRs, a 32-entry
+  write-back buffer and a 64-deep queue. Its \code{MESI\_LLC} FSM is the home of the protocol.
+\item \textbf{\code{bus[1]}} is point-to-point between the LLC and memory (id 100).
+\item \textbf{Main memory} is a \code{MainMemoryController} with a fixed 250-cycle latency;
+  \code{-p "main\_memory\_type(s)=MCsim"} swaps in cycle-accurate DDR4 (\cref{ch:main-memory}).
+\end{itemize}
+
+Two sibling presets build the same topology with a different protocol:
+\file{MultiCoreSystem_Snoop.csv} (snoop MSI) and \file{MultiCoreSystem_Directory.csv} (directory
+MSI, pinned to an FCFS bus); \file{MultiCoreSystem_Mesh.csv} replaces the bus with a mesh
+(\cref{ch:interconnects}). A protocol is five coupled keys, which is why these are presets and
+not single \code{-p} overrides (\cref{ch:configuration}).
+
+\begin{wherebox}
+\begin{itemize}[nosep,leftmargin=1.2em]
+\item \file{header/ClockManager.h}, \file{src/ClockManager.cpp} --- the clock and \code{ClockedObj}
+\item \file{header/Configurable.h}, \file{src/Configurable.cpp} --- parameters
+\item \file{header/Interconnect/CommunicationInterface.h} --- \code{Message} and the interfaces
+\item \file{src/SystemConfigurations/MultiCoreSystem.cpp} --- the system class that wires \cref{fig:shipped-system}
+\item \file{configuration/SystemConfigurations/MultiCoreSystem.csv} --- its parameters
+\item \file{Octopus_Simulator.cpp}, \file{src/CacheSim.cpp} --- \code{main} and the run
+\end{itemize}
+\end{wherebox}

@@ -1,0 +1,94 @@
+\chapter{File formats}\label{app:formats}
+
+\section{\code{LatencyReport\_C<n>.csv}}
+
+One file per core in \code{<workload>/newLogger/}: a header, one row per completed request in
+completion order, then two footer rows (per-column worst case, then averages). Columns, 1-indexed
+as the scripts address them:
+
+\begin{table}[htbp]\centering\small
+\begin{tabularx}{\textwidth}{@{}r>{\raggedright\arraybackslash}p{0.42\textwidth}Y@{}}
+\toprule \# & column & meaning \\ \midrule
+1 & \code{RequstID} & the global \code{msg\_id}; joins with Debugger traces and the raw trace \\
+2 & \code{Request Address} & \\
+3 & \code{Ready Cycle} & the simulation cycle at which the request could first issue; \code{Ready + CPU} is the issue cycle, so rows are time-resolvable \\
+4 & \code{CPU Latency} & issue $-$ ready \\
+5--12 & \code{L1 Stall}, \code{Requst Bus}, \code{L2 Stall}, \code{L2 Access}, \code{Response Bus}, \code{L2-DRAM Bus}, \code{DRAM}, \code{L1 Access Latency} & the stage columns, \cref{ch:request-end-to-end} \\
+13 & \code{Total Latency} & the sum of 5--12 \\
+14 & \code{Effective Latency} & the non-overlapped part of Total \\
+15 & \code{Oldest Latency} & head-of-queue latency; 0 if the request was never the oldest \\
+16--22 & \code{LLC Arrival State}, \code{LLC Gate}, \code{Resp Ahead}, \code{Resp Ahead Refills}, \code{Array Ahead}, \code{Array Ahead Writes}, \code{LLC Stall State} & the mechanism trackers, \cref{ch:monitoring} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{\code{Summary.csv}}
+
+One row per core: \code{Worst-case L1 Stall Latency}, \code{Worst-case Requst Bus Latency},
+\code{Worst-case L2 Stall Latency}, \code{Worst-case L2 Access Latency}, \code{Worst-case
+Response Bus Latency}, \code{Worst-case L2-DRAM Bus Latency}, \code{Worst-case DRAM Latency},
+\code{Worst-case L1 Access Latency}, \code{Worst-case Total Latency}, \code{Worst-case Effective
+Latency}, \code{Average Latency} (the mean Effective), \code{Finish Cycle} (the core's last
+completion, its total execution time) and \code{Worst-case Oldest Latency}, appended last so the
+earlier indices stay stable. This is the machine-readable hook every sweep reads.
+
+\section{\code{JobReport\_C<n>.csv}}
+
+Written for a core running a periodic task (\cref{ch:tasks-and-demo}), one row per job, flushed
+as each job finishes so the file can be tailed during a run:
+
+\begin{lstlisting}[style=plain]
+job,release_cycle,finish_cycle,deadline_cycle,deadline_miss,n_accesses,skipped_periods,mean_access_lat,max_access_lat
+\end{lstlisting}
+
+The last two are the job's mean and worst access latency as the core sees it, issue to response.
+
+\section{The task program, \code{task\_C<n>.task.csv}}
+
+Column 1 is the row kind. \code{attr} rows set \code{period}, \code{jobs} ($-1$ = free-running),
+\code{ooo}, \code{deadline}, \code{start}; phase rows are the job body, replayed once per job.
+Numbers accept hex or decimal; \code{\#} lines and blank lines are ignored.
+
+\begin{lstlisting}[style=plain]
+COMPUTE,cycles
+READ,addr            WRITE,addr
+LINEAR,base,count,stride,rd_ratio
+RANDOM,base,range,count,rd_ratio
+\end{lstlisting}
+
+\section{The sweep result, \code{results/<axis>/<suite>.csv}}
+
+\begin{lstlisting}[style=plain]
+value,benchmark,status,avg,wcTotal,wcEff,wcL1stall,wcReqBus,wcL2stall,wcL2access,wcRespBus,wcDramBus,wcDRAM,wcL1access,finish,wcOldest
+\end{lstlisting}
+
+\code{status} is \code{OK}, \code{INCOMPLETE} or \code{TIMEOUT}; the metrics are the
+\code{Summary.csv} worst cases over all cores.
+
+\section{The raw event trace}
+
+A file written under \env{OCTOPUS\_TRACE}: a magic, records in 64\,K-record chunks, a chunk
+index (offset, count, cycle and id ranges) and a trailer, so a windowed read decodes only the
+chunks it needs and a file without a trailer (a killed run) is still readable. Each record is
+32 bytes, little-endian:
+
+\begin{table}[htbp]\centering\small
+\begin{tabularx}{\textwidth}{@{}llY@{}}
+\toprule field & type & meaning \\ \midrule
+\code{cycle} & u64 & global core cycle \\
+\code{msg\_id} & u64 & the message id \\
+\code{addr} & u64 & the message's address \\
+\code{resource} & u8 & 0 CPU, 1 L1, 2 REQ\_BUS, 3 RESP\_BUS, 4 LLC, 5 MEM\_BUS, 6 DRAM, 8 SVC\_BUS, 9 ARRAY, 10 LLC\_QUEUE, 11 FSM \\
+\code{phase} & u8 & 0 ENTER, 1 SERVICE, 2 EXIT; for FSM records the event id \\
+\code{kind} & u8 & 1 DEMAND, 2 GETS, 3 GETM, 4 PUTM, 5 INV, 6 MEM\_READ, 7 EVICT, 8 WB\_DATA, 9 WB\_INV, 10 SUPPLY, 11 SUPPLY\_DEFERRED, 12 RESP, 13 FILL, 14 FILL\_ROLLBACK, 15 MEM\_WRITE; 0 untagged \\
+\code{core} & u8 & the message's owner \\
+\code{comp} & u16 & component id (L1 0--3, LLC 10, DRAM 100; bus 0 = L1--LLC, 1 = memory bus) \\
+\code{flags} & u16 & ARRAY: the action that claimed the port (1 read for a response, 4 read for a write-back or supply, 6 write of a fill, write-back or supply), bit 8 cut-in, bit 9 MSHR-resident, bit 10 write-back-buffer-resident. FSM: \code{old\_state << 8 | new\_state} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+At close the Logger writes \code{<file>.names} with each controller's state and event names, in
+FSM CSV order, which the converter uses to resolve FSM records. \code{tools/octoviz/convert.py
+<newLogger> --trace <file>} produces \code{octoviz.parquet} (the rows), \code{occupancy.parquet}
+(one busy interval per resource per message) and \code{fsm.parquet} (one row per transition).

@@ -93,6 +93,9 @@ Per‑access latencies and their stage decomposition stay in `LatencyReport_C<n>
 `[release_cycle, finish_cycle]`. `demo/extract_jobs.py` joins the two for the demo.
 
 ## Protection: LLC way partitioning
+
+![How a streaming core evicts the task's line through the inclusive LLC, and what the task then pays](imgs/inclusion_interference.svg)
+
 Under a shared inclusive LLC, streaming cores evict a small periodic task's lines from the LLC
 and, by inclusion, from its private L1 — the task then misses to DRAM on almost every access
 (the localization example: 53 % of accesses to DRAM under three streamers, none alone). Bus

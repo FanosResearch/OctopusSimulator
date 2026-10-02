@@ -94,55 +94,59 @@ namespace octopus
         if (responseBackpressured())
             return;
 
-        if (clk_in_slot_req == 0)
+        // Slot timing. A message is elected in slot 0 and delivered in slot
+        // latency-1, so a latency of 1 elects and delivers in the same cycle.
+        // The arbiter removes the message from its sender at election, which is
+        // why the delivery must never be skipped: an if/else-if form skips it
+        // at latency 1 (slot 0 always takes the election branch) and drops
+        // every message. Election is also guarded on no message being held, so
+        // a held broadcast is retried rather than overwritten.
+        if (clk_in_slot_req == 0 && !message_available_req)
         {
             message_available_req = m_arbiters[(int)BusType::RequestBus]->elect(cycle_number, buffers_req, &elected_msg_req);
             if (message_available_req)   // trace: grant = start of the slot
                 Logger::getLogger()->trace(elected_msg_req, m_is_mem_bus ? Logger::Role::MEM_BUS : Logger::Role::REQ_BUS, m_is_mem_bus ? 1u : 0u, Logger::Phase::ENTER);
         }
-        else if (clk_in_slot_req == (m_request_latency - 1))
+
+        if (message_available_req && clk_in_slot_req == (m_request_latency - 1))
         {
-            if (message_available_req)
+            // Atomic broadcast: consume the elected message only once it can be
+            // delivered to ALL receivers. If any receiver's RX buffer is full,
+            // hold it (stay in this slot) and retry next cycle -- never
+            // partially deliver or drop.
+            if (broadcast(elected_msg_req))
             {
-                // Atomic broadcast: consume the elected message only once it can be
-                // delivered to ALL receivers. If any receiver's RX buffer is full,
-                // hold it and retry next cycle -- never partially deliver or drop.
-                if (broadcast(elected_msg_req))
-                    message_available_req = false;
+                message_available_req = false;
+                clk_in_slot_req = 0;
             }
+            return;
         }
 
         if (message_available_req)
-        {
-            // Advance toward the broadcast slot; once there, stay put to retry a
-            // failed broadcast rather than wrapping to 0 (which would re-elect and
-            // drop the still-undelivered message).
-            if (clk_in_slot_req < (m_request_latency - 1))
-                clk_in_slot_req++;
-        }
+            clk_in_slot_req++;
         else
             clk_in_slot_req = 0;
     }
 
     void SplitBusController::responseBusStep(uint64_t cycle_number)
     {
-        if (clk_in_slot_resp == 0)
+        if (clk_in_slot_resp == 0 && !message_available_resp)
         {
             message_available_resp = m_arbiters[(int)BusType::ResponseBus]->elect(cycle_number, buffers_resp, &elected_msg_resp);
             if (message_available_resp)
                 Logger::getLogger()->trace(elected_msg_resp, m_is_mem_bus ? Logger::Role::MEM_BUS : Logger::Role::RESP_BUS, m_is_mem_bus ? 1u : 0u, Logger::Phase::ENTER);
         }
-        else if (clk_in_slot_resp == (m_response_latency - 1))
+
+        if (message_available_resp && clk_in_slot_resp == (m_response_latency - 1))
         {
-            if (message_available_resp)
-            {
-                send(elected_msg_resp);
-                message_available_resp = false;
-            }
+            send(elected_msg_resp);
+            message_available_resp = false;
+            clk_in_slot_resp = 0;
+            return;
         }
 
         if (message_available_resp)
-            clk_in_slot_resp = (clk_in_slot_resp + 1) % m_response_latency;
+            clk_in_slot_resp++;
         else
             clk_in_slot_resp = 0;
     }

@@ -11,7 +11,7 @@ hierarchy, unchanged, sits behind it.
 
 | folder | what | time |
 |---|---|---|
-| `01-gem5-se/` | gem5 in syscall-emulation mode driving Octopus; the journey of one memory request | 15–20 min |
+| `01-gem5-se/` | gem5 in syscall-emulation mode driving Octopus: a self-checking test, then a real-time SLAM under memory interference and two mitigations (round-robin arbitration, LLC way partitioning) | 20 min + runs in the background |
 | `02-full-system-arm/` | ARM Linux under gem5, restored from a checkpoint, with Octopus as its memory system | 25–30 min + take-home |
 
 ## The one constraint to know before starting
@@ -24,6 +24,8 @@ scons EXTRAS=../ATP-Engine:../OctopusSimulator ./build/ARM/gem5.opt -j`nproc`
 
 So an Octopus C++ edit means relinking `gem5.opt` — minutes, not the 50-second
 rebuild you had in exercise 03. Both exercises here vary **configuration** (the
-`--octopus-xml` file, gem5's own options), never Octopus source. The arbiter you
+CSV preset `MultiCoreSystem_gem5.csv` and `--octopus-param` overrides, gem5's own
+options), never Octopus source. `01-gem5-se/` is runnable today on any machine
+with a gem5 built this way (its README has the build line). The arbiter you
 wrote in `03-extending-octopus/01-arbiter` will not appear inside gem5 unless the
 container's `gem5.opt` was built with it.

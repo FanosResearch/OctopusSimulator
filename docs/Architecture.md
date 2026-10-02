@@ -112,6 +112,73 @@ inclusive, the FSM's `IssueInv` on an eviction invalidates the copy in whichever
 line — the red path, and the reason a task whose working set fits in its own private cache can
 still be disturbed by other cores.
 
+The same drawing with one path highlighted — a read or write **hit**, a `GetS` or `GetM` that
+finds the line in a stable state — from the request's arrival on the bus to its data leaving on
+the response channel, in ten numbered steps:
+
+![The path of a read or write hit through the LLC](imgs/llc_hit_path.svg)
+
+Steps 4–6 — tag compare, FSM, sequencer — take no simulated time. What a hit pays for is the
+wait in the processing queue (1–3), the wait for the port (7), and then the `A_LLC`-cycle access
+itself (8–9). A write hit differs from a read hit in what the FSM does, not in the path: the
+`GetM` gets plain data where a `GetS` gets exclusive data, and the FSM also rewrites the owner
+bits (untimed). Nothing else changes — in particular the LLC sends **no** invalidation: on the
+snooping bus every sharer sees the `GetM` itself and drops its copy (`S + Other_GetM → I`), so
+`IssueInv` is reserved for evictions.
+
+The figure draws the case where the LLC serves the data — the line is valid in the array and no
+L1 owns it (`I` or `S` in `MESI_LLC.csv`). The third case, a hit on a line an L1 holds in
+`EorM`, does not use the port at all: the owner answers the `GetS` on the bus with `Data2Both`,
+and the LLC only saves that copy (`S_d → SaveData → S`); on a `GetM` the owner hands the line
+straight to the requester and the LLC merely rewrites the owner bits.
+
+The write hit drawn on its own, so the difference is visible rather than described. The path
+is the read hit's; what is new is the branch marked **5b** — the FSM's `SetOwner` written back
+into the line's bits over the dashed control wire, untimed — and the plain-data response:
+
+![The path of a write hit through the LLC](imgs/llc_write_hit.svg)
+
+And the same again for a read **miss** in the simplest case — the set still has a free way, so
+nothing is evicted:
+
+![The path of a read miss that installs into a free way](imgs/llc_read_miss.svg)
+
+The request takes the same first six steps and then diverges at the tag compare: the FSM's
+`GetData` allocates an MSHR entry, the read leaves on `bus[1]`, and the line waits in the MSHR —
+not the array — until DRAM answers. When the fill is processed the response goes out on TX
+response at once, carrying the data from the fill message; the write into the free way — which
+contends for the port like any other array access and frees the MSHR — runs in parallel, off
+the requester's critical path (dashed in the figure). Because no
+victim is chosen, the write-back buffer and the red inclusion path are never touched. A miss into
+a *full* set adds a second actor, and it deserves its own colour:
+
+![A read miss into a full set: the requested line in teal, the evicted victim in amber](imgs/llc_miss_evict.svg)
+
+Two things in that drawing are easy to get wrong from a textbook. First, **the victim is chosen
+late**: the miss allocates an MSHR and sends the read while the full set is left alone, and only
+when the fill's array write runs does the data handler pick the LRU line among the requester's
+allowed ways, move it — bits and data — into the write-back buffer, and put the fill in its way
+(`moveLine2WB` inside `updateLineData`). The requester's data leaves on TX response right then;
+everything the victim costs comes afterwards and lands on *other* traffic. Second, the victim's
+exit is a coherence transaction, not a buffer drain: a `Replacement` is raised for it and goes
+through the queue and the FSM like any request, `IssueInv` puts an INV on the service channel,
+every L1 that shares the line drops it (this is the inclusion interference the demo measures),
+the LLC receives its own INV back, and only then does `WriteBack` read the line — from the
+buffer, over the dotted bypass — and send it to memory. There is no dirty bit in the model, so
+every victim is written back; the code marks the spot with a `ToDo`. A `GetM` miss evicts
+identically. A victim an L1 *owns* adds one leg: the owner answers the INV with its data, and
+that copy is what reaches memory.
+
+Seen from the cores instead of from inside the LLC, that eviction is the whole story of
+inter-core interference through an inclusive LLC — and the story the demo measures. Core 0
+brings a line in and hits on it in its L1; core 1 misses on a different line in the same
+set, the fill evicts core 0's line, the INV on the service lane removes it from core 0's
+L1 too, and core 0's next access to it is a full DRAM round trip that core 0 did nothing
+to cause. Bus arbitration cannot prevent it; LLC way reservation can (see
+[Tasks.md](Tasks.md)).
+
+![Inclusion interference as a sequence: core 0 owns X, core 1's miss on Y in the same set evicts X, the INV removes X from core 0's L1, and core 0's next Load X goes to DRAM](imgs/inclusion_interference.svg)
+
 A `CacheController` (a `BaseController`) has **two `CommunicationInterface`s** — one
 facing the cores below, one facing the interconnect above. Incoming messages are
 serialized into a **processing queue** ordered **First‑Ready First‑Come‑First‑Serve
@@ -204,8 +271,55 @@ sequenceDiagram
     end
 ```
 
+The same journey drawn on the system as shipped — four cores with private L1s on the
+TripleBus, the shared LLC, the point‑to‑point memory bus and DRAM — with one LLC miss
+from core 0 routed through it. Each hop is coloured by the LatencyReport column that
+measures it (amber = waiting, purple = a bus transfer, teal = being served), and the
+numbers ⓪–⑨ are the report's nine latency columns in order, placed at the Logger
+stamps that bound them (L2‑DRAM Bus is one column over two hops, ④ out and ⑥ back;
+CPU Latency, ⓪, is spent inside the core before the request exists on the bus); the
+right‑hand panel lists, per hop, the two stamps whose distance the column is. The other cores' L1s see every request on the
+request lane, and when one of them owns the line it answers on the response lane in
+the LLC's place, its stamps then standing in for the LLC's. The service lane carries
+the LLC's back‑invalidations on an eviction and is not on this request's path.
+
+![The Octopus system end to end: four cores on a TripleBus, the shared LLC, the memory bus and DRAM, with one LLC miss from core 0 routed through it and each hop coloured by the LatencyReport column that measures it](imgs/system_end_to_end.svg)
+
+The same system with an LLC **hit** from core 0. The request never leaves the LLC,
+so the memory bus and DRAM are greyed out and L2-DRAM Bus and DRAM are 0. L2 Access
+is then the wait for the array port: the data is emitted at the grant, so the read's
+`A_LLC` cycles on the port fall in no column of this request; they are paid by whoever
+waits for the port next. A slow hit is therefore the bus, the LLC queue or the port,
+never memory.
+
+![The same system with an LLC hit from core 0: the route stops at the LLC's array port, the memory bus and DRAM are not on the path](imgs/system_end_to_end_hit.svg)
+
 At each hop the component stamps a Logger checkpoint, so the same journey is what
-the [Logger](Logger.md) decomposes into per‑stage latencies.
+the [Logger](Logger.md) decomposes into per‑stage latencies. Exactly which stamps
+bound which column, on a time axis — for an LLC hit and for an LLC miss — is this:
+
+![One request end to end, with the nine LatencyReport columns bracketed between the Logger events that bound them](imgs/request_end_to_end.svg)
+
+Three things in it are easy to misread from the column names alone. **L2 Access** means
+two different waits. On a hit it ends at the array-port *grant*, not after `A_LLC`
+cycles: the data is emitted at the grant, and the port's busy time is paid by whoever
+waits for the port next. On a miss it is the fill's *turn at the LLC*: each cycle one
+message moves from the memory-side RX FIFO to the **front** of the processing queue, a
+data message is always ready, and every ready message is handled that same cycle — so
+typically a single cycle, plus any backlog in that one FIFO, and never a wait behind
+queued demand requests. The response is emitted the moment the fill is processed,
+carrying the data from the fill message itself; the array write claims the port
+afterwards — in parallel, off the requester's critical path. That write is the real
+"L2 access" of a miss, and the figure draws it as such, below the axis alongside the
+response; it lands in no report column (the `ARRAY` lane in the visualizer shows it).
+**L2-DRAM Bus** is two pieces on a miss, either side of the
+DRAM service, with `MainMemoryController`; MCsim stamps no DRAM events, so there the
+column becomes "LLC admit → read leaves on `bus[1]`" and **DRAM** becomes the whole
+`bus[1]` round trip. And when an owning L1 answers a request instead of the LLC, that
+L1's stamps stand in for the LLC's, so L2 Stall and L2 Access are the wait for and the
+service by the *owner*. The columns always tile to Total; the `[EVENT-PATH]` line on
+stderr says so on every run, and `OCTOPUS_EVENT_DUMP=N` prints the raw timelines of
+the first N slow requests when a column looks wrong.
 
 ---
 

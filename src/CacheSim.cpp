@@ -10,12 +10,22 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include "../header/Configurable.h"
+#include "../header/SystemConfigurations/MultiCoreSystem.h"
+#include "../header/SystemConfigurations/MultiCoreSystem_Mesh.h"
+#include "../header/ClockManager.h"
+#include "../header/CacheControllers/BaseController.h"
 
 using namespace std;
 
 namespace octopus
 {
-    CacheSim::CacheSim(string system_name, vector<string> cl_params, bool print_config, string output_dir, bool trace, string config)
+    CacheSim::CacheSim(string system_name, vector<string> cl_params, bool print_config, string config)
+        : CacheSim(system_name, cl_params, print_config, config, "", false)
+    {
+    }
+
+    CacheSim::CacheSim(string system_name, vector<string> cl_params, bool print_config, string config, string output_dir, bool trace)
     {
         Configurable::print_config_global = print_config;
         if (!output_dir.empty())
@@ -67,7 +77,7 @@ namespace octopus
 
         // setup simulation environment
         if(system_name == STRINGIFY(MultiCoreSystem))
-            system_config = new MultiCoreSystem(cl_params, config_dir, config_name);
+            system_config = new MultiCoreSystem(cl_params, config_name, config_dir);
         else if(system_name == STRINGIFY(MultiCoreSystem_Mesh))
             system_config = new MultiCoreSystem_Mesh(cl_params, config_dir, config_name);
         else
@@ -101,5 +111,25 @@ namespace octopus
     void CacheSim::step()
     {
         ClockManager::getClockManager()->clkStep();
+    }
+
+    uint64_t CacheSim::now() const
+    {
+        return ClockManager::getClockManager()->getCurrentTime();
+    }
+
+    uint64_t CacheSim::stepGranularity() const
+    {
+        return ClockManager::getClockManager()->getStepGranularity();
+    }
+
+    uint64_t CacheSim::minPeriod() const
+    {
+        return ClockManager::getClockManager()->getMinPeriod();
+    }
+
+    void CacheSim::reportOccupancy(std::ostream &os) const
+    {
+        BaseController::reportOccupancy(os);
     }
 }

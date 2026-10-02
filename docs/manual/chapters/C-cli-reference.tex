@@ -1,0 +1,65 @@
+\chapter{Command line, scripts and environment}\label{app:cli}
+
+\section{The simulator}
+
+\begin{lstlisting}[style=shell]
+./build/Octopus_Simulator -s <SystemClass> [-p "<key>=<value>"]...
+\end{lstlisting}
+
+\begin{description}
+\item[\code{-s <name>}] the system to build: a C++ class in \file{src/SystemConfigurations/} and
+  its CSV of the same name in \file{configuration/SystemConfigurations/}. \code{MultiCoreSystem}
+  (bus) and \code{MultiCoreSystem\_Mesh} ship.
+\item[\code{-p "<key>=<value>"}] override one configuration key; repeat for several. The key
+  carries its type suffix and, for an instance, its index or \code{[*]}
+  (\cref{ch:configuration}). Values with spaces or semicolons need the quotes.
+\end{description}
+
+The parser (\code{CLParser}) pairs each \code{-x} with the argument that follows it, so
+\code{-p key=value} and \code{-p "key=value"} are the same; it prints every argument it saw at
+start-up. The one key every run needs is \code{workload\_path(s)}: a directory holding
+\code{trace\_C<n>.trc.shared} per core (or \code{task\_C<n>.task.csv} for a periodic task); the
+reports are written into \code{<workload>/newLogger/}.
+
+\section{Scripts}
+
+\begin{table}[htbp]\centering\small
+\caption{The driver scripts at the repository root and under \code{scripts/}, \code{sweeps/},
+\code{demo/}.}\label{tab:scripts}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.36\textwidth}Y@{}}
+\toprule script & what it does \\ \midrule
+\file{get_benchmarks.sh} & clones the benchmark repository (\code{FanosResearch/OctopusBMs}) into \file{BMs/} if absent and inflates the compressed SPLASH-2 traces; idempotent, called by every driver. \code{BMS\_SPARSE="eembc-traces"} clones only that suite \\
+\file{scripts/check_environment.sh} & one PASS/FAIL line per component (compiler, cmake, xz, Python packages, binary, MCsim ini line endings, benchmarks), then a reference run whose request count and worst DRAM latency must match the committed numbers \\
+\file{run_octopus.sh} & \code{--protocol snoop|directory --suite eembc|splash [--bench <name>] [--jobs N] [--safety <s>] [--out <dir>]}: copies the preset over \file{MultiCoreSystem.csv}, runs the suite in parallel and judges completion per core (own trace covered and footer written) \\
+\file{run_splash.sh}, \file{sweep_protocols.sh} & the SPLASH driver and the coherence-family sweep \\
+\file{octoviz.sh} & \code{run|convert|serve|view <dir> [-- <simulator args>]}: the visualizer entry point; \code{WINDOW=t0:t1}, \code{TRACE=0}, \code{PORT}, \code{TIMEOUT}, \code{SYSTEM} \\
+\file{sweeps/sweep_*.sh} & one axis each (\code{arbiter}, \code{replacement}, \code{cache}, \code{memory}, \code{pcc\_ab}, \code{pcc\_par}); \code{SUITE}, \code{JOBS}, \code{BENCH}, \code{SAFETY}, \code{EXCLUDE}; \code{sweep\_all.sh} runs them all, \code{run\_overnight.sh} both suites \\
+\file{sweeps/plot_results.py}, \file{sweeps/analyze_*.sh} & the figures and the mechanism / trace analyses over sweep output \\
+\file{demo/run_acts.sh} & the three acts of the interference demo (\code{act1 act2 act3}); \code{demo/extract\_jobs.py}, \code{build\_page.py}, \code{live.sh} \\
+\file{demo_protocol.sh} & the MI-versus-MESI example of \cref{ch:coherence-engine} \\
+\file{check.sh}, \file{run_matrix.sh}, \file{compare_views.sh} in \file{tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/} & the gem5 SE exercise: the self-check, the seven SLAM configurations (\code{LOG=1} for Octopus's reports), gem5's statistics against Octopus's reports \\
+\file{gem5/harness/build.sh}, \file{gem5/se_test/Makefile} & the standalone harnesses and the SE test binary \\
+\file{docs/manual/build.sh} & this manual \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Environment variables}
+
+\begin{table}[htbp]\centering\small
+\caption{Environment switches read by the simulator. All are zero-cost when unset.}\label{tab:env}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.36\textwidth}Y@{}}
+\toprule variable & effect \\ \midrule
+\file{OCTOPUS_TRACE=<file>} & write the raw event trace (\cref{ch:monitoring}) \\
+\file{OCTOPUS_TRACE_WINDOW=t0:t1} & keep only trace events inside this core-cycle window \\
+\file{OCTOPUS_EVENT_DUMP=N} & print the raw Logger timelines of the first $N$ slow requests (Total above the threshold, or any memory-bus crossing) \\
+\file{OCTOPUS_EVENT_DUMP_MIN=<cycles>} & the Total threshold for the dump (default 100) \\
+\file{OCTOPUS_EVENT_DEBUG=1} & report any request whose stages do not tile to Total, and the end-of-run ok/fail/noresp tally \\
+\file{OCTOPUS_NO_LOG=1} & skip per-request logging; still write \code{Summary.csv} \\
+\file{OCTOPUS_HANG_DUMP=<cycles>} & dump every controller that has been idle with a non-empty queue for that long, and finalize the trace \\
+\file{OCTOPUS_TRACE_ADDR=<addr>} & print every controller's events on that line to stderr (\code{1} for every line); the first tool for a protocol fault \\
+\file{OCTOPUS_DUMP_AT=<cycle>} & dump every controller's queues at that cycle \\
+\file{MCSIM_PROBE=<file>} & log every MCsim request, command and completion with the DRAM clock \\
+\bottomrule
+\end{tabularx}
+\end{table}

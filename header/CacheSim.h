@@ -9,28 +9,48 @@
 #ifndef _CacheSim_H
 #define _CacheSim_H
 
-#include "Configurable.h"
-#include "MultiCoreSystem.h"
-#include "MultiCoreSystem_Mesh.h"
-#include "ClockManager.h"
-
+// Kept deliberately light: this header is included by the gem5 bridge. The
+// system-configuration headers it used to pull in are included by
+// CacheSim.cpp instead, so an embedder needs only this directory on its
+// include path.
+#include <cstdint>
+#include <ostream>
 #include <string>
 #include <vector>
 
 namespace octopus
 {
+    class Configurable;
+
     class CacheSim
     {
     private:
         Configurable* system_config;
 
     public:
-        CacheSim(std::string system_name, std::vector<std::string> cl_params, bool print_config = false,
-                 std::string output_dir = "", bool trace = false, std::string config = "");
+        // Preserve the four-argument API used by the prebuilt gem5 bridge.
+        CacheSim(std::string system_name, std::vector<std::string> cl_params,
+                 bool print_config = false, std::string config = "");
+        CacheSim(std::string system_name, std::vector<std::string> cl_params,
+                 bool print_config, std::string config, std::string output_dir, bool trace);
         ~CacheSim();
 
         void run();
         void step();
+
+        /* Simulated time in ns. One step() advances to the next scheduled
+         * event, so an embedder pacing this model from its own clock must
+         * step until now() has moved far enough rather than counting steps. */
+        uint64_t now() const;
+
+        /* Granularity one step() advances by, and the smallest registered
+         * clock period. Equal in a well-formed configuration. */
+        uint64_t stepGranularity() const;
+        uint64_t minPeriod() const;
+
+        /* Print each controller's queue/MSHR occupancy summary (only those that
+         * ever refused or stalled). */
+        void reportOccupancy(std::ostream &os) const;
     };
 }
 

@@ -1,0 +1,194 @@
+\chapter[The coherence engine]{The coherence engine: CSV finite-state machines}\label{ch:coherence-engine}
+
+\whatyoufind{Why a coherence protocol in Octopus is a spreadsheet and not a program; the exact
+format of that spreadsheet and the one rule about it that silently breaks protocols; the
+vocabulary of events a controller can see and actions it can perform; the families that ship
+and how a snooping protocol differs from a directory one; and a worked example, MI, added
+without a line of C++.}
+
+\section{Coherence as data}
+
+A cache controller's coherence logic is a finite-state machine read at start-up from a CSV
+file. Rows are states, stable and transient; columns are coherence events; each cell lists the
+actions and the next state for that (state, event) pair. Adding or modifying a protocol means
+editing the table --- no C++ change and no recompilation. The same engine, \code{FSMReader} plus
+a per-family protocol handler, drives MSI, MESI and MOESI in their snooping and directory forms,
+and the predictable protocols built on Octopus (\cref{ch:introduction}).
+
+The split pays off in code size. Because the handler only translates a small set of protocol
+actions into controller actions, a protocol that extends a family it already knows costs little:
+\cref{tab:loc} contrasts the lines of code per protocol with gem5's Ruby.
+
+\begin{table}[htbp]\centering\small
+\caption{Lines of code per coherence protocol, Octopus versus gem5's Ruby. In Octopus the count
+is the CSV table plus the handler code specific to that protocol; MESI and MOESI extend MSI's
+handler.}\label{tab:loc}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule & MSI & MESI & MOESI & PENDULUM \\ \midrule
+gem5 (Ruby) & 800 & 1400 & 1300 & 2000 \\
+\textbf{Octopus} & \textbf{300} & \textbf{70} & \textbf{120} & \textbf{500} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{The table}\label{sec:fsm-format}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/fsm-annotated}\end{adjustbox}
+\caption{An excerpt of \code{MESI\_LLC.csv} with the four things to know about the format.
+\Cref{app:fsm-tables} prints every shipped table in full.}
+\label{fig:fsm-annotated}
+\end{figure}
+
+A file in \file{Protocols_FSM/} has four blocks (\cref{fig:fsm-annotated}):
+
+\begin{enumerate}
+\item \textbf{Events}, numbered from 0: the columns of the transition table. For the snooping
+  L1 they are exactly \evt{Load}, \evt{Store}, \evt{Replacement}, \evt{Own\_GetS},
+  \evt{Own\_GetM}, \evt{Own\_PutM}, \evt{Other\_GetS}, \evt{Other\_GetM}, \evt{Other\_PutM},
+  \evt{OwnData}, \evt{Invalidation} and \evt{OwnData\_Execlusive}; for the snooping LLC
+  \evt{GetS}, \evt{GetM}, \evt{Replacement}, \evt{PutM\_fromOwner}, \evt{PutM\_fromNonOwner},
+  \evt{Data\_fromLowerInterface}, \evt{Data\_fromUpperInterface} and \evt{Own\_Invalidation}.
+\item \textbf{Actions}, numbered from 0: what a cell may ask for. The L1 offers \act{Stall},
+  \act{Hit}, \act{GetS}, \act{GetM}, \act{PutM}, \act{Data2Req}, \act{Data2Both}, \act{SaveReq},
+  \act{Fault} and \act{removeSavedReq}; the LLC offers \act{Stall}, \act{GetData},
+  \act{SendData}, \act{SaveData}, \act{SetOwner}, \act{ClearOwner}, \act{IssueInv},
+  \act{WriteBack}, \act{Fault} and \act{SendExeclusiveData}. Each type of controller offers its
+  list independently of the protocol, which is what lets one controller class run several
+  protocols.
+\item \textbf{States}, numbered from 0, stable and transient alike. Transient names follow the
+  textbook convention: \state{IS\_ad} is ``going from I to S, awaiting the bus (a) and the data
+  (d)'', \state{IM\_dI} is ``going to M, data pending, but invalidated meanwhile''.
+\item \textbf{The transition table}: a header row \code{State, stable, isDataValid, <events>},
+  then one row per state. \code{stable} marks the stable states; \code{isDataValid} says whether
+  the line's data may be read in that state. A cell is \code{Action1/Action2/NextState}. A cell
+  whose last element is an action, not a state (\code{IssueInv/}), stays in the current state;
+  an empty cell ignores the event; \code{Fault/} declares the pair unreachable.
+\end{enumerate}
+
+\begin{trapbox}[Row order is the state number]
+\code{FSMReader} indexes transition rows by \emph{position}, not by name. When you add a state,
+its row must be appended \textbf{last}, so that its position matches the number you gave it in
+the state list. Put it anywhere else and the FSM silently runs another state's transitions ---
+no error, just wrong results. This is the single most likely way a protocol edit goes wrong.
+\end{trapbox}
+
+\paragraph{Reading a cell.} In \cref{fig:fsm-annotated}, state \state{I} (the LLC has the line,
+no L1 owns it) on \evt{GetM} reads \code{SendData/SetOwner/EorM}: send the data to the
+requester, record it as the owner, and move to \state{EorM}. The same state on
+\evt{Replacement} reads \code{IssueInv/}: broadcast an invalidation and stay --- the eviction
+completes later, when the LLC's own copy of that invalidation comes back as
+\evt{Own\_Invalidation} and the cell \code{WriteBack/N} runs. \Cref{ch:llc-datapath} draws those
+two paths.
+
+\paragraph{Fault is an audit.} A cell of \code{Fault/} means ``this (state, event) should be
+unreachable''. The handler halts the run and reports the pair rather than mis-routing silently.
+That is what makes a protocol auditable: an incomplete or wrong table fails loudly on the first
+trace that exercises the hole, and the Debugger's transition trace (\cref{ch:monitoring}) shows
+the exact sequence that reached it.
+
+\section{Stable and transient states}
+
+A snooping protocol on a split-transaction bus is mostly transient states. A request is issued
+(\act{GetS}), travels the request lane, is seen back by its own issuer (\evt{Own\_GetS}: the
+line is now ordered on the bus), and some time later the data arrives (\evt{OwnData}); between
+those moments other cores' requests to the same line are seen (\evt{Other\_GetS},
+\evt{Other\_GetM}) and may have to be remembered (\act{SaveReq}) and answered when the data
+finally comes (\act{Data2Req}, \act{Data2Both}). Each such interleaving is a row. The shipped
+MESI L1 has 4 stable and 20 transient states; its LLC 4 stable and 7 transient
+(\cref{app:fsm-tables}).
+
+The LLC side uses states a textbook does not name. \state{N} is ``not present'';
+\state{EorM} is ``an L1 owns this line, I do not know in which of E or M''; \state{MN\_d} is
+``evicting, waiting for the owner's data''. They exist because the LLC is inclusive and tracks
+one owner per line, and they are where most of the subtle behaviour of \cref{ch:llc-datapath}
+lives.
+
+\section{Snooping and directory}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/snoop-vs-directory}\end{adjustbox}
+\caption{One \code{GetM} from core A while core B shares the line, under the shipped snooping
+MESI (left) and the shipped directory MSI (right).}
+\label{fig:snoop-vs-directory}
+\end{figure}
+
+The two families differ in who learns about a request (\cref{fig:snoop-vs-directory}). Under
+snooping every L1 sees every request on the request lane and acts on its own copy; the order of
+the bus is the order of the protocol, and the LLC's job is to supply data when no L1 owns the
+line and to track the owner when one does. Under a directory the home --- the LLC-side
+\code{CacheControllerDirectory} --- keeps a sharer list per line, forwards each request only to
+the caches that need to act, and the requester counts the acknowledgements; nothing is
+broadcast, which is what lets a directory run on a point-to-point network such as the mesh
+(\cref{ch:interconnects}). The same controllers, queues and data handlers serve both; only the
+protocol handler and the tables differ.
+
+\begin{table}[htbp]\centering\small
+\caption{The protocol families that ship, and the preset that selects each. The L1 and LLC
+tables of a family are a matched pair.}\label{tab:families}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}p{0.17\textwidth}p{0.27\textwidth}p{0.2\textwidth}Y@{}}
+\toprule family & L1 table & LLC table & selected by \\ \midrule
+snoop MSI & \file{MSI_splitBus_snooping} & \file{MSI_LLC} & \file{MultiCoreSystem_Snoop.csv} \\
+snoop MESI & \file{MESI_splitBus_snooping} & \file{MESI_LLC} & \file{MultiCoreSystem.csv} (the default) \\
+snoop MOESI & \file{MOESI_splitBus_snooping} & \file{MOESI_LLC} & no preset \\
+directory MSI & \file{MSI_directory} & \file{MSI_LLC_directory} & \file{MultiCoreSystem_Directory.csv} \\
+directory MESI, MOESI & \file{MESI_directory}, \file{MOESI_directory} & \file{MESI_LLC_directory}, \file{MOESI_LLC_directory} & no preset \\
+predictable & \file{PMSI}, \file{PMESI}, \file{PMSI_asterisk}, \file{PMESI_asterisk}, \file{Pendulum} & their \file{_LLC} tables & research configurations \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{trapbox}[{A protocol is five keys, and the tables are a matched pair}]
+Selecting a protocol sets the controller class, the L1 and LLC \code{protocol\_type} and the L1
+and LLC \code{fsm\_filename} together (\cref{ch:configuration}). A MESI L1 with an MSI LLC
+faults with ``Wrong destination''; overriding some of the five from the command line faults or
+crashes. Switch by preset, not by hand.
+\end{trapbox}
+
+\section{A worked example: MI without C++}
+
+MI is the simplest coherence protocol: a line is either Invalid or Modified, so every access,
+even a load, takes it exclusive. It is MSI with the \state{S} state and its transients removed
+and \evt{Load} behaving like \evt{Store}: 9 states instead of 22. Because MI uses only a subset
+of MSI's events and actions, it runs on the existing \code{SNOOP\_MSI} handler and the existing
+\code{MSI\_LLC}: the entire protocol is one CSV, \file{Protocols_FSM/MI_splitBus_snooping.csv}.
+
+\begin{table}[htbp]\centering\small
+\caption{The two stable rows of \code{MI\_splitBus\_snooping.csv}; the columns not shown are
+those of MSI.}\label{tab:mi-rows}
+\begin{tabular}{@{}>{\ttfamily}l>{\ttfamily}c>{\ttfamily}c>{\ttfamily}l>{\ttfamily}l>{\ttfamily}c>{\ttfamily}l>{\ttfamily}l@{}}
+\toprule
+\normalfont\textbf{State} & \normalfont\textbf{stable} & \normalfont\textbf{isDataValid} & \normalfont\textbf{Load} & \normalfont\textbf{Store} & \ldots & \normalfont\textbf{OwnData} & \normalfont\textbf{Invalidation} \\ \midrule
+I & 1 & 0 & GetM/IM\_ad & GetM/IM\_ad & \ldots & Fault/ & \\
+M & 1 & 1 & Hit/ & Hit/ & \ldots & Fault/ & Data2Req/I \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Selecting it is one override on top of the MSI preset:
+
+\begin{lstlisting}[style=shell]
+./build/Octopus_Simulator -s MultiCoreSystem \
+  -p "workload_path(s)=BMs/eembc-traces/mi_pingpong/" \
+  -p "cache_controller[*].fsm_filename(s)=MI_splitBus_snooping"
+\end{lstlisting}
+
+On the \code{mi\_pingpong} toy workload, where cores 0 and 1 repeatedly read one line, MESI lets
+the two cores share it and finishes in 332 cycles; MI makes the line ping-pong exclusively
+between them and finishes in 482. The Logger shows the cost; the Debugger's address-filtered
+transition trace shows the cause --- \code{I --Load--> IM\_ad} under MI against
+\code{I --Load--> IS\_ad} under MESI. One new file, one override, no compiler.
+
+\begin{wherebox}
+\begin{itemize}[nosep,leftmargin=1.2em]
+\item \file{Protocols_FSM/} --- the tables, one CSV per agent
+\item \file{header/FSMReader.h}, \file{src/FSMReader.cpp} --- the parser and \code{getTransition}
+\item \file{src/Protocols/MSIProtocol.cpp}, \file{src/Protocols/MESIProtocol.cpp}, \file{src/Protocols/MOESIProtocol.cpp} --- the snooping L1 handlers
+\item \file{src/Protocols/LLCMSIProtocol.cpp}, \file{src/Protocols/LLCMESIProtocol.cpp} --- the snooping LLC handlers (MOESI's LLC runs on the MESI handler)
+\item \file{src/Protocols/MSIDirectory.cpp}, \file{src/Protocols/MESIDirectory.cpp}, \file{src/Protocols/MOESIDirectory.cpp} --- the directory L1 handlers
+\item \file{src/Protocols/LLCMSIDirectory.cpp}, \file{src/Protocols/LLCMESIDirectory.cpp}, \file{src/Protocols/LLCMOESIDirectory.cpp} --- the directory home handlers
+\item \file{docs/AddingAProtocol.md} --- the MI example in full
+\item \file{demo_protocol.sh} --- runs it
+\end{itemize}
+\end{wherebox}

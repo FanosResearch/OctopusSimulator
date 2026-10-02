@@ -1,0 +1,129 @@
+\chapter{Extending Octopus}\label{ch:extending}
+
+\whatyoufind{Where to edit, for each kind of extension; what each costs in code and in
+rebuilds; the three worked extensions the tutorial uses --- an arbiter, a protocol change, a
+third cache level --- with the trap in each; and the extension points that are planned but not
+yet there.}
+
+\section{The map}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/extension-points}\end{adjustbox}
+\caption{The shipped system with a pin on every extension point. Amber pins exist; the grey one
+is planned.}
+\label{fig:extension-points}
+\end{figure}
+
+\begin{table}[htbp]\centering\small
+\caption{What each extension touches.}\label{tab:extend}
+\begin{tabularx}{\textwidth}{@{}lYl@{}}
+\toprule to add \ldots & do this & rebuild \\ \midrule
+a coherence protocol or variant & write or edit a CSV FSM, L1 and LLC tables as a pair (\cref{ch:coherence-engine}); a new family with new actions is a protocol-handler subclass in \code{src/Protocols/} & no (yes for a new family) \\
+an arbiter & subclass \code{Arbiter}, implement \code{elect()}, add the file to \code{src/Arbiters/CMakeLists.txt}, register the name in the controller's factory & yes \\
+a replacement policy & subclass \code{ReplacementPolicy} (\code{update}, \code{getReplacementCandidate}); honour the way mask & yes \\
+an interconnect topology & subclass \code{InterconnectTopology} and \code{InterconnectController}; the controllers on either side see only interfaces & yes \\
+a memory controller & a scheduler directory under \code{src/MCsim/system/}, selected by \code{mcsim\_scheduler}; about 130 lines on average & yes (MCsim) \\
+a system shape & a class beside \code{MultiCoreSystem} in \code{src/SystemConfigurations/} plus a CSV of the same name & yes \\
+a parameter & a key in the component's CSV, read from \code{parameters} in its constructor; overridable with \code{-p} at once & yes \\
+a Logger stage & stamp \stamp{ENTER}/\stamp{SERVICE}/\stamp{EXIT} with a new \code{Role}; the decomposition walks named events (\cref{ch:monitoring}) & yes \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The split of coherence into a handler plus a CSV table is why a protocol variant costs a
+spreadsheet edit and no rebuild, and why MESI and MOESI extend MSI at a fraction of the code of
+monolithic simulators (\cref{tab:loc}). Everything else is a subclass with a handful of virtual
+methods and a name in a factory. A rebuild after touching one file is about fifty seconds on a
+four-core codespace: \code{cmake --build build -j\$(nproc)}.
+
+\section{An arbiter}
+
+An arbiter is a subclass of \code{Arbiter} implementing one pure virtual, \code{elect}
+(\cref{sec:arbiters}). The base class offers \code{findMessage()} and
+\code{electOldestOwned(buffers, owner, out)}, which picks the oldest message owned by a given
+core across all buffers; use it rather than re-deriving it, because a core's cache-to-cache
+supplies sit in a different buffer from its own requests (\cref{sec:arbiters}). A weighted round-robin where core 0
+gets two slots per round is about twenty lines against \code{RRArbiter}, and its effect shows at
+once in core 0's worst-case request-bus latency:
+
+\begin{lstlisting}[style=shell]
+cp header/Arbiters/RRArbiter.h header/Arbiters/WRRArbiter.h
+cp src/Arbiters/RRArbiter.cpp  src/Arbiters/WRRArbiter.cpp
+sed -i 's/RRArbiter/WRRArbiter/g' header/Arbiters/WRRArbiter.h src/Arbiters/WRRArbiter.cpp
+#  add WRRArbiter.cpp to src/Arbiters/CMakeLists.txt; register the name in
+#  src/Interconnect/SplitBusController.cpp; rebuild; then:
+./build/Octopus_Simulator -s MultiCoreSystem -p "workload_path(s)=$W/" \
+    -p "bus[0].interconnect_controller.arbiter_type(s)=WRRArbiter"
+\end{lstlisting}
+
+With an unmodified copy of RR you must get exactly RR's numbers --- that is the check that the
+registration works --- and only then make it weighted. \code{cacheb01}, where four cores fight
+over one block, is the benchmark on which the arbiter matters most.
+
+\begin{trapbox}[Register it on the bus you are measuring]
+The shipped \code{bus[0]} is a \code{TripleBus} whose controller type is \code{Split}, so
+\file{src/Interconnect/SplitBusController.cpp} is the factory that decides which arbiters exist
+on it. \code{MeshController.cpp} and \code{NoCController.cpp} have the same chain for the mesh;
+registering there instead compiles cleanly and does nothing.
+\end{trapbox}
+
+\section{A protocol change}
+
+The protocol is \file{Protocols_FSM/*.csv}, one table per agent, read at start-up; no compiler
+is involved (\cref{ch:coherence-engine}). Two exercises of different depth: diff
+\code{MESI\_splitBus\_snooping.csv} against \code{MOESI\_splitBus\_snooping.csv}, find the
+\state{O} state, list every transition into and out of it, say in one sentence what it buys and
+what it costs, then run both on \code{cacheb01} and check the sentence against the response-bus
+column; or pick a race the table handles with a \code{Stall/} and handle it with an explicit
+transient state instead, run \code{a2time01}, and confirm the result is identical --- only
+\emph{how} the case is handled changed, not \emph{what} happens. Keep a copy of
+\code{Summary.csv} from before the edit and \code{diff} it after. The one real trap is the row
+order (\cref{sec:fsm-format}): a new state's row goes last.
+
+\section{A third cache level}
+
+\file{src/SystemConfigurations/MultiCoreSystem.cpp} hardwires the shape --- a loop creating one
+L1 per core on \code{bus[0]}, one LLC between \code{bus[0]} and \code{bus[1]}, memory beyond.
+There is no parameter for a third level; the wiring is in C++, which is the boundary between
+data and code (\cref{ch:configuration}). So this is a new class beside \code{MultiCoreSystem}
+and \code{MultiCoreSystem\_Mesh}, selected with \code{-s ThreeLevelSystem}. It needs the
+class --- a header and a source file --- \emph{and} a CSV of the same name under
+\file{configuration/SystemConfigurations/}; the shared name is how \code{-s} finds both. Every
+building block exists and is generic. \code{createController} makes a controller of any type
+from a parameter sub-map and a pair of interfaces; \code{Bus} and \code{TripleBus} build from
+their own sub-map (\code{getSubMap} with \code{"bus"} and the index); \key{bus\_type} already
+sizes the bus array from the CSV, so a third bus is a CSV line; and the per-instance parameters
+of a controller come from \code{getSubMap} with \code{"cache\_controller"} and the index. The new class is
+\code{MultiCoreSystem.cpp} with one more loop: L1s on \code{bus[0]}, private L2s between
+\code{bus[0]} and \code{bus[1]}, the LLC between \code{bus[1]} and \code{bus[2]}, memory on
+\code{bus[2]}; register it where \code{MultiCoreSystem\_Mesh} is registered and add the source to
+the \code{SystemConfigurations} CMake list.
+
+Two things to look at when it runs. The report's \col{L2 Stall} and \col{L2 Access} now mean the
+private L2, and the LLC's stages fold into the bus and DRAM columns --- the Logger attributes
+stages per controller through \code{setLogRole}, and a new level deserves its own role. And
+coherence: a private L2 between a snooping L1 and the LLC is not a transparent box; something has
+to snoop on behalf of the L1. The cheapest correct answer is an inclusive L2 that forwards every
+bus transaction up, which is what the reference solution does; what a real design would do
+instead is the discussion the exercise exists for.
+
+\section{Planned}
+
+Multi-hop routing on the NoC is designed, not built: a \code{Topology} that knows coordinates
+and endpoint attachment, a \code{RoutingAlgorithm} plug-in with one method,
+\code{nextHop(router, dest, msg)}, selected by name like an arbiter, input-buffered routers with
+credit-based back-pressure, and three virtual networks so that a directory protocol's
+request--forward--response dependency cannot deadlock. The current single-switch NoC becomes its
+degenerate case, and ``add a routing algorithm'' becomes the mesh's analogue of ``add an
+arbiter''. \file{docs/NoC_MultiHop_Plan.md} has the design and its phasing.
+
+\begin{wherebox}
+\begin{itemize}[nosep,leftmargin=1.2em]
+\item \file{header/Arbiters/Arbiter.h} --- the arbiter interface
+\item \file{src/Interconnect/SplitBusController.cpp} --- the arbiter factory for the bus
+\item \file{header/ReplacementPolicies/ReplacementPolicy.h}, \file{src/ReplacementPolicies/} --- replacement (LRU, random)
+\item \file{src/SystemConfigurations/} --- the system classes
+\item \file{tutorial/03-extending-octopus/} --- the three exercises with their checks
+\item \file{tutorial/solutions/} --- the reference patches
+\end{itemize}
+\end{wherebox}

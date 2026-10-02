@@ -39,8 +39,8 @@ int main (int argc, char *argv[])
     }
 
     CacheSim cache_sim(sys_names.back(), cl_params, !print_config.empty(),
-                       output_dirs.empty() ? "" : output_dirs.back(), trace,
-                       configs.empty() ? "" : configs.back());
+                       configs.empty() ? "" : configs.back(),
+                       output_dirs.empty() ? "" : output_dirs.back(), trace);
     cache_sim.run();
     
     return 0;

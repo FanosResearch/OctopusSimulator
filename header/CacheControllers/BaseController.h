@@ -22,6 +22,7 @@
 #include "Logger.h"
 
 #include <functional>
+#include <ostream>
 #include <string>
 #include <queue>
 #include <vector>
@@ -29,6 +30,7 @@
 
 namespace octopus
 {
+    class ExternalCPU;
     class BaseController : public ClockedObj, public Initializable, public Configurable
     {
     protected:
@@ -58,6 +60,20 @@ namespace octopus
 
         // This queue is used mainly to serialize messages that come from different sources
         FRFCFS_Buffer<Message, CoherenceProtocolHandler> *m_processing_queue;
+        int m_processing_queue_size;   // demand admission bound of that queue (-1 = none)
+        // Set when an external core model (the gem5 bridge) drives this L1.
+        // Receives the commit of each CPU request and the loss of any
+        // readable line; NULL in the standalone simulator.
+        ExternalCPU *m_cpu_port = NULL;
+        uint64_t m_data_read_failures = 0;   // responses built without line data
+        // Occupancy diagnostics, reported at the end of a run (reportOccupancy):
+        // cycles a popped request was turned away by canAdmitRequest (MSHR or
+        // write-back buffer full), interconnect intakes refused because the
+        // demand queue was at its bound, and the queue's peak occupancy.
+        uint64_t m_admit_fail_cycles = 0;
+        uint64_t m_intake_refusals = 0;
+        int m_queue_peak = 0;
+        static std::vector<BaseController *> s_controllers;   // every controller built, for the report
 
         // key is the msg.addr & mask(nbits of CacheLineSize) and the value is vector of Messages
         // to ensure order of requests of the same cache line
@@ -82,6 +98,11 @@ namespace octopus
         // held back (e.g., the derived controller has no free MSHR/PWB entry for
         // a new miss). Default: always admit. Overridden by CacheController.
         virtual bool canAdmitRequest(Message &msg) { return true; }
+        // Pipelined data array: lets the derived controller take a ready
+        // message off the FSM path and apply its event only once the array
+        // has absorbed its bytes. Default: never.
+        virtual bool deferForDataArray(Message &msg) { return false; }
+        virtual void traceMsg(const char *what, const Message &msg) {}   // debug trace hook (CacheController)
 
         virtual uint64_t getAddressKey(uint64_t addr);
 
@@ -100,6 +121,23 @@ namespace octopus
         ~BaseController();
 
         virtual void init();
+        void setCpuPort(ExternalCPU *port) { m_cpu_port = port; }
+        // One line per controller that ever refused or stalled: how close the
+        // queue, MSHR and write-back bounds came to binding in this run.
+        static void reportOccupancy(std::ostream &os);
+        // Mirror of a classic cache's blocked CPU port. `outstanding` is the
+        // number of the external core's requests accepted and not yet
+        // answered. The queue bound is read as the total the core is credited
+        // with: an accepted request holds a credit until its response,
+        // whether it waits in this queue, in the pending table, or on its way
+        // back, so every buffer between the core and this controller is
+        // bounded by that same number. The L1 controller adds its MSHR and
+        // write-back-buffer bounds.
+        virtual bool demandAdmissionBlocked(int outstanding) const;
+        // Fatal diagnostic for a response that needs line data the array no
+        // longer holds (replaces a memcpy from NULL).
+        void dataArrayReadFailed(const char *where, const Message *msg);
+        int demandQueueSize() const { return m_processing_queue_size; }
 
         // Design B: tag this controller's logging role (e.g. LLC). Default is L1.
         void setLogRole(Logger::Role role) { m_log_role = role; }

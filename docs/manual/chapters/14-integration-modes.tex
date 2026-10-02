@@ -1,0 +1,130 @@
+\chapter[Integration modes]{Integration modes: gem5 and full system}\label{ch:integration-modes}
+
+\whatyoufind{The three ways to run the same hierarchy --- trace replay, trace replay over
+MCsim, and a real CPU model under gem5 with Arm cores booting Linux --- and why the middle never
+changes; what the gem5 bridge does, what the Arm ISA support cost, how the stack is built and
+run, and the one constraint that shapes any session using it.}
+
+\section{Only the endpoints change}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/operating-modes}\end{adjustbox}
+\caption{Three operating modes, one hierarchy.}
+\label{fig:operating-modes}
+\end{figure}
+
+The request source and the memory sink are \code{CommunicationInterface} producers and
+consumers like every other component (\cref{fig:operating-modes}). In standalone mode the
+source is the trace-driven \code{CPU} and the sink the fixed-latency
+\code{MainMemoryController}; swapping the sink for \code{MCsimInterface} gives cycle-accurate
+DRAM (\cref{ch:main-memory}); swapping the source for \code{ExternalCPU} puts a real CPU model
+in front. \code{ExternalCPU} offers an API through which an external simulator pushes memory
+requests and registers a callback fired when each is fulfilled; nothing downstream can tell the
+difference, and the same CSV-configured hierarchy runs unchanged in every mode. A user chooses
+speed by omitting interfaces, single-side accuracy, or both for the highest fidelity.
+
+\section{Full system: gem5, Arm, Linux}
+
+\figmed{fullsystem.pdf}{Full-system integration: gem5 executes Arm cores under Linux and holds
+the functional memory values; Octopus supplies the cycle-accurate timing and coherence for every
+request; MCsim models the DDR4 controller. The ATP engine injects aggressor
+traffic.}{fig:fullsystem}{0.6}
+
+Standalone trace mode is fast, but embedded validation eventually needs a real OS and real
+applications. Octopus therefore also runs as a first-class memory model inside gem5
+(\cref{fig:fullsystem}): gem5 executes out-of-order Arm cores booting Linux and holds the
+functional memory values, while Octopus supplies the timing and coherence for every request and
+MCsim optionally models the DDR controller. Octopus is compiled \emph{into} gem5 as a scons
+\code{EXTRAS} module, together with Arm's Adaptive Traffic Profile engine for GPU- and DPU-like
+aggressor traffic:
+
+\begin{lstlisting}[style=shell]
+cd $root/OctopusSimulator/MCsim/src && make libmcsim.so            # MCsim as a shared library
+cd $root/OctopusSimulator && cmake -S . -B build && cmake --build build
+cd $root/gem5 && scons EXTRAS=../ATP-Engine:../OctopusSimulator -j $(nproc) build/ARM/gem5.fast
+export LD_LIBRARY_PATH=$root/OctopusSimulator/build:$root/OctopusSimulator/MCsim/src:$LD_LIBRARY_PATH
+./build/ARM/gem5.opt -re -d <out> $root/OctopusSimulator/gem5/configs/fs_arm.py
+./build/ARM/gem5.opt -re -d <out> $root/OctopusSimulator/gem5/configs/fs_arm.py --classic   # gem5's own caches, same preset
+./build/ARM/gem5.opt -re -d <out> $root/OctopusSimulator/gem5/configs/fs_arm.py \
+    --octopus-param 'bus[0].interconnect_controller.m_response_latency(i)=1'
+\end{lstlisting}
+
+The bridge is \file{gem5/octopus.cc}, a gem5 SimObject per L1, with \file{gem5/Octopus.py} and
+\file{gem5/SConscript} for the \code{EXTRAS} build; \file{gem5/configs/octopus_cache_hierarchy.py}
+puts the Octopus hierarchy behind gem5's cores, \file{fs_arm.py} and \file{se_arm.py} are the
+full-system and syscall-emulation entry points, and \file{gem5_base_cache_hierarchy.py} is
+gem5's own classic caches built from the same preset for comparison (\code{--classic}). The
+hierarchy itself is the preset \file{configuration/SystemConfigurations/MultiCoreSystem_gem5.csv}:
+four cores and eight L1 bridges --- instruction caches are Octopus ids 0--3, data caches 4--7
+--- running snoop MSI on a \code{CacheController}, 512\,KiB 4-way L1s with random replacement,
+an 8\,MiB 8-way LLC with a pipelined 10-cycle array and the line interlock on
+(\cref{ch:cache-controller}), an FCFS bus, and MCsim DDR4-2400 as memory.
+\code{--octopus-param} takes any \code{name(type)=value} line of the preset and may be repeated,
+so the five keys of a protocol switch it to MESI without rebuilding anything. After a change to
+the library, \code{cmake --build build} and the \code{scons} line relink only the bridge.
+
+\paragraph{Octopus's reports under gem5.} With \code{cpu[*].log\_requests(i)=1} the
+\code{ExternalCPU} reports its requests to the Logger, and a gem5 run then writes the same
+reports a standalone run does: a \code{newLogger/} directory with one latency report per core
+(both of a core's L1s report into it) and the \code{Summary.csv}. The window follows
+gem5's statistics: a stats reset starts a fresh log, the next stats dump writes the reports, so
+both views cover the region of interest only. gem5's side is the bridge's own counters per L1 in
+\code{stats.txt} (\code{readReqs}, \code{writeReqs}, \code{responses}, \code{avgLatency}); every
+packet gem5 hands to an L1 is one Octopus request, and the two latencies agree to about a cycle.
+
+\paragraph{The Arm ISA is the hard part.} Booting Linux requires faithful atomics over
+Octopus's asynchronous, out-of-order message model. The bridge implements Arm LL/SC
+(\code{LDXR}/\code{STXR}) with per-core exclusivity maps, revoked on any conflicting write, and
+the LSE atomic memory operations (\code{SWP}, \code{CAS}/\code{CASP}, the \code{LD}/\code{ST}
+arithmetic and logical variants), with ordering constraints that keep exclusivity correct even
+when responses return out of order. The bridge is about a thousand lines; integration and Linux
+bring-up took about six months, a one-time cost every later full-system study reuses. On the
+Arm Industrial Challenge AR-HUD workload --- an OV\textsuperscript{2}SLAM stereo pipeline plus a
+CNN pose estimator on a Jetson-class SoC model --- coordinating the shared arbiters cut the
+worst observed memory latency by more than twenty times at near-baseline throughput.
+
+\paragraph{Harnesses and tests.} The script \file{gem5/harness/build.sh} builds single
+binaries against the Octopus library with no gem5 --- \code{l1} (hit and miss latencies,
+same-line bursts),
+\code{llc}, \code{evict}, \code{seq}, \code{reorder} (with an override, e.g.\ a 10-cycle L1 port)
+and \code{stress} (multi-core random contention with a hang detector) --- each taking a log
+directory and \code{name(type)=value} overrides. \file{gem5/se_test/} is a self-checking
+four-thread program for SE mode, shipped as a static aarch64 binary: private streaming, one
+shared atomic counter, and producer--consumer slices, each phase checking its own result. Two
+debug aids apply to any run: \env{OCTOPUS\_TRACE\_ADDR}\code{=<addr>} (or \code{1}) prints each
+controller's events on a line, \env{OCTOPUS\_DUMP\_AT}\code{=<cycle>} dumps every controller's
+queues at that cycle. The standalone presets are the regression check for library changes: run
+\code{MultiCoreSystem\_Directory} and \code{MultiCoreSystem\_Snoop} and diff
+\file{BMs/TestBM/newLogger/} against a build of the commit you started from.
+
+\section{Running a session on it}
+
+The constraint that shapes any use of the stack: an Octopus C++ edit means relinking
+\code{gem5.opt} --- minutes, not the fifty-second rebuild of standalone work. A session on gem5
+therefore varies configuration, never Octopus source, and an arbiter written for the standalone
+build appears inside gem5 only if the image's \code{gem5.opt} was built with it. Two shapes of
+exercise follow. In syscall-emulation mode, one short program under gem5 makes the interface
+concrete: the request leaves the gem5 CPU, crosses \code{ExternalCPU}, becomes an ordinary
+\code{Message} through L1, bus, LLC and \code{MCsimInterface}, and its \code{LatencyReport} row
+decomposes exactly that path --- the same code that ran standalone, with only the source
+changed. In full system, a checkpoint taken past Linux boot is restored and a workload runs on a
+real kernel with Octopus as its memory system; booting is separated from measuring, and the
+pre-warm is launched in the background long before it is looked at. The tutorial's two gem5
+exercises (\cref{ch:tutorial}) are these; the ESWEEK container image carries the prebuilt
+\code{gem5.opt}.
+
+\begin{wherebox}
+\begin{itemize}[nosep,leftmargin=1.2em]
+\item \file{header/ExternalCPU.h}, \file{src/ExternalCPU.cpp} --- the CPU-side interface
+\item \file{header/MCsimInterface.h}, \file{src/MCsimInterface.cpp} --- the memory side
+\item \file{gem5/octopus.cc}, \file{gem5/octopus.hh}, \file{gem5/Octopus.py}, \file{gem5/SConscript} --- the bridge and its build
+\item \file{gem5/configs/octopus_cache_hierarchy.py}, \file{gem5/configs/fs_arm.py}, \file{gem5/configs/se_arm.py}, \file{gem5/configs/gem5_base_cache_hierarchy.py} --- the gem5 configurations
+\item \file{configuration/SystemConfigurations/MultiCoreSystem_gem5.csv}, \file{configuration/ExternalCPU.csv} --- the hierarchy behind gem5
+\item \file{gem5/harness/}, \file{gem5/se_test/} --- the harnesses and the SE test
+\item \file{gem5/patches/} --- the gem5 patch the integration needs
+\item \file{gem5/cmds.md} --- the working record of the full-system runs
+\item \file{docs/StateAndData.md} --- what real data adds to the timing model
+\item \file{README.md} --- ``Integrating Octopus with gem5''
+\item \file{tutorial/04-gem5-and-fullsystem-stack/} --- the two exercises
+\end{itemize}
+\end{wherebox}

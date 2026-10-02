@@ -65,7 +65,6 @@ namespace octopus
         ClockManager();
 
     public:
-        uint64_t getCurrentTime() const { return current_time; }   // ticks since start (core period = 100 ticks)
         void registerCLKObj(uint64_t clk_period, ClockedObj* obj);
         void deregisterCLKObj(ClockedObj* obj);
         void registerCLKTrigger(ClockedObj* obj);
@@ -73,8 +72,21 @@ namespace octopus
         void run();
         void clkStep();
         void stopClock(ClockedObj* obj);
-        
+
         static ClockManager *getClockManager();
+
+        /* Simulated time in ns. clkStep() advances to the next scheduled
+         * event, so an embedder pacing this model from its own clock must
+         * step until getCurrentTime() has moved far enough rather than count
+         * steps. */
+        uint64_t getCurrentTime() const { return current_time; }
+        /* Smallest registered non-zero clock period. */
+        uint64_t getMinPeriod() const;
+        /* GCD of all registered periods: the finest distance one clkStep()
+         * can advance by. Equal to getMinPeriod() in a well-formed config. */
+        uint64_t getStepGranularity() const;
+        /* Print the registered periods once; called from init(). */
+        void reportClocks() const;
     };
 }
 

@@ -19,6 +19,24 @@ namespace octopus
     {
     }
 
+    bool MSIProtocol::needsDataArray(const Message &msg)
+    {
+        GenericCacheLine cache_line;
+        EventId event_id;
+        Message message = msg;   // readEvent may clear a one-shot flag; work on a copy
+        m_data_handler->readLineBits(message.addr, &cache_line);
+        this->readEvent(message, &event_id);
+        int ev = (int)event_id;
+        return this->m_fsm->hasAction(cache_line.state, ev, "Hit") ||
+               this->m_fsm->hasAction(cache_line.state, ev, "Data2Req") ||
+               this->m_fsm->hasAction(cache_line.state, ev, "Data2Both");
+    }
+
+    bool MSIProtocol::isReadableState(int state)
+    {
+        return this->m_fsm->isHit(state, (int)EventId::Load);
+    }
+
     FRFCFS_State MSIProtocol::getRequestState(const Message &msg, FRFCFS_State req_state)
     {
         GenericCacheLine cache_line;
@@ -180,7 +198,7 @@ namespace octopus
                 break;
 
             case ActionId::Fault:
-                std::cout << " MSIProtocol: Fault Transaction is detected" << std::endl;
+                std::cout << " MSIProtocol: Fault Transaction is detected (controller " << this->m_id << ", line state " << cache_line.state << ", addr 0x" << std::hex << msg.addr << std::dec << ", msg " << msg.msg_id << ", source " << (int)msg.source << ", owner " << msg.owner << ", type " << msg.complementary_value << ", data " << (msg.data != NULL) << ")" << std::endl;
                 exit(0);
                 break;
             }

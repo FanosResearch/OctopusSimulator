@@ -1,0 +1,223 @@
+\chapter{The cache controller}\label{ch:cache-controller}
+
+\whatyoufind{What every cache in Octopus is made of, whether it is a private L1 or the shared
+LLC: two interfaces, one processing queue, a protocol handler that reads a CSV state machine,
+and a data handler that owns the array, the MSHRs and the write-back buffer. How a message
+becomes a list of actions; what the controller admits and what it stalls; how the fields of a
+\code{Message} are decoded; and the one ordering rule at the bus interface that a snoop
+protocol's correctness rests on.}
+
+\section{One class, every level}
+
+A cache controller is the same object at every level of the hierarchy. \code{BaseController}
+holds the machinery; \code{CacheController} adds the data array, the miss handling and the
+write-back path; \code{CacheControllerExclusive} (the shipped L1), \code{CacheController\_End2End}
+(the shipped LLC) and \code{CacheControllerDirectory} (the directory home) specialise only what
+differs. What makes one instance an L1 and another the LLC is its position in the system and the
+FSM table it is given, not its class.
+
+\figmed{CacheController3.pdf}{Inside a cache controller. Messages from both interfaces are
+serialised into one processing queue; the protocol handler turns each one into actions by
+looking the (state, event) pair up in the FSM table that the FSM reader parsed at start-up;
+the data handler executes those actions against the array, the MSHRs and the write-back
+buffer, arbitrating the data port.}{fig:controller}{0.62}
+
+\paragraph{Two interfaces.} Every controller has a \emph{lower} \code{CommunicationInterface},
+facing the cores, and an \emph{upper} one, facing the interconnect towards memory. Demand
+requests arrive from below; coherence requests, snooped transactions and data arrive from
+above; the controller's own requests leave through the upper interface. Interfaces are the
+only way in or out (\cref{ch:system-organization}): they are bounded queues, so a full
+interface pushes back on whoever is trying to fill it.
+
+\paragraph{The processing queue.} Messages from both interfaces are serialised into one
+queue ordered \emph{first-ready, first-come-first-served} (\code{FRFCFS\_Buffer}). A message
+is \emph{ready} when the protocol handler judges that its line is in a state that can accept
+it; a message whose line is in a transient state waits without blocking the ones behind it
+that can proceed. The queue is bounded by \key{processing\_queue\_size}, and the bound applies
+to demand admission only: maintenance traffic the controller generates for itself, such as a
+write-back draining the buffer, is admitted with \code{force=true} so it can never be
+deadlocked by the demand it is making room for.
+
+\paragraph{Per-line order.} Among messages to the \emph{same} line the queue keeps strict
+arrival order for demand requests and invalidations together; data messages are exempt, so a
+fill or a supply can always be processed and can never wait behind a stalled request. This
+per-line FCFS gate is what prevents an eviction's invalidation from leapfrogging an older
+\code{GetS}/\code{GetM} to the same line, and the Logger reports when a request was held by it
+(\col{LLC Gate}, \cref{ch:monitoring}).
+
+\section{From message to actions}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/controller-sequence}\end{adjustbox}
+\caption{One message through the controller. The handler decodes the message into an event,
+looks up the transition for the line's current state, and hands the controller a list of
+protocol-agnostic actions; the controller does not know which protocol it is running.}
+\label{fig:controller-sequence}
+\end{figure}
+
+The protocol handler (\code{CoherenceProtocolHandler}, specialised per family:
+\code{MSIProtocol}, \code{MESIProtocol}, \code{MOESIProtocol}, their \code{LLC\ldots} and
+\code{\ldots Directory} variants) does three things for every message
+(\cref{fig:controller-sequence}):
+
+\begin{enumerate}
+\item \textbf{Decode the event.} \code{readEvent} maps the message to one column of the FSM
+  table from its \emph{source} and \emph{contents}: a \code{Load}/\code{Store} from below; an
+  \code{Own\_GetS}/\code{Own\_GetM} when the controller sees its own request echoed back from the
+  bus and \code{Other\_GetS}/\code{Other\_GetM} when it is another core's; \code{OwnData} when the
+  message carries data for a line it is waiting on; \code{Invalidation} for an LLC
+  back-invalidation; \code{Replacement} for the controller's own eviction.
+\item \textbf{Look up the transition.} \code{FSMReader::getTransition(state, event)} returns the
+  actions and next state the CSV table lists for that cell (\cref{ch:coherence-engine}).
+\item \textbf{Translate to controller actions.} \code{handleAction} turns protocol actions such
+  as \act{GetS}, \act{Data2Both} or \act{IssueInv} into \code{ControllerAction}s the controller
+  can execute without knowing the protocol: \code{SEND\_BUS\_MSG}, \code{UPDATE\_CACHE\_LINE},
+  \code{WRITE\_BACK}, \code{HIT\_Action}, \code{REMOVE\_PENDING}, \ldots
+\end{enumerate}
+
+A cell that reads \code{Fault/} means ``this (state, event) must be unreachable''; the handler
+halts the run and reports it rather than mis-routing silently. That is what makes a protocol
+auditable: an incomplete table fails loudly, on the first trace that exercises the hole.
+
+\section{The data handler}
+
+\code{CacheDataHandler\_COTS} owns everything that holds a line:
+
+\begin{itemize}
+\item \textbf{The array.} One array per controller, indexed by set, holding each line's tag,
+  coherence bits and data together. Reading a line's \emph{bits} (the tag compare, the state
+  the FSM needs) is untimed and claims nothing. Reading or writing its \emph{data} goes through a
+  single port that is busy for \key{m\_data\_handler.m\_data\_access\_latency} cycles per access; demand
+  reads, eviction reads and fill or write-back writes contend for it through a round-robin
+  arbiter (\code{m\_data\_access\_arbiter}).
+\item \textbf{The MSHRs.} A miss allocates one entry and waits there, not in the array, until
+  its data returns. \key{num\_mshr} bounds the number of outstanding misses; \code{-1} removes
+  the bound.
+\item \textbf{The write-back buffer.} A victim moves out of the array into the buffer, bits and
+  data, the moment its way is needed, and leaves for memory later as a separate transaction.
+  \key{m\_data\_handler.pwb\_size} bounds it.
+\item \textbf{Replacement.} LRU, FIFO or random, chosen per controller; under way partitioning
+  (\cref{ch:tasks-and-demo}) a core's fills install into, and evict from, its own ways only.
+\end{itemize}
+
+A line that currently sits in the MSHR or the write-back buffer is read without waiting for the
+port, because it is not in the array yet; it still restarts the port's busy timer, which is why
+such accesses cut in ahead of an access already in progress (the dotted bypass in
+\cref{fig:llc-architecture}). Fill writes are not on the requester's critical path: the
+response is emitted from the fill message itself and the array write runs afterwards
+(\cref{ch:llc-datapath,ch:request-end-to-end}).
+
+\subsection{Two array models, and the line interlock}
+
+The data port can be timed in two ways, chosen per controller
+(\cref{tab:array-models}). In the \emph{occupancy} model, the default, a row runs when its
+message is popped --- the line's state changes at once --- and only the access to the line's
+bytes waits for the port, which then stays busy for the latency; the requester is not charged
+the latency and one access is served per latency window. It is the model every standalone
+preset uses, and it is correct for them because a trace carries no data and the LLC tables never
+invalidate what an older parked read still needs. In the \emph{pipelined} model
+(\key{m\_data\_handler.m\_data\_array\_pipelined}\code{=1}) every access pays the latency and one
+is admitted per port per cycle (\key{m\_data\_handler.m\_data\_array\_ports}); a message whose
+row touches the array is deferred \emph{whole}, so that its state change and its data access
+happen together when the access runs. Lines that sit in the MSHR or the write-back buffer are
+not in the array and bypass the pipeline in either model.
+
+Deferring a message whole takes it out of the queue, so a younger message to the same line could
+otherwise act on a state the older one was about to change. The \emph{line interlock}
+(\key{line\_interlock}\code{=1}) prevents that: while a line has an array access pending, every
+queued message to it is held in place, not ready, until the access has completed, so each message
+sees the line in bus order. The pipelined model turns the interlock on; with real data flowing
+through the hierarchy (the gem5 integration, \cref{ch:integration-modes}) or an L1 with an array
+latency, it must be on. In the same spirit a message from the bus enters a controller's queue
+ahead of the core's own requests but behind older bus messages, so bus order is kept even when a
+bus message has to wait. \file{docs/StateAndData.md} walks through the situations in which line
+state and line data can come apart and which setting handles each.
+
+\begin{table}[htbp]\centering\small
+\caption{The data-array settings.}\label{tab:array-models}
+\begin{tabularx}{\textwidth}{@{}lllY@{}}
+\toprule setting & default & gem5 preset & effect \\ \midrule
+\code{m\_data\_array\_pipelined} & 0 & 1 (LLC) & accesses pay the latency, one admitted per port per cycle; always defers whole, so it turns the interlock on \\
+\code{m\_data\_array\_ports} & 1 & 1 & pipelined model only: accesses admitted per cycle \\
+\code{line\_interlock} & 0 & 1 (L1, LLC) & hold every message to a line with an array access pending; enables whole-message deferral in the occupancy model \\
+\code{m\_data\_access\_latency} & 0 (L1), 10 (LLC) & 0, 10 & the port's busy time per access \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Admission and back-pressure}
+
+A new demand miss is admitted only when the controller can finish it. \code{canAdmitRequest}
+stalls a demand request at the lower interface when the MSHRs are full or the write-back buffer
+has no headroom; \code{demandAdmissionBlocked} adds those two bounds to the processing-queue
+bound. Responses and the controller's own maintenance traffic are never subject to these
+checks, which is what keeps the system deadlock-free under finite buffers: a full queue of
+stalled requests can always drain, because the data they wait for is always admitted.
+
+The default depths of every queue and buffer are in \cref{app:config-keys}.
+
+\section{The LLC's extra duties}
+
+The shipped LLC (\code{CacheController\_End2End}) is \emph{inclusive}: every line an L1 holds is
+also in the LLC. That gives it two duties an L1 does not have. When it evicts a line it must
+remove the L1 copies, which it does with the FSM action \act{IssueInv}: an \code{INV} broadcast on
+the TripleBus \emph{service} lane that every L1 sees and that comes back to the LLC itself as
+\code{Own\_Invalidation} to complete the eviction (\cref{ch:llc-datapath}). And it tracks, per
+line, which L1 currently owns it (\act{SetOwner}/\act{ClearOwner}), so that it can stay out of the
+way when an owner answers a request on the bus. The directory controller
+(\code{CacheControllerDirectory}) replaces snooping with a sharer list at the home and forwards
+requests point-to-point; \cref{ch:coherence-engine} contrasts the two.
+
+\section{Message encoding}\label{sec:message-encoding}
+
+Every transaction is one \code{Message} object. The decoders in the protocol handlers read a
+small set of fields (\cref{tab:message-fields}); knowing them is what makes a Debugger trace or
+the raw event trace readable.
+
+\begin{table}[htbp]\centering\small
+\caption{The \code{Message} fields a decoder reads.}\label{tab:message-fields}
+\begin{tabularx}{\textwidth}{@{}>{\ttfamily}lY@{}}
+\toprule \normalfont field & meaning \\ \midrule
+source & where the message entered the controller: \code{LOWER\_INTERCONNECT} (from the cores' side), \code{UPPER\_INTERCONNECT} (from the bus or memory side), \code{SELF} (a replacement the controller raised for itself) \\
+data & \code{NULL} for a request or command; non-\code{NULL} for a data transfer \\
+complementary\_value & on a request, its type: 0 GetS, 1 GetM, 2 PutM, 10 INV (CPU$\rightarrow$L1: 0 Load, 1 Store). On data it is \emph{inherited} from the message the data was copied from: provenance, not a kind \\
+owner & the requester on requests, supplies and fills; the evicting L1 on an eviction write-back; the LLC on an invalidation \\
+to & destination interface ids; a response is delivered only to these, a broadcast request to everyone \\
+msg\_id & a demand request keeps one id from \code{GetS}/\code{GetM} through fill and response; an eviction write-back has its own id; a write-back forced by a back-invalidation carries the LLC eviction's id \\
+kind & the producer's classification of the message (\code{DEMAND}, \code{GETS}, \code{GETM}, \code{PUTM}, \code{INV}, \code{MEM\_READ}, \code{EVICT}, \code{WB\_DATA}, \code{WB\_INV}, \code{SUPPLY}, \code{SUPPLY\_DEFERRED}, \code{RESP}, \code{FILL}, \code{FILL\_ROLLBACK}, \code{MEM\_WRITE}), set where it is created because the fields above cannot be read back into one \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The bus \code{MessageType} passed to \code{pushMessage} --- \code{REQUEST}, \code{DATA\_RESPONSE}
+or \code{SERVICE\_REQUEST} --- selects the lane the message travels on; it is not stored in the message.
+Three things the same value means are worth remembering: \code{cv = 2} is a PutM on a request, an
+eviction write-back at the LLC and an exclusive grant at a MESI L1; \code{owner} is the requester
+for requests, supplies and fills but the LLC for invalidations; and \code{msg\_id} joins a demand
+request across its life, while an invalidation-forced write-back is attributed to the LLC
+eviction, not to any core's request. The full producer-by-producer table is in
+\file{docs/MessageEncoding.md}.
+
+\section{Delivery order at the bus interface}
+
+A snoop protocol is correct only if every controller observes bus transactions in the
+\emph{same} order. \code{BusInterface} therefore stamps each delivery into a controller's RX
+with one global sequence number, and \code{TripleBusInterface} hands out a service-lane message
+(an LLC back-invalidation) only when it was delivered \emph{before} the request at the head of
+the request RX. Data responses are deliberately not ordered against requests, so that a full
+queue of stalled requests can always drain.
+
+\begin{wherebox}
+\begin{itemize}[nosep,leftmargin=1.2em]
+\item \file{header/CacheControllers/BaseController.h}, \file{src/CacheControllers/BaseController.cpp} --- the machinery every controller shares
+\item \file{header/CacheControllers/CacheController.h}, \file{src/CacheControllers/CacheController.cpp} --- the data array, miss handling, write-back path
+\item \file{header/CacheControllers/CacheControllerExclusive.h}, \file{src/CacheControllers/CacheControllerExclusive.cpp} --- the shipped L1
+\item \file{header/CacheControllers/CacheController_End2End.h}, \file{src/CacheControllers/CacheController_End2End.cpp} --- the shipped LLC
+\item \file{header/CacheControllers/CacheControllerDirectory.h}, \file{src/CacheControllers/CacheControllerDirectory.cpp} --- the directory home
+\item \file{src/CacheDataHandler_COTS.cpp} --- array, MSHRs, write-back buffer, port arbiter
+\item \file{header/FRFCFS_Buffer.h} --- the processing queue
+\item \file{src/Protocols/} --- the handlers (\code{readEvent}, \code{handleAction})
+\item \file{header/Interconnect/CommunicationInterface.h} --- the message
+\item \file{src/Interconnect/BusInterface.cpp}, \file{src/Interconnect/TripleBusInterface.cpp} --- delivery order
+\end{itemize}
+\end{wherebox}

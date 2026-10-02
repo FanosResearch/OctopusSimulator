@@ -1,0 +1,204 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 750" width="1280" height="750" font-family="'IBM Plex Sans','Segoe UI',system-ui,sans-serif" role="img" aria-label="The Octopus system as shipped: four cores with private L1 caches on a TripleBus, a shared LLC, a point-to-point memory bus and DRAM, with one LLC miss from core 0 routed through it as a numbered path, one number per LatencyReport column, whose colour is the kind of time the column measures">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#14212A"/></marker>
+    <marker id="p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#4B32A8"/></marker>
+    <marker id="t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#0E7C73"/></marker>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#B45309"/></marker>
+  </defs>
+  <style>
+    .blk { fill:#FFFFFF; stroke:#5A6B75; stroke-width:1.2 }
+    .mem { fill:#EAF1F6; stroke:#2F6F9F; stroke-width:1.2 }
+    .io  { fill:#F4F1FB; stroke:#6244C7; stroke-width:1.2 }
+    .ctl { fill:#FDF6E6; stroke:#9A6B12; stroke-width:1.2 }
+    .cpu { fill:#FDF6E6; stroke:#9A6B12; stroke-width:1.2 }
+    .ttl { font-size:12px; fill:#14212A; font-weight:600 }
+    .lbl { font-size:10.5px; fill:#14212A; font-weight:600 }
+    .sub { font-size:9.5px; fill:#5E6E76 }
+    .mono{ font-family:'IBM Plex Mono',monospace }
+    .lane{ stroke:#6244C7; stroke-width:1.2; fill:none; opacity:.55 }
+    .stub{ stroke:#5A6B75; stroke-width:1.2; fill:none }
+    .thin{ stroke:#14212A; stroke-width:1.2; fill:none }
+    .rt  { stroke-width:3; fill:none; stroke-linejoin:round }
+    .par { stroke-width:2.2; fill:none; stroke-dasharray:5 3 }
+    .num { font-size:9.5px; font-weight:700; fill:#FFFFFF; text-anchor:middle }
+    .wl  { font-size:8.5px; font-family:'IBM Plex Mono',monospace }
+    .off { opacity:.42 }
+  </style>
+  <rect width="1280" height="750" fill="#FCFBF8"/>
+  <text x="34" y="30" font-size="16" font-weight="700" fill="#14212A">The system, end to end — one LLC miss from core 0, and the column that measures each hop</text>
+  <text x="34" y="47" class="sub">MultiCoreSystem as shipped: 4 cores, snoop MESI on a TripleBus, one shared LLC, a point-to-point memory bus, DRAM. Colour = the LatencyReport column; ⓪–⑨ are the report's nine latency columns in order, at the Logger stamps that bound them.</text>
+  <rect x="34" y="70" width="190" height="130" rx="5" class="blk" stroke="#0E7C73" stroke-width="1.8"/>
+  <text x="44" y="86" class="ttl">Core 0 · the requester</text>
+  <rect x="44" y="94" width="170" height="28" rx="4" class="cpu"/>
+  <text x="52" y="108" class="lbl">CPU</text>
+  <text x="80" y="108" class="sub">trace replay or gem5</text>
+  <rect x="44" y="144" width="170" height="48" rx="4" class="mem"/>
+  <text x="52" y="158" class="lbl">L1</text>
+  <text x="52" y="170" class="sub">private · MSHR · write-back buffer</text>
+  <text x="52" y="182" class="sub mono">CacheControllerExclusive · MESI</text>
+  <rect x="246" y="70" width="190" height="130" rx="5" class="blk"/>
+  <text x="256" y="86" class="ttl">Core 1 · snoops</text>
+  <rect x="256" y="94" width="170" height="28" rx="4" class="cpu"/>
+  <text x="264" y="108" class="lbl">CPU</text>
+  <text x="292" y="108" class="sub">trace replay or gem5</text>
+  <rect x="256" y="144" width="170" height="48" rx="4" class="mem"/>
+  <text x="264" y="158" class="lbl">L1</text>
+  <text x="264" y="170" class="sub">private · MSHR · write-back buffer</text>
+  <text x="264" y="182" class="sub mono">CacheControllerExclusive · MESI</text>
+  <line x1="341" y1="200" x2="341" y2="294" class="stub"/>
+  <line x1="306" y1="122" x2="306" y2="144" class="thin"/>
+  <line x1="366" y1="144" x2="366" y2="122" class="thin"/>
+  <rect x="458" y="70" width="190" height="130" rx="5" class="blk"/>
+  <text x="468" y="86" class="ttl">Core 2 · snoops</text>
+  <rect x="468" y="94" width="170" height="28" rx="4" class="cpu"/>
+  <text x="476" y="108" class="lbl">CPU</text>
+  <text x="504" y="108" class="sub">trace replay or gem5</text>
+  <rect x="468" y="144" width="170" height="48" rx="4" class="mem"/>
+  <text x="476" y="158" class="lbl">L1</text>
+  <text x="476" y="170" class="sub">private · MSHR · write-back buffer</text>
+  <text x="476" y="182" class="sub mono">CacheControllerExclusive · MESI</text>
+  <line x1="553" y1="200" x2="553" y2="294" class="stub"/>
+  <line x1="518" y1="122" x2="518" y2="144" class="thin"/>
+  <line x1="578" y1="144" x2="578" y2="122" class="thin"/>
+  <rect x="670" y="70" width="190" height="130" rx="5" class="blk"/>
+  <text x="680" y="86" class="ttl">Core 3 · snoops</text>
+  <rect x="680" y="94" width="170" height="28" rx="4" class="cpu"/>
+  <text x="688" y="108" class="lbl">CPU</text>
+  <text x="716" y="108" class="sub">trace replay or gem5</text>
+  <rect x="680" y="144" width="170" height="48" rx="4" class="mem"/>
+  <text x="688" y="158" class="lbl">L1</text>
+  <text x="688" y="170" class="sub">private · MSHR · write-back buffer</text>
+  <text x="688" y="182" class="sub mono">CacheControllerExclusive · MESI</text>
+  <line x1="765" y1="200" x2="765" y2="294" class="stub"/>
+  <line x1="730" y1="122" x2="730" y2="144" class="thin"/>
+  <line x1="790" y1="144" x2="790" y2="122" class="thin"/>
+  <path d="M100 122 L100 144" class="rt" stroke="#B45309" marker-end="url(#m)"/>
+  <path d="M160 144 L160 122" class="rt" stroke="#0E7C73" marker-end="url(#t)"/>
+  <circle cx="84" cy="133" r="8.5" fill="#B45309"/><text x="84" y="136" class="num">1</text>
+  <circle cx="176" cy="133" r="8.5" fill="#0E7C73"/><text x="176" y="136" class="num">9</text>
+  <circle cx="202" cy="108" r="8.5" fill="#B45309"/><text x="202" y="111" class="num">0</text>
+  <rect x="34" y="232" width="896" height="80" rx="4" class="io"/>
+  <text x="46" y="306" class="lbl mono" fill="#4B32A8">bus[0] · TripleBus</text>
+  <line x1="60" y1="250" x2="800" y2="250" class="lane"/>
+  <text x="796" y="247" class="wl" fill="#4B32A8" text-anchor="end">request lane</text>
+  <line x1="60" y1="272" x2="800" y2="272" class="lane"/>
+  <text x="796" y="269" class="wl" fill="#4B32A8" text-anchor="end">response lane</text>
+  <line x1="60" y1="294" x2="800" y2="294" class="lane"/>
+  <text x="796" y="291" class="wl" fill="#4B32A8" text-anchor="end">service lane</text>
+  <rect x="812" y="240" width="108" height="64" rx="4" class="ctl"/>
+  <text x="820" y="254" class="lbl">Arbiter</text>
+  <text x="820" y="266" class="sub">FCFS · RR · TDM</text>
+  <text x="820" y="278" class="sub mono">one per lane</text>
+  <path d="M100 200 L100 250 L230 250 L230 374" class="rt" stroke="#4B32A8"/>
+  <rect x="34" y="348" width="896" height="98" rx="4" class="mem"/>
+  <text x="46" y="440" class="lbl mono" fill="#2F6F9F">LLC · End2End</text>
+  <text x="330" y="440" class="sub">shared, inclusive · 32 KB 2-way · MESI_LLC FSM · demand requests FCFS, fills first</text>
+  <rect x="50" y="372" width="104" height="56" rx="4" class="ctl"/>
+  <text x="58" y="386" class="lbl">controller</text>
+  <text x="58" y="398" class="sub">MESI_LLC FSM</text>
+  <text x="58" y="410" class="sub mono">hit / miss / evict</text>
+  <rect x="170" y="372" width="150" height="56" rx="4" class="blk"/>
+  <text x="178" y="386" class="lbl">processing queue</text>
+  <text x="178" y="398" class="sub">requests · fills · snoops</text>
+  <text x="178" y="410" class="sub mono">LLC_QUEUE</text>
+  <rect x="340" y="372" width="80" height="56" rx="4" class="blk"/>
+  <text x="348" y="386" class="lbl">array port</text>
+  <text x="348" y="398" class="sub">A_LLC cycles</text>
+  <text x="348" y="410" class="sub mono">1 op / cycle</text>
+  <rect x="440" y="372" width="250" height="56" rx="4" class="blk"/>
+  <text x="448" y="386" class="lbl">cache array</text>
+  <text x="448" y="398" class="sub">tag + state + data · 2 ways</text>
+  <text x="448" y="410" class="wl" fill="#4B32A8">lookup: miss → MSHR → read to DRAM</text>
+  <text x="448" y="422" class="wl" fill="#0E7C73">⑦ then: array write of the fill · no column</text>
+  <rect x="705" y="372" width="70" height="56" rx="4" class="blk"/>
+  <text x="713" y="386" class="lbl">MSHR</text>
+  <text x="713" y="398" class="sub">misses</text>
+  <text x="713" y="410" class="sub mono">in flight</text>
+  <rect x="790" y="372" width="125" height="56" rx="4" class="blk"/>
+  <text x="798" y="386" class="lbl">write-back buffer</text>
+  <text x="798" y="398" class="sub">evicted dirty lines</text>
+  <text x="798" y="410" class="sub mono">PWB</text>
+  <path d="M320 392 L340 392" class="rt" stroke="#4B32A8" marker-end="url(#p)"/>
+  <path d="M420 392 L440 392" class="rt" stroke="#4B32A8" marker-end="url(#p)"/>
+  <path d="M690 392 L705 392" class="rt" stroke="#4B32A8" marker-end="url(#p)"/>
+  <path d="M320 418 L440 418" class="par" stroke="#0E7C73" marker-end="url(#t)"/>
+  <path d="M380 372 L380 360 L300 360" class="par" stroke="#0E7C73" marker-end="url(#t)"/>
+  <text x="388" y="363" class="wl" fill="#0E7C73">on a hit: the port grant emits the data → ⑧ (that wait is L2 Access)</text>
+  <rect x="34" y="476" width="896" height="48" rx="4" class="io"/>
+  <text x="46" y="518" class="lbl mono" fill="#4B32A8">bus[1] · Point2Point</text>
+  <line x1="60" y1="503" x2="800" y2="503" class="lane"/>
+  <text x="796" y="500" class="wl" fill="#4B32A8" text-anchor="end">memory lane</text>
+  <rect x="812" y="484" width="108" height="32" rx="4" class="ctl"/>
+  <text x="820" y="498" class="lbl">Arbiter</text>
+  <text x="820" y="510" class="sub">LLC ↔ DRAM only</text>
+  <rect x="34" y="560" width="896" height="56" rx="4" class="blk"/>
+  <text x="42" y="574" class="lbl">DRAM</text>
+  <text x="42" y="586" class="sub">MainMemoryController (fixed latency) or MCsim DDR4, FR-FCFS · one channel</text>
+  <text x="42" y="598" class="sub mono">DRAM · main_memory_type(s)</text>
+  <path d="M100 200 L100 250 L230 250" class="rt" stroke="#4B32A8"/>
+  <path d="M230 250 L230 372" class="rt" stroke="#B45309" marker-end="url(#m)"/>
+  <circle cx="84" cy="226" r="8.5" fill="#4B32A8"/><text x="84" y="229" class="num">2</text>
+  <circle cx="214" cy="332" r="8.5" fill="#B45309"/><text x="214" y="335" class="num">3</text>
+  <path d="M740 428 L740 503 L780 503 L780 560" class="rt" stroke="#4B32A8" marker-end="url(#p)"/>
+  <circle cx="756" cy="460" r="8.5" fill="#4B32A8"/><text x="756" y="463" class="num">4</text>
+  <path d="M780 560 L780 600 L600 600 L600 560" class="rt" stroke="#0E7C73"/>
+  <circle cx="690" cy="600" r="8.5" fill="#0E7C73"/><text x="690" y="603" class="num">5</text>
+  <path d="M600 560 L600 503 L250 503 L250 428" class="rt" stroke="#4B32A8" marker-end="url(#p)"/>
+  <circle cx="430" cy="489" r="8.5" fill="#4B32A8"/><text x="430" y="492" class="num">6</text>
+  <circle cx="266" cy="460" r="8.5" fill="#0E7C73"/><text x="266" y="463" class="num">7</text>
+  <path d="M290 372 L290 272 L160 272 L160 200" class="rt" stroke="#4B32A8" marker-end="url(#p)"/>
+  <circle cx="306" cy="332" r="8.5" fill="#4B32A8"/><text x="306" y="335" class="num">8</text>
+  <text x="960" y="84" class="ttl">The route, hop by hop</text>
+  <text x="960" y="98" class="sub">stamp → stamp is the column's span</text>
+  <circle cx="969" cy="114" r="8.5" fill="#B45309"/><text x="969" y="117" class="num">0</text>
+  <text x="986" y="118" class="lbl">Ready; waits for a slot in the OoO window</text>
+  <text x="986" y="131" class="sub mono">Ready Cycle → CPU.ENTER</text>
+  <text x="986" y="144" font-size="9.5" font-weight="600" fill="#B45309">CPU Latency</text>
+  <circle cx="969" cy="164" r="8.5" fill="#B45309"/><text x="969" y="167" class="num">1</text>
+  <text x="986" y="168" class="lbl">Issued; queued at L1</text>
+  <text x="986" y="181" class="sub mono">CPU.ENTER → L1.ENTER</text>
+  <text x="986" y="194" font-size="9.5" font-weight="600" fill="#B45309">L1 Stall</text>
+  <circle cx="969" cy="214" r="8.5" fill="#4B32A8"/><text x="969" y="217" class="num">2</text>
+  <text x="986" y="218" class="lbl">L1 misses, MSHR; wins the request lane</text>
+  <text x="986" y="231" class="sub mono">L1.ENTER → REQ_BUS.EXIT</text>
+  <text x="986" y="244" font-size="9.5" font-weight="600" fill="#4B32A8">Request Bus</text>
+  <circle cx="969" cy="264" r="8.5" fill="#B45309"/><text x="969" y="267" class="num">3</text>
+  <text x="986" y="268" class="lbl">Waits in the LLC queue; every L1 snooped it</text>
+  <text x="986" y="281" class="sub mono">REQ_BUS.EXIT → LLC.ENTER</text>
+  <text x="986" y="294" font-size="9.5" font-weight="600" fill="#B45309">L2 Stall</text>
+  <circle cx="969" cy="314" r="8.5" fill="#4B32A8"/><text x="969" y="317" class="num">4</text>
+  <text x="986" y="318" class="lbl">Lookup misses; MSHR; read leaves on bus[1]</text>
+  <text x="986" y="331" class="sub mono">LLC.ENTER → DRAM.ENTER</text>
+  <text x="986" y="344" font-size="9.5" font-weight="600" fill="#4B32A8">L2-DRAM Bus</text>
+  <circle cx="969" cy="364" r="8.5" fill="#0E7C73"/><text x="969" y="367" class="num">5</text>
+  <text x="986" y="368" class="lbl">DRAM serves the read</text>
+  <text x="986" y="381" class="sub mono">DRAM.ENTER → DRAM.EXIT</text>
+  <text x="986" y="394" font-size="9.5" font-weight="600" fill="#0E7C73">DRAM</text>
+  <circle cx="969" cy="414" r="8.5" fill="#4B32A8"/><text x="969" y="417" class="num">6</text>
+  <text x="986" y="418" class="lbl">Data back on bus[1], to the queue front</text>
+  <text x="986" y="431" class="sub mono">DRAM.EXIT → MEM_BUS.EXIT #2</text>
+  <text x="986" y="444" font-size="9.5" font-weight="600" fill="#4B32A8">L2-DRAM Bus — the same column as ④</text>
+  <circle cx="969" cy="464" r="8.5" fill="#0E7C73"/><text x="969" y="467" class="num">7</text>
+  <text x="986" y="468" class="lbl">Fill processed; response emitted</text>
+  <text x="986" y="481" class="sub mono">MEM_BUS.EXIT #2 → LLC.SERVICE=EXIT</text>
+  <text x="986" y="494" font-size="9.5" font-weight="600" fill="#0E7C73">L2 Access · ~1 cycle; array write off-path</text>
+  <circle cx="969" cy="514" r="8.5" fill="#4B32A8"/><text x="969" y="517" class="num">8</text>
+  <text x="986" y="518" class="lbl">Response lane back to core 0</text>
+  <text x="986" y="531" class="sub mono">LLC.EXIT → RESP_BUS.EXIT</text>
+  <text x="986" y="544" font-size="9.5" font-weight="600" fill="#4B32A8">Response Bus</text>
+  <circle cx="969" cy="564" r="8.5" fill="#0E7C73"/><text x="969" y="567" class="num">9</text>
+  <text x="986" y="568" class="lbl">L1 fills, CPU retires it</text>
+  <text x="986" y="581" class="sub mono">RESP_BUS.EXIT → CPU.EXIT</text>
+  <text x="986" y="594" font-size="9.5" font-weight="600" fill="#0E7C73">L1 Access</text>
+  <text x="960" y="612" class="sub">Total = delivered − issued = ① … ⑨, tiled exactly; ⓪ lies before it.</text>
+  <text x="960" y="626" class="sub">Under MCsim there are no DRAM stamps: ④ runs to</text>
+  <text x="960" y="640" class="sub">MEM_BUS.EXIT #1, ⑤ is the whole bus[1] round trip, ⑥ is 0.</text>
+  <text x="34" y="648" class="lbl">The other cores</text><text x="150" y="648" class="sub">their L1s see every request on the request lane; an owner answers on the response lane in the LLC's place, its stamps standing in for the LLC's in ③ ④.</text>
+  <text x="34" y="664" class="lbl">The service lane</text><text x="150" y="664" class="sub">the LLC's back-invalidations on an eviction and their echoes; not on this request's path.</text>
+  <text x="34" y="680" class="lbl">Directory protocol</text><text x="150" y="680" class="sub">the same boxes: requests become point-to-point and the LLC-side directory forwards them instead of the L1s snooping.</text>
+  <line x1="34" y1="704" x2="66" y2="704" class="rt" stroke="#B45309"/><text x="74" y="708" class="sub">waiting: in a queue, for a lane, for the port</text>
+  <line x1="330" y1="704" x2="362" y2="704" class="rt" stroke="#4B32A8"/><text x="370" y="708" class="sub">moving: a bus transfer</text>
+  <line x1="540" y1="704" x2="572" y2="704" class="rt" stroke="#0E7C73"/><text x="580" y="708" class="sub">being served: an array or DRAM access</text>
+  <line x1="800" y1="704" x2="832" y2="704" class="par" stroke="#0E7C73"/><text x="840" y="708" class="sub">off the critical path</text>
+  <text x="34" y="730" class="sub mono">MultiCoreSystem.csv · SplitBusController.csv · Logger.cpp · the same nine stamps on a time axis: request_end_to_end.svg · the LLC boxes in detail: llc_architecture.svg</text>
+</svg>

@@ -76,3 +76,17 @@ demo/workloads/*/.out*
 /tutorial/03-extending-octopus/02-protocol/output/
 header/Arbiters/WRRArbiter.h
 src/Arbiters/WRRArbiter.cpp
+
+# gem5 integration: harness build products, python cache, stale copies kept for reference
+gem5/harness/*
+!gem5/harness/*.cc
+!gem5/harness/build.sh
+gem5/configs/__pycache__/
+gem5/attic/
+build_asan/
+
+# --- LaTeX manual aux files (the PDF itself is committed) ---
+docs/manual/build/
+
+*.o
+*.so

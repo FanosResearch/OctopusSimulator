@@ -100,6 +100,11 @@ Having generated the baseline statistics and modified experiment's
  results as before. See if you can identify the different setting's
  effect on the timeline view in the visualizer and the overall trend.
 
+Way reservation prevents a streaming core's LLC fills from evicting a quiet core's
+lines and, by inclusion, its L1 copies. The sequence is drawn in
+[`docs/imgs/inclusion_interference.svg`](../../docs/imgs/inclusion_interference.svg).
+Compare the reserved-way run with its baseline: does it reduce the quiet core's
+DRAM traffic and worst-case latency?
 
 ## The axes that ship
 
