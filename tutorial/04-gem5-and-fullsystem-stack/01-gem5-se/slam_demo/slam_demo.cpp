@@ -25,7 +25,8 @@
  * m5_dump_stats around scans 1..N-1; scan 0 is mapped at its true pose.
  *
  * usage: slam_demo [--offline] [--period-us US] [--aggr N] [--aggr-kib K]
- *                  [--aggr-write] [--frames N] [--kf-every N] [--dump]
+ *                  [--aggr-write] [--aggr-warm N] [--frames N] [--kf-every N]
+ *                  [--abort-m M] [--dump]
  */
 
 #include <algorithm>
@@ -57,7 +58,7 @@ constexpr double kRes = 0.05;         /* grid cell, m */
 constexpr double kSpeed = 0.2;        /* m per scan */
 constexpr double kW = 44, kH = 20, kInset = 5;   /* corridor loop, m */
 
-int frames = 40;
+int frames = 20;
 int kf_every = 2;                     /* every Nth tracked scan to the mapper */
 double period_us = 100;
 bool offline = false;
@@ -65,6 +66,8 @@ bool dump = false;                    /* per-scan / per-keyframe lines after the
 int n_aggr = 0;
 size_t aggr_kib = 2048;
 bool aggr_write = false;
+int aggr_warm = 1;                    /* passes over its buffer before the ROI */
+double abort_m = 0;                   /* > 0: end the run once a tracked scan is this far off */
 
 uint64_t
 now_ns()
@@ -156,7 +159,7 @@ build_scenario()
         return line[j];
     };
 
-    /* Start near the end of the bottom straight so the run takes a corner. */
+    /* Start on the bottom straight, a few metres before its corner. */
     double s = cum.back() * 0.14;
     for (int k = 0; k < frames; k++) {
         const Pose c = at(s), n = at(s + 0.05);
@@ -367,6 +370,7 @@ alignas(kLine) std::atomic<int> fe_done{0};    /* newest scan tracked */
 alignas(kLine) std::atomic<int> kf_tail{0};    /* keyframes queued */
 alignas(kLine) std::atomic<int> kf_head{0};    /* keyframes mapped */
 alignas(kLine) std::atomic<bool> fe_exit{false};
+alignas(kLine) std::atomic<int> aborted_at{0};  /* scan whose error passed abort_m */
 alignas(kLine) std::atomic<int> ready{0};      /* pipeline threads started */
 alignas(kLine) std::atomic<bool> aggr_stop{false};
 
@@ -424,6 +428,9 @@ front_end()
         est[k] = p;
         tracked[k] = 1;
         last = k;
+        if (abort_m > 0 && !aborted_at.load(std::memory_order_relaxed) &&
+            std::hypot(p.x - gt[k].x, p.y - gt[k].y) > abort_m)
+            aborted_at.store(k, std::memory_order_release);
 
         if (++since_kf == kf_every) {
             since_kf = 0;
@@ -517,13 +524,18 @@ main(int argc, char **argv)
             n_aggr = std::clamp(atoi(argv[++i]), 0, 8);
         else if (!strcmp(argv[i], "--aggr-kib") && more)
             aggr_kib = strtoul(argv[++i], nullptr, 10);
+        else if (!strcmp(argv[i], "--aggr-warm") && more)
+            aggr_warm = std::max(0, atoi(argv[++i]));
+        else if (!strcmp(argv[i], "--abort-m") && more)
+            abort_m = atof(argv[++i]);
         else if (!strcmp(argv[i], "--frames") && more)
             frames = std::max(3, atoi(argv[++i]));
         else if (!strcmp(argv[i], "--kf-every") && more)
             kf_every = std::max(1, atoi(argv[++i]));
         else {
             printf("usage: %s [--offline] [--period-us US] [--aggr N] "
-                   "[--aggr-kib K] [--aggr-write] [--frames N] [--kf-every N] [--dump]\n", argv[0]);
+                   "[--aggr-kib K] [--aggr-write] [--aggr-warm N] [--frames N] [--kf-every N] "
+                   "[--abort-m M] [--dump]\n", argv[0]);
             return 2;
         }
     }
@@ -564,8 +576,8 @@ main(int argc, char **argv)
         bufs.emplace_back(new uint8_t[aggr_kib * 1024]);
         aggr.emplace_back(aggressor, i, bufs.back().get(), aggr_kib * 1024);
     }
-    for (int i = 0; i < n_aggr; i++)          /* two passes: warmed up */
-        while (aggr_bytes[i].bytes.load() < 2 * aggr_kib * 1024) {
+    for (int i = 0; i < n_aggr; i++)          /* aggr_warm passes: warmed up */
+        while (aggr_bytes[i].bytes.load() < size_t(aggr_warm) * aggr_kib * 1024) {
         }
 
     /* ---- ROI: main is the player */
@@ -582,6 +594,10 @@ main(int argc, char **argv)
     roi_t0 = t0;
     const uint64_t period = uint64_t(period_us * 1000);
     for (int k = 1; k <= frames; k++) {
+        if (aborted_at.load(std::memory_order_acquire)) {
+            released.store(frames, std::memory_order_release);  /* end now */
+            break;
+        }
         if (offline) {
             while (fe_done.load(std::memory_order_acquire) != k - 1 ||
                    kf_head.load(std::memory_order_acquire) !=
@@ -601,6 +617,10 @@ main(int argc, char **argv)
     tf.join();
     tm.join();
     const uint64_t t1 = now_ns();
+    if (const int a = aborted_at.load()) {   /* report the scans up to the abort */
+        printf("[ABORT] scan %d: position error over %.2f m, run ended there\n", a, abort_m);
+        frames = a + 1;
+    }
     m5_dump_stats(0, 0);
     std::vector<uint64_t> b1(n_aggr);
     for (int i = 0; i < n_aggr; i++)

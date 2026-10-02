@@ -39,8 +39,9 @@ RUNS = [
     ("H_fcfs", "Heavy aggressor", "#c73e5a", "heavy"),
     ("H_rr", "Heavy + RR", "#8e44ad", "heavy"),
     ("H_part", "Heavy + partition", "#2f7ed8", "heavy"),
-    ("H_rr_part", "Heavy + RR + partition", "#5a9e2f", "heavy"),
 ]
+# run_matrix.sh does not run Solo by default; the reference run stands in.
+SOLO_REF = os.path.join(HERE, "..", "..", "expected", "runs", "A_solo")
 
 
 def load_run(path):
@@ -218,8 +219,8 @@ def fig_memory_breakdown(breakdowns, out):
     """Stacked mean latency per stage of the requests that left the L1, for
     the front-end and the mapper core; one row per aggressor, each with its
     own scale (the heavy aggressor's DRAM waits would flatten the rest)."""
-    if "A_solo" not in breakdowns:
-        return False
+    if "A_solo" not in breakdowns or len(breakdowns) < 2:
+        return False                  # Solo alone (the reference) says nothing
 
     def core_of(b, role):
         # the aggressor thread is created first: with one, the mapper runs on
@@ -274,12 +275,15 @@ def main():
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     data = {}
-    for name, *_ in RUNS:
-        p = os.path.join(a.runs_dir, name)
+    dirs = {name: os.path.join(a.runs_dir, name) for name, *_ in RUNS}
+    if not os.path.isfile(os.path.join(dirs["A_solo"], "simout.txt")):
+        dirs["A_solo"] = SOLO_REF
+        print("Solo: the reference run,", os.path.normpath(SOLO_REF))
+    for name, p in dirs.items():
         if os.path.isfile(os.path.join(p, "simout.txt")):
             data[name] = load_run(p)
     if "A_solo" not in data:
-        raise SystemExit(f"the Solo run (A_solo) is required in {a.runs_dir}")
+        raise SystemExit(f"no Solo run (A_solo) in {a.runs_dir} or {SOLO_REF}")
     with open(a.steps) as f:
         walls = json.load(f)["walls"]
     for name, label, *_ in RUNS:
@@ -292,8 +296,8 @@ def main():
     fig_error_over_time(data, a.out)
     fig_exec_times(data, a.out, a.period_us, a.kf_every)
     breakdowns = {}
-    for name, *_ in RUNS:
-        b = load_breakdown(os.path.join(a.runs_dir, name))
+    for name, p in dirs.items():
+        b = load_breakdown(p)
         if b:
             breakdowns[name] = b
     if fig_memory_breakdown(breakdowns, a.out):

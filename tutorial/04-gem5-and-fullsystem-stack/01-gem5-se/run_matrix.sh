@@ -1,25 +1,28 @@
 #!/bin/bash
-# run_matrix.sh -- the seven configurations of the interference demo under gem5 SE.
+# run_matrix.sh -- the interference demo under gem5 SE: two aggressors, each with
+# the mitigation that matches what it does to the SLAM.
 #
-#   bash run_matrix.sh [config ...]      (default: all seven, in parallel)
+#   bash run_matrix.sh [config ...]      (default: the four below, in parallel)
 #   LOG=1 bash run_matrix.sh ...         also Octopus's own per-request reports
-#                                        (newLogger/; about 1 GB per run, twice
-#                                        the run time); RUNS=<dir> to write elsewhere
+#                                        (newLogger/; large, and twice the run
+#                                        time); RUNS=<dir> to write elsewhere
 #
 # Each run writes runs/<config>/ (simout.txt carries the demo's report and its
-# per-scan dump). About 5 minutes per run for Solo and the light aggressor,
-# about 10 for the heavy one, all in parallel on a machine with 7+ cores.
+# per-scan dump). One gem5 per configuration, each on a core of its own: on 4
+# cores the four take as long as the slowest, the heavy aggressor.
 #
-#   A_solo        the SLAM pipeline alone
-#   L_fcfs        + light aggressor: 2 MiB write sweep, fits the LLC (queueing)
-#   L_rr          + light aggressor, round-robin bus and LLC arbitration
-#   H_fcfs        + heavy aggressor: 16 MiB read sweep, twice the LLC (capacity)
-#   H_rr          + heavy aggressor, round-robin
-#   H_part        + heavy aggressor, LLC way partitioning
-#   H_rr_part     + heavy aggressor, round-robin and way partitioning
+#   L_fcfs        light aggressor: 2 MiB write sweep, fits the LLC (queueing)
+#   L_rr          light aggressor, round-robin bus and LLC arbitration
+#   H_rr          heavy aggressor: 16 MiB read sweep, twice the LLC (capacity),
+#                 with round-robin: it does not help here
+#   H_part        heavy aggressor, LLC way partitioning
+#   not in the default set:
+#   A_solo        the SLAM alone (check.sh runs it, and the plots fall back to
+#                 expected/runs/A_solo)
+#   H_fcfs        heavy aggressor, FCFS
 #
 # Settings: 4 cores (player, mapper, front-end, aggressor), scan period 80 us,
-# a keyframe every 2nd scan, 40 scans, MultiCoreSystem_gem5 preset (FCFS).
+# a keyframe every 2nd scan, 20 scans, MultiCoreSystem_gem5 preset (FCFS).
 # The aggressor thread is created first, so gem5 SE places it on core 1, whose
 # L1s are Octopus ids 1 (instruction) and 5 (data): "1:0;5:0" confines its
 # LLC fills to way 0.
@@ -27,15 +30,14 @@
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../.." && pwd)
-GEM5_BIN=${GEM5_BIN:-$GEM5_ROOT/build/ARM/gem5.opt}
+GEM5_BIN=${GEM5_BIN:-$([ -n "${GEM5_ROOT:-}" ] && echo "$GEM5_ROOT/build/ARM/gem5.opt" || command -v gem5 || true)}
 CONFIG=$ROOT/gem5/configs/se_arm.py
 DEMO=$HERE/slam_demo/slam_demo
-[ -x "$GEM5_BIN" ] || { echo "gem5 not found: set GEM5_ROOT or GEM5_BIN (built with EXTRAS=$ROOT)"; exit 1; }
+[ -x "$GEM5_BIN" ] || { echo "gem5 not found: not on PATH, and neither GEM5_BIN nor GEM5_ROOT set (a gem5 built with EXTRAS=$ROOT)"; exit 1; }
 [ -x "$DEMO" ] || { echo "build the demo first: make -C $HERE/slam_demo"; exit 1; }
 
 RR=(--octopus-param 'bus[0].interconnect_controller.arbiter_type(s)=RRArbiter'
-    --octopus-param 'llc_controller.arbiter_type(s)=RRArbiter'
-    --octopus-param 'llc_controller.arbiter_candidates_ids(vi)=0,1,2,3,4,5,6,7,10')
+    --octopus-param 'llc_controller.arbiter_type(s)=RRArbiter')
 PART=(--octopus-param 'llc_controller.m_data_handler.way_partition(s)=1:0;5:0')
 LIGHT=(--aggr 1 --aggr-write --aggr-kib 2048)
 HEAVY=(--aggr 1 --aggr-kib 16384)
@@ -55,7 +57,7 @@ run() {   # run <name> <octopus options...> -- <demo options...>
     echo "$name: $(grep -h '^\[ATE\]' "$RUNS/$name/simout.txt" 2>/dev/null || echo "no result, see $RUNS/$name/simerr.txt")"
 }
 
-ALL=(A_solo L_fcfs L_rr H_fcfs H_rr H_part H_rr_part)
+ALL=(L_fcfs L_rr H_rr H_part)
 
 one() {   # the options of one configuration; arrays, so no quoting is lost
     case $1 in
@@ -65,8 +67,7 @@ one() {   # the options of one configuration; arrays, so no quoting is lost
         H_fcfs)    run H_fcfs -- "${HEAVY[@]}" ;;
         H_rr)      run H_rr "${RR[@]}" -- "${HEAVY[@]}" ;;
         H_part)    run H_part "${PART[@]}" -- "${HEAVY[@]}" ;;
-        H_rr_part) run H_rr_part "${RR[@]}" "${PART[@]}" -- "${HEAVY[@]}" ;;
-        *) echo "unknown config $1 (one of ${ALL[*]})"; return 1 ;;
+        *) echo "unknown config $1 (one of ${ALL[*]} A_solo H_fcfs)"; return 1 ;;
     esac
 }
 
@@ -75,4 +76,4 @@ for c in "${@:-${ALL[@]}}"; do
     one "$c" &
 done
 wait
-echo "plots: python $HERE/slam_demo/viz/plot_matrix.py   (after make -C $HERE/slam_demo steps)"
+echo "plots: python $HERE/slam_demo/viz/plot_matrix.py"

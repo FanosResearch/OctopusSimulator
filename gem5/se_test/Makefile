@@ -11,18 +11,26 @@
 # qemu-user-static.
 #
 # The ROI markers (m5_work_begin / m5_work_end) come from gem5's own
-# util/m5/src/abi/arm64/m5op.S, assembled here instead of linking a prebuilt
-# libm5.a, which is not built for arm64 in this tree.
+# util/m5/src/abi/arm64/m5op.S (copied into gem5/m5ops), assembled here instead
+# of linking a prebuilt libm5.a.
 
-GEM5     ?= $(GEM5_ROOT)
+# m5ops: this repository's copy (gem5/m5ops), or a gem5 checkout's with GEM5=<dir>.
+ROOT     := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/../..)
+ifdef GEM5
+M5_INC    = $(GEM5)/include
+M5OP_S    = $(GEM5)/util/m5/src/abi/arm64/m5op.S
+else
+M5OPS    ?= $(ROOT)/gem5/m5ops
+M5_INC    = $(M5OPS)/include
+M5OP_S    = $(M5OPS)/m5op.S
+endif
 CROSS    ?= aarch64-linux-gnu-
 # Plain '=': make predefines CXX, so '?=' would keep the host compiler.
 CXX       = $(CROSS)g++
 CXXFLAGS ?= -O2 -g -Wall -Wextra -std=c++17 -march=armv8-a
-CPPFLAGS ?= -I$(GEM5)/include
+CPPFLAGS ?= -I$(M5_INC)
 LDFLAGS  ?= -pthread
 SRC       = se_test.cpp
-M5OP_S    = $(GEM5)/util/m5/src/abi/arm64/m5op.S
 TARGETS   = se_test-static se_test-dynamic se_test-noroi
 QEMU      = qemu-aarch64-static
 

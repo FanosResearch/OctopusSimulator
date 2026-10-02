@@ -60,8 +60,12 @@ four cores and eight L1 bridges --- instruction caches are Octopus ids 0--3, dat
 an 8\,MiB 8-way LLC with a pipelined 10-cycle array and the line interlock on
 (\cref{ch:cache-controller}), an FCFS bus, and MCsim DDR4-2400 as memory.
 \code{--octopus-param} takes any \code{name(type)=value} line of the preset and may be repeated,
-so the five keys of a protocol switch it to MESI without rebuilding anything. After a change to
-the library, \code{cmake --build build} and the \code{scons} line relink only the bridge.
+so the five keys of a protocol switch it to MESI without rebuilding anything. gem5 loads Octopus
+as a shared library, \file{build/libOctopus.so}: after a change to the library,
+\code{cmake --build build} is enough and the next gem5 run uses it. The \code{scons} line is
+needed again only after a change to the bridge (\file{gem5/octopus.cc}, \file{gem5/octopus.hh},
+\file{gem5/Octopus.py}) or to the headers it compiles in (\file{header/ExternalCPU.h},
+\file{header/CacheSim.h} and what they include).
 
 \paragraph{Octopus's reports under gem5.} With \code{cpu[*].log\_requests(i)=1} the
 \code{ExternalCPU} reports its requests to the Logger, and a gem5 run then writes the same
@@ -83,7 +87,7 @@ Arm Industrial Challenge AR-HUD workload --- an OV\textsuperscript{2}SLAM stereo
 CNN pose estimator on a Jetson-class SoC model --- coordinating the shared arbiters cut the
 worst observed memory latency by more than twenty times at near-baseline throughput.
 
-\paragraph{Harnesses and tests.} The script \file{gem5/harness/build.sh} builds single
+\paragraph{Standalone tests.} The script \file{gem5/octopus_test/build.sh} builds single
 binaries against the Octopus library with no gem5 --- \code{l1} (hit and miss latencies,
 same-line bursts),
 \code{llc}, \code{evict}, \code{seq}, \code{reorder} (with an override, e.g.\ a 10-cycle L1 port)
@@ -99,19 +103,20 @@ queues at that cycle. The standalone presets are the regression check for librar
 
 \section{Running a session on it}
 
-The constraint that shapes any use of the stack: an Octopus C++ edit means relinking
-\code{gem5.opt} --- minutes, not the fifty-second rebuild of standalone work. A session on gem5
-therefore varies configuration, never Octopus source, and an arbiter written for the standalone
-build appears inside gem5 only if the image's \code{gem5.opt} was built with it. Two shapes of
-exercise follow. In syscall-emulation mode, one short program under gem5 makes the interface
-concrete: the request leaves the gem5 CPU, crosses \code{ExternalCPU}, becomes an ordinary
+Because gem5 loads Octopus as a shared library, a session on gem5 can change Octopus as freely
+as a standalone one: an arbiter written for the standalone build, a protocol table or a preset
+reaches gem5 after the usual fifty-second \code{cmake --build build}. Only the bridge and the
+headers it compiles in tie a change to a gem5 rebuild, which takes minutes and needs gem5's
+source. Two shapes of exercise follow. In syscall-emulation mode, one short program under gem5
+makes the interface concrete: the request leaves the gem5 CPU, crosses \code{ExternalCPU}, becomes an ordinary
 \code{Message} through L1, bus, LLC and \code{MCsimInterface}, and its \code{LatencyReport} row
 decomposes exactly that path --- the same code that ran standalone, with only the source
 changed. In full system, a checkpoint taken past Linux boot is restored and a workload runs on a
 real kernel with Octopus as its memory system; booting is separated from measuring, and the
 pre-warm is launched in the background long before it is looked at. The tutorial's two gem5
-exercises (\cref{ch:tutorial}) are these; the ESWEEK container image carries the prebuilt
-\code{gem5.opt}.
+exercises (\cref{ch:tutorial}) are these; the ESWEEK container image carries a prebuilt gem5,
+on the \code{PATH} as \code{gem5}, and \file{gem5/get_gem5.sh} builds the same gem5 from
+scratch elsewhere.
 
 \begin{wherebox}
 \begin{itemize}[nosep,leftmargin=1.2em]
@@ -120,9 +125,8 @@ exercises (\cref{ch:tutorial}) are these; the ESWEEK container image carries the
 \item \file{gem5/octopus.cc}, \file{gem5/octopus.hh}, \file{gem5/Octopus.py}, \file{gem5/SConscript} --- the bridge and its build
 \item \file{gem5/configs/octopus_cache_hierarchy.py}, \file{gem5/configs/fs_arm.py}, \file{gem5/configs/se_arm.py}, \file{gem5/configs/gem5_base_cache_hierarchy.py} --- the gem5 configurations
 \item \file{configuration/SystemConfigurations/MultiCoreSystem_gem5.csv}, \file{configuration/ExternalCPU.csv} --- the hierarchy behind gem5
-\item \file{gem5/harness/}, \file{gem5/se_test/} --- the harnesses and the SE test
+\item \file{gem5/octopus_test/}, \file{gem5/se_test/} --- the standalone tests and the SE test
 \item \file{gem5/patches/} --- the gem5 patch the integration needs
-\item \file{gem5/cmds.md} --- the working record of the full-system runs
 \item \file{docs/StateAndData.md} --- what real data adds to the timing model
 \item \file{README.md} --- ``Integrating Octopus with gem5''
 \item \file{tutorial/04-gem5-and-fullsystem-stack/} --- the two exercises
