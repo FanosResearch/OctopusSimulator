@@ -1,31 +1,51 @@
 # 04 — gem5 and the full-system stack
 
-> **Status: environment pending.** The gem5 build is not in the dev container yet.
-> These two exercises are written against `gem5/cmds.md` on the
-> `gem5_ARM_Challenge` branch and will be finalised once the container carries a
-> prebuilt `gem5.opt`. Until then, treat the steps as the plan, not the procedure.
-
 Everything so far ran Octopus **standalone**: a trace-driven `CPU` object feeds the
 memory hierarchy. Here the request source is a real CPU model — gem5 — and the same
 hierarchy, unchanged, sits behind it.
 
-| folder | what | time |
-|---|---|---|
-| `01-gem5-se/` | gem5 in syscall-emulation mode driving Octopus: a self-checking test, then a real-time SLAM under memory interference and two mitigations (round-robin arbitration, LLC way partitioning) | 20 min + runs in the background |
-| `02-full-system-arm/` | ARM Linux under gem5, restored from a checkpoint, with Octopus as its memory system | 25–30 min + take-home |
+| folder | what | time | status |
+|---|---|---|---|
+| `01-gem5-se/` | gem5 in syscall-emulation mode driving Octopus: a self-checking test, then a real-time SLAM under memory interference and two mitigations (round-robin arbitration, LLC way partitioning) | 20 min + runs in the background | ready |
+| `02-full-system-arm/` | ARM Linux under gem5, restored from a checkpoint, with Octopus as its memory system | 25–30 min + take-home | plan: the checkpoint and `prewarm.sh` are not in place yet |
 
-## The one constraint to know before starting
+## What the dev container has
 
-Octopus is compiled **into** gem5 as a scons `EXTRAS` module:
+| | |
+|---|---|
+| `gem5` | on the `PATH`: gem5 25.1.0.1 for ARM with Octopus linked in (`gem5 -re -d <out> <config.py> ...`) |
+| `/opt/gem5-resources/` | the ARM kernel, bootloader and Ubuntu disk image for full system (`gem5/configs/fs_arm.py`) |
+| `g++-aarch64-linux-gnu` | the cross compiler for the workloads; their m5ops are in `gem5/m5ops/`, so no gem5 checkout is needed to rebuild them |
+| prebuilt workloads | `gem5/se_test/se_test-static` and `01-gem5-se/slam_demo/slam_demo`, the binaries the reference results were made with |
+
+`bash 01-gem5-se/check.sh` (about 5 minutes) tells you whether gem5 and Octopus work
+together in your environment.
+
+## Octopus inside gem5
+
+gem5 loads Octopus as a shared library, `build/libOctopus.so`, the one the container
+builds from your checkout. A change to Octopus's own code — a new arbiter from
+`03-extending-octopus/01-arbiter`, a protocol table, a preset — reaches gem5 with the
+usual `cmake --build build -j$(nproc)`: about 50 seconds, and the next `gem5` run uses
+it.
+
+What does need gem5 rebuilt is a change to the bridge itself (`gem5/octopus.cc`,
+`gem5/octopus.hh`, `gem5/Octopus.py`) or to the Octopus headers it compiles in
+(`header/ExternalCPU.h`, `header/CacheSim.h` and what they include). The container
+carries the gem5 binary, not its source, so that work happens outside it.
+
+## gem5 outside the container
+
+`gem5/get_gem5.sh` builds the same gem5 from scratch: it clones gem5 v25.1.0.1,
+applies the patch in `gem5/patches/`, and builds it with this repository as an
+`EXTRAS` module. Build Octopus first; the gem5 build itself is long, tens of
+minutes even on many cores:
 
 ```shell
-scons EXTRAS=../ATP-Engine:../OctopusSimulator ./build/ARM/gem5.opt -j`nproc`
+bash gem5/get_gem5.sh                # clones into ../gem5, beside this repository
+export GEM5_ROOT=<that directory>    # the tutorial scripts then use $GEM5_ROOT/build/ARM/gem5.opt
 ```
 
-So an Octopus C++ edit means relinking `gem5.opt` — minutes, not the 50-second
-rebuild you had in exercise 03. Both exercises here vary **configuration** (the
-CSV preset `MultiCoreSystem_gem5.csv` and `--octopus-param` overrides, gem5's own
-options), never Octopus source. `01-gem5-se/` is runnable today on any machine
-with a gem5 built this way (its README has the build line). The arbiter you
-wrote in `03-extending-octopus/01-arbiter` will not appear inside gem5 unless the
-container's `gem5.opt` was built with it.
+Use `$GEM5_ROOT/build/ARM/gem5.opt` wherever the exercises say `gem5`. The full-system
+exercise also needs the kernel, bootloader and disk image under `/opt/gem5-resources/`
+(see `gem5/configs/fs_arm.py`).

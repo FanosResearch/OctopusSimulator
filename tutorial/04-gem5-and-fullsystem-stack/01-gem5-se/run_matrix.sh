@@ -27,10 +27,10 @@
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../.." && pwd)
-GEM5_BIN=${GEM5_BIN:-$GEM5_ROOT/build/ARM/gem5.opt}
+GEM5_BIN=${GEM5_BIN:-$([ -n "${GEM5_ROOT:-}" ] && echo "$GEM5_ROOT/build/ARM/gem5.opt" || command -v gem5 || true)}
 CONFIG=$ROOT/gem5/configs/se_arm.py
 DEMO=$HERE/slam_demo/slam_demo
-[ -x "$GEM5_BIN" ] || { echo "gem5 not found: set GEM5_ROOT or GEM5_BIN (built with EXTRAS=$ROOT)"; exit 1; }
+[ -x "$GEM5_BIN" ] || { echo "gem5 not found: not on PATH, and neither GEM5_BIN nor GEM5_ROOT set (a gem5 built with EXTRAS=$ROOT)"; exit 1; }
 [ -x "$DEMO" ] || { echo "build the demo first: make -C $HERE/slam_demo"; exit 1; }
 
 RR=(--octopus-param 'bus[0].interconnect_controller.arbiter_type(s)=RRArbiter'

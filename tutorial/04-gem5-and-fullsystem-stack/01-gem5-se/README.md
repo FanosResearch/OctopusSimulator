@@ -31,15 +31,20 @@ changed. The gem5 side is `gem5/octopus.cc` (a SimObject per L1) and
 `configuration/SystemConfigurations/MultiCoreSystem_gem5.csv` (4 cores, 8 L1s:
 instruction caches are Octopus ids 0–3, data caches 4–7, the LLC is 10).
 
-## Step 1 — build
+## Step 1 — set up
+
+In the dev container (or a codespace) everything is ready: `gem5` is on the
+`PATH`, built with this repository as an EXTRAS module, and links the
+`build/libOctopus.so` that the container builds on creation. Commands below run
+from the repository root unless they `cd`.
+
+Outside the container, build the same gem5 once with `gem5/get_gem5.sh` (see the
+folder README, `../README.md`) and use `$GEM5_ROOT/build/ARM/gem5.opt` wherever
+this page says `gem5` (the scripts pick it up from `GEM5_ROOT`):
 
 ```shell
-export GEM5_ROOT=<your gem5 checkout>
-# gem5 with this repository linked in (once; minutes):
-(cd $GEM5_ROOT && scons EXTRAS=<this repository> build/ARM/gem5.opt -j$(nproc))
-
-cd tutorial/04-gem5-and-fullsystem-stack/01-gem5-se
-make -C slam_demo steps                  # scenario data for the plots (host g++)
+bash gem5/get_gem5.sh
+export GEM5_ROOT=<the directory it printed>
 ```
 
 The two aarch64 binaries come prebuilt in the repository
@@ -50,19 +55,20 @@ them only if you change `se_test.cpp` or `slam_demo.cpp`. That needs
 `gem5/m5ops/`:
 
 ```shell
-make -C gem5/se_test                     # from the repository root
-make -C slam_demo                        # from this folder
+make -C gem5/se_test
+make -C tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/slam_demo
 ```
 
 The plots need Python with `numpy` and `matplotlib`.
 
-`bash check.sh` (in this folder) runs Parts A and B and the demo's Solo
-configuration (about 5 minutes) and tells you whether everything works.
+`bash tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/check.sh` runs Parts A and B
+and the demo's Solo configuration (about 5 minutes) and tells you whether
+everything works.
 
 ## Part A — `se_test`
 
 ```shell
-$GEM5_ROOT/build/ARM/gem5.opt -re -d m5out_se gem5/configs/se_arm.py
+gem5 -re -d m5out_se gem5/configs/se_arm.py
 tail -5 m5out_se/simout.txt          # RESULT: PASS
 ```
 
@@ -75,7 +81,7 @@ cache-to-cache data). Every phase checks its own result.
 Now change one thing, the L1↔LLC bus arbiter, from the command line:
 
 ```shell
-$GEM5_ROOT/build/ARM/gem5.opt -re -d m5out_se_rr gem5/configs/se_arm.py \
+gem5 -re -d m5out_se_rr gem5/configs/se_arm.py \
     --octopus-param 'bus[0].interconnect_controller.arbiter_type(s)=RRArbiter'
 grep simTicks m5out_se/stats.txt m5out_se_rr/stats.txt
 ```
@@ -93,7 +99,7 @@ request; `Summary.csv`, worst cases per core). Octopus writes them under gem5
 too when asked:
 
 ```shell
-$GEM5_ROOT/build/ARM/gem5.opt -re -d m5out_views gem5/configs/se_arm.py \
+gem5 -re -d m5out_views gem5/configs/se_arm.py \
     --octopus-param 'cpu[*].log_requests(i)=1'
 bash tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/compare_views.sh m5out_views
 ```
@@ -182,6 +188,7 @@ from a run on your machine.
 | `H_rr_part` | heavy | | both |
 
 ```shell
+cd tutorial/04-gem5-and-fullsystem-stack/01-gem5-se
 bash run_matrix.sh                   # all seven in parallel, ~10 min on 7+ cores
 python slam_demo/viz/plot_matrix.py  # figures/ from runs/
 ```
@@ -294,11 +301,6 @@ the failure (dropped, keyframes mapped) and look at the trajectories.
   change you made. Rebuilding the program (even from the same source, at
   another path) moves its code and data in memory and shifts timing slightly,
   which is why your numbers can differ from `expected/` in the last digits.
-
-## What you will *not* be able to do here
-
-Change Octopus C++ and see it under gem5 without relinking `gem5.opt` (see the
-parent README).
 
 ## Going further
 
