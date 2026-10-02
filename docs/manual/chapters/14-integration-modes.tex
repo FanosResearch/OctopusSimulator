@@ -83,7 +83,7 @@ Arm Industrial Challenge AR-HUD workload --- an OV\textsuperscript{2}SLAM stereo
 CNN pose estimator on a Jetson-class SoC model --- coordinating the shared arbiters cut the
 worst observed memory latency by more than twenty times at near-baseline throughput.
 
-\paragraph{Harnesses and tests.} The script \file{gem5/harness/build.sh} builds single
+\paragraph{Standalone tests.} The script \file{gem5/octopus_test/build.sh} builds single
 binaries against the Octopus library with no gem5 --- \code{l1} (hit and miss latencies,
 same-line bursts),
 \code{llc}, \code{evict}, \code{seq}, \code{reorder} (with an override, e.g.\ a 10-cycle L1 port)
@@ -120,7 +120,7 @@ exercises (\cref{ch:tutorial}) are these; the ESWEEK container image carries the
 \item \file{gem5/octopus.cc}, \file{gem5/octopus.hh}, \file{gem5/Octopus.py}, \file{gem5/SConscript} --- the bridge and its build
 \item \file{gem5/configs/octopus_cache_hierarchy.py}, \file{gem5/configs/fs_arm.py}, \file{gem5/configs/se_arm.py}, \file{gem5/configs/gem5_base_cache_hierarchy.py} --- the gem5 configurations
 \item \file{configuration/SystemConfigurations/MultiCoreSystem_gem5.csv}, \file{configuration/ExternalCPU.csv} --- the hierarchy behind gem5
-\item \file{gem5/harness/}, \file{gem5/se_test/} --- the harnesses and the SE test
+\item \file{gem5/octopus_test/}, \file{gem5/se_test/} --- the standalone tests and the SE test
 \item \file{gem5/patches/} --- the gem5 patch the integration needs
 \item \file{docs/StateAndData.md} --- what real data adds to the timing model
 \item \file{README.md} --- ``Integrating Octopus with gem5''
