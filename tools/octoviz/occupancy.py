@@ -53,7 +53,9 @@ def _pairs(a, enter_mask, exit_mask, key_cols):
 
     def with_seq(idx):
         keys = np.stack([a[c][idx].astype(np.int64) for c in key_cols], 1)
-        order = np.lexsort(tuple(keys[:, i] for i in range(keys.shape[1] - 1, -1, -1)) + (idx,))
+        # lexsort's last key is primary: group by message keys first, then
+        # preserve trace order within each group to number repeated events.
+        order = np.lexsort((idx,) + tuple(keys[:, i] for i in range(keys.shape[1] - 1, -1, -1)))
         ks = keys[order]
         new = np.ones(len(order), bool)
         new[1:] = np.any(ks[1:] != ks[:-1], axis=1)

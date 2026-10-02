@@ -235,7 +235,7 @@ W=$PWD/BMs/eembc-traces/a2time01-trace
   -o tutorial/01-exploration/output/Interconnect/2_Mesh --trace
 ```
 
-Try graphing the trend with the python script `sweeps/graph_axis.py`.
+Try graphing the trend with the python script `sweeps/plot_axis.py`.
 See if it matches your expectations.
 
 ## If you finish early

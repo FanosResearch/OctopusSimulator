@@ -93,8 +93,9 @@ needed for this example.
 ## 4. Run MSI and MI on the same workload
 
 The supplied `mi_pingpong` workload has cores 0 and 1 repeatedly read line
-`0x1000`; cores 2 and 3 have no memory accesses. Exercise 00 prepares the benchmark
-traces; if this workload is missing, run `bash get_benchmarks.sh BMs/eembc-traces`.
+`0x1000`; cores 2 and 3 each read a separate line twice. Exercise 00 prepares the
+benchmark traces; if this workload is missing, run
+`bash get_benchmarks.sh BMs/eembc-traces`.
 
 ```shell
 W=$PWD/BMs/eembc-traces/mi_pingpong
