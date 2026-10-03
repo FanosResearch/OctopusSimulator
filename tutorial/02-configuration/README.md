@@ -26,11 +26,12 @@ The system constructs each bus, and each bus constructs its controller. Each
 component loads its own CSV defaults, then merges the parameter map passed by its
 owner, replacing matching keys. Dots route parameters to children:
 
-|File|Key to override|
+| File under `configuration/` | Key to override |
 |:--|:--|
-| `MultiCoreSystem.csv` | `bus[0].interconnect_controller.m_request_latency` |
-| `Bus.csv` | `interconnect_controller.m_request_latency`|
-| `Controller.csv` | `m_request_latency` |
+| `SystemConfigurations/MultiCoreSystem.csv` | `bus[0].interconnect_controller.m_request_latency(i)` |
+| `Interconnect/Bus.csv` | `interconnect_controller.m_request_latency(i)` |
+| `Interconnect/SplitBusController.csv` | `m_request_latency(i)` |
+| `Interconnect/BusController.csv` (inherited controller defaults) | `m_request_latency(i)` |
 
 The C++ constructors pass those maps explicitly; the dotted names do not select
 folders. The controller constructor supplies the path to its default CSV.
@@ -195,9 +196,6 @@ and resource limits are parameters read from CSV files.
 does not require a new C++ class. The `.csv` suffix is optional, and a path such as
 `--config ./my-system.csv` also works.
 
-Adding a third cache level changes the wiring and requires C++ work. That is the
-boundary crossed in `03-extending-octopus/03-three-levels`.
-
 ## 4. Select a preset directly
 
 The snooping and directory presets group compatible controller, protocol, and FSM
@@ -258,7 +256,8 @@ not improve together.
 ## 6. Stretch: Compare one limit at a time
 
 First save the same baseline under each axis so the plotting layout matches
-exercise 01:
+exercise 01, before modifying the value of each parameter
+and comparing with the baseline:
 
 ```shell
 for axis in CPU MSHR WB; do
