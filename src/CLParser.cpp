@@ -42,10 +42,11 @@ namespace octopus
         for(auto line : lines)
         {
             int pos;
+            // The identifier must start the line as a standalone option token.
             if(line.compare(0, identifier.size(), identifier) != 0 ||
                (line.size() > identifier.size() && line[identifier.size()] != ' '))
                 continue;
-            
+
             line = line.substr(identifier.size()); //remove parameter identifier
 
             //Trim leading spaces

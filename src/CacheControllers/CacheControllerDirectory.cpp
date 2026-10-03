@@ -64,7 +64,10 @@ namespace octopus
                 // interface) must always be admitted, else a full queue starves the
                 // response that would drain it. Route by message kind, not interface.
                 if (buf.pushBack(msg, FRFCFS_State::NonReady, /*force=*/!msg.isDemandRequest()))
+                {
+                    noteQueueArrival(msg, buf);   // the LLC_QUEUE trace record and the mechanism trackers, as BaseController's intake
                     m_lower_interface->popFrontMessage();
+                }
             }
         }
 

@@ -84,6 +84,7 @@ namespace octopus
                                                              (uint16_t)action, // Complementary_value
                                                              msg.owner);       // Owner
                 ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+                ((Message *)controller_action.data)->kind = Message::K_MEM_READ;
                 break;
             case ActionId::SendData: // remove request from pending and respond to request
             {
@@ -95,6 +96,7 @@ namespace octopus
                 ((Message *)controller_action.data)->copy(msg);
                 ((Message *)controller_action.data)->to.clear();
                 ((Message *)controller_action.data)->to.push_back(msg.owner);
+                ((Message *)controller_action.data)->kind = Message::K_RESP;
 
                 if(cache_line.owner_id != -1)
                 {
@@ -135,6 +137,7 @@ namespace octopus
                 controller_action.data = (void *)new Message(msg);
 
                 ((Message *)controller_action.data)->complementary_value = (uint16_t)MSIDirectory::REQUEST_TYPE_INV;
+                ((Message *)controller_action.data)->kind = Message::K_INV;
 
                 ((Message *)controller_action.data)->to.clear();
                 for(uint64_t id : protocol_counters->at(msg.addr & ~uint64_t(m_data_handler->getBlockSize() -1)))
@@ -150,6 +153,7 @@ namespace octopus
                 controller_action.data = (void *)new Message(msg);
                 
                 ((Message *)controller_action.data)->complementary_value = (uint16_t)MSIDirectory::REQUEST_TYPE_GETS;
+                ((Message *)controller_action.data)->kind = Message::K_FWD;
 
                 ((Message *)controller_action.data)->to.clear();
                 ((Message *)controller_action.data)->to.push_back(old_owner);
@@ -162,6 +166,7 @@ namespace octopus
                 controller_action.data = (void *)new Message(msg);
                 
                 ((Message *)controller_action.data)->complementary_value = (uint16_t)MSIDirectory::REQUEST_TYPE_GETM;
+                ((Message *)controller_action.data)->kind = Message::K_FWD;
 
                 ((Message *)controller_action.data)->to.clear();
                 ((Message *)controller_action.data)->to.push_back(old_owner);
@@ -177,6 +182,7 @@ namespace octopus
                                                              (uint16_t)MSIDirectory::REQUEST_TYPE_PUT_ACK, // Complementary_value
                                                              (uint16_t)this->m_id);                         // Owner
                 ((Message *)controller_action.data)->to.push_back((uint16_t)msg.owner);
+                ((Message *)controller_action.data)->kind = Message::K_ACK;
                 break;
 
             case ActionId::WriteBack:
@@ -187,6 +193,7 @@ namespace octopus
                                                              0,          // Cycle
                                                              0,          // Complementary_value
                                                              m_id); // Owner
+                ((Message *)controller_action.data)->kind = Message::K_MEM_WRITE;
                 break;
 
             case ActionId::IncSharers:

@@ -80,7 +80,7 @@ chunks it needs and a file without a trailer (a killed run) is still readable. E
 \code{addr} & u64 & the message's address \\
 \code{resource} & u8 & 0 CPU, 1 L1, 2 REQ\_BUS, 3 RESP\_BUS, 4 LLC, 5 MEM\_BUS, 6 DRAM, 8 SVC\_BUS, 9 ARRAY, 10 LLC\_QUEUE, 11 FSM \\
 \code{phase} & u8 & 0 ENTER, 1 SERVICE, 2 EXIT; for FSM records the event id \\
-\code{kind} & u8 & 1 DEMAND, 2 GETS, 3 GETM, 4 PUTM, 5 INV, 6 MEM\_READ, 7 EVICT, 8 WB\_DATA, 9 WB\_INV, 10 SUPPLY, 11 SUPPLY\_DEFERRED, 12 RESP, 13 FILL, 14 FILL\_ROLLBACK, 15 MEM\_WRITE; 0 untagged \\
+\code{kind} & u8 & 1 DEMAND, 2 GETS, 3 GETM, 4 PUTM, 5 INV, 6 MEM\_READ, 7 EVICT, 8 WB\_DATA, 9 WB\_INV, 10 SUPPLY, 11 SUPPLY\_DEFERRED, 12 RESP, 13 FILL, 14 FILL\_ROLLBACK, 15 MEM\_WRITE, 16 PUTS, 17 FWD (FwdGetS/FwdGetM), 18 ACK (InvAck/PutAck); 0 untagged \\
 \code{core} & u8 & the message's owner \\
 \code{comp} & u16 & component id (L1 0--3, LLC 10, DRAM 100; bus 0 = L1--LLC, 1 = memory bus) \\
 \code{flags} & u16 & ARRAY: the action that claimed the port (1 read for a response, 4 read for a write-back or supply, 6 write of a fill, write-back or supply), bit 8 cut-in, bit 9 MSHR-resident, bit 10 write-back-buffer-resident. FSM: \code{old\_state << 8 | new\_state} \\

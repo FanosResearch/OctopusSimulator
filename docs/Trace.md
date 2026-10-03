@@ -22,7 +22,7 @@ latency decomposition; the trace is what the visualizer's resource lanes are bui
 | `addr` u64 | the message's address (so lanes and transitions can be filtered by line) |
 | `resource` u8 | `Logger::Role`: 0 CPU, 1 L1, 2 REQ_BUS, 3 RESP_BUS, 4 LLC, 5 MEM_BUS, 6 DRAM, 8 SVC_BUS, 9 ARRAY, 10 LLC_QUEUE, 11 FSM |
 | `phase` u8 | 0 ENTER, 1 SERVICE, 2 EXIT — for FSM records: the FSM **event id** |
-| `kind` u8 | `Message::Kind`, assigned by the producer: 1 DEMAND, 2 GETS, 3 GETM, 4 PUTM, 5 INV, 6 MEM_READ, 7 EVICT, 8 WB_DATA, 9 WB_INV, 10 SUPPLY, 11 SUPPLY_DEFERRED, 12 RESP, 13 FILL, 14 FILL_ROLLBACK, 15 MEM_WRITE; 0 = untagged |
+| `kind` u8 | `Message::Kind`, assigned by the producer: 1 DEMAND, 2 GETS, 3 GETM, 4 PUTM, 5 INV, 6 MEM_READ, 7 EVICT, 8 WB_DATA, 9 WB_INV, 10 SUPPLY, 11 SUPPLY_DEFERRED, 12 RESP, 13 FILL, 14 FILL_ROLLBACK, 15 MEM_WRITE, 16 PUTS, 17 FWD (FwdGetS/FwdGetM), 18 ACK (InvAck/PutAck); 0 = untagged |
 | `core` u8 | `Message::owner` (requester for requests/responses/supplies/fills, evicting L1 for write‑backs, LLC for invalidations) |
 | `comp` u16 | component id (L1 0–3, LLC 10, DRAM 100; bus 0 = L1↔LLC, 1 = memory bus) |
 | `flags` u16 | ARRAY: low byte = the `ControllerAction::Type` that claimed the port (1 HIT_Action = read for a response, 4 WRITE_BACK = read for a write‑back / supply, 6 WRITE_CACHE_LINE_DATA = write of a fill / write‑back / snooped supply); bit 8 (0x100) = **cut‑in**, the port timer was still busy when this access was admitted; bit 9 (0x200) = the line was MSHR‑resident, bit 10 (0x400) = PWB‑resident at the claim (see below). FSM: `old_state << 8 | new_state` |
@@ -102,7 +102,7 @@ One row per busy interval `[start, end)` of a resource instance, for every messa
 
 | resource | interval | comp |
 |---|---|---|
-| REQ_BUS / RESP_BUS | `[ENTER, EXIT]` of the same `msg_id`+`kind` (grant → transmitted; the k‑th ENTER pairs with the k‑th EXIT of that key) | 0 |
+| REQ_BUS / RESP_BUS | `[ENTER, EXIT]` of the same `msg_id`+`kind` (grant → transmitted; the k‑th ENTER pairs with the k‑th EXIT of that key). On a mesh or NoC every link crossing is one interval and **comp = the link index**, so parallel links never look double‑booked; the viewer draws every link in the one lane, stacked where they overlap | 0 (bus) / link index (mesh, NoC) |
 | SVC_BUS | `[EXIT − 1, EXIT]` (no election event; the request‑bus slot is one core cycle, and consecutive INVs are observed one cycle apart) | 0 |
 | MEM_BUS | `[EXIT − A_req, EXIT]` for MEM_READ / MEM_WRITE, `[EXIT − A_res, EXIT]` for FILL. The point‑to‑point bus is full duplex, so **comp = direction**: 0 toward memory, 1 toward the LLC | 0 / 1 |
 | ARRAY | `[SERVICE, SERVICE + A_LLC]` for the LLC (comp 10); `[SERVICE, SERVICE + A_L1]` (default 0) for an L1; a write into a PWB‑resident line (flag 0x400, action 6) is a register merge that never touches the port → zero width. Columns `cutin` and `reg` (1 MSHR, 2 PWB) carry the flags | 0–3, 10 |
@@ -116,7 +116,12 @@ The Logger stamps an event with the **core clock count** at the moment it is log
 before the CPUs within a timestamp, so every bus event (grant, broadcast, memory‑bus transfer) is
 recorded one cycle earlier in the `LatencyReport` than on the global clock the trace uses; LLC,
 array and DRAM events agree. The occupancy builder therefore shifts the four bus resources by −1 by
-default so lanes line up with the request rows (`--global-clock` keeps the physical stamps). This is
+default so lanes line up with the request rows (`--global-clock` keeps the physical stamps). The
+offset depends on the tick order of the system's components (in `MultiCoreSystem_Mesh` the memory
+side is constructed after the CPUs and lands one cycle later than in `MultiCoreSystem`), so when
+`convert.py` has the run's rows it **measures** the residual offset of each family on the run's own
+requests (the bus family against `REQ_BUS.EXIT`, the memory family against `DRAM.EXIT`) and shifts
+the lanes by the modal value, reporting `time base: … (measured against the report)`. This is
 a fixed one‑cycle attribution between Req‑Bus/L2‑Stall and Resp‑Bus/L1‑Access in the rows, totals
 are unaffected; moving the Logger to the global clock is a results‑invalidating change and is
 deferred until the next full re‑collection.

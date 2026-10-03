@@ -53,8 +53,10 @@ def _pairs(a, enter_mask, exit_mask, key_cols):
 
     def with_seq(idx):
         keys = np.stack([a[c][idx].astype(np.int64) for c in key_cols], 1)
-        # lexsort's last key is primary: group by message keys first, then
-        # preserve trace order within each group to number repeated events.
+        # key-major, time-minor: np.lexsort takes its PRIMARY key LAST, so idx goes first.
+        # (Sorted by time alone, the sequence number only counted consecutive repeats: a key that
+        # recurred later, e.g. a directory request's forward on the same msg_id, got seq 0 twice,
+        # pairs went wrong and intersect1d(assume_unique) indexed out of bounds.)
         order = np.lexsort((idx,) + tuple(keys[:, i] for i in range(keys.shape[1] - 1, -1, -1)))
         ks = keys[order]
         new = np.ones(len(order), bool)
@@ -252,9 +254,12 @@ def check_against_requests(occ, viz, t0=None, t1=None):
         FROM v JOIN o ON o.msg_id = v.id AND o.resource='REQ_BUS' AND o.kind IN ('GETS','GETM') WHERE v.reqb > 0""")
     # (a data message with this id can also leave AFTER retirement: the line returned to the LLC
     #  when the request was invalidated while waiting -- IS_dI -- so only transfers before retire count)
-    c["respbus_end"] = q("""SELECT count(*), coalesce(sum(CASE WHEN o."end" <> v.e_resp THEN 1 END),0)
-        FROM v JOIN o ON o.msg_id = v.id AND o.resource='RESP_BUS' AND o.kind IN ('RESP','SUPPLY','SUPPLY_DEFERRED') AND o.core = v.core
-                     AND o."end" <= v.retire
+    # (on a mesh/NoC a response can cross several links: only its LAST crossing ends at RESP_BUS.EXIT)
+    c["respbus_end"] = q("""SELECT count(*), coalesce(sum(CASE WHEN l.e <> v.e_resp THEN 1 END),0)
+        FROM v JOIN (SELECT o.msg_id, o.core, max(o."end") AS e
+                     FROM o JOIN v ON o.msg_id = v.id AND o.core = v.core AND o."end" <= v.retire
+                     WHERE o.resource='RESP_BUS' AND o.kind IN ('RESP','SUPPLY','SUPPLY_DEFERRED')
+                     GROUP BY 1, 2) l ON l.msg_id = v.id AND l.core = v.core
         WHERE v.resp > 0""")
     c["array_start"] = q("""SELECT count(*), coalesce(sum(CASE WHEN o.start <> v.o_array_s THEN 1 END),0)
         FROM v JOIN o ON o.msg_id = v.id AND o.resource='ARRAY' AND o.comp = 10 AND o.flags = 1 AND o.kind IN ('GETS','GETM','RESP')
@@ -269,6 +274,45 @@ def check_against_requests(occ, viz, t0=None, t1=None):
     return c
 
 
+FAMILIES = {"bus": ("REQ_BUS", "RESP_BUS", "SVC_BUS"), "memory": ("MEM_BUS", "DRAM")}
+
+
+def calibrate(occ_parts, viz, t0=None, t1=None):
+    """Align the lanes to the report's clock by measurement. The Logger stamps a request in its
+    core's clock at the moment a component is stepped, the trace in the global clock, so a lane is
+    offset from the rows by the tick order of that system's components: the buses of
+    MultiCoreSystem tick before the CPUs (-1, the default shift), the memory side of
+    MultiCoreSystem_Mesh ticks after them (0). Rather than know every system, measure the modal
+    offset between a stamp and the trace interval that ends at it on the run's own requests
+    (REQ_BUS.EXIT for the bus family, DRAM.EXIT for the memory family) and shift the family by it.
+    Returns {family: shift applied}."""
+    con = duckdb.connect()
+    win = f" WHERE issue >= {t0} AND retire <= {t1}" if t0 is not None and t1 is not None else ""
+    con.execute(f"CREATE VIEW v AS SELECT * FROM read_parquet('{viz}'){win}")
+    con.execute(f"CREATE VIEW o AS SELECT * FROM read_parquet([{', '.join(repr(p) for p in occ_parts)}])")
+    probes = {
+        "bus": """SELECT v.e_reqb - o."end" AS d, count(*) AS n FROM v JOIN o ON o.msg_id = v.id AND o.core = v.core
+                  WHERE o.resource='REQ_BUS' AND o.kind IN ('GETS','GETM') AND v.reqb > 0 GROUP BY 1 ORDER BY 2 DESC LIMIT 1""",
+        # (the row's e_dram is DRAM.EXIT: the fill leaves memory on the bus at that cycle; the DRAM interval
+        #  itself ends earlier by the return leg, which the tiled columns fold into DRAM)
+        "memory": """SELECT v.e_dram - o."end" AS d, count(*) AS n FROM v JOIN o ON o.msg_id = v.id
+                     WHERE o.resource='MEM_BUS' AND o.kind='FILL' AND v.dram > 0 GROUP BY 1 ORDER BY 2 DESC LIMIT 1""",
+    }
+    shifts = {}
+    for fam, sql in probes.items():
+        r = con.execute(sql).fetchone()
+        shifts[fam] = int(r[0]) if r and r[1] >= 16 else 0
+    if any(shifts.values()):
+        case = " ".join(f"WHEN resource IN ({','.join(repr(x) for x in FAMILIES[f])}) THEN {s}" for f, s in shifts.items() if s)
+        for p in occ_parts:
+            tmp = p + ".tmp"
+            con.execute(f"""COPY (SELECT * REPLACE (start + CASE {case} ELSE 0 END AS start, "end" + CASE {case} ELSE 0 END AS "end")
+                            FROM read_parquet('{p}') ORDER BY start, resource, comp) TO '{tmp}' (FORMAT PARQUET, COMPRESSION ZSTD)""")
+            con.close(); con = duckdb.connect()
+            os.replace(tmp, p)
+    return shifts
+
+
 def report(st, n, pending, occ, fsm, viz=None, t0=None, t1=None, log=print):
     log(f"{occ}: {sum(st.stats.values())} intervals from {n} records in {len(st.occ_parts)} part(s)")
     log(f"{fsm}: {st.fsm_total} coherence transitions in {len(st.fsm_parts)} part(s)")
@@ -277,6 +321,9 @@ def report(st, n, pending, occ, fsm, viz=None, t0=None, t1=None, log=print):
     if pending: log(f"  starts without an end (trace cut / window edge), dropped: {pending}")
     orph = {g: v for g, v in st.orphans.items() if v}
     if orph: log(f"  ends without a start (window edge): {orph}")
+    if viz and st.logger_base:
+        shifts = calibrate(st.occ_parts, viz, t0, t1)
+        log("  time base: " + ", ".join(f"{f} lanes {'shifted by %+d' % s if s else 'as stamped'}" for f, s in shifts.items()) + " (measured against the report)")
     dbl = check_no_double_booking(occ)
     log("  double-booking: " + ("none" if not dbl else str(dbl)))
     if viz:

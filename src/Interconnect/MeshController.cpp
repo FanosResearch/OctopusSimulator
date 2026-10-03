@@ -72,6 +72,12 @@ namespace octopus
         }
     }
 
+    void MeshController::traceLink(const Message &msg, const Link &link, Logger::Phase phase)
+    {
+        Logger::getLogger()->trace(msg, msg.data == NULL ? Logger::Role::REQ_BUS : Logger::Role::RESP_BUS,
+                                   (uint32_t)(&link - links.data()), phase);
+    }
+
     void MeshController::send(Message &msg)
     {
         if(msg.data == NULL)
@@ -109,10 +115,14 @@ namespace octopus
                 if(link.arbiter->elect(cycle_number, link.buffers, &elected_msg))
                 {
                     link.utilize(cycle_number, elected_msg);
+                    traceLink(elected_msg, link, Logger::Phase::ENTER);
                 }
             }
             else if(link.utilization_cycle == cycle_number)
+            {
+                traceLink(link.msg, link, Logger::Phase::EXIT);
                 send(link.msg);
+            }
         }
     }
 }

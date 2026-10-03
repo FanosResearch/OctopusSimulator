@@ -139,6 +139,7 @@ namespace octopus
                                                              (uint16_t)this->m_id);                                             // Owner
 
                 ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+                ((Message *)controller_action.data)->kind = (action == (int)ActionId::GetS) ? Message::K_GETS : Message::K_GETM;
                 break;
             case ActionId::PutS:
                 // send Bus request
@@ -149,6 +150,7 @@ namespace octopus
                                                              MSIDirectory::REQUEST_TYPE_PUTS,// Complementary_value
                                                              (uint16_t)this->m_id);          // Owner
                 ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+                ((Message *)controller_action.data)->kind = Message::K_PUTS;
                 break;
             case ActionId::PutM_Data:
             {
@@ -158,8 +160,9 @@ namespace octopus
                                                      0,                                 // Cycle
                                                      MSIDirectory::REQUEST_TYPE_PUTM,   // Complementary_value
                                                      (uint16_t)this->m_id);             // Owner
-                
-                ((Message *)controller_action.data)->to.clear();                
+
+                ((Message *)controller_action.data)->to.clear();
+                ((Message *)controller_action.data)->kind = Message::K_PUTM;   // eviction write-back to the home
                 controller_actions.insert(controller_actions.begin(), controller_action);
                 continue; //skip push back at the end of the loop
             }
@@ -174,7 +177,8 @@ namespace octopus
                 ((Message *)controller_action.data)->to.clear();
                 if (action == (int)ActionId::Data2Both)
                     ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
-                
+                ((Message *)controller_action.data)->kind = Message::K_SUPPLY;   // the owner answers a forwarded request
+
                 controller_actions.insert(controller_actions.begin(), controller_action);
                 continue; //skip push back at the end of the loop
                 
@@ -187,6 +191,7 @@ namespace octopus
                                                              MSIDirectory::REQUEST_TYPE_INV_ACK,// Complementary_value
                                                              (uint16_t)this->m_id);             // Owner
                 ((Message *)controller_action.data)->to.push_back(msg.owner);
+                ((Message *)controller_action.data)->kind = Message::K_ACK;
                 break;
             case ActionId::InvAck_Data:
             {
@@ -196,8 +201,9 @@ namespace octopus
                                                      0,                                 // Cycle
                                                      MSIDirectory::REQUEST_TYPE_INV_ACK,// Complementary_value
                                                      (uint16_t)this->m_id);             // Owner
-                
-                ((Message *)controller_action.data)->to.clear();                
+
+                ((Message *)controller_action.data)->to.clear();
+                ((Message *)controller_action.data)->kind = Message::K_ACK;   // an InvAck that carries the data
                 controller_actions.insert(controller_actions.begin(), controller_action);
 
                 continue; //skip push back at the end of the loop

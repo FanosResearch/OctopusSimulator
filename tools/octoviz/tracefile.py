@@ -19,7 +19,8 @@ REC = np.dtype([("cycle", "<u8"), ("msg_id", "<u8"), ("addr", "<u8"), ("resource
 RESOURCE = ["CPU", "L1", "REQ_BUS", "RESP_BUS", "LLC", "MEM_BUS", "DRAM", "?", "SVC_BUS", "ARRAY", "LLC_QUEUE", "FSM"]
 PHASE = ["ENTER", "SERVICE", "EXIT"]
 KIND = ["UNKNOWN", "DEMAND", "GETS", "GETM", "PUTM", "INV", "MEM_READ", "EVICT", "WB_DATA", "WB_INV", "SUPPLY",
-        "SUPPLY_DEFERRED", "RESP", "FILL", "FILL_ROLLBACK", "MEM_WRITE"]
+        "SUPPLY_DEFERRED", "RESP", "FILL", "FILL_ROLLBACK", "MEM_WRITE",
+        "PUTS", "FWD", "ACK"]   # 16-18: directory protocols (PutS, FwdGetS/FwdGetM, InvAck/PutAck)
 ACTION = {0: "REMOVE_PENDING", 1: "HIT_Action", 2: "ADD_PENDING", 3: "SEND_BUS_MSG", 4: "WRITE_BACK", 5: "UPDATE_CACHE_LINE",
           6: "WRITE_CACHE_LINE_DATA", 7: "MODIFY_DATA"}   # ControllerAction::Type ordinals used in ARRAY flags
 
