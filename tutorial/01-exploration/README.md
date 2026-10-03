@@ -153,16 +153,11 @@ directory preset is validated with FCFS and documents a starvation issue with
 TDM. The presets also differ in buffer and queue sizing: this is a comparison of
 complete configurations, not an isolated change to one protocol parameter.
 
-Compare the saved summaries, graphs, and coherence transitions:
+Graph the data and observe the trend:
 
 ```shell
 python3 sweeps/plot_axis.py tutorial/01-exploration/output/Coherence
-./octoviz.sh serve tutorial/01-exploration/output/Coherence
 ```
-
-Select a request or filter by the same cache-line address in each run to inspect
-its coherence transitions. Which messages and state changes differ? If you rerun
-an already converted setting, refresh it with `octoviz.sh convert` before viewing.
 
 ### Changing MSI/MESI within a family
 
