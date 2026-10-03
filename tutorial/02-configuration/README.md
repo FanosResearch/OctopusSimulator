@@ -112,7 +112,7 @@ three runs.
 Compare the saved settings, summaries, and timelines:
 
 ```shell
-rg 'arbiter_type' tutorial/02-configuration/output/Arbiter/*/config.log
+grep 'arbiter_type' tutorial/02-configuration/output/Arbiter/*/config.log
 python3 sweeps/plot_axis.py tutorial/02-configuration/output/Arbiter
 ./octoviz.sh serve tutorial/02-configuration/output/Arbiter
 ```
