@@ -19,29 +19,31 @@ Extends,BusController
 `Extends` tells the CSV loader to read `BusController.csv` from the same directory
 **first**, then apply the remaining rows of this file. It must be the first line.
 This is explicit CSV inheritance; C++ inheritance alone does not load defaults.
-Here, request/response latencies come from `BusController.csv`, while
-`SplitBusController.csv` replaces the arbiter default with TDM.
+Here, `BusController.csv` sets `arbiter_type(s),RRArbiter`, while
+`SplitBusController.csv` overrides it with `arbiter_type(s),TDMArbiter`.
+The shared bus uses `TripleBusController.csv`, which extends
+`SplitBusController.csv` and inherits that TDM default.
 
 The system constructs each bus, and each bus constructs its controller. Each
 component loads its own CSV defaults, then merges the parameter map passed by its
-owner, replacing matching keys. Dots route parameters to children:
+owner, replacing matching keys. The shipped system selects FCFS for the shared
+bus, giving this three-level example:
 
-| File under `configuration/` | Key to override |
-|:--|:--|
-| `SystemConfigurations/MultiCoreSystem.csv` | `bus[0].interconnect_controller.m_request_latency(i)` |
-| `Interconnect/Bus.csv` | `interconnect_controller.m_request_latency(i)` |
-| `Interconnect/SplitBusController.csv` | `m_request_latency(i)` |
-| `Interconnect/BusController.csv` (inherited controller defaults) | `m_request_latency(i)` |
+| Level | File under `configuration/` | Row |
+|---|---|---|
+| Base controller | `Interconnect/BusController.csv` | `arbiter_type(s),RRArbiter` |
+| Split controller | `Interconnect/SplitBusController.csv` | `arbiter_type(s),TDMArbiter` |
+| System | `SystemConfigurations/MultiCoreSystem.csv` | `bus[0].interconnect_controller.arbiter_type(s),FCFSArbiter` |
 
-The C++ constructors pass those maps explicitly; the dotted names do not select
-folders. The controller constructor supplies the path to its default CSV.
-The shared bus is a `TripleBus`; its `TripleBusController.csv` extends
-`SplitBusController.csv`, so the same latency defaults apply.
+The controller CSV uses the local key `arbiter_type`. In the system CSV,
+`bus[0].interconnect_controller` routes the setting through the bus to its
+controller. Dotted names identify child objects, not folders. The C++
+constructors pass those parameter maps explicitly.
 
-### Run the starting configuration
+### Compare the inherited and system settings
 
-Run from the project root in your Codespace, starting with the committed CSVs.
-This exercise edits four files; restore them with Git at the end.
+Run from the project root, starting with the committed CSVs. First save the
+shipped configuration:
 
 ```shell
 W=$PWD/BMs/eembc-traces/a2time01-trace
@@ -49,72 +51,31 @@ W=$PWD/BMs/eembc-traces/a2time01-trace
 
 ./build/Octopus_Simulator -s MultiCoreSystem \
   -p "workload_path(s)=$W/" \
-  -o tutorial/02-configuration/output/Latency/0_Baseline --trace --PrintConfig
+  -o tutorial/02-configuration/output/Arbiter/0_System-FCFS --trace --PrintConfig
 ```
 
-Use no `-c` here: these runs read `MultiCoreSystem.csv`. Each run saves reports and
-a trace under `output/Latency/<setting>/`. Reusing a setting replaces its reports.
-Every latency run uses `--PrintConfig` to save its resolved settings as `config.log`
-in that run's output directory.
+Use no `-c` here: these runs read `MultiCoreSystem.csv`. `--PrintConfig` saves
+resolved settings as `config.log` in each run's output directory.
 
-### Override the same latency at each level
+Now temporarily remove this row from `configuration/SystemConfigurations/MultiCoreSystem.csv`:
 
-Keep earlier edits in place. Edit an existing row if present; otherwise append it.
-Do not change response latency or clock periods.
+```csv
+bus[0].interconnect_controller.arbiter_type(s),FCFSArbiter
+```
 
-| Step | File under `configuration/` | Row to set | Output setting |
-|---|---|---|---|
-| 1 | `Interconnect/BusController.csv` | `m_request_latency(i),4` | `Parent` |
-| 2 | `Interconnect/SplitBusController.csv` | `m_request_latency(i),8` | `Controller` |
-| 3 | `Interconnect/Bus.csv` | `interconnect_controller.m_request_latency(i),16` | `Bus` |
-| 4 | `SystemConfigurations/MultiCoreSystem.csv` | `bus[*].interconnect_controller.m_request_latency(i),24` | `All` |
-
-Run each command immediately after its matching edit, before making the next edit:
+Without that system override, the shared bus inherits TDM from
+`SplitBusController.csv`. The memory bus uses `Point2PointController.csv`, which
+extends `BusController.csv` directly, so it inherits RR.
 
 ```shell
-# After step 1: parent controller defaults.
 ./build/Octopus_Simulator -s MultiCoreSystem \
   -p "workload_path(s)=$W/" \
-  -o tutorial/02-configuration/output/Latency/1_Parent --trace --PrintConfig
-
-# After step 2: split-bus controller override.
-./build/Octopus_Simulator -s MultiCoreSystem \
-  -p "workload_path(s)=$W/" \
-  -o tutorial/02-configuration/output/Latency/2_Controller --trace --PrintConfig
-
-# After step 3: bus-level override.
-./build/Octopus_Simulator -s MultiCoreSystem \
-  -p "workload_path(s)=$W/" \
-  -o tutorial/02-configuration/output/Latency/3_Bus --trace --PrintConfig
-
-# After step 4: system override for every bus.
-./build/Octopus_Simulator -s MultiCoreSystem \
-  -p "workload_path(s)=$W/" \
-  -o tutorial/02-configuration/output/Latency/4_All --trace --PrintConfig
+  -o tutorial/02-configuration/output/Arbiter/1_Inherited-TDM --trace --PrintConfig
 ```
 
-The configured `(bus[0], bus[1])` request latencies become `(4,4)`, `(8,4)`, `(16,16)`,
-and `(24,24)`. Step 2 targets only the shared bus: the memory bus uses a
-`Point2PointController`, which extends `BusController`, bypassing `SplitBusController`.
-
-After each run, check the saved request-latency settings:
-
-```shell
-rg 'm_request_latency' tutorial/02-configuration/output/Latency/*/config.log
-```
-
-The final `TripleBusController` entry describes `bus[0]`; `Point2PointController`
-describes `bus[1]`. The temporary `SplitBusController` entry printed during
-TripleBus construction has the same settings.
-
-Read each run's `Summary_transposed.csv`. Compare **Worst-case Requst Bus Latency**
-(the L1–LLC request bus; the label retains its original spelling) and
-**Worst-case L2-DRAM Bus Latency** (the LLC–DRAM bus). Take the maximum across cores.
-Which delays increase, stay similar, or decrease relative to the preceding run?
-
-The configured values are service times in interconnect cycles; summary values
-also include waiting. A change on one bus can affect contention on the other, so
-an unchanged setting does not guarantee an unchanged worst-case delay.
+Restore the FCFS row in `MultiCoreSystem.csv` before continuing.
+Check each run's saved `arbiter_type` settings: the `TripleBusController` entry
+is the shared bus, and `Point2PointController` is the memory bus.
 
 ### Target all buses or one bus
 
@@ -124,100 +85,58 @@ Parameter names are case-sensitive: use lowercase `bus`.
 - `bus[0]` targets the L1–LLC shared bus.
 - `bus[1]` targets the LLC–DRAM bus.
 
-Keep the wildcard row from step 4 and add these two rows to `MultiCoreSystem.csv`:
-
-```csv
-bus[0].interconnect_controller.m_request_latency(i),32
-bus[1].interconnect_controller.m_request_latency(i),48
-```
-
-```shell
-./build/Octopus_Simulator -s MultiCoreSystem \
-  -p "workload_path(s)=$W/" \
-  -o tutorial/02-configuration/output/Latency/5_PerBus --trace --PrintConfig
-```
-
-The configured request latencies are now `(32,48)`. Compare both bus-delay rows
-with the `All` run. An instance-specific key takes precedence over the matching
-wildcard key, regardless of their order in the file. What would happen if you
-removed just the `bus[1]` row?
+An instance-specific key takes precedence over a matching wildcard key. For
+example, `bus[*].interconnect_controller.arbiter_type(s),RRArbiter` would select
+RR for the memory bus while the existing `bus[0]` FCFS row would still select
+FCFS for the shared bus.
 
 ## 2. Apply a command-line override
 
 The suffix gives the value's type: `(i)` integer, `(s)` string, `(vi)` vector of
 integers, `(vs)` vector of strings. CSV rows use a comma; `-p` uses `=`.
 
+With the system FCFS row restored, override just the shared bus for one run:
+
 ```shell
 ./build/Octopus_Simulator -s MultiCoreSystem \
   -p "workload_path(s)=$W/" \
-  -p "bus[0].interconnect_controller.m_request_latency(i)=64" \
-  -o tutorial/02-configuration/output/Latency/6_CLI --trace --PrintConfig
+  -p "bus[0].interconnect_controller.arbiter_type(s)=RRArbiter" \
+  -o tutorial/02-configuration/output/Arbiter/2_CLI-RR --trace --PrintConfig
 ```
 
-The configured request latencies are now `(64,48)`. Command-line overrides take
-precedence over the selected system CSV. Quote them to preserve brackets,
-parentheses, and spaces. Compare the `CLI` and `PerBus` summaries: how does changing
-only the shared bus affect both measured delays? Repeating the `PerBus` command
-uses `(32,48)` again; the command-line change applies only to its invocation.
+Command-line overrides take precedence over the selected system CSV. Quote them
+to preserve brackets, parentheses, and spaces. The CSV still selects FCFS;
+rerunning the first command uses FCFS again. The memory bus remains RR in all
+three runs.
 
-Plot the saved runs to compare both bus-delay rows and finish cycle:
+Compare the saved settings, summaries, and timelines:
 
 ```shell
-python3 sweeps/plot_axis.py tutorial/02-configuration/output/Latency
-./octoviz.sh serve tutorial/02-configuration/output/Latency
+rg 'arbiter_type' tutorial/02-configuration/output/Arbiter/*/config.log
+python3 sweeps/plot_axis.py tutorial/02-configuration/output/Arbiter
+./octoviz.sh serve tutorial/02-configuration/output/Arbiter
 ```
 
-The plotter requires matplotlib and NumPy. Which edits changed both buses, and
-which changed only one? Use the timeline to distinguish service time from waiting.
+Compare finish cycle and worst-case request/response bus latency across cores.
+These measured delays include waiting, so changing arbitration can affect both
+the selected bus and contention elsewhere. Which setting comes from CSV
+inheritance, which comes from the system, and which comes from the command line?
 
 ### Restore before the next experiment
 
-Restore the four CSVs to the current commit before the preset and capacity
-experiments. This discards uncommitted edits to these files; saved run outputs
-remain available.
+Ensure the system FCFS row is restored before the capacity experiments.
+To restore the file to the current commit with Git, use the command below.
+This discards all uncommitted edits to that CSV; saved run outputs remain available.
 
 ```shell
-git restore -- configuration/Interconnect/BusController.csv \
-  configuration/Interconnect/SplitBusController.csv \
-  configuration/Interconnect/Bus.csv \
-  configuration/SystemConfigurations/MultiCoreSystem.csv
+git restore -- configuration/SystemConfigurations/MultiCoreSystem.csv
 ```
 
-## 3. What is data and what is code
+## 3. CPU, MSHR, and write-back limits
 
-`-s` selects the C++ system class, which decides **what objects exist and how they
-are wired**. `MultiCoreSystem` creates one L1 per core on `bus[0]`, an LLC between
-`bus[0]` and `bus[1]`, and memory beyond. Protocols, arbitration, cache geometry,
-and resource limits are parameters read from CSV files.
-
-`-c` (or `--config`) selects the system CSV independently of the class. Without
-`-c`, the CSV has the same name as the class. With `-s MultiCoreSystem -c MyConfig`,
-`MyConfig.csv` supplies parameters for the existing `MultiCoreSystem` wiring; it
-does not require a new C++ class. The `.csv` suffix is optional, and a path such as
-`--config ./my-system.csv` also works.
-
-## 4. Select a preset directly
-
-The snooping and directory presets group compatible controller, protocol, and FSM
-settings. Run a directory configuration directly:
-
-```shell
-./build/Octopus_Simulator -s MultiCoreSystem -c MultiCoreSystem_Directory \
-  -p "workload_path(s)=$W/" \
-  -o tutorial/02-configuration/output/Presets/Directory-MSI --trace
-```
-
-Use `-c MultiCoreSystem_Snoop` for snooping MSI. Preset selection itself does not
-copy or edit configuration files. `-p` applies after the selected preset.
-The presets also differ in resource sizing; changing presets changes a complete
-configuration. For the experiments below, keep the snoop preset and FCFS fixed.
-
-Protocol selection requires matched L1/LLC protocol names, FSM filenames, and
-controller types. For example, snooping MESI needs `CacheControllerExclusive` at
-L1. See exercise 01 for the coordinated overrides; changing a single protocol
-name can leave an incompatible configuration.
-
-## 5. CPU, MSHR, and write-back limits
+Exercise [01](../01-exploration/README.md#switching-coherence-families-with-a-system-preset)
+covers system classes and presets. For the experiments below, keep
+`MultiCoreSystem_Snoop` and FCFS arbitration fixed.
 
 These capacities constrain different parts of a request's lifetime:
 
@@ -253,7 +172,7 @@ positive values in these comparisons. Increasing capacity can improve overlap
 while increasing contention, so finish time and worst-case request latency need
 not improve together.
 
-## 6. Stretch: Compare one limit at a time
+## 4. Stretch: Compare one limit at a time
 
 First save the same baseline under each axis so the plotting layout matches
 exercise 01, before modifying the value of each parameter
