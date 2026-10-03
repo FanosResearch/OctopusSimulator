@@ -57,7 +57,7 @@ bash scripts/check_environment.sh
 
 One \code{[PASS]} line per component, then a short reference simulation --- the single-core DRAM
 exerciser under MCsim --- whose result is fixed: \textbf{15364 requests, worst-case DRAM latency
-359 cycles}. The simulator is deterministic and platform-independent, so those numbers are an
+377 cycles}. The simulator is deterministic and platform-independent, so those numbers are an
 equality check, not a smoke test: a mismatch means a stale build, an edited file under
 \file{configuration/} (\code{git checkout -- configuration/} puts everything back), or a bug.
 The check also catches the one portability trap in the tree: a working copy checked out on
@@ -67,7 +67,7 @@ with \emph{Malformed Line N (missing equals)}.
 \section{A first run}
 
 \code{a2time01} from EEMBC, four cores, on the configuration as shipped: snooping MESI, a
-TDM-arbitrated TripleBus, fixed-latency memory (\cref{sec:shipped-system}).
+FCFS-arbitrated TripleBus, fixed-latency memory (\cref{sec:shipped-system}).
 
 \begin{lstlisting}[style=shell]
 W=$PWD/BMs/eembc-traces/a2time01-trace       # Git Bash on Windows: W=$(cygpath -m "$PWD/BMs/eembc-traces/a2time01-trace")

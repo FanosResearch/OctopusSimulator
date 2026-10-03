@@ -28,11 +28,11 @@ namespace octopus
         Configurable* system_config;
 
     public:
-        // system_name selects the system class (MultiCoreSystem, ...);
-        // config_name selects its CSV under configuration/SystemConfigurations,
-        // defaulting to the class name. cl_params are name=value overrides.
+        // Preserve the four-argument API used by the prebuilt gem5 bridge.
         CacheSim(std::string system_name, std::vector<std::string> cl_params,
-                 bool print_config = false, std::string config_name = "");
+                 bool print_config = false, std::string config = "");
+        CacheSim(std::string system_name, std::vector<std::string> cl_params,
+                 bool print_config, std::string config, std::string output_dir, bool trace);
         ~CacheSim();
 
         void run();

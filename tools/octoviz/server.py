@@ -41,7 +41,9 @@ RESOURCES = ["reqbus", "array", "membus", "dram", "respbus"]
 def runs():
     out = []
     for p in sorted(glob.glob(os.path.join(ROOT, "**", "octoviz.parquet"), recursive=True)):
-        rel = os.path.relpath(os.path.dirname(os.path.dirname(p)), ROOT).replace(os.sep, "/")
+        # Use the actual report directory: arbitrary sibling output directories
+        # must remain distinct even when neither is named newLogger.
+        rel = os.path.relpath(os.path.dirname(p), ROOT).replace(os.sep, "/")
         n, tmin, tmax = CON.execute(f"SELECT count(*), min(issue), max(retire) FROM '{p.replace(os.sep,'/')}'").fetchone()
         d = os.path.dirname(p)   # occupancy/fsm: a single file, or parts occupancy_NNN.parquet read as one table via a glob
         occ = next((g for g in (os.path.join(d, "occupancy.parquet"), os.path.join(d, "occupancy_*.parquet")) if glob.glob(g)), None)

@@ -1,5 +1,5 @@
 Core Id,Worst-case L1 Stall Latency,Worst-case Requst Bus Latency,Worst-case L2 Stall Latency,Worst-case L2 Access Latency,Worst-case Response Bus Latency,Worst-case L2-DRAM Bus Latency,Worst-case DRAM Latency,Worst-case L1 Access Latency,Worst-case Total Latency,Worst-case Effective Latency,Average Latency,Finish Cycle,Worst-case Oldest Latency
-3,837,51,331,139,145,7,250,8,913,292,10.7098,1128425,365
-1,717,51,329,163,139,7,250,8,893,292,10.9191,1134315,343
-2,820,52,373,171,154,7,250,8,943,300,10.8376,1135070,350
-0,746,45,358,175,165,7,250,8,918,291,10.8541,1136110,334
+1,512,18,289,193,35,12,250,8,609,282,9.10521,1021611,299
+0,608,15,293,190,39,15,250,8,727,280,9.12927,1021621,355
+2,650,13,286,194,40,15,250,8,666,280,9.132,1022568,309
+3,589,20,294,188,40,9,250,8,732,285,9.16845,1022945,321

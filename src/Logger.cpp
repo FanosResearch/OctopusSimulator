@@ -10,6 +10,7 @@
 #include "../header/ClockManager.h"
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 
 #include <cstdlib>
 
@@ -54,6 +55,22 @@ namespace octopus
     }
 
 
+    void Logger::enableTrace()
+    {
+        // OCTOPUS_TRACE remains an explicit filename override for old scripts.
+        const char *override_path = std::getenv("OCTOPUS_TRACE");
+        m_trace_path = override_path && *override_path ? override_path : report_file_path + "/trace.bin";
+        std::error_code error;
+        std::filesystem::create_directories(report_file_path, error);
+        if (error)
+        {
+            std::cerr << "Cannot create logger output directory: " << error.message() << std::endl;
+            std::exit(1);
+        }
+        traceOpen();
+        if (!m_trace) std::exit(1);
+    }
+
     void Logger::resetReports()
     {
         for (auto &f : report_files)
@@ -61,6 +78,8 @@ namespace octopus
         report_files.clear();
         if (summary_file.is_open())
             summary_file.close();
+        summary_metrics.clear();
+        summary_values.clear();
         grant_hist.clear();
         event_log.clear();
         event_core.clear();
@@ -187,9 +206,11 @@ namespace octopus
     {
         m_trace_checked = true;
         const char *f = std::getenv("OCTOPUS_TRACE");
-        if (!f || !*f) return;
-        m_trace_path = f; m_trace = std::fopen(f, "wb");
-        if (!m_trace) { fprintf(stderr, "Logger: cannot open OCTOPUS_TRACE file %s\n", f); return; }
+        if (m_trace) return;
+        if (f && *f) m_trace_path = f;
+        if (m_trace_path.empty()) return;
+        m_trace = std::fopen(m_trace_path.c_str(), "wb");
+        if (!m_trace) { fprintf(stderr, "Logger: cannot open trace file %s\n", m_trace_path.c_str()); return; }
         std::fwrite(TRACE_MAGIC, 1, 8, m_trace);
         m_trace_buf.reserve(65536);
         // OCTOPUS_TRACE_WINDOW=t0:t1 keeps only events in that core-cycle window, so a
@@ -535,6 +556,11 @@ namespace octopus
             summary_file << "Core Id,";
             summary_file << stream.str();
             summary_file << ",Finish Cycle,Worst-case Oldest Latency" << endl;
+            stringstream headers(stream.str() + ",Finish Cycle,Worst-case Oldest Latency");
+            string metric;
+            summary_metrics.clear();
+            while (getline(headers, metric, ','))
+                summary_metrics.push_back(metric);
         }
 
         stream.str("");
@@ -554,9 +580,16 @@ namespace octopus
         report_files[core_id].close();
         report_files.erase(core_id);
 
-        summary_file << core_id << ",";
-        summary_file << stream.str();
-        summary_file << "," << last_checkpoint[core_id] << "," << worst_case_oldest_latency[core_id] << endl;
+        const string values = stream.str() + "," + to_string(last_checkpoint[core_id])
+                            + "," + to_string(worst_case_oldest_latency[core_id]);
+        summary_file << core_id << "," << values << endl;
+        stringstream fields(values);
+        string value;
+        auto &core_values = summary_values[core_id];
+        core_values.clear();
+        while (getline(fields, value, ','))
+            core_values.push_back(value);
+        writeTransposedSummary();
         last_checkpoint.erase(core_id);
 
         if (report_files.empty())
@@ -568,6 +601,24 @@ namespace octopus
                 fprintf(stderr, "[EVENT-PATH] tiling ok=%llu fail=%llu noresp=%llu\n",
                         (unsigned long long)g_evt_ok, (unsigned long long)g_evt_fail,
                         (unsigned long long)g_evt_noresp);
+        }
+    }
+
+    void Logger::writeTransposedSummary()
+    {
+        // Preserve the exact serialized values from Summary.csv. Rewriting on each
+        // core's completion also makes partial summaries available during a run.
+        ofstream transposed(report_file_path + "/Summary_transposed.csv");
+        transposed << "Metric";
+        for (const auto &core : summary_values)
+            transposed << ",Core " << core.first;
+        transposed << endl;
+        for (size_t i = 0; i < summary_metrics.size(); ++i)
+        {
+            transposed << summary_metrics[i];
+            for (const auto &core : summary_values)
+                transposed << "," << core.second.at(i);
+            transposed << endl;
         }
     }
 

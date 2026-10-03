@@ -1,5 +1,38 @@
 # Configuration-axis sweeps
 
+## Plot manually collected tutorial runs
+
+You can run the simulator directly with different `-p` values and use `-o` to
+keep each setting's reports in `tutorial/<axis>/<setting>/`. Then compare a
+single benchmark across those settings without invoking any sweep runner:
+
+```bash
+python3 sweeps/plot_axis.py tutorial/Arbiter
+# From tutorial/ instead:
+python3 ../sweeps/plot_axis.py Arbiter
+```
+
+Requires matplotlib and numpy (`requirements.txt`). Each immediate setting
+directory must contain a completed run's `Summary.csv`; latency CSVs, if present,
+are checked for matching core IDs. No tracing or Parquet conversion is required.
+Use the same benchmark and hold other configuration choices fixed. The summaries
+do not record enough provenance to verify that automatically; partial runs with
+entirely missing cores also cannot always be detected.
+
+The plotter discovers setting names, reads columns by header name, and produces
+`figures/comparison.png` and `.pdf` (finish cycle, mean effective latency, worst-case
+total latency), `figures/stages.png` and `.pdf` (independent stage maxima), and
+`figures/metrics.csv`. Use `--out <directory>` to change that destination.
+Average latency is the unweighted mean of per-core averages, matching the ordinary
+sweep aggregation. Finish cycle and worst-case metrics are maxima across cores.
+Stage maxima are not stacked: they can belong to different requests and do not
+sum to worst-case total latency. Finish cycle measures last request completion,
+not any trailing computation in a periodic task.
+
+The existing `plot_results.py` remains the suite-oriented plotter for
+`results/<axis>/<suite>.csv`; the sweep runners themselves do not generate its
+figures automatically.
+
 Each script varies **one** Octopus configuration axis against a fixed baseline
 and records, per `(config, benchmark)`, whether the run **completes** plus
 latency metrics parsed from the Logger's `Summary.csv` (see
