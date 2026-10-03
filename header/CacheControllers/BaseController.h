@@ -87,6 +87,9 @@ namespace octopus
         virtual void cycleProcess();
         virtual void processLogic();
         virtual void addRequests2ProcessingQueue(FRFCFS_Buffer<Message, CoherenceProtocolHandler> &);
+        // after a lower-interface message is admitted to the queue: the LLC_QUEUE trace record and
+        // the LLC mechanism trackers (arrival state, per-line gate); every intake calls it
+        void noteQueueArrival(const Message &msg, FRFCFS_Buffer<Message, CoherenceProtocolHandler> &buf);
 
         // Diagnostics: OCTOPUS_HANG_DUMP=<cycles> dumps this controller's queues to
         // stderr once it has processed nothing for that many cycles (deadlock triage).

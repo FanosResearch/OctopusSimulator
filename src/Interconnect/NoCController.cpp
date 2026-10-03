@@ -82,10 +82,12 @@ namespace octopus
                 if(link.arbiter->elect(cycle_number, link.buffers, &elected_msg))
                 {
                     link.utilize(cycle_number, elected_msg);
+                    traceLink(elected_msg, link, Logger::Phase::ENTER);
                 }
             }
             else if(link.utilization_cycle == cycle_number)
             {
+                traceLink(link.msg, link, Logger::Phase::EXIT);
                 if(link.msg.from == link.id_a)
                     send(link.msg, link.id_b);
                 else

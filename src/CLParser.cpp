@@ -42,10 +42,13 @@ namespace octopus
         for(auto line : lines)
         {
             int pos;
-            if((pos = line.find(identifier)) == string::npos) //find parameter identifier
+            // the identifier must START the line: a value may contain it ("-p workload_path(s)=
+            // .../viz-snoop/" contains "-s", "results-sweep" contains "-s"), and matching it
+            // anywhere made that value the system name ("Error wrong system configuration")
+            if(line.compare(0, identifier.size(), identifier) != 0)
                 continue;
-            
-            line = line.substr(pos + 2); //remove parameter identifier
+
+            line = line.substr(identifier.size()); //remove parameter identifier
 
             //Trim leading spaces
             pos = 0;

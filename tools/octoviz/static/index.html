@@ -11,7 +11,8 @@
           /* message kinds (trace lanes, docs/Trace.md) */
           --kd-DEMAND:#ced4da; --kd-GETS:#20c997; --kd-GETM:#0ca678; --kd-PUTM:#fab005; --kd-INV:#e03131; --kd-EVICT:#868e96;
           --kd-WB_DATA:#fd7e14; --kd-WB_INV:#d9480f; --kd-SUPPLY:#82c91e; --kd-SUPPLY_DEFERRED:#5c940d; --kd-RESP:#f8f9fa;
-          --kd-FILL:#b197fc; --kd-FILL_ROLLBACK:#cc5de8; --kd-MEM_READ:#4c6ef5; --kd-MEM_WRITE:#7048e8; --kd-UNKNOWN:#495057; }
+          --kd-FILL:#b197fc; --kd-FILL_ROLLBACK:#cc5de8; --kd-MEM_READ:#4c6ef5; --kd-MEM_WRITE:#7048e8; --kd-UNKNOWN:#495057;
+          --kd-PUTS:#ffd43b; --kd-FWD:#ff922b; --kd-ACK:#74c0fc; }
   html,body { margin:0; background:var(--bg); color:var(--ink); font:13px/1.35 system-ui, Segoe UI, Roboto, sans-serif; }
   #top { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:flex-end; padding:10px 14px; background:var(--panel); border-bottom:1px solid var(--line); }
   #top label { display:flex; flex-direction:column; gap:3px; color:var(--muted); font-size:11px; letter-spacing:.03em; text-transform:uppercase; }
@@ -118,7 +119,7 @@
 <div id="legend2"><b style="color:var(--ink)">Resource lanes</b> — one segment = one request occupying the resource, coloured by
   <span class="lc-core"><span style="--sw:var(--c0)">core 0</span> <span style="--sw:var(--c1)">core 1</span> <span style="--sw:var(--c2)">core 2</span> <span style="--sw:var(--c3)">core 3</span></span>
   <span class="lc-cls" style="display:none"><span style="--sw:var(--k-stable)">stable hit</span> <span style="--sw:var(--k-transient)">transient hit</span> <span style="--sw:var(--k-coalesced)">coalesced hit</span> <span style="--sw:var(--k-miss)">miss</span></span>
-  <span class="lc-kind" style="display:none"><span style="--sw:var(--kd-GETS)">GetS</span> <span style="--sw:var(--kd-GETM)">GetM</span> <span style="--sw:var(--kd-PUTM)">PutM</span> <span style="--sw:var(--kd-INV)">INV</span> <span style="--sw:var(--kd-RESP)">response</span> <span style="--sw:var(--kd-SUPPLY)">supply</span> <span style="--sw:var(--kd-SUPPLY_DEFERRED)">deferred supply</span> <span style="--sw:var(--kd-WB_DATA)">write-back</span> <span style="--sw:var(--kd-WB_INV)">INV-forced WB</span> <span style="--sw:var(--kd-MEM_READ)">mem read</span> <span style="--sw:var(--kd-FILL)">fill</span> <span style="--sw:var(--kd-MEM_WRITE)">mem write</span> <span style="--sw:repeating-linear-gradient(135deg,#fff 0 1px,transparent 1px 4px)">dashed = array cut-in (admitted while the port was busy)</span></span>
+  <span class="lc-kind" style="display:none"><span style="--sw:var(--kd-GETS)">GetS</span> <span style="--sw:var(--kd-GETM)">GetM</span> <span style="--sw:var(--kd-PUTM)">PutM</span> <span style="--sw:var(--kd-INV)">INV</span> <span style="--sw:var(--kd-RESP)">response</span> <span style="--sw:var(--kd-SUPPLY)">supply</span> <span style="--sw:var(--kd-SUPPLY_DEFERRED)">deferred supply</span> <span style="--sw:var(--kd-WB_DATA)">write-back</span> <span style="--sw:var(--kd-WB_INV)">INV-forced WB</span> <span style="--sw:var(--kd-MEM_READ)">mem read</span> <span style="--sw:var(--kd-FILL)">fill</span> <span style="--sw:var(--kd-MEM_WRITE)">mem write</span> <span style="--sw:var(--kd-PUTS)">PutS</span> <span style="--sw:var(--kd-FWD)">forward</span> <span style="--sw:var(--kd-ACK)">ack</span> <span style="--sw:repeating-linear-gradient(135deg,#fff 0 1px,transparent 1px 4px)">dashed = array cut-in (admitted while the port was busy)</span></span>
   <span style="--sw:#3b4250">context (not in the filtered set)</span> <span style="--sw:var(--hl)">occupant AHEAD of the selected request (white outline)</span> <span style="--sw:repeating-linear-gradient(135deg,var(--wait) 0 2px,transparent 2px 5px)">selected request's WAIT window (magenta hatching)</span> <span style="--sw:var(--accent)">selected request's OWN service slot (orange outline)</span></div>
 </section>
 <div id="bottom">
@@ -146,7 +147,7 @@ const STATE = {"-2":"never reached the LLC","-1":"absent","0":"N","1":"NE_d (DRA
 const A_RES = 5, A_LLC = 10;
 // trace lanes (docs/Trace.md): every message's busy intervals from occupancy.parquet; the memory bus is full duplex (comp = direction)
 const TRES = [["REQ_BUS",0,"request bus","reqbus"],["SVC_BUS",0,"service bus (INV)",null],["ARRAY",10,"LLC array port","array"],["MEM_BUS",0,"mem bus → DRAM",null],["MEM_BUS",1,"mem bus → LLC",null],["DRAM",100,"DRAM (banks overlap)",null],["RESP_BUS",0,"response bus","respbus"]];
-const KIND_TXT = { DEMAND:"CPU request", GETS:"GetS", GETM:"GetM", PUTM:"PutM", INV:"back-invalidation", EVICT:"L1 replacement", WB_DATA:"eviction write-back", WB_INV:"INV-forced write-back", SUPPLY:"cache-to-cache supply", SUPPLY_DEFERRED:"deferred supply (parked request)", RESP:"LLC/L1 data response", FILL:"DRAM fill", FILL_ROLLBACK:"fill (rollback)", MEM_READ:"memory read", MEM_WRITE:"LLC eviction to memory", UNKNOWN:"untagged" };
+const KIND_TXT = { DEMAND:"CPU request", GETS:"GetS", GETM:"GetM", PUTM:"PutM", INV:"back-invalidation", EVICT:"L1 replacement", WB_DATA:"eviction write-back", WB_INV:"INV-forced write-back", SUPPLY:"cache-to-cache supply", SUPPLY_DEFERRED:"deferred supply (parked request)", RESP:"LLC/L1 data response", FILL:"DRAM fill", FILL_ROLLBACK:"fill (rollback)", MEM_READ:"memory read", MEM_WRITE:"LLC eviction to memory", PUTS:"PutS", FWD:"forward (FwdGetS/FwdGetM)", ACK:"acknowledgement (InvAck/PutAck)", UNKNOWN:"untagged" };
 let runs = [], run = null, view = { t0: 0, t1: 0 }, data = null, ctxData = null, occData = null, mini = null, hover = null, timer = null, selected = null, laneHover = null;
 /* ---- views: hide/show here, or pop one out into its own window.
    Windows of the same origin share a BroadcastChannel, so the cycle window, the
@@ -324,7 +325,9 @@ function drawGantt() {
 }
 // ---- trace lanes: intervals of every message, packed into sub-rows where they overlap (DRAM banks, array cut-ins) ----
 const oget = (row, k) => row[occData.cols.indexOf(k)];
-function laneRows(res, comp) { const C = occData.cols, ir = C.indexOf("resource"), ic = C.indexOf("comp"); return occData.rows.filter(r => r[ir] === res && r[ic] === comp); }
+// REQ_BUS / RESP_BUS: comp is the link index on a mesh or NoC (0 on a bus); one lane shows every link, overlapping crossings stack
+const anyComp = res => res === "REQ_BUS" || res === "RESP_BUS";
+function laneRows(res, comp) { const C = occData.cols, ir = C.indexOf("resource"), ic = C.indexOf("comp"); return occData.rows.filter(r => r[ir] === res && (anyComp(res) || r[ic] === comp)); }
 function pack(rows) { const ends = []; return rows.map(r => { const s = oget(r, "start"), e = oget(r, "end"); let k = ends.findIndex(t => t <= s); if (k < 0) { if (ends.length < 4) { k = ends.length; ends.push(e); } else { k = 3; ends[3] = Math.max(ends[3], e); } } else ends[k] = e; return k; }); }
 const occKey = r => oget(r, "core") + ":" + oget(r, "msg_id");
 function occAhead(sel, selC) { // trace occupants (any kind) overlapping the selected request's wait windows -> {lane index: [row,...]}
@@ -336,7 +339,7 @@ function drawTraceLanes(g, W, H) {
   const lh = (H - 4) / TRES.length; const ahead = selected && occData.mode === "rows" ? occAhead(selected.row, selected.C) : null; const ww = selected ? waitWindows(selected.row, selected.C) : null;
   const me = selected ? selected.core + ":" + selected.id : null; g.__lh = lh; g.__hits = [];
   TRES.forEach(([res, comp, name, wk], li) => { const y = 2 + li * lh; g.fillStyle = css("--muted"); g.font = "11px system-ui"; g.fillText(name, 4, y + 11);
-    if (occData.mode === "bins") { const C = occData.cols; occData.bins.filter(b => b[C.indexOf("resource")] === res && b[C.indexOf("comp")] === comp).forEach(b => { const i = b[0], u = Math.min(1, b[C.indexOf("busy")] / occData.bw), un = Math.min(1, b[C.indexOf("busy_nonreq")] / occData.bw);
+    if (occData.mode === "bins") { const C = occData.cols; occData.bins.filter(b => b[C.indexOf("resource")] === res && (anyComp(res) || b[C.indexOf("comp")] === comp)).forEach(b => { const i = b[0], u = Math.min(1, b[C.indexOf("busy")] / occData.bw), un = Math.min(1, b[C.indexOf("busy_nonreq")] / occData.bw);
         const x0 = x(occData.t0 + i * occData.bw) * W, w = Math.max(1, occData.bw / (view.t1 - view.t0) * W); g.fillStyle = `rgba(242,176,61,${0.15 + 0.85 * u})`; g.fillRect(x0, y + 14, w, lh - 16); g.fillStyle = `rgba(177,151,252,${un})`; g.fillRect(x0, y + 14, w, (lh - 16) * 0.35); }); return; }
     if (ww && wk && ww[wk]) { const x0 = x(ww[wk][0]) * W, x1 = x(ww[wk][1]) * W; g.fillStyle = hatch(); g.fillRect(x0, y + 12, Math.max(1, x1 - x0), lh - 12); g.strokeStyle = css("--wait"); g.lineWidth = 1.5; g.strokeRect(x0 + .5, y + 12.5, Math.max(1, x1 - x0), lh - 13); g.lineWidth = 1; }
     const rows = laneRows(res, comp), sub = pack(rows), nsub = Math.max(1, ...sub.map(k => k + 1)), sh = (lh - 16) / nsub;

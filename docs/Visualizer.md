@@ -47,7 +47,10 @@ Dependency: Python 3 + `duckdb` (`python -m pip install duckdb`).
   click to open the inspector.
 - **Resource lanes** — request bus, LLC array port, memory bus, DRAM, response bus; each segment is
   the occupying request coloured by core. Bright = the filtered set, dim = every other request in
-  the window ("context"), so *who is ahead of me* is visible.
+  the window ("context"), so *who is ahead of me* is visible. On a mesh or NoC the two bus lanes
+  carry every link's crossings (one interval per hop), stacked where links are busy at once; under a
+  directory protocol the forwards, acknowledgements and PutS messages are their own kinds (colour
+  by kind to see them).
 - **Inspector** — the row's fields and every request on the same 64‑B line within ±2000 cycles
   (coalescing / transient context); click one to jump to it.
 - **Minimap** — request density over the whole run; click to move the window.
@@ -115,8 +118,9 @@ and the inspector lists them (*trace: ahead of it on …*) together with every t
 selected id (its queue residency, array claims, transfers, the supply or fill that served it).
 Wide windows show utilisation per lane with the non‑request share (fills, write‑backs, INV,
 memory traffic) overlaid in purple. The trace lanes are shifted onto the Logger's time base
-(bus events −1) so they line up with the request rows; `occupancy.py --global-clock` keeps the
-physical stamps.
+(bus events −1, then whatever residual offset the converter measures on the run's own requests,
+which differs between the bus and the mesh systems) so they line up with the request rows;
+`occupancy.py --global-clock` keeps the physical stamps.
 
 ## Coherence transition table (per line)
 The full‑width panel at the bottom lists every event a controller's FSM processed on one 64‑B

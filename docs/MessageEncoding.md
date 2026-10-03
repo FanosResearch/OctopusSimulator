@@ -57,7 +57,12 @@ Because the fields above cannot be read back into a kind, the phase‑3 trace ta
 | `SUPPLY_DEFERRED` | L1 `Data2Req/Data2Both` triggered by `OwnData`/`OwnData_Execlusive` with a parked request; the message takes the **parked** request's id and owner (and a copy goes to the LLC if the parked request was a GetS) |
 | `RESP` | LLC `SendData` / `SendExeclusiveData` |
 | `FILL`, `FILL_ROLLBACK` | MainMemory / MCsim / perfect loopback; End2End rollback |
-| `MEM_WRITE` | LLC `WriteBack` |
-| `0` (unknown) | anything else (directory protocols are not tagged yet) |
+| `MEM_WRITE` | LLC `WriteBack` (snoop and directory home) |
+| `PUTS` | directory L1 `PutS` |
+| `FWD` | directory home `FwdGetS` / `FwdGetM` (sent on the service lane, or point-to-point on a mesh) |
+| `ACK` | directory L1 `InvAck2Req` / `InvAck_Data`, directory home `PutAck` |
+| `0` (unknown) | anything else |
+
+Under the directory protocols the shared kinds keep their meaning: an L1's `GetS`/`GetM` and `PutM_Data` are `GETS`/`GETM`/`PUTM`, the home's `GetData` is `MEM_READ`, its `SendInv` is `INV`, its `SendData` is `RESP`, and an owner answering a forward (`Data2Req`/`Data2Both`) is a `SUPPLY`.
 
 `Message::copy` propagates `kind`; the decoders never read it.

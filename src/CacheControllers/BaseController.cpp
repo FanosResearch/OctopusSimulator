@@ -187,22 +187,7 @@ namespace octopus
             // so route by message kind, not by interface.)
             if (buf.pushBack(msg, FRFCFS_State::NonReady, /*force=*/!msg.isDemandRequest()))
             {
-                Logger::getLogger()->trace(msg, Logger::Role::LLC_QUEUE, (uint32_t)m_id, Logger::Phase::ENTER);   // arrival in the controller's queue (L1: from its CPU; LLC: from the bus)
-                // Mechanism trackers (LLC only): the line's state when the demand request
-                // arrives, and whether an older demand to the same line is already queued
-                // (per-line FCFS gate). A stable line => admitted immediately; a transient
-                // (S_d/I_d/MN_d/...) => waits a coherence round trip; NE_d/NM_d => waits
-                // for a DRAM fetch already in flight (coalesced hit). See docs/Logger.md S5.
-                if (m_log_role == Logger::Role::LLC && msg.isDemandRequest())
-                {
-                    GenericCacheLine line;
-                    int st = m_data_handler->readLineBits(msg.addr, &line) ? line.state : -1;
-                    bool gated = false; uint64_t key = getAddressKey(msg.addr);
-                    buf.forEach([&](const Message &m, FRFCFS_State) {
-                        if (m.msg_id != msg.msg_id && m.isDemandRequest() && getAddressKey(m.addr) == key) gated = true; });
-                    Logger::getLogger()->annotate(msg.msg_id, Logger::Annot::LLC_STATE, st);
-                    Logger::getLogger()->annotate(msg.msg_id, Logger::Annot::LLC_GATE, gated ? 1 : 0);
-                }
+                noteQueueArrival(msg, buf);
                 m_lower_interface->popFrontMessage();
             }
             else
@@ -210,6 +195,30 @@ namespace octopus
         }
         if (buf.size() > m_queue_peak)
             m_queue_peak = buf.size();
+    }
+
+    // A message admitted to the processing queue from the lower interface (L1: from its CPU;
+    // LLC: from the interconnect): the raw-trace record the visualizer's LLC_QUEUE lane is built
+    // from, and the mechanism trackers. Shared by every controller's intake, the directory's
+    // included, so the trackers and the lane do not depend on the controller class.
+    void BaseController::noteQueueArrival(const Message &msg, FRFCFS_Buffer<Message, CoherenceProtocolHandler> &buf)
+    {
+        Logger::getLogger()->trace(msg, Logger::Role::LLC_QUEUE, (uint32_t)m_id, Logger::Phase::ENTER);   // arrival in the controller's queue
+        // Mechanism trackers (LLC only): the line's state when the demand request
+        // arrives, and whether an older demand to the same line is already queued
+        // (per-line FCFS gate). A stable line => admitted immediately; a transient
+        // (S_d/I_d/MN_d/...) => waits a coherence round trip; NE_d/NM_d => waits
+        // for a DRAM fetch already in flight (coalesced hit). See docs/Logger.md S5.
+        if (m_log_role == Logger::Role::LLC && msg.isDemandRequest())
+        {
+            GenericCacheLine line;
+            int st = m_data_handler->readLineBits(msg.addr, &line) ? line.state : -1;
+            bool gated = false; uint64_t key = getAddressKey(msg.addr);
+            buf.forEach([&](const Message &m, FRFCFS_State) {
+                if (m.msg_id != msg.msg_id && m.isDemandRequest() && getAddressKey(m.addr) == key) gated = true; });
+            Logger::getLogger()->annotate(msg.msg_id, Logger::Annot::LLC_STATE, st);
+            Logger::getLogger()->annotate(msg.msg_id, Logger::Annot::LLC_GATE, gated ? 1 : 0);
+        }
     }
 
     std::vector<BaseController *> BaseController::s_controllers;
