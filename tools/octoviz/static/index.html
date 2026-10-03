@@ -5,7 +5,7 @@
 <title>Octoviz timeline</title>
 <style>
   :root { --bg:#14161a; --panel:#1d2026; --ink:#e7e9ee; --muted:#9aa3b2; --line:#2c313a; --accent:#f2b03d; --hl:#ffffff; --wait:#ff2d95;
-          --l1s:#4c6ef5; --reqb:#20c997; --l2s:#fab005; --membus:#845ef7; --dram:#e64980; --l2a:#15aabf; --resp:#fd7e14; --l1a:#82c91e;
+          --l1s:#4c6ef5; --reqb:#a84432; --l2s:#ffe34d; --membus:#845ef7; --dram:#e64980; --l2a:#15aabf; --resp:#fd7e14; --l1a:#82c91e;
           --c0:#f8f9fa; --c1:#ff8787; --c2:#c0eb75; --c3:#b197fc;
           --k-l1hit:#868e96; --k-stable:#f8f9fa; --k-transient:#c0eb75; --k-coalesced:#ff8787; --k-miss:#b197fc;
           /* message kinds (trace lanes, docs/Trace.md) */
@@ -20,6 +20,8 @@
   #top .chk { display:flex; gap:6px; flex-wrap:wrap; text-transform:none; color:var(--ink); font-size:12px; }
   #top button, .panel button { background:var(--accent); color:#111; border:0; border-radius:4px; padding:6px 12px; font-weight:600; cursor:pointer; }
   #status { color:var(--muted); font-family: ui-monospace, Consolas, monospace; padding:4px 14px; border-bottom:1px solid var(--line); }
+  #time-scroll { overflow-x:scroll; overflow-y:hidden; height:22px; background:var(--panel); scrollbar-color:var(--muted) var(--panel); }
+  #time-scroll-space { height:1px; }
   #minimap { display:block; width:100%; height:44px; background:#0f1114; cursor:crosshair; }
   #gantt, #lanes { display:block; width:100%; background:#0f1114; }
   #gantt { height:44vh; cursor:grab; } #lanes { height:26vh; border-top:1px solid var(--line); }
@@ -91,6 +93,7 @@
   <label>lane colour <select id="lanecolor"><option value="core">by core</option><option value="cls">by class</option><option value="kind">by kind (trace)</option></select></label>
   <label>more <span class="chk"><label><input type="checkbox" id="oldest">oldest only</label><label>resp-ahead ≥ <input id="ahead" type="number" style="min-width:50px;width:50px"></label><label><input type="checkbox" id="context" checked>context lanes</label></span></label>
   <button id="go">Apply</button>
+  <label class="keep">Wheel action <select id="wheel-mode"><option value="zoom">Zoom (Ctrl: pan)</option><option value="pan">Pan (Ctrl: zoom)</option></select></label>
 </div>
 <div id="views">views
   <span class="vb" data-view="pipeline" aria-pressed="true">pipeline<span class="pop" title="open in a new window">⧉</span></span>
@@ -101,6 +104,7 @@
   <span style="margin-left:auto">click a name to hide it here · ⧉ opens it in its own window, kept in sync</span>
 </div>
 <div id="status">loading…</div>
+<div id="time-scroll" tabindex="0" aria-label="Timeline horizontal scroll"><div id="time-scroll-space"></div></div>
 <section class="view" id="v-pipeline" data-view="pipeline">
   <div class="vhead"><b>Pipeline</b> — request × cycle<span class="link" id="link-pipeline"></span></div>
 <canvas id="minimap"></canvas>
@@ -110,7 +114,7 @@
   <span style="--sw:var(--l1s)">L1 stall</span><span style="--sw:var(--reqb)">req bus</span><span style="--sw:var(--l2s)">L2 stall (LLC queue)</span>
   <span style="--sw:var(--membus)">mem bus</span><span style="--sw:var(--dram)">DRAM</span><span style="--sw:var(--l2a)">L2 access (array wait)</span>
   <span style="--sw:var(--resp)">resp bus</span><span style="--sw:var(--l1a)">L1 access</span><span style="--sw:var(--accent)">▲ became oldest</span> <span style="--sw:repeating-linear-gradient(135deg,var(--muted) 0 2px,transparent 2px 5px)">hatched = waiting</span> <span style="--sw:var(--muted)">solid = being served (broadcast, array read, mem bus, DRAM, transfer, L1 access)</span>
-  <span style="margin-left:auto">wheel = zoom · drag = pan · click a bar = inspect &amp; "why did I wait"</span>
+  <span style="margin-left:auto">wheel action: see selector above · Ctrl swaps pan/zoom · drag = pan · click a bar = inspect</span>
 </div>
 </section>
 <section class="view" id="v-lanes" data-view="lanes">
@@ -219,19 +223,22 @@ function popOut(v) {
 }
 
 async function refresh() {
-  if (!run) return; view.t0 = Math.max(run.tmin, Math.floor(view.t0)); view.t1 = Math.min(run.tmax, Math.ceil(view.t1)); if (view.t1 <= view.t0) view.t1 = view.t0 + 1000;
+  if (!run) return; clampTimeline(); syncTimeScroll();
   $("#t0").value = view.t0; $("#t1").value = view.t1; saveHash();
   setStatus("querying…"); const f = filters();
   const [d, c, o] = await Promise.all([api("/api/window", { ...f, t0: view.t0, t1: view.t1 }),
                                     ($("#context").checked || selected) ? api("/api/window", { run: run.run, t0: view.t0, t1: view.t1, limit: 20000 }) : Promise.resolve(null),
                                     traceMode() ? api("/api/occupancy", { run: run.run, t0: view.t0, t1: view.t1, core: f.core, addr: f.addr, mask: f.addr ? f.mask : "" }) : Promise.resolve(null)]);
   data = d; ctxData = c; occData = o; draw(); refreshHist(); refreshHot(); refreshFsm(); sendState("state");
-  setStatus(d.mode === "rows" ? `${run.run} · cycles ${view.t0}–${view.t1} (${view.t1 - view.t0}) · ${d.rows.length} of ${d.total} matching requests shown` :
-            `${run.run} · cycles ${view.t0}–${view.t1} (${view.t1 - view.t0}) · aggregated view, ${d.bins.length} bins of ${d.bw} cycles — zoom in below 40 000 cycles for individual requests`);
+  const statusPrefix = `${run.run} · cycles ${view.t0}–${view.t1} (${view.t1 - view.t0}) · total recorded cycles: ${run.tmax}`;
+  setStatus(d.mode === "rows" ? `${statusPrefix} · ${d.rows.length} of ${d.total} matching requests shown` :
+            `${statusPrefix} · aggregated view, ${d.bins.length} bins of ${d.bw} cycles — zoom in below 40 000 cycles for individual requests`);
 }
 const x = t => (t - view.t0) / (view.t1 - view.t0);
 function fit(cv) { const r = cv.getBoundingClientRect(); cv.width = r.width * devicePixelRatio; cv.height = r.height * devicePixelRatio; const g = cv.getContext("2d"); g.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0); return [g, r.width, r.height]; }
 const get = (row, C, k) => row[C.indexOf(k)];
+// Keep the memory-address notation, clearing the offset within a 64-byte line.
+const blockAddress = hex => (BigInt("0x" + hex) & ~63n).toString(16).padStart(hex.length, "0");
 
 // ---- "why did I wait": occupants overlapping the selected request's WAIT windows ----
 // wait windows (cycles the request spent waiting for the resource, before its own service slot):
@@ -277,7 +284,7 @@ function draw() { drawMini(); drawGantt(); drawLanes(); }
 function layout(rows, C) {
   const mode = $("#layout").value, out = [];
   if (mode === "flat") { rows.forEach((r, i) => out.push({ row: r, idx: i })); return out; }
-  const key = mode === "line" ? (r => (BigInt("0x" + get(r, C, "addr_hex")) >> 6n).toString(16) + "…") : (r => "core " + get(r, C, "core"));
+  const key = mode === "line" ? (r => blockAddress(get(r, C, "addr_hex"))) : (r => "core " + get(r, C, "core"));
   const groups = new Map(); rows.forEach((r, i) => { const k = key(r); if (!groups.has(k)) groups.set(k, []); groups.get(k).push({ row: r, idx: i }); });
   const order = [...groups.keys()]; if (mode === "core") order.sort();
   for (const k of order) { const g = groups.get(k);
@@ -288,7 +295,7 @@ function layout(rows, C) {
   return out;
 }
 function drawGantt() {
-  const [g, W, H] = fit($("#gantt")); g.clearRect(0, 0, W, H); ticks(g, W, H); if (!data) return;
+  const [g, W, H] = fit($("#gantt")); g.clearRect(0, 0, W, H); g.__hits = []; ticks(g, W, H); if (!data) return;
   if (data.mode === "bins") {
     const C = data.cols, mx = Math.max(1, ...data.bins.map(b => b[C.indexOf("issued")])), mt = Math.max(1, ...data.bins.map(b => b[C.indexOf("max_total")] || 0));
     data.bins.forEach(b => { const x0 = x(b[C.indexOf("b0")]) * W, w = Math.max(1, x(b[C.indexOf("b1")]) * W - x0);
@@ -302,7 +309,10 @@ function drawGantt() {
   const aheadKey = new Set(); if (ahead) Object.values(ahead).forEach(list => list.forEach(row => aheadKey.add(get(row, ctxData.cols, "core") + ":" + get(row, ctxData.cols, "id"))));
   const drawOne = (r, y) => {
     // waiting = hatched in the stage colour, service = solid (same reading as the lanes)
-    const seg = (a, b, v, solid) => { if (b <= a) return; const x0 = x(a) * W, x1 = x(b) * W; g.fillStyle = solid ? css(v) : hatchFor(v); g.fillRect(x0, y, Math.max(1, x1 - x0), rh - 1); };
+    const seg = (a, b, v, solid) => { if (b <= a) return; const x0 = x(a) * W, width = Math.max(1, x(b) * W - x0);
+      g.fillStyle = solid ? css(v) : hatchFor(v); g.fillRect(x0, y, width, rh - 1);
+      const stage = { "--l1s": "L1 queue wait", "--reqb": solid ? "Request bus broadcast" : "Request bus grant wait", "--l2s": "LLC queue / line wait", "--membus": "Memory bus", "--dram": "DRAM", "--l2a": solid ? "LLC array read" : "LLC array port wait", "--resp": solid ? "Response bus transfer" : "Response bus grant wait", "--l1a": "L1 access" }[v];
+      g.__hits.push({ x0, x1: x0 + width, y0: y, y1: y + rh - 1, r, C, stage, start: a, end: b }); };
     const st = k => get(r, C, "s_" + k), en = k => get(r, C, "e_" + k);
     seg(st("l1s"), en("l1s"), "--l1s", false);                                   // queued at own L1
     seg(st("reqb"), Math.max(st("reqb"), en("reqb") - 2), "--reqb", false); seg(Math.max(st("reqb"), en("reqb") - 2), en("reqb"), "--reqb", true);   // wait for grant | broadcast
@@ -321,7 +331,11 @@ function drawGantt() {
     if (sl.label) { g.fillStyle = "#1d2026"; g.fillRect(0, y, W, rh - 1); g.fillStyle = css("--muted"); g.font = "10px system-ui"; g.fillText(sl.label, 4, y + Math.min(rh - 2, 10)); return; }
     if (sl.track) { sl.items.forEach(e => drawOne(e.row, y)); return; }
     drawOne(sl.row, y); });
-  if (hover != null && rows[hover]) { const si = slots.findIndex(sl => (sl.row && sl.idx === hover) || (sl.track && sl.items.some(e => e.idx === hover))); if (si >= 0) { const y = 14 + si * rh; g.strokeStyle = "#fff6"; g.strokeRect(0, y - .5, W, rh); } }
+  const hoveredSegment = hover && g.__hits.find(h => h.r === hover.r && h.stage === hover.stage && h.start === hover.start);
+  if (hoveredSegment) {
+    g.strokeStyle = "#fff"; g.lineWidth = 1.5;
+    g.strokeRect(hoveredSegment.x0, hoveredSegment.y0, hoveredSegment.x1 - hoveredSegment.x0, hoveredSegment.y1 - hoveredSegment.y0); g.lineWidth = 1;
+  }
 }
 // ---- trace lanes: intervals of every message, packed into sub-rows where they overlap (DRAM banks, array cut-ins) ----
 const oget = (row, k) => row[occData.cols.indexOf(k)];
@@ -346,11 +360,12 @@ function drawTraceLanes(g, W, H) {
     rows.forEach((r, i) => { const s = oget(r, "start"), e = oget(r, "end"); if (e <= s) return; const x0 = x(s) * W, x1 = x(e) * W, yy = y + 14 + sub[i] * sh, key = occKey(r);
       const mode = $("#lanecolor").value; g.fillStyle = mode === "kind" ? css("--kd-" + oget(r, "kind")) : mode === "cls" ? "#3b4250" : css("--c" + Math.min(3, oget(r, "core")));
       if (oget(r, "core") > 3) g.fillStyle = css("--kd-INV");
-      g.fillRect(x0, yy, Math.max(1, x1 - x0), Math.max(2, sh - 1)); g.__hits.push({ x0, x1, y0: yy, y1: yy + sh, r, li });
+      g.fillRect(x0, yy, Math.max(1, x1 - x0), Math.max(2, sh - 1)); g.__hits.push({ x0, x1: x0 + Math.max(1, x1 - x0), y0: yy, y1: yy + Math.max(2, sh - 1), r, li });
       if (oget(r, "cutin")) { g.setLineDash([2, 2]); g.strokeStyle = "#fff"; g.strokeRect(x0 + .5, yy + .5, Math.max(1, x1 - x0) - 1, Math.max(2, sh - 1) - 1); g.setLineDash([]); }
       if (me && key === me) { g.strokeStyle = css("--accent"); g.lineWidth = 2; g.strokeRect(x0 - 1, yy - 1, Math.max(2, x1 - x0) + 2, sh + 1); g.lineWidth = 1; }
       if (ahead && ahead[li] && ahead[li].includes(r)) { g.strokeStyle = css("--hl"); g.strokeRect(x0 - .5, yy - .5, Math.max(2, x1 - x0) + 1, sh); } });
-    if (laneHover && laneHover.li === li) { g.strokeStyle = "#fff6"; g.strokeRect(0, y + 12.5, W, lh - 12); } });
+    const hoveredInterval = laneHover && g.__hits.find(h => h.li === li && h.r === laneHover.r);
+    if (hoveredInterval) { g.strokeStyle = "#fff"; g.lineWidth = 1.5; g.strokeRect(hoveredInterval.x0, hoveredInterval.y0, hoveredInterval.x1 - hoveredInterval.x0, hoveredInterval.y1 - hoveredInterval.y0); g.lineWidth = 1; } });
 }
 function drawLanes() {
   const [g, W, H] = fit($("#lanes")); g.clearRect(0, 0, W, H); ticks(g, W, H);
@@ -388,41 +403,97 @@ function reasons(r, C) {
   if (a("oldest") == 0) out.push("never became the oldest request of its core (retired behind an older one)");
   return out;
 }
-const gantt = $("#gantt"); let drag = null;
-gantt.addEventListener("wheel", e => { e.preventDefault(); const W = gantt.getBoundingClientRect().width, f = e.deltaY > 0 ? 1.25 : 0.8, tc = view.t0 + (e.offsetX / W) * (view.t1 - view.t0); view.t0 = tc - (tc - view.t0) * f; view.t1 = tc + (view.t1 - tc) * f; schedule(); }, { passive: false });
-gantt.addEventListener("mousedown", e => drag = { x: e.clientX, t0: view.t0, t1: view.t1, moved: false });
-window.addEventListener("mouseup", () => drag = null);
+function timelineHit(canvas, e) {
+  const hits = canvas.getContext("2d").__hits || [];
+  // Last painted rectangle wins where narrow segments overlap on screen.
+  return hits.slice().reverse().find(h => e.offsetX >= h.x0 && e.offsetX < h.x1 && e.offsetY >= h.y0 && e.offsetY < h.y1) || null;
+}
+const gantt = $("#gantt"); let drag = null, suppressTimelineClick = false;
+function clampTimeline() {
+  if (!run) return;
+  const end = Math.max(run.tmin + 1, run.tmax);
+  const span = Math.min(end - run.tmin, Math.max(1, Math.round(view.t1 - view.t0)));
+  view.t0 = Math.max(run.tmin, Math.min(end - span, Math.round(view.t0)));
+  view.t1 = view.t0 + span;
+}
+let syncedScrollLeft = 0;
+function syncTimeScroll() {
+  if (!run) return;
+  const bar = $("#time-scroll"), width = bar.clientWidth;
+  const total = Math.max(1, run.tmax - run.tmin), span = view.t1 - view.t0;
+  // Bound the DOM width even for billion-cycle traces.
+  $("#time-scroll-space").style.width = `${Math.min(1000000, Math.max(width, width * total / span))}px`;
+  const travel = bar.scrollWidth - width, range = Math.max(0, total - span);
+  bar.scrollLeft = range ? (view.t0 - run.tmin) / range * travel : 0;
+  syncedScrollLeft = bar.scrollLeft;
+}
+$("#time-scroll").addEventListener("scroll", () => {
+  const bar = $("#time-scroll");
+  if (!run || Math.abs(bar.scrollLeft - syncedScrollLeft) < 0.5) return;
+  const span = view.t1 - view.t0, travel = bar.scrollWidth - bar.clientWidth;
+  if (travel <= 0) return;
+  view.t0 = run.tmin + bar.scrollLeft / travel * Math.max(0, run.tmax - run.tmin - span);
+  view.t1 = view.t0 + span;
+  schedule();
+});
+try { $("#wheel-mode").value = localStorage.getItem("octoviz-wheel-mode") === "pan" ? "pan" : "zoom"; } catch (_) {}
+$("#wheel-mode").addEventListener("change", () => {
+  try { localStorage.setItem("octoviz-wheel-mode", $("#wheel-mode").value); } catch (_) {}
+});
+function timelineWheel(e) {
+  if (!run) return;
+  e.preventDefault();
+  const width = e.currentTarget.getBoundingClientRect().width;
+  const delta = (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? width : 1);
+  if (!delta) return;
+  const span = view.t1 - view.t0;
+  const zoom = ($("#wheel-mode").value === "zoom") !== e.ctrlKey;
+  if (zoom) {
+    const factor = Math.exp(Math.max(-1, Math.min(1, delta * 0.002)));
+    const anchor = view.t0 + e.offsetX / width * span;
+    view.t0 = anchor - (anchor - view.t0) * factor;
+    view.t1 = anchor + (view.t1 - anchor) * factor;
+  } else {
+    const shift = delta / width * span;
+    view.t0 += shift; view.t1 += shift;
+  }
+  schedule();
+}
+gantt.addEventListener("wheel", timelineWheel, { passive: false });
+$("#lanes").addEventListener("wheel", timelineWheel, { passive: false });
+window.addEventListener("resize", syncTimeScroll);
+gantt.addEventListener("mousedown", e => { suppressTimelineClick = false; drag = { x: e.clientX, t0: view.t0, t1: view.t1, moved: false }; });
+window.addEventListener("mouseup", () => { suppressTimelineClick = !!(drag && drag.moved); drag = null; });
 gantt.addEventListener("mousemove", e => { const W = gantt.getBoundingClientRect().width;
-  if (drag) { const dt = (drag.x - e.clientX) / W * (drag.t1 - drag.t0); if (Math.abs(e.clientX - drag.x) > 3) drag.moved = true; view.t0 = drag.t0 + dt; view.t1 = drag.t1 + dt; schedule(); return; }
+  if (drag) { hover = null; $("#tip").style.display = "none"; const dt = (drag.x - e.clientX) / W * (drag.t1 - drag.t0); if (Math.abs(e.clientX - drag.x) > 3) drag.moved = true; view.t0 = drag.t0 + dt; view.t1 = drag.t1 + dt; schedule(); return; }
   if (!data || data.mode !== "rows") { $("#tip").style.display = "none"; return; }
-  const gg = gantt.getContext("2d"), si = Math.floor((e.offsetY - 14) / (gg.__rh || 1)), sl = (gg.__slots || [])[si]; let i = null;
-  if (sl && sl.row) i = sl.idx; else if (sl && sl.track) { const W2 = gantt.getBoundingClientRect().width, tc = view.t0 + (e.offsetX / W2) * (view.t1 - view.t0); const hit = sl.items.find(it => get(it.row, data.cols, "issue") <= tc && get(it.row, data.cols, "retire") >= tc); if (hit) i = hit.idx; }
-  const r = i != null ? data.rows[i] : null; hover = r ? i : null; drawGantt();
-  if (!r) { $("#tip").style.display = "none"; return; } const C = data.cols, a = k => get(r, C, k);
+  const hit = timelineHit(gantt, e); hover = hit; gantt.style.cursor = hit ? "pointer" : "default"; drawGantt();
+  if (!hit) { $("#tip").style.display = "none"; return; } const r = hit.r, C = hit.C, a = k => get(r, C, k);
   $("#tip").style.display = "block"; $("#tip").style.left = Math.min(e.clientX + 14, window.innerWidth - 660) + "px"; $("#tip").style.top = (e.clientY + 14) + "px";
-  $("#tip").textContent = `core ${a("core")}  id ${a("id")}  addr ${a("addr_hex")}  ${a("cls")}\nissue ${a("issue")}  retire ${a("retire")}  total ${a("total")}  oldest ${a("oldest")}\nL1s ${a("e_l1s")-a("s_l1s")}  reqB ${a("e_reqb")-a("s_reqb")}  L2s ${a("e_l2s")-a("s_l2s")}  memB ${a("e_membus")-a("s_membus")}  DRAM ${a("e_dram")-a("s_dram")}  L2a ${a("e_l2a")-a("s_l2a")}  resp ${a("e_resp")-a("s_resp")}  L1a ${a("e_l1a")-a("s_l1a")}\n` + reasons(r, C).map(s => "• " + s).join("\n"); });
-gantt.addEventListener("click", e => { if (drag && drag.moved) return; if (!data || data.mode !== "rows" || hover == null) return; const C = data.cols, r = data.rows[hover]; if (!r) return; select(r, C); });
+  $("#tip").textContent = `core ${a("core")}  id ${a("id")}  addr ${a("addr_hex")}  block ${blockAddress(a("addr_hex"))}  ${a("cls")}\nStage: ${hit.stage} · cycles ${hit.start}–${hit.end} (${hit.end - hit.start})\nissue ${a("issue")}  retire ${a("retire")}  total ${a("total")}  oldest ${a("oldest")}\nL1s ${a("e_l1s")-a("s_l1s")}  reqB ${a("e_reqb")-a("s_reqb")}  L2s ${a("e_l2s")-a("s_l2s")}  memB ${a("e_membus")-a("s_membus")}  DRAM ${a("e_dram")-a("s_dram")}  L2a ${a("e_l2a")-a("s_l2a")}  resp ${a("e_resp")-a("s_resp")}  L1a ${a("e_l1a")-a("s_l1a")}\n` + reasons(r, C).map(s => "• " + s).join("\n"); });
+gantt.addEventListener("mouseleave", () => { hover = null; gantt.style.cursor = "default"; $("#tip").style.display = "none"; drawGantt(); });
+gantt.addEventListener("click", e => { if (suppressTimelineClick) { suppressTimelineClick = false; return; } if (!data || data.mode !== "rows") return; const hit = timelineHit(gantt, e); if (hit) select(hit.r, hit.C); });
 function select(r, C) { selected = { row: r, C, id: get(r, C, "id"), core: get(r, C, "core"), key: get(r, C, "core") + ":" + get(r, C, "id") }; if (!ctxData) { refresh().then(() => { draw(); inspect(); }); } else { draw(); inspect(); refreshFsm(); } sendState("select"); }
 $("#minimap").addEventListener("click", e => { const W = $("#minimap").getBoundingClientRect().width, t = mini.tmin + e.offsetX / W * (mini.tmax - mini.tmin), span = view.t1 - view.t0; view.t0 = t - span / 2; view.t1 = t + span / 2; schedule(); });
-function schedule() { draw(); clearTimeout(timer); timer = setTimeout(refresh, 180); }
+function schedule() { clampTimeline(); syncTimeScroll(); draw(); clearTimeout(timer); timer = setTimeout(refresh, 180); }
 // ---- trace-lane hover / click: any message, not only requests ----
 const lanesCv = $("#lanes");
 lanesCv.addEventListener("mousemove", e => { const g = lanesCv.getContext("2d"); if (!traceMode() || !g.__hits) { $("#tip").style.display = "none"; return; }
-  const hit = g.__hits.find(h => e.offsetX >= h.x0 - 1 && e.offsetX <= h.x1 + 1 && e.offsetY >= h.y0 && e.offsetY <= h.y1); laneHover = hit ? { li: hit.li } : null; drawLanes();
+  const hit = timelineHit(lanesCv, e); laneHover = hit; lanesCv.style.cursor = hit ? "pointer" : "default"; drawLanes();
   if (!hit) { $("#tip").style.display = "none"; return; } const r = hit.r, k = oget(r, "kind");
   $("#tip").style.display = "block"; $("#tip").style.left = Math.min(e.clientX + 14, window.innerWidth - 400) + "px"; $("#tip").style.top = (e.clientY - 70) + "px";
-  $("#tip").textContent = `${TRES[hit.li][2]}: ${KIND_TXT[k] || k} (${k})\nmsg ${oget(r, "msg_id")}  owner ${oget(r, "core") > 3 ? "LLC" : "core " + oget(r, "core")}  cycles ${oget(r, "start")}–${oget(r, "end")} (${oget(r, "end") - oget(r, "start")})` +
+  $("#tip").textContent = `${TRES[hit.li][2]}: ${KIND_TXT[k] || k} (${k})\naddr 0x${BigInt(oget(r, "addr")).toString(16)}  block 0x${blockAddress(BigInt(oget(r, "addr")).toString(16))}\nmsg ${oget(r, "msg_id")}  owner ${oget(r, "core") > 3 ? "LLC" : "core " + oget(r, "core")}  cycles ${oget(r, "start")}–${oget(r, "end")} (${oget(r, "end") - oget(r, "start")})` +
     (oget(r, "cutin") ? "\ncut-in: admitted while the array port was busy (MSHR/PWB-resident line)" : "") + (hit.li === 2 ? `\narray action ${({1:"read for a response",4:"read for a write-back/supply",6:"write (fill / write-back / supply copy)"})[oget(r, "flags")] || oget(r, "flags")}` : "") + "\nclick = inspect the request with this id"; });
-lanesCv.addEventListener("mouseleave", () => { laneHover = null; $("#tip").style.display = "none"; drawLanes(); });
+lanesCv.addEventListener("mouseleave", () => { laneHover = null; lanesCv.style.cursor = "default"; $("#tip").style.display = "none"; drawLanes(); });
 lanesCv.addEventListener("click", e => { const g = lanesCv.getContext("2d"); if (!traceMode() || !g.__hits) return;
-  const hit = g.__hits.find(h => e.offsetX >= h.x0 - 1 && e.offsetX <= h.x1 + 1 && e.offsetY >= h.y0 && e.offsetY <= h.y1); if (!hit) return; jumpTo(oget(hit.r, "msg_id"), oget(hit.r, "core") > 3 ? null : oget(hit.r, "core")); });
+  const hit = timelineHit(lanesCv, e); if (!hit) return; jumpTo(oget(hit.r, "msg_id"), oget(hit.r, "core") > 3 ? null : oget(hit.r, "core")); });
 
 async function inspect() {
   if (!selected) return; const d = await api("/api/request", { run: run.run, id: selected.id, core: selected.core }); if (d.error) return; const r = d.row; $("#inspector").style.display = "block"; document.body.classList.add("ins");
   $("#insTitle").textContent = `core ${r.core} · request ${r.id} · ${r.addr_hex} · ${r.cls}`; const r_core = r.core;
   let h = `<div class="why">${reasons(selected.row, selected.C).map(s => "• " + s).join("<br>") || "no waiting worth explaining"}</div>`;
   const keys = ["issue","retire","total","eff","oldest","t_oldest","llc_state","llc_stall","llc_gate","resp_ahead","resp_ahead_ref","array_ahead","array_ahead_w","l1s","reqb","l2s","membus","dram","l2a","resp","l1a"];
-  h += "<table>" + keys.map(k => `<tr><td>${k}</td><td>${k === "llc_state" || k === "llc_stall" ? (STATE[r[k]] || r[k]) : r[k]}</td></tr>`).join("") + "</table>";
+  h += `<table><tr><td>addr</td><td>${r.addr_hex}</td></tr><tr><td>block addr</td><td>${blockAddress(r.addr_hex)}</td></tr>` + keys.map(k => `<tr><td>${k}</td><td>${k === "llc_state" || k === "llc_stall" ? (STATE[r[k]] || r[k]) : r[k]}</td></tr>`).join("") + "</table>";
   const ahead = ctxData && ctxData.mode === "rows" ? aheadOf(selected.row, selected.C, ctxData.rows, ctxData.cols) : {};
   for (const [res, name] of RES) { const list = ahead[res]; if (!list || !list.length) continue; const C = ctxData.cols;
     h += `<h4>ahead of it on the ${name} (${list.length})</h4><table><tr><td>id</td><td>core</td><td>class</td><td>occupied</td></tr>` +
@@ -496,7 +567,11 @@ async function refreshFsm() {
     h += `<tr class="jump ${mine ? "sel" : ""}" data-cycle="${g(r, "cycle")}" data-id="${g(r, "msg_id")}" data-core="${g(r, "core")}"><td>${g(r, "cycle")}</td><td style="text-align:left">${g(r, "event")} <span style="color:var(--muted)">(${KIND_TXT[g(r, "kind")] || g(r, "kind")})</span></td><td style="text-align:left">${g(r, "msg_id")} <span style="color:var(--muted)">${g(r, "core") >= 10 ? "LLC" : "core " + g(r, "core")}</span></td>${cells}</tr>`; });
   $("#fsm").innerHTML = h + "</table>";
   $$("#fsm tr.jump").forEach(tr => tr.onclick = () => { const c = +tr.dataset.cycle, span = Math.max(200, view.t1 - view.t0); view.t0 = c - span / 2; view.t1 = c + span / 2; refresh(); });
-  const selRow = $("#fsm tr.sel"); if (selRow) selRow.scrollIntoView({ block: "center" });
+  const selRow = $("#fsm tr.sel");
+  if (selRow) {
+    const table = $("#fsm"), rowBounds = selRow.getBoundingClientRect(), tableBounds = table.getBoundingClientRect();
+    table.scrollTop += rowBounds.top - tableBounds.top - table.clientTop - (table.clientHeight - rowBounds.height) / 2;
+  }
 }
 $("#fsmwin").onchange = refreshFsm;
 

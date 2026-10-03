@@ -5,7 +5,7 @@ shape:
 
 ```
 README.md    what to do, the exact commands, what you should see
-check.sh     runs the exercise and tells you in one line whether it worked
+check.sh     validates the exercise result (00 checks your saved output/)
 expected/    the reference result check.sh compares against
 start.sh     (only where needed) puts the starting files in place
 ```
@@ -20,7 +20,7 @@ reference, something real changed (usually a file under `configuration/`).
 | 00 | `00-setup-and-first-run/` | verify the environment, run one benchmark, read its output, open the visualizer |
 | 01 | `01-exploration/` | change one thing at a time — arbiter, memory model, protocol — and watch one number move |
 | 02 | `02-configuration/` | how the CSV configuration model works, and why every knob is a command-line override |
-| 03 | `03-extending-octopus/` | three ways to extend the simulator: a new arbiter, a protocol change, a third cache level |
+| 03 | `03-extending-octopus/` | two ways to extend the simulator: a new arbiter or a protocol change |
 | 04 | `04-gem5-and-fullsystem-stack/` | Octopus as the memory hierarchy behind gem5, in SE mode and full-system ARM |
 
 The reference for everything the exercises touch is the manual,
@@ -33,6 +33,3 @@ Two commands to remember:
 bash scripts/check_environment.sh      # is my environment healthy?
 git checkout -- configuration/         # put every configuration file back as shipped
 ```
-
-Fell behind? `bash tutorial/solutions/apply.sh <exercise>` applies the reference solution
-for that exercise so you can continue with the next one.

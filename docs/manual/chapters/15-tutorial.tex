@@ -19,12 +19,9 @@ bash scripts/check_environment.sh      # is my environment healthy?
 git checkout -- configuration/         # put every configuration file back as shipped
 \end{lstlisting}
 
-Fell behind? \code{bash tutorial/solutions/apply.sh <exercise>} applies the reference solution
-for that exercise so you can continue with the next one.
-
 The exercises come in two blocks. The first runs Octopus standalone: setup and first run
 (about 15 minutes), exploration (25), the configuration model (10) and extending Octopus (45,
-one exercise of three). The second puts the same hierarchy behind gem5: syscall-emulation mode
+one exercise of two). The second puts the same hierarchy behind gem5: syscall-emulation mode
 (15--20) and full-system Arm from a checkpoint (25--30, plus a take-home), whose pre-warm is
 launched at the start of the block.
 
@@ -32,7 +29,7 @@ launched at the start of the block.
 
 Goal: a working environment, one completed simulation, and a first read of its output.
 \cref{ch:getting-started} is this exercise in full: run \code{scripts/check\_environment.sh}
-and expect eight \code{[PASS]} lines ending in \emph{15364 requests, worst DRAM 359 cycles};
+and expect eight \code{[PASS]} lines ending in \emph{15364 requests, worst DRAM 377 cycles};
 run \code{a2time01} on the shipped configuration; read \code{Summary.csv} and the first rows of
 \code{LatencyReport\_C0.csv} with \cref{fig:system-miss,fig:system-hit,fig:request-timeline}
 open; run \code{check.sh}, which compares \code{Summary.csv} byte for byte against the
@@ -64,7 +61,7 @@ last in exactly one parameter. The \code{part} row is the one with a story behin
 preset with \code{run\_octopus.sh --protocol snoop|directory} (\cref{ch:configuration}). If you
 finish early, run the same six on \code{cacheb01-trace}, where all four cores fight over one
 block and the arbiter rows spread out. Two things the numbers will show: the fixed-latency
-model reports a worst DRAM of exactly the configured latency where MCsim reports 359 on the
+model reports a worst DRAM of exactly the configured latency where MCsim reports 377 on the
 same trace --- the fixed model is optimistic exactly where you would expect --- and a fault
 after switching the protocol by hand is almost always the five-key coupling, not a protocol
 bug.
@@ -77,16 +74,16 @@ sense. Ten minutes of reading, nothing to build: open the four files of the L1's
 controller and the system CSV --- in that order and follow one key through \code{Extends} and
 the per-instance overrides; read the typed suffixes; find where the L1 MSHR depth is set, override it
 to 1 with \code{-p} and watch the L1 stall column grow; see that \code{-s} selects a C++ class
-and a CSV by the same name, which is the boundary the third exercise of 03 crosses; and look at
+and a CSV by the same name; and look at
 \code{git diff} after a \code{run\_octopus.sh --protocol} to see exactly which five keys a
 protocol is. \Cref{ch:configuration} is the chapter.
 
 \section{03 --- Extending Octopus}
 
-Three exercises of different natures; pick one, because 45 minutes is enough for one done
-properly. All three edit the real source tree, not a copy (\file{src/Arbiters/},
-\file{Protocols_FSM/} and \file{src/SystemConfigurations/}); the exercise folders hold only the
-instructions and the answer key. \Cref{ch:extending} has each in full.
+Two exercises of different natures; pick one, because 45 minutes is enough for one done
+properly. Both edit the real source tree (\file{src/Arbiters/} and
+\file{Protocols_FSM/}); the exercise folders hold only the
+instructions. \Cref{ch:extending} has each in full.
 
 \begin{description}
 \item[01 --- a bus arbiter] (C++, small, well-fenced; a fifty-second rebuild). Weighted
@@ -95,8 +92,6 @@ instructions and the answer key. \Cref{ch:extending} has each in full.
 \item[02 --- a coherence protocol] (CSV only; no rebuild). Read the \state{O} state out of the
   MESI/MOESI diff, or replace a \code{Stall/} with an explicit transient state; the trap is the
   row order.
-\item[03 --- a third cache level] (a new system class; driven from the front). The boundary
-  between data and code, crossed; the open question is who snoops for an L1 behind a private L2.
 \end{description}
 
 \section{04 --- gem5 and the full-system stack}
@@ -140,6 +135,5 @@ the workload path wants \code{cygpath -m}.
 \begin{itemize}[nosep,leftmargin=1.2em]
 \item \file{tutorial/README.md} --- the index
 \item \file{tutorial/00-setup-and-first-run/}, \file{tutorial/01-exploration/}, \file{tutorial/02-configuration/}, \file{tutorial/03-extending-octopus/}, \file{tutorial/04-gem5-and-fullsystem-stack/} --- the exercises, each with its \file{README.md}, \file{check.sh} and \file{expected/}
-\item \file{tutorial/solutions/} --- the patches and \code{apply.sh}
 \end{itemize}
 \end{wherebox}

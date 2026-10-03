@@ -1,31 +1,28 @@
 #!/usr/bin/env bash
-# 00 -- re-run a2time01 on the shipped configuration and compare Summary.csv with the
-# reference. The simulator is deterministic, so this is an equality test.
+# 00 -- compare the saved exercise output with the reference.
+# Never runs the simulator or modifies output files.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 cd "$ROOT"
 
-BIN="build/Octopus_Simulator"; [ -x "$BIN" ] || BIN="build/Octopus_Simulator.exe"
-[ -x "$BIN" ] || { echo "[FAIL] simulator not built: cmake -S . -B build && cmake --build build"; exit 1; }
-W="$ROOT/BMs/eembc-traces/a2time01-trace"
-[ -f "$W/trace_C0.trc.shared" ] || { echo "[FAIL] benchmark missing: ./get_benchmarks.sh"; exit 1; }
-
-rm -f "$W/newLogger"/*.csv; mkdir -p "$W/newLogger"
-wpath=$(cygpath -m "$W" 2>/dev/null || printf '%s' "$W")
-if ! "$BIN" -s MultiCoreSystem -p "workload_path(s)=$wpath/" > "$W/.out.check" 2>&1; then
-  echo "[FAIL] simulator exited non-zero (see $W/.out.check)"; exit 1
+REPORT="$HERE/output/Summary.csv"
+REFERENCE="$HERE/expected/Summary.csv"
+if [ ! -f "$REPORT" ]; then
+  echo "[FAIL] no saved run at $REPORT"
+  echo "       Run the command in README.md step 2 first, then run this check again."
+  exit 1
 fi
+[ -f "$REFERENCE" ] || { echo "[FAIL] reference missing: $REFERENCE"; exit 1; }
 
-got=$(tr -d '\r' < "$W/newLogger/Summary.csv" | md5sum | cut -d' ' -f1)
-ref=$(tr -d '\r' < "$HERE/expected/Summary.csv" | md5sum | cut -d' ' -f1)
-if [ "$got" = "$ref" ]; then
+# Ignore Windows CRLF differences; preserve the reference's exact values and order.
+if diff -u <(tr -d '\r' < "$REFERENCE") <(tr -d '\r' < "$REPORT"); then
   echo "[PASS] 00 first run: Summary.csv matches the reference"
   exit 0
 fi
-echo "[FAIL] 00 first run: Summary.csv differs from the reference"
-echo "       yours:"; column -s, -t "$W/newLogger/Summary.csv" | cut -c1-120 | sed 's/^/         /'
-if ! git -C "$ROOT" diff --quiet -- configuration 2>/dev/null; then
-  echo "       configuration/ differs from what was shipped -- 'git checkout -- configuration/' resets it"
+echo "[FAIL] 00 first run: output/Summary.csv differs from the reference"
+echo "       Check that the run completed and used the shipped MESI/FCFS baseline."
+if ! git -C "$ROOT" diff HEAD --quiet -- configuration 2>/dev/null; then
+  echo "       configuration/ has local changes; inspect them with git diff HEAD -- configuration/"
 fi
 exit 1

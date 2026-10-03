@@ -17,7 +17,7 @@ bus[1].interconnect_controller.candidates_id(vi),0,1,2,3,10,#Candidates are the 
 ,,,,,,
 cache_controller[*].m_shared_memory_id(i),10,,,,,
 cache_controller[*].protocol_type(s),SNOOP_MSI,,,,,
-cache_controller[*].fsm_filename(s),MSI_splitBus_snooping,,,,,
+cache_controller[*].fsm_filename(s),Tutorial_MI_splitBus_snooping,,,,,
 cache_controller[*].num_mshr(i),16,,#L1 MSHR depth (max concurrent outstanding misses). -1 = unbounded,,
 cache_controller[*].m_data_handler.pwb_size(i),8,,#L1 write-back buffer depth. -1 = unbounded,,
 cache_controller[*].processing_queue_size(i),16,,#L1 processing-queue depth (bounds demand admission). -1 = unbounded,,

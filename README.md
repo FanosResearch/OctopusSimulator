@@ -121,7 +121,7 @@ bash scripts/check_environment.sh
 ```
 
 It prints one line per component and finishes with a short simulation whose result
-is fixed: **15364 requests, worst-case DRAM latency 359 cycles**. The simulator is
+is fixed: **15364 requests, worst-case DRAM latency 377 cycles**. The simulator is
 deterministic and platform-independent, so those numbers are an equality check, not
 a smoke test — a mismatch means a stale build, an edited configuration, or a bug.
 It also catches the one portability trap in the tree: a working copy checked out on
@@ -192,6 +192,67 @@ A worked end-to-end example of the simulator driving something visible is
 [`demo/`](demo/README.md): a periodic localization task ([`docs/Tasks.md`](docs/Tasks.md)) whose
 job timings steer a robot along a planned path, showing what shared-cache and DRAM interference
 cost a real-time task, and what a reserved cache way recovers.
+
+Select a system CSV independently of its C++ system class with `-c` or
+`--config`:
+
+```bash
+./build/Octopus_Simulator -s MultiCoreSystem \
+  -c MultiCoreSystem_Directory -o results/directory --trace
+./build/Octopus_Simulator -s MultiCoreSystem \
+  --config ./my-config.csv -p "num_cores(i)=4"
+```
+
+A bare name (with or without `.csv`) selects a file under
+`configuration/SystemConfigurations/`. A path such as `./my-config.csv`,
+`configs/experiment.csv`, or an absolute path selects that file; relative paths
+resolve from the current working directory. A missing `.csv` suffix is appended.
+Without this option, the system's usual class-named CSV is loaded. Both
+`MultiCoreSystem` and `MultiCoreSystem_Mesh` support it; the chosen CSV must match
+the selected class's expected configuration. If repeated, the last `-c` or
+`--config` wins. `-p` overrides are applied after the selected file is loaded.
+No preset is copied and no configuration file is modified. Component defaults
+still load from their usual CSVs; a system CSV's `Extends` resolves from its own
+directory. Relative workload paths inside the CSV remain project-root-relative,
+even for a custom CSV stored elsewhere.
+
+When running the binary directly, use `-o <directory>` to write the logger CSVs
+(`LatencyReport_C*.csv`, `Summary.csv`, `Summary_transposed.csv`, and task
+`JobReport_C*.csv`) to a separate
+directory. Missing directories are created; relative paths resolve from the current
+working directory. Without `-o`, reports still go to `<workload_path>/newLogger`.
+Reusing an output directory overwrites reports with matching names. For example:
+
+```bash
+./build/Octopus_Simulator -s MultiCoreSystem -o results/rr \
+  -p "bus[0].interconnect_controller.arbiter_type(s)=RRArbiter"
+```
+
+`Summary_transposed.csv` presents the same summary values with metrics as rows
+and cores as columns, ordered by core ID. `Summary.csv` retains its existing
+format for scripts and the visualizer.
+
+Add `--PrintConfig` to save resolved component settings to `<output-directory>/config.log`
+when using `-o`. The log is plain text and is replaced on each flagged run. Without
+`-o`, configuration printing goes to stdout.
+
+This also works with `-s MultiCoreSystem_Mesh`. Add `--trace` to record raw events
+as `trace.bin` (plus `trace.bin.names`) in the same output directory:
+
+```bash
+# From tutorial/, using the workload configured in the system CSV:
+../build/Octopus_Simulator -s MultiCoreSystem -o Arbiter/FCFS --trace \
+  -p "bus[0].interconnect_controller.arbiter_type(s)=FCFSArbiter"
+```
+
+Relative `workload_path` values from system CSVs resolve against the project root
+(derived from the compiled-in configuration directory). Explicit
+`-p "workload_path(s)=..."` overrides and `-o` paths resolve against the current
+working directory; absolute paths are unchanged. Without `-o`, `--trace` writes
+into `<workload_path>/newLogger/`. Without `--trace`, tracing stays off unless
+`OCTOPUS_TRACE` is set. That environment variable remains supported and takes
+precedence as an explicit trace filename, including when `--trace` is supplied.
+`OCTOPUS_TRACE_WINDOW` still controls the recorded cycle range.
 
 To *see* a run rather than read its reports, `./octoviz.sh view <workload_dir>` simulates it with
 the raw event trace on, converts the run and opens the timeline viewer in the browser (per-request

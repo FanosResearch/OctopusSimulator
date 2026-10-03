@@ -12,8 +12,8 @@ using namespace std;
 
 namespace octopus
 {   
-    MultiCoreSystem_Mesh::MultiCoreSystem_Mesh(vector<string> cl_params) : 
-        Configurable(cl_params, string(CONFIGURATION_PATH) + string(SYSTEM_CONFIGURATIONS), STRINGIFY(MultiCoreSystem_Mesh))
+    MultiCoreSystem_Mesh::MultiCoreSystem_Mesh(vector<string> cl_params, string config_path, string config_name) :
+        Configurable(cl_params, config_path, config_name)
     {
         string name = STRINGIFY(MultiCoreSystem_Mesh);
         //Parameters initialization

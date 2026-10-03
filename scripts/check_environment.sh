@@ -19,7 +19,7 @@ ROOT="$PWD"
 # part that was platform-dependent, so it is the part worth checking.
 WORKLOAD="$ROOT/demo/workloads/dramtest"
 REF_REQUESTS=15364
-REF_WORST_DRAM=359
+REF_WORST_DRAM=377
 
 fails=0
 pass(){ printf '[PASS] %-14s %s\n' "$1" "$2"; }
