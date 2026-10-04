@@ -4,11 +4,6 @@ Everything so far ran Octopus **standalone**: a trace-driven `CPU` object feeds 
 memory hierarchy. Here the request source is a real CPU model — gem5 — and the same
 hierarchy, unchanged, sits behind it.
 
-| folder | what | time | status |
-|---|---|---|---|
-| `01-gem5-se/` | gem5 in syscall-emulation mode driving Octopus: a self-checking test, then a real-time SLAM under memory interference and two mitigations (round-robin arbitration, LLC way partitioning) | 20 min + runs in the background | ready |
-| `02-full-system-arm/` | ARM Linux under gem5, restored from a checkpoint, with Octopus as its memory system | 25–30 min + take-home | ready: unpack the disk image first (`bash gem5/get_disk_image.sh`) |
-
 ## What the dev container has
 
 | | |

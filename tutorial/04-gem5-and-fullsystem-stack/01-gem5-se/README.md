@@ -13,23 +13,67 @@ real-time task, and what the hierarchy's knobs can do about it.
 
 ## The journey of a memory request
 
-1. The gem5 CPU model issues a load or store.
+Two models share the work, and the point of this exercise is *where they meet*.
+**Octopus models timing and coherence:** it moves messages that carry an
+address, a type (read or write) and a size, works out how many cycles each one
+takes and which core may hold the line — and it never carries the bytes.
+**gem5's memory holds the one real copy of the data.** They meet at two moments:
+the bytes are touched when Octopus *commits* a request, and the core gets its
+answer when Octopus has finished *timing* it.
+
+```mermaid
+sequenceDiagram
+    participant CPU as gem5 O3 core
+    participant Bridge as Octopus bridge
+    participant Engine as Octopus engine
+    participant Mem as gem5 memory
+
+    CPU->>Bridge: load / store / atomic
+    Note over Bridge: admit, or refuse and retry<br/>while the L1 is full
+    Bridge->>Engine: submit — address + type + size<br/>(no data)
+    Note over Engine: L1 → bus → LLC → DRAM<br/>timing and coherence only
+    Engine-->>Bridge: commit — request serialised<br/>(line held exclusive for a write)
+    Bridge->>Mem: one access — read, write,<br/>or read-modify-write the bytes
+    Mem-->>Bridge: bytes land in the packet
+    Note over Engine: modelled latency elapses
+    Engine-->>Bridge: completion — timing done
+    Bridge-->>CPU: response — already carries the data
+```
+
+1. The gem5 O3 core issues a load, a store or an atomic. The bridge
+   (`gem5/octopus.cc`, one SimObject per L1) first decides whether to **admit**
+   it — just as a classic cache refuses its port when the L1 is full, retrying
+   once there is room. Nothing has touched memory yet.
 2. It crosses into Octopus through `ExternalCPU` (`header/ExternalCPU.h`), a
    `CommunicationInterface` producer exactly like the trace-driven `CPU` you used
-   in exercises 00–03. Nothing downstream can tell the difference.
+   in exercises 00–03 — but carrying only the address, the type and the size,
+   **not the data**. Nothing downstream can tell the difference.
 3. From there it is an ordinary Octopus `Message`: L1 controller, bus
-   arbitration, LLC, and out to memory.
-4. Memory is `MCsimInterface`: the address is handed to MCsim's DDR4 model and
-   the fill comes back through a callback.
-5. The response travels back the same way and completes the load in the gem5
-   core, with real data: under gem5 the bytes matter, not only the timing
-   (`docs/StateAndData.md`).
+   arbitration, LLC, and out to `MCsimInterface` and MCsim's DDR4 model — all
+   pure timing and coherence.
+4. **Commit — where the bytes move.** When the L1 holds the line in a state that
+   permits the access (for a write, held exclusive), Octopus calls back and the
+   bridge performs a *single* access to gem5's memory: a load fills the packet, a
+   store writes it, an atomic does its whole read-modify-write at once. This is
+   the point at which Octopus serialises the request, so the data order the
+   program sees is the coherence order Octopus computed (`docs/StateAndData.md`).
+5. **Completion — the answer.** When the modelled latency has elapsed, Octopus
+   signals that the request is done and the bridge returns the packet — already
+   holding its data from step 4 — to the core.
 
-Steps 2–4 are **the same code** you ran standalone. Only the request source
-changed. The gem5 side is `gem5/octopus.cc` (a SimObject per L1) and
-`gem5/configs/octopus_cache_hierarchy.py`; the system is the CSV preset
+A store, a store-exclusive and an atomic (swap, compare-and-swap, an LSE add) are
+all one **write**, so the line is held exclusive before step 4 and the
+read-modify-write is indivisible in the coherence model as well as in the data.
+And when this L1 *loses* a line — another core writes it, or the LLC evicts it —
+Octopus calls back once more and the bridge snoops the core, which is what clears
+an LL/SC reservation and makes a speculative load re-execute.
+
+Steps 2–3 are **the same Octopus code** you ran standalone; only the request
+source changed. Steps 1, 4 and 5 are the gem5 bridge — the admission, the data
+and the response. The system is the CSV preset
 `configuration/SystemConfigurations/MultiCoreSystem_gem5.csv` (4 cores, 8 L1s:
-instruction caches are Octopus ids 0–3, data caches 4–7, the LLC is 10).
+instruction caches are Octopus ids 0–3, data caches 4–7, the LLC is 10), wired up
+by `gem5/configs/octopus_cache_hierarchy.py`.
 
 ## Step 1 — set up
 
@@ -218,22 +262,23 @@ estimate drifts.
 
 ### Where the time goes: Octopus's own reports
 
-The figures above are the program's view. The hierarchy's view says *why*:
-rerun the matrix with Octopus's per-request reports (Part B), reduce them, and
-plot again.
+The figures above are the program's view. The hierarchy's view says *why*. It
+comes from Octopus's per-request reports (Part B) for the same four runs:
+`expected/figures/5_memory_breakdown.png`, with the numbers per configuration in
+`expected/runs/<config>/breakdown.csv`. The default `run_matrix.sh` leaves
+logging off. To produce the breakdown yourself (about 300 MB of reports per run
+and twice the time):
 
 ```shell
-LOG=1 bash run_matrix.sh                       # about 300 MB of reports per run, 2x the time
-for d in runs/*/; do bash slam_demo/viz/reduce_reports.sh $d --delete; done
+LOG=1 bash run_matrix.sh
+for d in runs/*/; do bash slam_demo/viz/reduce_reports.sh "$d" --delete; done
 python slam_demo/viz/plot_matrix.py            # adds figures/5_memory_breakdown.png
 ```
 
 `reduce_reports.sh` keeps, per core, the requests that left the L1 (the
 spinning threads hit their L1 millions of times, which would drown the rest)
-and their mean time per `LatencyReport` stage, in `runs/<config>/breakdown.csv`
-(reference: `expected/runs/<config>/breakdown.csv`,
-`expected/figures/5_memory_breakdown.png`). Logging does not change the
-simulation: the logged runs give the same numbers.
+and their mean time per `LatencyReport` stage, in `runs/<config>/breakdown.csv`.
+Logging does not change the simulation: the logged runs give the same numbers.
 
 | config | front-end core: cycles per request past the L1 | of which | reached DRAM |
 |---|---|---|---|
