@@ -1,202 +1,137 @@
-# When line state and line data come apart
+# Line state and line data
 
 A controller handles a message by running one row of its FSM: the row changes
 the line's **state** and runs **actions**, some of which read or write the
-line's **data** in the data array. As long as both happen in the same cycle,
-nobody can see one without the other. This note lists the situations where a
-data-array latency separates them, what goes wrong in each, whether the
-presets on this branch can reach it, and what handles it.
+line's **data** in the data array. When the data array has a latency, the state
+change and the data access can happen at different cycles, and another message
+can see one without the other. This note defines the two data-array models and
+the three configurations they allow, and shows in which one state and data can
+come apart.
 
-## Why the presets on this branch do not show it
+## The two data-array models
 
-| setting | L1 | LLC |
+The data array of a cache (`m_data_handler`) has an access latency *L*
+(`m_data_access_latency`, cycles). How a controller pays it is the array model
+(`m_data_array_pipelined`):
+
+| | occupancy model (`0`, default) | pipelined model (`1`) |
 | --- | --- | --- |
-| `m_data_access_latency` | 0 | 10 |
-| array model | none needed | occupancy (upstream) |
-| `line_interlock` | 0 | 0 |
+| an access | starts if the array is free, runs at once, then closes the array for *L* cycles | is admitted to the pipeline and completes *L* cycles later |
+| the requester pays | 0 cycles (only the wait for a free array) | *L* cycles |
+| throughput | one access per *L* cycles | `m_data_array_ports` accesses admitted per cycle |
+| what waits for the array | the byte phase, or the whole message with `line_interlock=1` (below) | always the whole message |
 
-- **L1 latency 0.** An L1 never parks anything, so every L1 row changes state
-  and data together.
-- **LLC occupancy model.** The row runs at pop (state now) and only its byte
-  phase waits for the array (data later). This is a tag-then-data shape
-  without a lock on the line in between. It is correct here because of how
-  the LLC tables are written, not by construction: no LLC row invalidates or
-  replaces what an older row's parked byte phase still needs, and parked byte
-  phases are served first-in first-out.
-- **Standalone runs carry no data.** A trace only drives addresses. If state
-  and data did disagree for a few cycles, the only visible effect would be on
-  timing; no check compares the bytes.
+In both models, an access that cannot start at once goes on the controller's
+**array-access list**. Each cycle the list is served by the controller's data
+arbiter (`arbiter_type`, electing by requesting core) or, without one, oldest
+first: one access when the array opens (occupancy), up to `ports` admissions
+(pipelined).
 
-Once real data flows (the gem5 integration: loads return bytes, LL/SC and
-programs check them), or an L1 gets a latency, or the LLC is pipelined, the
-situations below become reachable.
+Two rules hold in both models:
 
-## The situations
+- **With *L* = 0 nothing waits:** every row changes state and data in the same
+  cycle. (The pipelined model is only active for *L* > 0.)
+- **Lines in the MSHR or the write-back buffer are not in the array:** accesses
+  to them run in place, without waiting for the array.
 
-### 1. A load hit is overtaken by a remote invalidation (L1 with latency)
+## The three configurations
 
-Setting: L1 `m_data_access_latency` > 0, occupancy model.
+The array model and `line_interlock` (CacheController) give three
+configurations. They differ in what waits when the array is busy:
 
-1. Core A loads X, which is in S. The row is a hit; the array is busy, so the
-   byte phase parks.
-2. Core B's GetM for X is snooped at A. The row S → I needs no data, so it
-   runs at once and invalidates X.
-3. A's parked read runs against a line that is now I.
-
-Upstream: the load reads an invalidated line (in gem5, possibly bytes that B
-is about to overwrite). With whole-message deferral (the hit's row runs when
-its array access runs) the load re-runs as a miss: coherent, but not what
-hardware does. With `line_interlock=1` the snoop waits in the queue until the
-hit's access has completed, as a real pipeline holds a line from tag to data.
-
-### 2. A snoop supplies a line that its own state change already dropped (L1 with latency)
-
-Setting: L1 latency > 0, occupancy model.
-
-A snoop answered with data (rows `Data2Req/I`, `Data2Both/S`) expands to a
-write-back that reads the line, then a state update. With the array busy, the
-read parks and the state update runs; the line is invalidated or replaced
-before the parked read runs. Upstream: the write-back copies from a NULL line
-(crash) or sends stale bytes. Handled by deferring the whole message: the row,
-and with it the state change, runs when the array access runs.
-
-### 3. Parked accesses without an arbiter are never served (L1 with latency)
-
-Setting: L1 latency > 0; L1s have no data-access arbiter.
-
-Upstream served parked byte phases only through the arbiter, so at an L1 they
-waited forever: the second store of a same-line burst hung the core. The
-array-access list is now served oldest-first when there is no arbiter.
-
-### 4. A younger message acts on a line whose older access is still waiting
-
-Setting: any array latency, whole-message deferral on, `line_interlock=0`.
-
-Deferring a whole message keeps its state change with its data, but the
-message has left the queue. A younger message to the same line (a snoop, a
-request, an invalidation) can now start before it, against a state the older
-message was about to change. This is the situation behind the one fault seen
-while porting to this branch: with the LLC deferring its array-touching rows
-(`SendData`, `SendExeclusiveData`, `SaveData`) and no hold, the Snoop preset
-stopped with `MSIProtocol: Fault Transaction is detected`; with the hold it
-ran clean.
-
-The fault, traced (`OCTOPUS_TRACE_ADDR`, Snoop preset, LLC deferral on, hold
-off; LLC states from `MSI_LLC.csv`: IorS = no L1 owner, M = an L1 owns the
-line, IorS_d = waiting for the previous owner's data):
-
-| cycle | LLC | L1 1 |
-| --- | --- | --- |
-| 2618 | L1 2's GetM 272 pops in IorS and is deferred whole (array busy) | |
-| 2625 | L1 1's GetS 329 pops in IorS and is deferred whole; its row (IorS + GetS: SendData) is chosen against IorS | issues GetS 329 |
-| 2660 | GetM 272 fires: IorS to M (L1 2 owns the line) | |
-| 2663 | L1 0's GetS 321, younger than 329, pops: M + GetS needs no array, runs at once, M to IorS_d | |
-| 2670 | GetS 329 fires against IorS_d: a Stall row, so it is pushed back to the queue behind younger messages | |
-| 2689 | | L1 2, the owner, answers 329 cache-to-cache (correct, in bus order); the load completes |
-| 2701-2721 | the re-queued 329 runs again in IorS: SendData, a second answer to a finished request | invalidated by L1 3's GetM; issues GetS 348 |
-| 2764 | | the stale answer to 329 arrives while waiting for 348; an L1 matches data by line, so it takes it as 348's data and goes to S |
-| 2814 | | the real answer to 348 arrives in S: no row for OwnData in S, `MSIProtocol: Fault Transaction is detected` |
-
-Deferring 329 whole took it out of the queue, and a younger message to the
-same line changed the line's state before 329's row ran. 329's row had been
-chosen against a state that no longer held; it stalled, was re-queued behind
-younger traffic, and ran a second time, so its requester was answered twice.
-In gem5 the stale answer is also wrong data.
-
-Handled by `line_interlock=1`: while a line has an entry on the array-access
-list, every queued message to it stays in place, not ready, until the entry is
-gone. In the trace, GetS 321 waits until 329's access has run, so every
-message sees the line in bus order and a fired row is never a Stall
-(`m_pipe_requeues` stays 0). Holding in place (rather than popping and parking) keeps each message's
-position, so bus order and the per-line FCFS gate still apply. This is why
-whole-message deferral is tied to the interlock: with `line_interlock=0` the
-occupancy model keeps upstream's handling, and the pipelined model turns the
-interlock on.
-
-### 5. A younger bus message to a line jumps ahead of an older one that waits
-
-Setting: any configuration where a message from the bus can wait in an L1's
-queue. On this branch that includes the default presets: the per-line FCFS
-gate (7c9fa4bd) holds a back-invalidation behind the core's own older request
-to its line. (Snoops from the bus, GetS/GetM of other cores, are not demand
-requests at the L1 and are not gated.) With `line_interlock=1` any bus message
-can also wait while its line has an array access pending.
-
-Upstream inserted every bus message at the very front of the L1's queue. That
-was equivalent to bus order only while a bus message never waited. If one
-waits, the next bus message to the same line is inserted in front of it and,
-having nothing older ahead of it, can run first: a snoop overtakes the
-back-invalidation that preceded it on the bus, or, under the interlock, one
-snoop overtakes another. In the second case the owner answers the wrong
-requester; the older GetM finds the line in S, no data is sent, and its
-requester waits forever (seen on gem5_integration before the fix). Handled by
-`FRFCFS_Buffer::pushFrontOrdered`: a bus message goes ahead of the core's own
-requests but behind older bus messages. It is unconditional; the lab presets
-are unchanged by it.
-
-### 6. A parked read of a line in the write-back buffer loses its line (pipelined model)
-
-Setting: `m_data_array_pipelined=1`.
-
-An eviction moves the victim into the write-back buffer; its WriteBack reads
-the buffered copy and the state change that follows (to N) releases the
-entry at once. A read of that line parked on the array pipeline found nothing
-when it ran. Lines in the MSHR or the write-back buffer are not in the array,
-so accesses to them now bypass the pipeline and run in place.
-
-### 7. Directory rows that assumed the LLC answers at pop
-
-Setting: directory protocols, once the LLC's outgoing traffic can be
-reordered (deferral and hold, or a NoC that delays some links).
-
-- A PutS was classified as the last one by the size of the sharer list alone.
-  Arriving after the invalidation that removed its sender, it drove the line
-  to I with a live sharer, and the next GetM was answered with a stale ack
-  count.
-- `MSI_directory.csv` rows `IM_aI` / `IM_aSI` handed the line on at the last
-  ack without performing the requester's own store.
-
-Both are fixed on this branch by d9b4f6b4; gem5_integration found the same two
-through the deferral path.
-
-### 8. What real data adds (the gem5 integration)
-
-With gem5, the bytes matter as well as the timing:
-
-- A load must return the value of the latest store in coherence order.
-  Situations 1, 2 and 4 return old or missing bytes, which a program sees.
-- A core's own younger access to a line with an older store still in flight
-  must see that store. The gem5 bridge holds such an access back behind the
-  older overlapping write (hold-back in `gem5/octopus.cc`).
-- LL/SC depends on the invalidation reaching the core at the right point;
-  a snoop that runs early (situation 1) or late changes which SC succeeds.
-
-## Why each gem5-integration change exists
-
-Some changes are needed only because the integration gives the data array a
-latency the presets never used (introduced); others fix defects that were
-already there but that no preset or trace reached (hidden).
-
-| change | needed for | kind | why nothing failed before |
+| configuration | set by | what waits for the array | state and data |
 | --- | --- | --- | --- |
-| bus slot at latency 1 (`SplitBusController`) | bus latency experiments | hidden | the if/else-if slot logic dropped every message at latency 1; every preset uses 2/5 |
-| one array-access list; parked accesses served without an arbiter; a whole message deferred so state and data change together (L1) | an L1 with a data latency (situations 1-3); the base of the pipelined model | hidden | all presets use L1 latency 0, so no L1 ever parked |
-| pipelined data array | an LLC that charges its latency and serves one access per cycle under multi-core load | introduced (new model) | the occupancy model charges the requester 0 cycles and serves one access per 10 cycles for all L1s; on a 4-thread streaming test that made runs 56% longer, invisible in single-trace presets |
-| MSHR / write-back-buffer lines bypass the array (situation 6) | the pipelined model | introduced by pipelining | the occupancy model already ran such accesses in place through `isReady(addr)`; only the pipelined model parked them |
-| line interlock (hold) | any whole-message deferral (situation 4) | introduced by deferral | with latency 0 or rows decided at pop, a message never left the queue before its line's older work had run |
-| `pushFrontOrdered` (situation 5) | any queue where a bus message can wait | hidden, now reachable on this branch | upstream bus messages never waited; this branch's INV-aware gate and the hold can make one wait |
-| directory: stale PutS, `IM_aI` store (situation 7) | reordered LLC traffic | hidden | the window needs the LLC's answers reordered; also found on this branch through a NoC (d9b4f6b4) |
-| LLC defers array-touching rows whole | real data at the LLC (state and data together) | introduced, only with the interlock | the LLC tables happen never to invalidate what an older parked read needs, and traces carry no data; without the hold it faults (situation 4) |
-| bridge hold-back (gem5 side) | a core's younger access to a line with its older store in flight | introduced by gem5 (real data) | trace-driven cores do not read back the bytes they wrote |
+| A. occupancy, no interlock (default) | `m_data_array_pipelined=0`, `line_interlock=0` | the row's byte phase only | the row runs at pop: the state changes now, the bytes later |
+| B. occupancy with interlock | `m_data_array_pipelined=0`, `line_interlock=1` | the whole message, when the array is busy at pop | change together |
+| C. pipelined | `m_data_array_pipelined=1` (turns `line_interlock` on) | the whole message, always | change together |
+
+A message is deferred whole when its row touches the array. The protocol
+reports those rows (`needsDataArray`): `Hit`, `Data2Req` and `Data2Both` in the
+L1 snoop protocols; `SendData`, `SendExeclusiveData` and `SaveData` in the LLC
+protocols. In C, a message that carries bytes from below or from a peer (a fill)
+is an array write as well. A deferred message leaves the processing queue and
+goes on the array-access list as a unit; its row runs when its array access
+runs.
+
+Whole-message deferral is never used without the interlock: once a message has
+left the queue, the interlock is what stops a younger message to the same line
+from acting on the line before it. That is why B needs `line_interlock=1` and C
+turns it on (`the pipelined data array needs line_interlock; enabling it`).
+
+## The line interlock
+
+While a line has an entry on the array-access list, every queued message to
+that line stays in the processing queue, in place and not ready, until the entry
+is gone. Same-line traffic therefore runs in arrival order against the state the
+older access leaves, as in a hardware pipeline that holds a line from tag to
+data. Holding in place, rather than popping and parking, keeps each message's
+queue position, so bus order and the per-line FCFS gate still apply.
+
+## Where state and data come apart: configuration A
+
+In A, a row whose byte phase waits has already changed the line's state. Two
+situations follow at an L1 with *L* > 0:
+
+- **A load hit overtaken by an invalidation.** Core A loads X, which is in S; the
+  row is a hit and its read waits for the array. Core B's GetM is snooped at A;
+  the row S → I needs no data, runs at once and invalidates X. A's read then runs
+  against a line that is I (under gem5, bytes B is about to overwrite).
+- **A snoop answer whose own state change dropped the line.** A snoop answered
+  with data (`Data2Req/I`, `Data2Both/S`) reads the line for the write-back, then
+  changes state. The read waits, the state change runs, and the line is
+  invalidated or replaced before the read: the write-back sends stale bytes or
+  none.
+
+Neither happens in B or C: the hit's row and the snoop answer's row run together
+with their access, and the invalidating snoop waits behind the hit in the queue.
+
+At the LLC, A is safe in the standalone presets: no LLC row invalidates or
+replaces what an older waiting byte phase still needs, and traces carry no
+bytes.
+
+## Rules that hold in every configuration
+
+- **Bus order inside a queue.** A bus message can wait in a controller's queue:
+  the per-line FCFS gate holds a back-invalidation behind the core's own older
+  request to its line, and the interlock holds any message to a line with a
+  pending access. `FRFCFS_Buffer::pushFrontOrdered` puts a bus message ahead of
+  the core's own requests but behind older bus messages, so a younger snoop
+  cannot overtake an older one to the same line.
+- **A line leaving the array.** An eviction moves the victim into the write-back
+  buffer, and the WriteBack's state change releases the buffered copy at once.
+  Every access still waiting on the victim completes before its bytes move
+  (`pipelineFlushLine`); after that, accesses to the line run in place in the
+  buffer.
+
+## What real data adds (the gem5 integration)
+
+Standalone runs drive addresses only: if state and data disagreed for a few
+cycles, only timing would change. Under gem5 the bytes are real:
+
+- A load must return the latest store in coherence order. The two situations of
+  configuration A return old or missing bytes, which the program sees.
+- A core's younger access to a line with its own older store in flight must see
+  that store. The gem5 bridge holds such an access back behind the older
+  overlapping write (`gem5/octopus.cc`).
+- LL/SC depends on the invalidation reaching the core at the right point; a
+  snoop that runs early (as in configuration A) or late changes which SC
+  succeeds.
 
 ## Settings
 
 | setting | default | gem5 preset | effect |
 | --- | --- | --- | --- |
-| `line_interlock` (CacheController) | 0 | 1 (L1 and LLC) | hold messages to a line with an array access pending; enables whole-message deferral in the occupancy model |
-| `m_data_array_pipelined` (CacheDataHandler) | 0 | 1 (LLC) | accesses pay the latency and one is admitted per port per cycle; always defers, so it turns `line_interlock` on |
-| `m_data_array_ports` | 1 | 1 | pipelined model only |
+| `m_data_access_latency` (CacheDataHandler) | 0 (L1), 10 (LLC) | 0 (L1), 10 (LLC) | the array latency *L* |
+| `m_data_array_pipelined` (CacheDataHandler) | 0 | 1 (LLC) | 0 = occupancy model, 1 = pipelined model; pipelined turns the interlock on |
+| `m_data_array_ports` (CacheDataHandler) | 1 | 1 | pipelined model only: accesses admitted per cycle |
+| `line_interlock` (CacheController) | 0 | 1 (L1 and LLC) | hold messages to a line with a pending array access; enables whole-message deferral in the occupancy model |
 
-Rule of thumb: an array latency with real data needs `line_interlock=1`. The
-occupancy model with `line_interlock=0` is upstream's model and is only safe
-for trace-driven runs with an L1 latency of 0.
+What the presets use:
+
+| preset | L1 | LLC |
+| --- | --- | --- |
+| standalone (`MultiCoreSystem`, `_Snoop`, `_Directory`, `_Mesh`) | *L* = 0: nothing waits | A, *L* = 10 |
+| gem5 (`MultiCoreSystem_gem5`) | *L* = 0: nothing waits | C, *L* = 10, 1 port |
+
+Use A only for trace-driven runs with an L1 latency of 0. With real data, or an
+L1 with *L* > 0, use B or C.
