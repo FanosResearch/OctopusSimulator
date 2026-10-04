@@ -146,18 +146,15 @@ CSV from `configuration/SystemConfigurations/`; the `.csv` suffix is optional.
 You can also supply a path, such as `--config ./my-system.csv`. `-p` overrides
 apply after loading the selected CSV. No files are copied or edited, so there is
 no configuration reset step afterward. Omitting `-c` uses `MultiCoreSystem.csv`
-again, with whatever settings it currently contains.
-
-Both presets above select **MSI**. FCFS is pinned for both runs because the
-directory preset is validated with FCFS and documents a starvation issue with
-TDM. The presets also differ in buffer and queue sizing: this is a comparison of
-complete configurations, not an isolated change to one protocol parameter.
+again, with whatever settings it currently contains. Both presets above select **MSI**.
 
 Graph the data and observe the trend:
 
 ```shell
 python3 sweeps/plot_axis.py tutorial/01-exploration/output/Coherence
 ```
+
+Then try visualizing the simulation runs with `octoviz`.
 
 ### Changing MSI/MESI within a family
 
@@ -232,7 +229,8 @@ W=$PWD/BMs/eembc-traces/a2time01-trace
 ```
 
 Try graphing the trend with the python script `sweeps/plot_axis.py`.
-See if it matches your expectations.
+See if it matches your expectations. Then try visualizing the different
+runs with `octoviz`.
 
 ## If you finish early
 
