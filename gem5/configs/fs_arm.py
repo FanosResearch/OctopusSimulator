@@ -10,6 +10,12 @@ checkpoints) live in one directory, /opt/gem5-resources in the container.
     gem5.opt fs_arm.py --clip 0.5s --classic          # same clip, classic caches
     gem5.opt fs_arm.py --resources /path --clip 3s    # resources elsewhere
     gem5.opt fs_arm.py --no-checkpoint --readfile x.rcS   # fresh boot with your own script
+    gem5.opt fs_arm.py --switch-at-workbegin          # fresh boot on atomic cores, /se_test on O3
+
+--switch-at-workbegin is the other way to skip the boot: no checkpoint, the
+image boots on atomic cores (Octopus bypassed) and the cores switch to O3 at
+the workload's workbegin marker. It runs se_test_switch.rcS unless --readfile
+says otherwise.
 """
 import argparse
 import os
@@ -19,6 +25,9 @@ from gem5.components.boards.arm_board import ArmBoard
 from gem5.components.memory import DualChannelDDR4_2400
 from gem5.components.processors.cpu_types import CPUTypes
 from gem5.components.processors.simple_processor import SimpleProcessor
+from gem5.components.processors.simple_switchable_processor import (
+    SimpleSwitchableProcessor,
+)
 from gem5.isas import ISA
 from gem5.resources.resource import (
     BootloaderResource,
@@ -111,7 +120,22 @@ parser.add_argument(
     help="stop at the workend marker instead of running on to the end of the clip, the "
          "trajectory write-out and the guest's own exit",
 )
+parser.add_argument(
+    "--switch-at-workbegin",
+    action="store_true",
+    help="boot from scratch on atomic cores and switch to O3 at the workload's workbegin "
+         "marker; runs se_test_switch.rcS unless --readfile is given",
+)
 args = parser.parse_args()
+if args.switch_at_workbegin:
+    # The switchable processor names its cores start/switch, a checkpoint from
+    # SimpleProcessor names them cores, and a restore silently skips sections
+    # it cannot match: switching is for a fresh boot only.
+    if args.checkpoint:
+        parser.error("--switch-at-workbegin boots from scratch; drop --checkpoint")
+    if args.cache_ports:
+        parser.error("--cache-ports is not supported with --switch-at-workbegin")
+    args.no_checkpoint = True
 octopus_out = args.octopus_out or m5.options.outdir
 
 
@@ -134,7 +158,17 @@ else:
 
 memory = DualChannelDDR4_2400(size="8GiB")
 
-processor = SimpleProcessor(cpu_type=CPUTypes.O3, num_cores=4, isa=ISA.ARM)
+if args.switch_at_workbegin:
+    # Atomic first: the bridge bypasses the Octopus engine in atomic mode, so
+    # the boot runs fast. Atomic -> O3 needs no drain of the bridge.
+    processor = SimpleSwitchableProcessor(
+        starting_core_type=CPUTypes.ATOMIC,
+        switch_core_type=CPUTypes.O3,
+        num_cores=4,
+        isa=ISA.ARM,
+    )
+else:
+    processor = SimpleProcessor(cpu_type=CPUTypes.O3, num_cores=4, isa=ISA.ARM)
 if args.cache_ports:
     _loads, _stores = (int(x) for x in args.cache_ports.split(","))
     for _c in processor.get_cores():
@@ -167,7 +201,10 @@ kernel_cmd = [
     "no_systemd",
 ]
 
-readfile = args.readfile or os.path.join(HERE, "ov2slam", f"params_{args.clip}.sh")
+if args.switch_at_workbegin:
+    readfile = args.readfile or os.path.join(HERE, "se_test_switch.rcS")
+else:
+    readfile = args.readfile or os.path.join(HERE, "ov2slam", f"params_{args.clip}.sh")
 workload = dict(
     kernel=KernelResource(os.path.join(args.resources, "arm64-linux-kernel-5.15.180")),
     disk_image=DiskImageResource(os.path.join(args.resources, args.image)),
@@ -184,9 +221,18 @@ board.set_kernel_disk_workload(**workload)
 def handle_workbegin():
     # Fires only on a fresh boot; a restored ROI checkpoint already sits
     # past this marker (ov2slam/checkpoints.py took it here).
+    # With --switch-at-workbegin, the first marker switches to O3; switch()
+    # toggles, so later markers must not call it again.
+    if args.switch_at_workbegin:
+        print("Switching ATOMIC -> O3 at the start of ROI!")
+        processor.switch()
     print("Resetting stats at the start of ROI!")
     m5.stats.reset()
     yield False
+    while True:
+        print("Resetting stats at the start of ROI!")
+        m5.stats.reset()
+        yield False
 
 
 def handle_workend():
@@ -204,12 +250,19 @@ def exit_event_handler():
     yield True
 
 
+def exit_after_script():
+    # The image's boot exits are gem5-bridge hypercalls with their own
+    # handlers; the first classic exit is the guest script's `m5 exit`.
+    print("exit event: guest script done")
+    yield True
+
+
 simulator = Simulator(
     board=board,
     on_exit_event={
         ExitEvent.WORKBEGIN: handle_workbegin(),
         ExitEvent.WORKEND: handle_workend(),
-        ExitEvent.EXIT: exit_event_handler(),
+        ExitEvent.EXIT: exit_after_script() if args.switch_at_workbegin else exit_event_handler(),
     },
 )
 
