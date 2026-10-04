@@ -127,9 +127,9 @@ workload where the arbiter matters.
 ## Part B — two views of one run
 
 A gem5 run has two sets of books: gem5's `stats.txt`, and Octopus's own reports,
-the `newLogger/` you read in exercise 00 (`LatencyReport_C<n>.csv`, one row per
-request; `Summary.csv`, worst cases per core). Octopus writes them under gem5
-too when asked:
+the ones you read in exercise 00 (`LatencyReport_C<n>.csv`, one row per request;
+`Summary.csv`, worst cases per core). Octopus writes them under gem5 too when
+asked:
 
 ```shell
 gem5 -re -d m5out_views gem5/configs/se_arm.py \
@@ -137,6 +137,10 @@ gem5 -re -d m5out_views gem5/configs/se_arm.py \
 bash tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/compare_views.sh m5out_views
 ```
 
+- **Where.** Not in an `-o` directory as in exercise 00: under gem5 the
+  reports go to `newLogger/` inside gem5's output directory
+  (`m5out_views/newLogger/`; `--octopus-out <dir>` moves them to
+  `<dir>/newLogger/`).
 - **Same window.** Octopus logging follows gem5's statistics: a stats reset
   (`se_test`'s work-begin marker, `m5 resetstats`) starts a fresh log, the next
   stats dump writes `newLogger/`. Both cover the region of interest only.
@@ -161,8 +165,9 @@ equal; the few missing rows (core 0) are requests still in flight when the
 window closed. The latencies agree to about a cycle: gem5 measures from the
 bridge's hand-off to its response, Octopus from the CPU issue to the response
 (`Total Latency`). The rest of exercise 00 applies unchanged: read a row's
-stages in `LatencyReport`, the worst cases in `Summary.csv`. With
-`OCTOPUS_TRACE=<file>` set as well, the run also writes the raw event trace
+stages in `LatencyReport`, the worst cases in `Summary.csv`. The raw event
+trace has no `--trace` flag under gem5: set `OCTOPUS_TRACE=<file>` in the
+environment of the gem5 command and the run writes it to `<file>`
 (`docs/Trace.md`). The reports are large (a row per request, about 27 MB per
 core here), so logging is off unless you ask for it.
 
