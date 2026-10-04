@@ -121,7 +121,7 @@ the one the tutorial runs first. The points that matter when reading a report:
   \code{CacheControllerExclusive} running snoop MESI --- 16\,KB, direct-mapped, 64-byte lines,
   an untimed data port, 16 MSHRs, an 8-entry write-back buffer and a 16-deep processing queue.
 \item \textbf{\code{bus[0]}} is a TripleBus under a \code{SplitBusController}: three lanes ---
-  request, response, service --- each with its own arbiter, TDM by default
+  request, response, service --- each with its own arbiter, FCFS as shipped (RR and TDM selectable)
   (\file{SplitBusController.csv}); 256-deep buffers with 128 entries reserved for in-flight
   responses so that the request lane stalls before responses can overflow.
 \item \textbf{The LLC} (id 10) is a \code{CacheController\_End2End}: shared, inclusive, 32\,KB,

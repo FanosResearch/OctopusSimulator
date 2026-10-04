@@ -71,11 +71,14 @@ the visualizer's class and ``ahead'' filters read.
 \end{tabularx}
 \end{table}
 
-\paragraph{Switches.} \env{OCTOPUS\_NO\_LOG}\code{=1} skips per-request logging but still writes
-\code{Summary.csv}, for correctness sweeps where only termination matters.
-\env{OCTOPUS\_EVENT\_DEBUG}\code{=1} prints any tiling violation and the end-of-run tally.
-\env{OCTOPUS\_EVENT\_DUMP}\code{=N} and \env{OCTOPUS\_EVENT\_DUMP\_MIN} print raw timelines
-(\cref{ch:request-end-to-end}).
+\paragraph{Switches.}
+\begin{itemize}
+\item \env{OCTOPUS\_NO\_LOG}\code{=1} skips per-request logging but still writes
+  \code{Summary.csv}, for correctness sweeps where only termination matters.
+\item \env{OCTOPUS\_EVENT\_DEBUG}\code{=1} prints any tiling violation and the end-of-run tally.
+\item \env{OCTOPUS\_EVENT\_DUMP}\code{=N} and \env{OCTOPUS\_EVENT\_DUMP\_MIN} print raw
+  timelines (\cref{ch:request-end-to-end}).
+\end{itemize}
 
 \section{The Debugger}
 
@@ -96,16 +99,20 @@ A static map keys open files by name, so several components pointed at the same 
 produce one aggregated report whose \code{Name} and \code{Clock} columns tell the lines apart
 (\cref{fig:debugger-aggregation}).
 
-\paragraph{Three kinds of print.} A \emph{general event print}, \code{print(NULL, "queue
-FULL")}, fires on any event. A \emph{message-associated print}, \code{print(\&msg, "...")},
-emits a configurable preamble of identity columns (\key{print\_name}, \key{print\_clk},
-\key{print\_msg\_id}, \key{print\_addr}, \key{print\_from}, \key{print\_to}, \key{print\_owner})
-and is subject to the filters. And the \emph{transition hook}, \code{transition(\&msg, id, old,
-event, next, stalled, fsm)}, which every protocol calls right after \code{getTransition}, prints
-the readable \code{I --Store--> IM\_ad (src, cv, data)} with the FSM's own names --- the snoop L1,
-the snoop LLC and the directory protocols all read the same way, and a stall shows as
-\code{old --event--> old [stall]}. Keep new protocols on this hook: it is the single place
-transitions are reported, and it is also what feeds the raw trace.
+\paragraph{Three kinds of print.}
+\begin{itemize}
+\item A \emph{general event print}, \code{print(NULL, "queue FULL")}, fires on any event.
+\item A \emph{message-associated print}, \code{print(\&msg, "...")}, emits a configurable
+  preamble of identity columns and is subject to the filters. The columns are switched on one by
+  one: \key{print\_name}, \key{print\_clk}, \key{print\_msg\_id}, \key{print\_addr},
+  \key{print\_from}, \key{print\_to}, \key{print\_owner}.
+\item The \emph{transition hook}, \code{transition(\&msg, id, old, event, next, stalled, fsm)},
+  which every protocol calls right after \code{getTransition}, prints the readable
+  \code{I --Store--> IM\_ad (src, cv, data)} with the FSM's own names. The snoop L1, the snoop
+  LLC and the directory protocols all read the same way, and a stall shows as
+  \code{old --event--> old [stall]}. Keep new protocols on this hook: it is the single place
+  transitions are reported, and it is also what feeds the raw trace.
+\end{itemize}
 
 \begin{figure}[htbp]\centering
 \begin{adjustbox}{max width=\textwidth}\input{figures/tikz/debugger-filter}\end{adjustbox}
@@ -113,12 +120,18 @@ transitions are reported, and it is also what feeds the raw trace.
 \label{fig:debugger-filter}
 \end{figure}
 
-\paragraph{Filters.} Four categories, each a list in the configuration: \key{cond\_addr}
-(compared as \code{(addr \& addr\_filter) == entry}, so the hex mask \code{FFFFFFC0} selects a
-64-byte line), \key{cond\_msg\_id}, \key{cond\_from}, \key{cond\_owner}. With no filter set
-everything prints; with any set, a message must match every active category and any value
-within one (\cref{fig:debugger-filter}). Note the units: \key{addr\_filter} is hex, but the
-\key{cond\_addr} entries and the \code{Addr} column are decimal.
+\paragraph{Filters.} Four categories, each a list in the configuration:
+\begin{itemize}
+\item \key{cond\_addr} --- addresses, compared as \code{(addr \& addr\_filter) == entry}, so the
+  hex mask \code{FFFFFFC0} in \key{addr\_filter} selects a 64-byte line;
+\item \key{cond\_msg\_id} --- message ids;
+\item \key{cond\_from} --- the interface a message arrived on;
+\item \key{cond\_owner} --- the owning core.
+\end{itemize}
+With no filter set everything prints; with any set, a message must match \emph{every} active
+category and \emph{any} value within one (\cref{fig:debugger-filter}). Note the units:
+\key{addr\_filter} is hex, but the \key{cond\_addr} entries and the \code{Addr} column are
+decimal.
 
 \begin{figure}[htbp]\centering
 \begin{adjustbox}{max width=0.85\textwidth}\input{figures/tikz/debugger-lifecycle}\end{adjustbox}
@@ -185,7 +198,35 @@ diffed decision by decision.
 run and opens \emph{octoviz} in the browser; \code{run}, \code{convert} and \code{serve} are the
 same steps separately, and \code{serve <dir>} shows every converted run under a directory, such
 as a sweep. It is a local web app (Python 3 with \code{duckdb} and \code{numpy}; data never
-leaves the machine) that shows a run as a pipeline:
+leaves the machine) that shows a run as a pipeline. \Cref{fig:octoviz-panel} is the whole panel
+on one window of \code{a2time01}; \cref{fig:octoviz-views,fig:octoviz-tables} show each view on
+its own.
+
+\begin{figure}[htbp]\centering
+\includegraphics[width=\textwidth]{octoviz_panel.png}
+\caption{The visualizer on cycles 120\,000--121\,800 of \code{a2time01}: the filter bar and the
+view tabs on top, the request pipeline (one row per request, one bar per stage, hatched while
+waiting) and, below it, the resource lanes (the same cycles seen from each shared resource,
+coloured by the core that held it).}
+\label{fig:octoviz-panel}
+\end{figure}
+
+\begin{figure}[p]\centering
+\begin{subfigure}{\textwidth}\centering\includegraphics[width=\textwidth]{octoviz_pipeline.png}\caption{Pipeline: one row per request, one bar per stage, hatched while waiting, solid while served.}\end{subfigure}\\[10pt]
+\begin{subfigure}{\textwidth}\centering\includegraphics[width=\textwidth]{octoviz_lanes.png}\caption{Resource lanes: the same cycles seen from each shared resource, one segment per occupant, coloured by core.}\end{subfigure}
+\caption{The two linked timeline views, each popped out into its own window
+(\code{?solo=pipeline}, \code{?solo=lanes}), on cycles 120\,000--121\,800 of \code{a2time01}.}
+\label{fig:octoviz-views}
+\end{figure}
+
+\begin{figure}[p]\centering
+\begin{subfigure}{\textwidth}\centering\includegraphics[width=\textwidth]{octoviz_dist.png}\caption{Distribution: the histogram and CDF of one report column over the filtered requests, with N, mean, P50, P90, P99 and max.}\end{subfigure}\\[10pt]
+\begin{subfigure}{\textwidth}\centering\includegraphics[width=\textwidth]{octoviz_hot.png}\caption{Hot lines: cache lines ranked by coalesced hits, with request count, worst Total, worst L2 Stall, first and last cycle; a click filters every view onto the line.}\end{subfigure}\\[10pt]
+\begin{subfigure}{\textwidth}\centering\includegraphics[width=\textwidth]{octoviz_fsm.png}\caption{Coherence transitions of one line: one row per FSM event in cycle order, the acting agent's old~$\rightarrow$~new transition, and the state every other agent held at that moment.}\end{subfigure}
+\caption{The three table views (\code{?solo=dist}, \code{?solo=hot}, \code{?solo=fsm}) on the
+same window; the coherence table is filtered to one line with the address filter.}
+\label{fig:octoviz-tables}
+\end{figure}
 
 \begin{description}
 \item[Pipeline] one row per request in the window, sorted by issue, coloured segments per

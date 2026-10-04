@@ -21,7 +21,7 @@
   \node[font=\sffamily\scriptsize, text=octquiet, align=center, above=1mm of $(c1.north)!0.5!(c2.north)$]
     {\code{CacheControllerExclusive}, snoop MESI (\code{MESI\_splitBus\_snooping.csv}) \\ 16\,KB direct-mapped, 64\,B lines, untimed port, 16 MSHRs, 8-entry write-back buffer, queue 16};
   \node[bus, below=9mm of $(c1.south)!0.5!(c2.south)$, minimum width=120mm] (b0)
-    {\textbf{bus[0]} \quad TripleBus, \code{SplitBusController}: request / response / service lanes \\ \scriptsize 256-deep buffers, 128 reserved for responses \textperiodcentered\ arbiter per lane: TDM by default (FCFS, RR selectable)};
+    {\textbf{bus[0]} \quad TripleBus, \code{SplitBusController}: request / response / service lanes \\ \scriptsize 256-deep buffers, 128 reserved for responses \textperiodcentered\ arbiter per lane: FCFS as shipped (RR, TDM selectable)};
   \foreach \k in {0,1,2,3} \draw[wire] (l1\k.south) -- (l1\k.south |- b0.north);
   \node[llc, below=8mm of b0, minimum width=120mm] (llc)
     {\textbf{LLC} \quad \code{CacheController\_End2End}, snoop MESI home (\code{MESI\_LLC.csv}) \quad id 10 \\ \scriptsize shared, inclusive \textperiodcentered\ 32\,KB, 2-way, 64\,B lines \textperiodcentered\ 10-cycle data port, FCFS port arbiter \textperiodcentered\ 64 MSHRs, 32-entry write-back buffer, queue 64};

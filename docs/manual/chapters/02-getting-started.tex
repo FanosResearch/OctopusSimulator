@@ -41,7 +41,7 @@ run on every core to create a data-sharing stress workload, and SPLASH-2 applica
 including the \code{raytrace} and \code{radiosity} giants, stored as \code{xz} archives (about
 650\,MB, 10\,GB inflated). Nothing is needed by hand: every driver script calls
 \file{get_benchmarks.sh}, which clones the repository into \file{BMs/} if absent and inflates
-the archives in place, idempotently. Run it yourself only to call the binary on a benchmark
+the archives in place; running it again does nothing. Run it yourself only to call the binary on a benchmark
 directly, and use the sparse form for an EEMBC-only environment:
 
 \begin{lstlisting}[style=shell]

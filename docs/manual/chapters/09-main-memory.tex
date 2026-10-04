@@ -49,10 +49,25 @@ wedge on the shipped workloads.
 
 \section{Clocks at the boundary}
 
-The memory models are \code{ClockedObj}s like everything else. \code{MainMemoryController}
-ticks at the cores' period. \code{MCsimInterface} is constructed with the \emph{LLC's} period
-and must be: MCsim advances its DRAM clock once per tick of the interface, so one tick per core
-cycle is what makes a DRAM cycle a core cycle.
+The memory models are \code{ClockedObj}s like everything else, and both tick at the cores'
+rate; what differs is what a tick means on the far side.
+
+\begin{itemize}
+\item \code{MainMemoryController} has no clock of its own to speak of: a read is served
+  \key{m\_memory\_latency} core cycles after it is accepted. The DRAM is a delay, in core cycles.
+\item \code{MCsimInterface} is constructed with the \emph{LLC's} period (one tick per core
+  cycle) and tells MCsim that each tick is one cycle of a 2.4\,GHz core
+  (\code{setCPUClockSpeed} in \file{src/MCsimInterface.cpp}). MCsim keeps its \emph{own} clock:
+  its clock-domain crosser advances the DRAM by one command-clock cycle, $t_{CK}$ of the
+  configured device (0.83\,ns for DDR4-2400), for every 0.42\,ns of core time, so the memory
+  controller and the DRAM run at the device's real rate relative to the core and MCsim's timing
+  parameters (\code{tRCD}, \code{tRP}, \code{tCL}, \ldots) stay in DRAM cycles. A request that
+  spends $n$ DRAM cycles in MCsim therefore costs about $2n$ core cycles in the report.
+\end{itemize}
+
+The 2.4\,GHz figure is the one assumption at this boundary: the trace-driven core has no
+frequency of its own, so the ratio between core and DRAM time is set here, in the bridge, and
+is the same for every run.
 
 The simulator is deterministic and its reports are byte-identical on Linux and Windows, MCsim
 included; the environment check's reference run (\cref{ch:getting-started}) is an MCsim run for

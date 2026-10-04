@@ -28,7 +28,7 @@ reports are written into \code{<workload>/newLogger/}.
 \code{demo/}.}\label{tab:scripts}
 \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.36\textwidth}Y@{}}
 \toprule script & what it does \\ \midrule
-\file{get_benchmarks.sh} & clones the benchmark repository (\code{FanosResearch/OctopusBMs}) into \file{BMs/} if absent and inflates the compressed SPLASH-2 traces; idempotent, called by every driver. \code{BMS\_SPARSE="eembc-traces"} clones only that suite \\
+\file{get_benchmarks.sh} & clones the benchmark repository (\code{FanosResearch/OctopusBMs}) into \file{BMs/} if absent and inflates the compressed SPLASH-2 traces; safe to run again, called by every driver. \code{BMS\_SPARSE="eembc-traces"} clones only that suite \\
 \file{scripts/check_environment.sh} & one PASS/FAIL line per component (compiler, cmake, xz, Python packages, binary, MCsim ini line endings, benchmarks), then a reference run whose request count and worst DRAM latency must match the committed numbers \\
 \file{run_octopus.sh} & \code{--protocol snoop|directory --suite eembc|splash [--bench <name>] [--jobs N] [--safety <s>] [--out <dir>]}: copies the preset over \file{MultiCoreSystem.csv}, runs the suite in parallel and judges completion per core (own trace covered and footer written) \\
 \file{run_splash.sh}, \file{sweep_protocols.sh} & the SPLASH driver and the coherence-family sweep \\

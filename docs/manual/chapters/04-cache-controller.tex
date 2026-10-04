@@ -23,10 +23,15 @@ the data handler executes those actions against the array, the MSHRs and the wri
 buffer, arbitrating the data port.}{fig:controller}{0.62}
 
 \paragraph{Two interfaces.} Every controller has a \emph{lower} \code{CommunicationInterface},
-facing the cores, and an \emph{upper} one, facing the interconnect towards memory. Demand
-requests arrive from below; coherence requests, snooped transactions and data arrive from
-above; the controller's own requests leave through the upper interface. Interfaces are the
-only way in or out (\cref{ch:system-organization}): they are bounded queues, so a full
+facing the level below it, and an \emph{upper} one, facing the level above it towards memory.
+What arrives on each depends on where the controller sits. At an L1 the lower interface is its
+core: loads and stores arrive there; the upper interface is \code{bus[0]}: the transactions it
+snoops, the LLC's back-invalidations and the data responses arrive there. At the LLC the lower
+interface is \code{bus[0]}: the L1s' \code{GetS}/\code{GetM}/\code{PutM} requests \emph{and}
+the data the L1s return (write-backs, cache-to-cache supplies) arrive there; the upper interface
+is \code{bus[1]}: only fills from memory arrive there. In both cases the controller's own
+requests leave through the upper interface and its responses through the lower one. Interfaces
+are the only way in or out (\cref{ch:system-organization}): they are bounded queues, so a full
 interface pushes back on whoever is trying to fill it.
 
 \paragraph{The processing queue.} Messages from both interfaces are serialised into one
@@ -88,8 +93,9 @@ auditable: an incomplete table fails loudly, on the first trace that exercises t
   coherence bits and data together. Reading a line's \emph{bits} (the tag compare, the state
   the FSM needs) is untimed and claims nothing. Reading or writing its \emph{data} goes through a
   single port that is busy for \key{m\_data\_handler.m\_data\_access\_latency} cycles per access; demand
-  reads, eviction reads and fill or write-back writes contend for it through a round-robin
-  arbiter (\code{m\_data\_access\_arbiter}).
+  reads, eviction reads and fill or write-back writes contend for it through the port arbiter
+  (\code{m\_data\_access\_arbiter}), which is the controller's \key{arbiter\_type}: the same
+  arbiter classes as the buses, FCFS as shipped or round-robin (\cref{sec:arbiters}).
 \item \textbf{The MSHRs.} A miss allocates one entry and waits there, not in the array, until
   its data returns. \key{num\_mshr} bounds the number of outstanding misses; \code{-1} removes
   the bound.
@@ -109,29 +115,42 @@ response is emitted from the fill message itself and the array write runs afterw
 
 \subsection{Two array models, and the line interlock}
 
-The data port can be timed in two ways, chosen per controller
-(\cref{tab:array-models}). In the \emph{occupancy} model, the default, a row runs when its
-message is popped --- the line's state changes at once --- and only the access to the line's
-bytes waits for the port, which then stays busy for the latency; the requester is not charged
-the latency and one access is served per latency window. It is the model every standalone
-preset uses, and it is correct for them because a trace carries no data and the LLC tables never
-invalidate what an older parked read still needs. In the \emph{pipelined} model
-(\key{m\_data\_handler.m\_data\_array\_pipelined}\code{=1}) every access pays the latency and one
-is admitted per port per cycle (\key{m\_data\_handler.m\_data\_array\_ports}); a message whose
-row touches the array is deferred \emph{whole}, so that its state change and its data access
-happen together when the access runs. Lines that sit in the MSHR or the write-back buffer are
-not in the array and bypass the pipeline in either model.
+A message that needs the line's data has two parts: the FSM transition, which changes the
+line's \emph{state}, and the array access, which reads or writes its \emph{bytes} and occupies the
+port. The two array models (\cref{tab:array-models}) differ in whether those two parts happen
+together or apart.
 
-Deferring a message whole takes it out of the queue, so a younger message to the same line could
-otherwise act on a state the older one was about to change. The \emph{line interlock}
-(\key{line\_interlock}\code{=1}) prevents that: while a line has an array access pending, every
-queued message to it is held in place, not ready, until the access has completed, so each message
-sees the line in bus order. The pipelined model turns the interlock on; with real data flowing
-through the hierarchy (the gem5 integration, \cref{ch:integration-modes}) or an L1 with an array
-latency, it must be on. In the same spirit a message from the bus enters a controller's queue
-ahead of the core's own requests but behind older bus messages, so bus order is kept even when a
-bus message has to wait. \file{docs/StateAndData.md} walks through the situations in which line
-state and line data can come apart and which setting handles each.
+\begin{description}
+\item[The occupancy model (default).] The transition runs the moment the message is popped from
+  the queue: the state changes at once. Only the access to the bytes waits for the port, and the
+  port then stays busy for \key{m\_data\_handler.m\_data\_access\_latency} cycles. Nobody is
+  charged that latency up front: the request that claimed the port is served at the grant, and
+  the \emph{next} claimant pays the wait (\cref{ch:llc-datapath}). One access is served per
+  latency window. Every standalone preset uses this model, and it is sound for them because a
+  trace carries no data values and the LLC tables never invalidate a line that an older, still
+  parked read needs.
+\item[The pipelined model] (\key{m\_data\_handler.m\_data\_array\_pipelined}\code{=1}). Every
+  access pays the latency, and up to \key{m\_data\_handler.m\_data\_array\_ports} accesses are
+  admitted per cycle. A message whose transition touches the array is deferred \emph{whole}: it
+  leaves the queue, and its state change and its data access happen together when the access
+  completes. This is the model for runs where the data matters, such as the gem5 integration.
+\end{description}
+
+In either model a line that sits in the MSHR or the write-back buffer is not in the array and is
+read without the port.
+
+\paragraph{Why the interlock exists.} Deferring a message whole takes it out of the queue for the
+duration of its access. A younger message to the \emph{same} line could then be processed first
+and act on a state the deferred message is about to change. The \emph{line interlock}
+(\key{line\_interlock}\code{=1}) closes that window: while a line has an array access pending,
+every queued message to that line is held as not ready until the access completes, so messages to
+a line are processed in the order they arrived. The pipelined model turns the interlock on by
+itself; it must also be on whenever real data flows through the hierarchy
+(\cref{ch:integration-modes}) or an L1 is given an array latency. Related and independent of the
+model: a message from the bus enters a controller's queue ahead of the core's own requests but
+behind older bus messages, so bus order is kept even when a bus message has to wait.
+\file{docs/StateAndData.md} walks through the situations in which line state and line data can
+come apart and which setting handles each.
 
 \begin{table}[htbp]\centering\small
 \caption{The data-array settings.}\label{tab:array-models}

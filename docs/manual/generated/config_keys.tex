@@ -9,8 +9,10 @@ workload\_\allowbreak{}path\index[cfg]{workload\_path@\code{workload\_path}} & s
 num\_\allowbreak{}cores\index[cfg]{num\_cores@\code{num\_cores}} & int & \texttt{4} &  \\
 bus\_\allowbreak{}type\index[cfg]{bus\_type@\code{bus\_type}} & string list & \texttt{Triple\allowbreak{}Bus,\allowbreak{} Bus} & Bus[0] (L1\textless{}-\textgreater{}LLC) is TripleBus: carries the LLC back-invalidation on its service channel. Bus[1] is LLC\textless{}-\textgreater{}memory \\
 bus\allowbreak{}[0].\allowbreak{}controller\_\allowbreak{}type\index[cfg]{bus[0].controller\_type@\code{bus[0].controller\_type}} & string & \texttt{Split} & snoop broadcast bus \\
+bus\allowbreak{}[0].\allowbreak{}interconnect\_\allowbreak{}controller.\allowbreak{}arbiter\_\allowbreak{}type\index[cfg]{bus[0].interconnect\_controller.arbiter\_type@\code{bus[0].interconnect\_controller.arbiter\_type}} & string & \texttt{FCFSArbiter} & Shared L1-LLC bus arbitration \\
 bus\allowbreak{}[0].\allowbreak{}m\_\allowbreak{}lower\_\allowbreak{}level\_\allowbreak{}ids\index[cfg]{bus[0].m\_lower\_level\_ids@\code{bus[0].m\_lower\_level\_ids}} & int list & \texttt{0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3} &  \\
 bus\allowbreak{}[0].\allowbreak{}upper\_\allowbreak{}level\_\allowbreak{}cache\_\allowbreak{}ids\index[cfg]{bus[0].upper\_level\_cache\_ids@\code{bus[0].upper\_level\_cache\_ids}} & int list & \texttt{10} & LLC ID \\
+bus\allowbreak{}[0].\allowbreak{}interconnect\_\allowbreak{}controller.\allowbreak{}wrr\_\allowbreak{}weight\index[cfg]{bus[0].interconnect\_controller.wrr\_weight@\code{bus[0].interconnect\_controller.wrr\_weight}} & int & \texttt{4} &  \\
 cache\_\allowbreak{}controller\_\allowbreak{}type\index[cfg]{cache\_controller\_type@\code{cache\_controller\_type}} & string & \texttt{Cache\allowbreak{}Controller\allowbreak{}Exclusive} & L1 private caches: basic snoop controller \\
 llc\_\allowbreak{}controller\_\allowbreak{}type\index[cfg]{llc\_controller\_type@\code{llc\_controller\_type}} & string & \texttt{Cache\allowbreak{}Controller\_\allowbreak{}End2End} & LLC: End2End controller drives TripleBus service channel for back-invalidation on eviction \\
 bus\allowbreak{}[*].\allowbreak{}buffers\_\allowbreak{}max\_\allowbreak{}size\index[cfg]{bus[*].buffers\_max\_size@\code{bus[*].buffers\_max\_size}} & int & \texttt{256} & Response/request buffer depth: usable + in-flight reserve (sized to MSHR bound) \\
@@ -39,7 +41,7 @@ llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}han
 llc\_\allowbreak{}controller.\allowbreak{}num\_\allowbreak{}mshr\index[cfg]{llc\_controller.num\_mshr@\code{llc\_controller.num\_mshr}} & int & \texttt{64} & LLC MSHR depth: larger than L1 (fans in all cores). -1 = unbounded \\
 llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}pwb\_\allowbreak{}size\index[cfg]{llc\_controller.m\_data\_handler.pwb\_size@\code{llc\_controller.m\_data\_handler.pwb\_size}} & int & \texttt{32} & LLC write-back buffer depth: larger than L1. -1 = unbounded \\
 llc\_\allowbreak{}controller.\allowbreak{}processing\_\allowbreak{}queue\_\allowbreak{}size\index[cfg]{llc\_controller.processing\_queue\_size@\code{llc\_controller.processing\_queue\_size}} & int & \texttt{64} & LLC processing-queue depth: larger than L1 (holds cache-to-cache forwarding concurrency). -1 = unbounded \\
-llc\_\allowbreak{}controller.\allowbreak{}arbiter\_\allowbreak{}type\index[cfg]{llc\_controller.arbiter\_type@\code{llc\_controller.arbiter\_type}} & string & \texttt{RRArbiter} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}arbiter\_\allowbreak{}type\index[cfg]{llc\_controller.arbiter\_type@\code{llc\_controller.arbiter\_type}} & string & \texttt{FCFSArbiter} &  \\
 llc\_\allowbreak{}controller.\allowbreak{}arbiter\_\allowbreak{}candidates\_\allowbreak{}ids\index[cfg]{llc\_controller.arbiter\_candidates\_ids@\code{llc\_controller.arbiter\_candidates\_ids}} & int list & \texttt{0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3} & Candidates are the l1 ids \\
 m\_\allowbreak{}main\_\allowbreak{}memory.\allowbreak{}m\_\allowbreak{}llc\_\allowbreak{}id\index[cfg]{m\_main\_memory.m\_llc\_id@\code{m\_main\_memory.m\_llc\_id}} & int & \texttt{10} &  \\
 m\_\allowbreak{}main\_\allowbreak{}memory.\allowbreak{}m\_\allowbreak{}id\index[cfg]{m\_main\_memory.m\_id@\code{m\_main\_memory.m\_id}} & int & \texttt{100} &  \\
@@ -51,8 +53,6 @@ cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}
 llc\_\allowbreak{}controller.\allowbreak{}dprint.\allowbreak{}addr\_\allowbreak{}filter\index[cfg]{llc\_controller.dprint.addr\_filter@\code{llc\_controller.dprint.addr\_filter}} & string & \texttt{} & filter in hexdecimal \\
 cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}cond\_\allowbreak{}addr\index[cfg]{cache\_controller[*].dprint.cond\_addr@\code{cache\_controller[*].dprint.cond\_addr}} & string list & \texttt{} & Acceptable Addresses \\
 llc\_\allowbreak{}controller.\allowbreak{}dprint.\allowbreak{}cond\_\allowbreak{}addr\index[cfg]{llc\_controller.dprint.cond\_addr@\code{llc\_controller.dprint.cond\_addr}} & string list & \texttt{} & Acceptable Addresses \\
-main\_\allowbreak{}memory\_\allowbreak{}type\index[cfg]{main\_memory\_type@\code{main\_memory\_type}} & string & \texttt{MCsim} &  \\
-mcsim\_\allowbreak{}scheduler\index[cfg]{mcsim\_scheduler@\code{mcsim\_scheduler}} & string & \texttt{FRFCFS} &  \\
 \end{longtable}
 
 \subsection*{\texttt{configuration/SystemConfigurations/MultiCoreSystem\_Directory.csv}}\label{cfg:configuration-systemconfigurations-multicoresystem-directory-csv}
@@ -122,6 +122,7 @@ bus.\allowbreak{}interconnect\_\allowbreak{}controller.\allowbreak{}candidates\_
 cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}shared\_\allowbreak{}memory\_\allowbreak{}id\index[cfg]{cache\_controller[*].m\_shared\_memory\_id@\code{cache\_controller[*].m\_shared\_memory\_id}} & int & \texttt{10} &  \\
 cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}protocol\_\allowbreak{}type\index[cfg]{cache\_controller[*].protocol\_type@\code{cache\_controller[*].protocol\_type}} & string & \texttt{DIRECTORY\_\allowbreak{}MSI} &  \\
 cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}fsm\_\allowbreak{}filename\index[cfg]{cache\_controller[*].fsm\_filename@\code{cache\_controller[*].fsm\_filename}} & string & \texttt{MSI\_\allowbreak{}directory} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}processing\_\allowbreak{}queue\_\allowbreak{}size\index[cfg]{cache\_controller[*].processing\_queue\_size@\code{cache\_controller[*].processing\_queue\_size}} & int & \texttt{16} & L1 processing-queue depth (bounds demand admission). -1 = unbounded \\
 cache\_\allowbreak{}controller\allowbreak{}[0].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[0].m\_id@\code{cache\_controller[0].m\_id}} & int & \texttt{0} &  \\
 cache\_\allowbreak{}controller\allowbreak{}[1].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[1].m\_id@\code{cache\_controller[1].m\_id}} & int & \texttt{1} &  \\
 cache\_\allowbreak{}controller\allowbreak{}[2].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[2].m\_id@\code{cache\_controller[2].m\_id}} & int & \texttt{2} &  \\
@@ -130,10 +131,13 @@ llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}id\index[cfg]{llc\_con
 llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}shared\_\allowbreak{}memory\_\allowbreak{}id\index[cfg]{llc\_controller.m\_shared\_memory\_id@\code{llc\_controller.m\_shared\_memory\_id}} & int & \texttt{100} & Id of the main memory \\
 llc\_\allowbreak{}controller.\allowbreak{}protocol\_\allowbreak{}type\index[cfg]{llc\_controller.protocol\_type@\code{llc\_controller.protocol\_type}} & string & \texttt{DIRECTORY\_\allowbreak{}LLC\_\allowbreak{}MSI} &  \\
 llc\_\allowbreak{}controller.\allowbreak{}fsm\_\allowbreak{}filename\index[cfg]{llc\_controller.fsm\_filename@\code{llc\_controller.fsm\_filename}} & string & \texttt{MSI\_\allowbreak{}LLC\_\allowbreak{}directory} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}num\_\allowbreak{}mshr\index[cfg]{llc\_controller.num\_mshr@\code{llc\_controller.num\_mshr}} & int & \texttt{64} & LLC MSHR depth: larger than L1 (fans in all cores). -1 = unbounded \\
+llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}pwb\_\allowbreak{}size\index[cfg]{llc\_controller.m\_data\_handler.pwb\_size@\code{llc\_controller.m\_data\_handler.pwb\_size}} & int & \texttt{32} & LLC write-back buffer depth: larger than L1. -1 = unbounded \\
+llc\_\allowbreak{}controller.\allowbreak{}processing\_\allowbreak{}queue\_\allowbreak{}size\index[cfg]{llc\_controller.processing\_queue\_size@\code{llc\_controller.processing\_queue\_size}} & int & \texttt{32} & LLC processing-queue depth: larger than L1. -1 = unbounded \\
 llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}cache\_\allowbreak{}size\index[cfg]{llc\_controller.m\_data\_handler.cache\_size@\code{llc\_controller.m\_data\_handler.cache\_size}} & int & \texttt{32768} &  \\
 llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}m\_\allowbreak{}ways\_\allowbreak{}count\index[cfg]{llc\_controller.m\_data\_handler.m\_ways\_count@\code{llc\_controller.m\_data\_handler.m\_ways\_count}} & int & \texttt{2} &  \\
 llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}access\_\allowbreak{}latency\index[cfg]{llc\_controller.m\_data\_handler.m\_data\_access\_latency@\code{llc\_controller.m\_data\_handler.m\_data\_access\_latency}} & int & \texttt{10} &  \\
-llc\_\allowbreak{}controller.\allowbreak{}arbiter\_\allowbreak{}type\index[cfg]{llc\_controller.arbiter\_type@\code{llc\_controller.arbiter\_type}} & string & \texttt{RRArbiter} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}arbiter\_\allowbreak{}type\index[cfg]{llc\_controller.arbiter\_type@\code{llc\_controller.arbiter\_type}} & string & \texttt{FCFSArbiter} &  \\
 llc\_\allowbreak{}controller.\allowbreak{}arbiter\_\allowbreak{}candidates\_\allowbreak{}ids\index[cfg]{llc\_controller.arbiter\_candidates\_ids@\code{llc\_controller.arbiter\_candidates\_ids}} & int list & \texttt{0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3} & Candidates are the l1 ids \\
 m\_\allowbreak{}main\_\allowbreak{}memory.\allowbreak{}m\_\allowbreak{}llc\_\allowbreak{}id\index[cfg]{m\_main\_memory.m\_llc\_id@\code{m\_main\_memory.m\_llc\_id}} & int & \texttt{10} &  \\
 m\_\allowbreak{}main\_\allowbreak{}memory.\allowbreak{}m\_\allowbreak{}id\index[cfg]{m\_main\_memory.m\_id@\code{m\_main\_memory.m\_id}} & int & \texttt{100} &  \\
@@ -157,6 +161,7 @@ workload\_\allowbreak{}path\index[cfg]{workload\_path@\code{workload\_path}} & s
 num\_\allowbreak{}cores\index[cfg]{num\_cores@\code{num\_cores}} & int & \texttt{4} &  \\
 bus\_\allowbreak{}type\index[cfg]{bus\_type@\code{bus\_type}} & string list & \texttt{Triple\allowbreak{}Bus,\allowbreak{} Bus} & Bus[0] (L1\textless{}-\textgreater{}LLC) is TripleBus: carries the LLC back-invalidation on its service channel. Bus[1] is LLC\textless{}-\textgreater{}memory \\
 bus\allowbreak{}[0].\allowbreak{}controller\_\allowbreak{}type\index[cfg]{bus[0].controller\_type@\code{bus[0].controller\_type}} & string & \texttt{Split} & snoop broadcast bus \\
+bus\allowbreak{}[0].\allowbreak{}interconnect\_\allowbreak{}controller.\allowbreak{}arbiter\_\allowbreak{}type\index[cfg]{bus[0].interconnect\_controller.arbiter\_type@\code{bus[0].interconnect\_controller.arbiter\_type}} & string & \texttt{FCFSArbiter} & Shared L1-LLC bus arbitration \\
 bus\allowbreak{}[0].\allowbreak{}m\_\allowbreak{}lower\_\allowbreak{}level\_\allowbreak{}ids\index[cfg]{bus[0].m\_lower\_level\_ids@\code{bus[0].m\_lower\_level\_ids}} & int list & \texttt{0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3} &  \\
 bus\allowbreak{}[0].\allowbreak{}upper\_\allowbreak{}level\_\allowbreak{}cache\_\allowbreak{}ids\index[cfg]{bus[0].upper\_level\_cache\_ids@\code{bus[0].upper\_level\_cache\_ids}} & int list & \texttt{10} & LLC ID \\
 cache\_\allowbreak{}controller\_\allowbreak{}type\index[cfg]{cache\_controller\_type@\code{cache\_controller\_type}} & string & \texttt{Cache\allowbreak{}Controller} & L1 private caches: basic snoop controller \\
@@ -422,7 +427,7 @@ candidates\_\allowbreak{}id\index[cfg]{candidates\_id@\code{candidates\_id}} & i
 \toprule \normalfont key & type & value & meaning \\ \midrule \endfirsthead
 \toprule \normalfont key & type & value & meaning \\ \midrule \endhead
 \bottomrule \endfoot
-arbiter\_\allowbreak{}type\index[cfg]{arbiter\_type@\code{arbiter\_type}} & string & \texttt{FCFSArbiter} & Type should match the name of the arbiter class \\
+arbiter\_\allowbreak{}type\index[cfg]{arbiter\_type@\code{arbiter\_type}} & string & \texttt{TDMArbiter} & Type should match the name of the arbiter class \\
 response\_\allowbreak{}reserve\index[cfg]{response\_reserve@\code{response\_reserve}} & int & \texttt{0} & Response-buffer slots reserved for in-flight responses; request bus stalls when free space falls to this. 0 = stall at full. \\
 \end{longtable}
 

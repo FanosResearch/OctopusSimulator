@@ -43,8 +43,8 @@ substrate is concrete (\cref{fig:cards}): no fair comparison, no composability o
 no reproducibility, a high barrier to entry, and slow exploration.
 
 \begin{figure}[htbp]\centering
-\begin{subfigure}[t]{0.49\textwidth}\centering\includegraphics[width=\textwidth]{problems_we_address.png}\caption{What is lost without one.}\end{subfigure}\hfill
-\begin{subfigure}[t]{0.49\textwidth}\centering\includegraphics[width=\textwidth]{solution.png}\caption{What a common framework gives.}\end{subfigure}
+\begin{subfigure}{\textwidth}\centering\includegraphics[width=\textwidth]{problems_we_address.png}\caption{What is lost without one.}\end{subfigure}\\[8pt]
+\begin{subfigure}{\textwidth}\centering\includegraphics[width=\textwidth]{solution.png}\caption{What a common framework gives.}\end{subfigure}
 \caption{The case for a common, cycle-accurate simulation framework.}
 \label{fig:cards}
 \end{figure}
@@ -55,13 +55,14 @@ Octopus is a reusable, whole-hierarchy, cycle-accurate substrate in which memory
 can be built, observed, validated and verified under one roof. Unlike simulators that fix an
 architecture, it treats every layer as a configurable, swappable component and makes the hardest
 component to change --- the coherence protocol --- an editable spreadsheet rather than C++
-(\cref{ch:coherence-engine}). Four capabilities follow, each tied to a mechanism in this manual:
+(\cref{ch:coherence-engine}). Five capabilities follow, each tied to a mechanism in this manual:
 
 \begin{table}[htbp]\centering\small
-\caption{Four pillars, and where each is realised.}\label{tab:pillars}
+\caption{Five pillars, and where each is realised.}\label{tab:pillars}
 \begin{tabularx}{\textwidth}{@{}lYl@{}}
 \toprule pillar & capability & chapter \\ \midrule
-Controllability & sweep any layer --- coherence, arbiter, replacement, cache geometry, memory --- with no recompile & \ref{ch:configuration} \\
+Configurability & every component reads its parameters from its own CSV, inherits and overrides along the hierarchy, and any key is reachable from the command line; the whole design space without recompiling & \ref{ch:configuration} \\
+Controllability & swap the mechanism at any layer --- coherence protocol, arbiter, replacement policy, interconnect, memory model --- as a component behind the same interface, and sweep it & \ref{ch:configuration}, \ref{ch:extending} \\
 Observability & per-request latency in nine stages with per-core worst cases; an address-filtered coherence trace; a raw trace of every message & \ref{ch:request-end-to-end}, \ref{ch:monitoring} \\
 Timing validation & cycle-accurate worst-case latency, deterministic and platform-independent; analytical against measured & \ref{ch:evaluation} \\
 Verification & auditable CSV FSMs; undefined transitions halt the run; deterministic replay & \ref{ch:coherence-engine} \\

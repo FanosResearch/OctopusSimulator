@@ -133,7 +133,7 @@
   <!-- ═══ right: the timed data port ═══ -->
   <path d="M946 346 L1246 346 L1222 386 L970 386 Z" class="ctl"/>
   <text x="1010" y="364" class="lbl" fill="#9A6B12">array-port arbiter</text>
-  <text x="1000" y="378" class="sub" fill="#9A6B12">round-robin over the four L1 slots</text>
+  <text x="1000" y="378" class="sub" fill="#9A6B12">arbiter_type: FCFS as shipped, or RR</text>
   <g class="wl">
     <path d="M990 320 L1000 344" class="wire" marker-end="url(#d)"/><text x="946" y="314">demand read</text>
     <path d="M1090 320 L1090 344" class="wire" marker-end="url(#d)"/><text x="1046" y="314">evict read</text>

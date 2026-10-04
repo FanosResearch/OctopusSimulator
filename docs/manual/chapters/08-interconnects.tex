@@ -21,9 +21,15 @@ round-robin or TDM. The controllers on either side see only interfaces, so nothi
 system changes.
 
 Interconnects have their own clock: \key{m\_clk\_period} is 50 for every bus and mesh against
-100 for the cores, so an interconnect steps twice per core cycle. A transfer occupies a link for
-\key{m\_request\_latency} (2) interconnect ticks for a request and \key{m\_response\_latency}
-(5) for data --- the 2- and 5-cycle slots the visualizer draws.
+100 for the cores, so an interconnect steps twice per core cycle. The reason is resolution, not
+speed: the periods are the units the \code{ClockManager} schedules in (\cref{ch:system-organization}),
+and an interconnect that ticks between two core ticks can arbitrate a lane and deliver what it
+carries within the same core cycle, so a request that wins the lane is at the LLC's queue one
+core cycle after it was issued, and transfer times can be set in half core cycles. A transfer
+occupies a link for \key{m\_request\_latency} (2) interconnect ticks for a request and
+\key{m\_response\_latency} (5) for data: one core cycle and two and a half, the 2- and 5-tick
+slots the visualizer draws. Both are configuration keys, so a slower link is a number, not a
+clock change.
 
 \section{The bus family}
 
@@ -100,9 +106,22 @@ controller's factory (\cref{ch:extending}).
 \section{Mesh and NoC}
 
 \code{MultiCoreSystem\_Mesh.csv} replaces the bus with a \code{Mesh}: one node per entry of
-\key{component\_ids}, and \key{connection\_matrix[i]} listing node $i$'s neighbours. As shipped
-the matrix is the complete graph on the four L1s and the LLC (\cref{fig:topologies} middle), so
-every pair has a direct link; each link carries requests and data on separate channels with
+\key{component\_ids}, and \key{connection\_matrix[i]} listing node $i$'s neighbours, the first
+entry being the node itself. As shipped (\file{configuration/Interconnect/Mesh.csv}) the matrix
+is the complete graph on the four L1s and the LLC (\cref{fig:topologies} middle), so every pair
+has a direct link:
+
+\begin{lstlisting}[style=csv]
+component_ids(vi),0,1,2,3,10
+connection_matrix[0](vi),0,1,2,3,10    # node 0 (L1 0) links to L1 1, L1 2, L1 3 and the LLC
+connection_matrix[1](vi),1,0,2,3,10
+connection_matrix[2](vi),2,0,1,3,10
+connection_matrix[3](vi),3,0,1,2,10
+connection_matrix[4](vi),10,0,1,2,3    # the LLC links to every L1
+\end{lstlisting}
+
+A different shape is a different matrix, no code: a ring is each node listing its two
+neighbours. Each link each link carries requests and data on separate channels with
 their own latencies (2 and 5 ticks) and its own arbiter (FCFS by default), half-duplex, one
 message in flight per latency window. It is the natural home of the directory protocol, which
 sends point-to-point and never broadcasts; directory MSI runs the whole EEMBC suite on it.
