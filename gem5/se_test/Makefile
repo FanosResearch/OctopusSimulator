@@ -37,7 +37,7 @@ QEMU      = qemu-aarch64-static
 .PHONY: all run-qemu clean
 
 all: $(TARGETS)
-	@file $(TARGETS)
+	@file $(TARGETS) 2>/dev/null || true   # informational; `file` may be absent
 
 m5op.o: $(M5OP_S)
 	$(CXX) $(CPPFLAGS) -c -o $@ $<
