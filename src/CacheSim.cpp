@@ -13,6 +13,7 @@
 #include "../header/Configurable.h"
 #include "../header/SystemConfigurations/MultiCoreSystem.h"
 #include "../header/SystemConfigurations/MultiCoreSystem_Mesh.h"
+#include "../header/SystemConfigurations/NetworkOnly.h"
 #include "../header/ClockManager.h"
 #include "../header/CacheControllers/BaseController.h"
 
@@ -80,6 +81,8 @@ namespace octopus
             system_config = new MultiCoreSystem(cl_params, config_name, config_dir);
         else if(system_name == STRINGIFY(MultiCoreSystem_Mesh))
             system_config = new MultiCoreSystem_Mesh(cl_params, config_dir, config_name);
+        else if(system_name == STRINGIFY(NetworkOnly))
+            system_config = new NetworkOnly(cl_params, config_dir, config_name);
         else
         {
             cout << "Error wrong system configuration." << endl;

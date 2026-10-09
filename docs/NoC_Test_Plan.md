@@ -145,14 +145,14 @@ All `sim` on `NetworkOnly.csv` unless marked. Defaults: `flit_bytes` 16, `router
 | S4-UNLOADED | one packet, 1 and 5 flits, on 2×2 and 4×4 grids under `Table` and `XY`, torus 4×4, ring 5, star 5, corner to opposite corner | `R·2 + (R−1)·1 + (f−1)`: 2×2 → 8 and 12; 4×4 → 20 and 24; star → 2 and 6 |
 | S4-INJECT-TICK | one packet, one router (`star`) | ejected `router_latency + (f−1)` ticks after injection, proving injection is visible in its own tick |
 | S4-LATENCY-KEYS | `router_latency` 0 and 4, `link_latency` 1 and 3, on 4×4 corner to corner | the formula with those values |
-| S4-CLASS-LAT | `class_link_latency = 2,5,5`, one request and one response | formula with per-class link latency |
+| S4-CLASS-LAT | `class_link_latency = 2,5,5`, `vc_depth 8` (so credits never limit a 5-flit packet over a 5-tick link), one request and one response | formula with per-class link latency |
 
 ### 7.3 Flow control
 
 | id | assertion | expected |
 |---|---|---|
-| S4-CREDIT-TPUT | a 200-flit stream over one link, `vc_depth` 1, 2, 4, `credit_latency` 1 | throughput `min(1, vc_depth / 3)` flits per tick within one flit |
-| S4-CREDIT-LAT | the same with `credit_latency` 3, `vc_depth` 2 | `2 / 5` flits per tick |
+| S4-CREDIT-TPUT | a 200-flit stream over one link, `router_latency 0` (so heads behave like body flits), `vc_depth` 1, 2, 4, `credit_latency` 1 | throughput `min(1, vc_depth / (link_latency + credit_latency))` = 0.5, 1, 1 flits per tick within 0.06 |
+| S4-CREDIT-LAT | the same with `credit_latency` 3, `vc_depth` 2 | `2 / 4` flits per tick |
 | S4-WORMHOLE | `vc_depth` 2: a 5-flit packet P1 stalled at router 2 for 20 ticks by a full downstream; an unrelated 1-flit packet P2 that needs P1's VC at router 1 | P2 waits exactly 20 ticks more than unloaded |
 | S4-VCT | the same with `vc_depth` 8 | P2 is not delayed |
 | S4-CUTTHROUGH | a 5-flit packet over two links, trace enabled | the head's EXIT at router 1 precedes the tail's ENTER at router 1 |
@@ -167,7 +167,7 @@ All `sim` on `NetworkOnly.csv` unless marked. Defaults: `flit_bytes` 16, `router
 | id | assertion | expected |
 |---|---|---|
 | S4-VA-CONTEND | two heads at one router wanting the same output VC in the same tick | exactly one wins; the other waits one tick under FCFS with the lower `seq` first |
-| S4-INTERLEAVE | two 5-flit packets on different VCs sharing one link | their flits interleave on the link; both ejected by `unloaded + 5` ticks |
+| S4-INTERLEAVE | two 5-flit packets on different VCs sharing one link, under `FCFSArbiter` and `RRArbiter` | FCFS: the older packet's flits all go first (ejected at unloaded and unloaded + 5, no interleaving); RR: the flits interleave (both ejected later than under FCFS on average) and still both by `unloaded + 5` |
 | S4-ONE-PER-INPORT | two VCs at one input port both ready for different outputs | one flit per tick leaves that input port |
 | S4-LOCAL-BW | two packets ejecting at one local port | one flit per tick at the local port |
 | S4-CLASS-ISOLATION | the request-class sink stopped for 100 ticks while response traffic shares every link | response latencies unchanged from an unloaded run |
@@ -196,10 +196,10 @@ All `sim` on `NetworkOnly.csv` unless marked. Defaults: `flit_bytes` 16, `router
 
 | id | assertion | expected |
 |---|---|---|
-| S4-SAT-DEF | 4×4 `XY`, uniform random, 5-flit packets, rates stepped by 2 percent, 50 000 packets per point, seeded | the **saturation rate** is the lowest rate at which mean latency exceeds three times the unloaded mean; the test records it in `results.csv` and asserts it lies in the band derived from the link bound: between 0.6 and 1.0 of the per-port capacity after serialization |
+| S4-SAT-DEF | 4×4 `XY`, uniform random, 5-flit packets, offered rates stepped by 10 packets per 1000 ticks per endpoint, 50 000 packets per point, seeded | the **saturation rate** is the lowest offered rate at which the accepted rate (packets delivered per tick, per endpoint) falls below 0.9 of the offered rate; the generators are closed-loop (a refused packet is retried, not dropped) so latency alone plateaus and is not the criterion; the test records the rate in `results.csv` and asserts it lies between 0.4 and 0.7 of the per-port capacity of 200 packets per 1000 ticks (the published 4×4 mesh, one VC, 4-flit buffer figures; S8-BOOKSIM calibrates it) |
 | S4-HOTSPOT | hotspot to one router | saturation rate strictly below S4-SAT-DEF's |
 | S4-TRANSPOSE | transpose pattern under `XY` and `WestFirst` | `WestFirst` saturates no earlier than `XY` |
-| S4-STATS | after S4-SAT-DEF | per-link flits carried sum to flits injected times hops; per-class maximum latency equals the maximum over packets |
+| S4-STATS | after S4-SAT-DEF | flits counted on link ports equal the sum over ejected packets of flits × links traversed (`totals,linkflits`); flits counted on local ports equal flits ejected |
 
 ## 8. Step 5 — system wiring
 

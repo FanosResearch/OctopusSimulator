@@ -220,9 +220,11 @@ namespace octopus { namespace net
         bool needsEscapeVC() const override { return true; }
         Route nextHop(const RouteContext &c) const override
         {
-            // on the escape VC, or when no adaptive VC has credits: XY on the escape VC
+            // on the escape VC (arrived over a link on it), or when no adaptive VC has credits: XY on
+            // the escape VC. The VC a packet was injected on at its local port carries no meaning:
+            // the NI uses the lowest free VC, which is usually the escape VC's index.
             Route esc = XYRouting::nextHop(c); esc.vc_mask = 1u << m_escape;
-            if (c.in_vc == m_escape) return esc;
+            if (c.in_vc == m_escape && !m_t.isLocalPort(c.router, c.in_port)) return esc;
             auto here = m_t.coord(c.router), dst = m_t.coord(c.dst_router);
             int dx = dst.first - here.first, dy = dst.second - here.second;
             bool wx, wy;

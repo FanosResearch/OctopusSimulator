@@ -56,6 +56,7 @@ namespace octopus
     public:
         typedef std::map<std::string, std::map<std::string, Parameter>> SubordinateMap; //key is the subordinate name and the value is a sub-map of parameters
         typedef std::map<std::string, Parameter> ParametersMap;                         //key is the parameter name and the value is the parameter itself
+        virtual ~Configurable() {}                                                       //systems are deleted through Configurable* (CacheSim)
 
     protected:
         std::string name;

@@ -151,6 +151,7 @@ namespace octopus
         // as a gem5 stats reset starts its statistics over (ExternalCPU).
         void resetReports();
         void registerReportPath(std::string file_path);
+        const std::string &reportPath() const { return report_file_path; }
         void enableTrace();
         void traceEnd(uint64_t core_id);
         void setClkCount(uint64_t core_id, uint64_t clk);

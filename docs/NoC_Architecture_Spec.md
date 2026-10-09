@@ -145,6 +145,7 @@ existing convention: `(i)` int, `(s)` string, `(vi)` int list, `(vs)` string lis
 | `class_link_latency` | vi | — | optional per-class link latency, index = class; overrides `link_latency`; used by the degenerate mapping (§17) and available generally | each ≥ 1 |
 | `credit_latency` | i | = `link_latency` | ticks for a credit to return | ≥ 0 |
 | `half_duplex` | i | 0 | `1`: the two links of a physical connection share one occupancy, so only one flit is in flight on the connection in either direction (legacy behaviour, §17) | 0 or 1 |
+| `link_model` | s | `pipelined` | `pipelined`: a link accepts one flit per tick and delivers it `link_latency` ticks later (a wire pipeline); `serial`: a flit holds the link for its whole latency, so a link carries one flit per `link_latency` ticks (the legacy transfer model, §17) | |
 | `inject_queue_depth` | i | 16 | per class, packets, at the NI | ≥ 1 |
 | `eject_queue_depth` | i | 16 | per class, messages, at the NI (the endpoint's RX) | ≥ 1 |
 | `rx_serving` | s | `priority` | `priority`: response, forward, request; `alternate`: the legacy round-robin between RX queues (§7.4) | |
@@ -345,8 +346,13 @@ classes because classes map to distinct RX queues.
 - `vc_depth` may be smaller than a packet's flit count; that is the wormhole case and is allowed.
   `vc_depth ≥ flits` for every class is virtual cut-through; `flit_bytes = 0` and `vc_depth ≥ 1`
   is the message-level model.
-- Per-VC throughput is bounded by `vc_depth / (link_latency + credit_latency + 1)` flits per tick;
-  the manual states this so users can size `vc_depth` deliberately.
+- Per-VC throughput is bounded by `vc_depth / (link_latency + credit_latency)` flits per tick: a
+  flit sent at tick `t` arrives at `t + link_latency`, is forwarded in that same tick when the
+  downstream VC already holds the packet's route, and its credit is back and usable at
+  `t + link_latency + credit_latency` (§13.2 applies arrivals before switch allocation). The head of
+  a packet additionally waits `router_latency` downstream, so the bound is reached by body flits
+  and, with `router_latency = 0`, by every flit; the manual states this so users can size `vc_depth`
+  deliberately (validated by S4-CREDIT-TPUT).
 - Conservation: at the end of a run, flits injected equal flits ejected plus flits in flight, and
   no credit counter ever exceeds its initial value. Both are asserted in debug builds and checked
   by the test suite (§20).
@@ -383,7 +389,7 @@ the VC (dateline rules, escape channels); `~0` means any VC of the class.
 | `Table` | any | static next hop per (router, dest); computed by BFS shortest path at init with ties broken by lowest port index, or loaded from `routing_table`; `vc_mask = ~0` | PAIR_PER_CLASS with `vcs_per_class = 1` |
 | `XY` | grid2d, torus2d | route along X to the destination column, then along Y; at the destination router, the local port. On `torus2d` the shorter direction around each ring is taken and the **dateline rule** applies: a packet that has crossed, or will cross, the wrap link of the current dimension gets `vc_mask = 0b10` (VC 1), others `0b01`; construction refuses `torus2d` + `XY` with one VC | PAIR_PER_CLASS with `vcs_per_class = 1` on grid2d; on torus2d the dateline keeps a pair's packets on one VC, so PAIR_PER_CLASS holds with 2 VCs |
 | `WestFirst` | grid2d | turn model: a packet with a westward component goes west first; otherwise, among the minimal outputs allowed by the turn rules, the one whose output VCs of the class hold the most credits, ties by lowest port index; adaptive | NONE |
-| `AdaptiveMinimal` | grid2d, torus2d | among minimal outputs, the one with the most credits, ties by lowest port index, `vc_mask` = all VCs except `escape_vc`; a packet that finds no credit on any adaptive VC is routed by `XY` with `vc_mask = 1 << escape_vc` | NONE |
+| `AdaptiveMinimal` | grid2d, torus2d | among minimal outputs, the one with the most credits, ties by lowest port index, `vc_mask` = all VCs except `escape_vc`; a packet that finds no credit on any adaptive VC is routed by `XY` with `vc_mask = 1 << escape_vc`, and a packet that arrives over a link on the escape VC stays on it (the VC a packet was injected on at its local port carries no meaning) | NONE |
 
 ### 10.3 Multicast
 
@@ -428,7 +434,8 @@ Per output port, per tick: candidates are the input VCs holding an output VC on 
 front flit is present and whose output VC has a credit (link ports) or whose reservation is held
 (local ports); the link must be free (`busy_until < tick`, and under `half_duplex` the opposite
 direction's link too). One winner per output port per tick; the winning flit is sent and the link
-is busy for its latency. Per input port, at most one flit leaves per tick (one crossbar input).
+is busy for one tick (`link_model = pipelined`) or for its latency (`serial`, §4.1). Per input port,
+at most one flit leaves per tick (one crossbar input).
 
 ## 12. Real-time arbitration (deferred)
 
@@ -454,9 +461,11 @@ reserved names and shall be refused at construction with "deferred" until implem
 ### 13.1 Clock
 
 `Network` is a `ClockedObj` with `m_clk_period` from its CSV, 50 as shipped, stepping its controller
-on falling edges exactly as `Mesh::cycleProcess` does: one network tick per two edges. All latency
-keys are in ticks. The manual states next to the keys that two ticks are one core cycle in the
-shipped configuration.
+on falling edges exactly as `Mesh::cycleProcess` does: one network tick per two edges, that is one
+tick per 100 time units, which is one core cycle in the shipped configuration (the cores run at
+period 100). All latency keys are in ticks. The manual states next to the keys that one tick is
+one core cycle as shipped, and that halving `m_clk_period` gives two ticks per core cycle
+(measured in step 4: a 4×4 run of 21 476 ticks ended at simulation time 2 147 600).
 
 ### 13.2 Per-tick algorithm
 
@@ -483,8 +492,9 @@ Unloaded latency of a packet of `f` flits traversing `R` routers (so `R − 1` l
 R · router_latency + (R − 1) · link_latency + (f − 1)   ticks
 ```
 
-from the head's injection to the tail's ejection, with local links costing nothing; §20 asserts
-exactly that. With `router_latency = 0`, `link_latency = 1` and one flit, a packet crosses one
+from the head's injection to the tail's ejection, with local links costing nothing and provided
+the credits never run out on the way, which for `link_latency > 1` needs
+`vc_depth ≥ min(f, link_latency + credit_latency)`; §20 asserts exactly that. With `router_latency = 0`, `link_latency = 1` and one flit, a packet crosses one
 router per tick.
 
 ## 14. Ordering and deadlock freedom
@@ -595,7 +605,8 @@ class, owner, flits present, output port and VC, and credits available on its ou
 
 `topology(s),star`, one router, `routing(s),Table`, `flit_bytes(i),0`, `router_latency(i),0`,
 `vcs_per_class(i),1`, `vc_depth(i),1`, `num_classes(i),2`, `half_duplex(i),1`,
-`rx_serving(s),alternate`, `local_ports(i),0`, and `class_link_latency(vi),<m_request_latency>,
+`rx_serving(s),alternate`, `local_ports(i),0`, `link_model(s),serial` (the legacy link holds a
+message for its whole latency), and `class_link_latency(vi),<m_request_latency>,
 <m_data_latency>`. Acceptance: `MultiCoreSystem_Mesh` on directory MSI over EEMBC produces
 byte-identical `LatencyReport` and `Summary` files to the legacy `NoC`. Known residual differences
 to watch: the legacy model arbitrates per link between the two endpoints of that link, while the
