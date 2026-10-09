@@ -18,6 +18,8 @@
 #include "DirectInterconnect.h"
 #include "Mesh.h"
 #include "NoC.h"
+#include "Network.h"
+#include <functional>
 
 #include "BaseController.h"
 #include "CacheController.h"

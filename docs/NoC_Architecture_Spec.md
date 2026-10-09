@@ -80,7 +80,7 @@ The NI implements the existing interface and nothing else; its visible behaviour
 
 | call | NI behaviour |
 |---|---|
-| `pushMessage(msg, cycle, type)` | accepts the message if the per-class injection queue has at least `msg.to.size()` free slots; returns `false` otherwise, and the sender retries on its next tick. Shall never drop a message. The `type` argument is ignored, as the mesh does today; class comes from the message (§6.3). |
+| `pushMessage(msg, cycle, type)` | stamps `msg.from` with the endpoint id, as every Octopus interface does (the directory L1 distinguishes the home's data from an owner's by it); accepts the message if the per-class injection queue has at least `msg.to.size()` free slots; returns `false` otherwise, and the sender retries on its next tick. Shall never drop a message. The `type` argument is ignored, as the mesh does today; class comes from the message (§6.3). |
 | `peekMessage(out)` / `popFrontMessage()` | serve the endpoint's per-class RX queues in the order selected by `rx_serving` (§7.4). Within a class, FIFO. |
 | `pushMessage2RX(msg, type)` | used only by the network itself on ejection. Because an RX slot is reserved for a packet when its head is admitted to the last router (§8.4), the call shall always succeed; a `false` is an internal error and fatal (§16). |
 | `canAcceptRX(type)` | true when the RX queue for that type's class has an unreserved free slot. |
@@ -96,8 +96,10 @@ all destinations.
 `msg_id`, `addr`, `owner` (the endpoint the packet belongs to: the requesting core for requests,
 supplies and fills, the LLC for invalidations and forwards it originates; carried for the deferred
 ownership-based policies, §12), `from`, `to`, `data`/`data_size` (payload size), `kind`, `complementary_value` and
-`source` (fallback classifier, §6.3). The network shall not modify any field of a message in
-transit, and shall deliver the message object bit-identical to the one injected.
+`source` (fallback classifier, §6.3). Apart from the `from` stamp at `pushMessage`, the network
+shall not modify any field of a message in transit, and shall deliver the message object
+bit-identical to the one injected (`to` included: the legacy interfaces narrowed it to the one
+destination, the controllers only test membership).
 
 ### 3.3 System wiring
 
@@ -236,8 +238,28 @@ is both head and tail.
 | class | index | members | classifier |
 |---|---|---|---|
 | REQUEST | 0 | GetS, GetM, PutS, PutM | `kind` ∈ {K_GETS, K_GETM, K_PUTS, K_PUTM, K_DEMAND}; fallback: `data == NULL` and the destination is in `home_ids` |
-| FORWARD | 1 | FwdGetS, FwdGetM, Inv | `kind` ∈ {K_FWD, K_INV}; fallback: `data == NULL` and the source is in `home_ids` |
-| RESPONSE | 2 | data, InvAck, PutAck, fills, supplies | `kind` ∈ {K_RESP, K_SUPPLY, K_SUPPLY_DEFERRED, K_FILL, K_FILL_ROLLBACK, K_ACK, K_WB_DATA, K_MEM_READ, K_MEM_WRITE, K_EVICT}; fallback: `data != NULL` |
+| FORWARD | 1 | FwdGetS, FwdGetM, Inv, and a home's PutAck | `kind` ∈ {K_FWD, K_INV}, or K_ACK without data from a home; fallback: `data == NULL` and the source is in `home_ids` |
+| RESPONSE | 2 | data, InvAck, fills, supplies | `kind` ∈ {K_RESP, K_SUPPLY, K_SUPPLY_DEFERRED, K_FILL, K_FILL_ROLLBACK, K_WB_DATA, K_MEM_READ, K_MEM_WRITE, K_EVICT}, K_ACK otherwise; fallback: `data != NULL` |
+
+A home's PutAck rides the FORWARD class deliberately. The shipped directory L1 FSM handles a
+home's Inv or Fwd followed by its PutAck to the same cache (SI_a, MI_a, II_a) but not the
+reverse order: a PutAck overtaking an Inv leaves the cache in I when the Inv arrives, which the
+FSM marks as a fault, and a PutAck overtaking a FwdGetM would lose the forwarded request. The
+legacy mesh delivered both on its request link in FIFO order; keeping them in one class with
+`pair_per_class` ordering preserves that guarantee. It costs no deadlock freedom: an ack is
+consumed without injecting anything, so the forward class still drains independently of the
+request class (found by S5-EEMBC-2x2, see the implementation report).
+
+That is not the only order the shipped directory protocol assumes. The LLC FSM has no row for a
+PutS or PutM arriving after the line was evicted (state N): it relies on a cache's PutS reaching
+the home before the cache's InvAck to the home's eviction Inv, which holds only when the two
+travel in one FIFO class, and three classes put them in REQUEST and RESPONSE. The legacy mesh
+carried every non-data message of a pair on one request link in order, and the FSMs were written
+against that. Until the FSMs are made tolerant of an unordered network (the plan's
+P2-THREE-CLASS: `(I, Inv)` → InvAck, `(N, PutS/PutM)` → PutAck, and the symmetric races), the
+protocol presets (`MultiCoreSystem_Grid.csv`) set `num_classes = 2`, which is the legacy split
+and reproduces the legacy ordering under `pair_per_class` routing. `num_classes = 3` remains the
+default for the network itself and is what synthetic traffic and the NetworkOnly system use.
 
 `num_classes = 2` is the legacy split and uses exactly the legacy rule, `data == NULL ? 0 : 1`,
 ignoring `kind`, so that the degenerate configuration (§17) classifies as the old mesh did. The

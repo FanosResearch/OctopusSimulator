@@ -7,6 +7,7 @@
  */
 
 #include "../../header/CacheControllers/BaseController.h"
+#include "../../header/HangDump.h"
 #include <cstdio>
 #include <cstdlib>
 #include "../../header/ExternalCPU.h"
@@ -98,6 +99,7 @@ namespace octopus
                 {
                     m_hang_dumped = true;
                     dumpState();
+                    HangDump::run();            // the network router view, if a Network is present
                     // The run is wedged: finalize the raw trace now (records + chunk
                     // index) so the cycles leading into the stall survive the kill.
                     Logger::getLogger()->traceFinalize();

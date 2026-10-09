@@ -7,6 +7,8 @@
  */
 
 #include "../../header/SystemConfigurations/MultiCoreSystem_Mesh.h"
+#include <algorithm>
+#include <iostream>
 
 using namespace std;
 
@@ -23,11 +25,46 @@ namespace octopus
         string interconnect_type = std::get<string>(parameters.at(STRINGIFY(interconnect_type)).value);
 
         //Constructor
-        Mesh* interconnect;
+        std::function<CommunicationInterface *(int)> interfaceFor;
         if(interconnect_type == STRINGIFY(Mesh))
-            interconnect = new Mesh(getSubMap(STRINGIFY(interconnect)), name);
+        {
+            Mesh *mesh = new Mesh(getSubMap(STRINGIFY(interconnect)), name);
+            interfaceFor = [mesh](int id) { return mesh->getInterfaceFor(id); };
+        }
         else if(interconnect_type == STRINGIFY(NoC))
-            interconnect = new NoC(getSubMap(STRINGIFY(interconnect)), name);
+        {
+            NoC *noc = new NoC(getSubMap(STRINGIFY(interconnect)), name);
+            interfaceFor = [noc](int id) { return noc->getInterfaceFor(id); };
+        }
+        else if(interconnect_type == STRINGIFY(Network))
+        {
+            // The multi-hop network (docs/NoC_Architecture_Spec.md s3.3). Two values come from the
+            // system level: the home ids (default: the cores' m_shared_memory_id values) and the
+            // protocol's ordering requirement (requires_ordering, set by the presets).
+            ParametersMap net_map = getSubMap(STRINGIFY(interconnect));
+            auto h = net_map.find("home_ids");
+            bool have_homes = h != net_map.end() && !std::get<vector<int>>(h->second.value).empty() && std::get<vector<int>>(h->second.value)[0] >= 0;
+            if (!have_homes)
+            {
+                vector<int> homes;
+                for (int i = 0; i < num_cores; i++)
+                {
+                    int sid = std::get<int>(getSubMap(STRINGIFY(cache_controller), i).at("m_shared_memory_id").value);
+                    if (std::find(homes.begin(), homes.end(), sid) == homes.end()) homes.push_back(sid);
+                }
+                net_map.erase("home_ids");
+                net_map.insert({"home_ids", Parameter("home_ids", Parameter::Vector_Integer, homes)});
+            }
+            net::Network *net = new net::Network(net_map, name);
+            if (parameters.count("requires_ordering"))
+                net->requireOrdering(std::get<string>(parameters.at("requires_ordering").value));
+            interfaceFor = [net](int id) { return net->getInterfaceFor(id); };
+        }
+        else
+        {
+            cerr << "MultiCoreSystem_Mesh: unknown interconnect_type '" << interconnect_type << "' (Mesh, NoC, Network)" << endl;
+            exit(2);
+        }
 
         // iterate over each core
         for (int i = 0; i < num_cores; i++)
@@ -42,7 +79,7 @@ namespace octopus
 
             cache_controller = createController(cache_controller_type, 
                                                 getSubMap(STRINGIFY(cache_controller), i),
-                                                interconnect->getInterfaceFor(cache_id),
+                                                interfaceFor(cache_id),
                                                 cpu_interconnect->getInterfaceFor(cache_id), name);
         }
 
@@ -53,7 +90,7 @@ namespace octopus
         llc_controller = createController(cache_controller_type,
                                           getSubMap(STRINGIFY(llc_controller)),
                                           bus->getInterfaceFor(llc_id),
-                                          interconnect->getInterfaceFor(llc_id), name);
+                                          interfaceFor(llc_id), name);
         // Without this the LLC's events carry no role: the LatencyReport's DRAM and LLC
         // stages read 0 on Mesh/NoC and the event-path validator reports thousands of rows
         // whose stages do not sum to Total. Mirrors MultiCoreSystem.

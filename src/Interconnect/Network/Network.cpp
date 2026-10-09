@@ -3,6 +3,7 @@
  * The per-tick engine. Specification: docs/NoC_Architecture_Spec.md §7-§9, §11, §13, §15, §16.
  */
 #include "../../../header/Interconnect/Network/Network.h"
+#include "../../../header/HangDump.h"
 #include "../../../header/Interconnect/Network/TrafficGenerator.h"
 #include "../../../header/Arbiters/FCFSArbiter.h"
 #include "../../../header/Arbiters/RRArbiter.h"
@@ -25,6 +26,8 @@ namespace octopus { namespace net
     Network::Network(ParametersMap map, std::string pname, std::string config_path, std::string name)
         : ClockedObj(0), Configurable(map, config_path, name, pname)
     {
+        if (const char *d = std::getenv("OCTOPUS_NET_DEBUG")) m_debug = d;
+        if (const char *h = std::getenv("OCTOPUS_HANG_DUMP")) m_hang_ticks = std::atol(h);
         try
         {
             readConfig();
@@ -36,7 +39,7 @@ namespace octopus { namespace net
         s_instance = this;
         static bool registered = false;
         if (!registered) { std::atexit(statsAtExit); registered = true; }
-        if (const char *d = std::getenv("OCTOPUS_NET_DEBUG")) m_debug = d;
+        HangDump::add([this]() { std::cerr << dump(); });
     }
     Network::~Network()
     {
@@ -139,7 +142,7 @@ namespace octopus { namespace net
                 rp.routing_table[rid] = std::get<std::vector<int>>(kv.second.value);
             }
         m_routing = createRouting(m_cfg.routing, *m_topo, rp);
-        if (!m_routing->deadlockFreeOn(*m_topo))
+        if (!m_routing->deadlockFreeOn(*m_topo) && m_debug != "nocheck")
         {
             std::string cyc; channelDependencyAcyclic(*m_topo, *m_routing, m_cfg.vcs_per_class, &cyc);
             throw ConfigError("routing " + m_cfg.routing + " is not deadlock-free on this topology: " + cyc +
@@ -220,16 +223,16 @@ namespace octopus { namespace net
     }
 
     // ------------------------------------------------------------------ packets
-    uint64_t Network::newPacket(const Message &msg, int dst_endpoint, int cls)
+    uint64_t Network::newPacket(const Message &msg, int src_endpoint, int dst_endpoint, int cls)
     {
         uint64_t seq = ++m_seq;
         Packet &p = m_packets[seq];
         p.msg = msg;                                   // delivered bit-identical, `to` included (spec §3.2)
         p.seq = seq; p.cls = cls; p.dst_endpoint = dst_endpoint;
-        p.src_router = m_topo->routerOf(msg.from);
+        p.src_router = m_topo->routerOf(src_endpoint);          // the injecting NI, not msg.from (a protocol may carry another id there)
         p.dst_router = m_topo->routerOf(dst_endpoint);
         if (p.src_router < 0)
-            fatal("message from " + std::to_string(msg.from) + " which is not an endpoint: " + Classifier::describe(msg, dst_endpoint));
+            fatal("message injected by " + std::to_string(src_endpoint) + " which is not an endpoint: " + Classifier::describe(msg, dst_endpoint));
         p.flits = flitCount(msg, m_cfg.flit_bytes, m_cfg.header_bytes);
         return seq;
     }
@@ -243,6 +246,11 @@ namespace octopus { namespace net
     void Network::step()
     {
         m_tick++;
+        if (m_hang_ticks > 0 && !m_packets.empty() && m_tick - m_last_move >= (uint64_t)m_hang_ticks)
+        {
+            Logger::getLogger()->traceFinalize();
+            fatal("no flit moved for " + std::to_string(m_hang_ticks) + " ticks with " + std::to_string(m_packets.size()) + " packets in flight: the network is wedged");
+        }
         phaseInject();
         phaseArrivals();
         phaseRoute();
@@ -291,7 +299,7 @@ namespace octopus { namespace net
                         OutVC &o = lp.vcs[cls][v];
                         if (o.holder == 0) continue;
                         Packet &p = m_packets.at(o.holder);
-                        if (p.msg.from != (uint16_t)ni->id()) continue;
+                        if (o.holder_ep != ni->id()) continue;        // not by msg.from: a protocol may forward the requester's id
                         if (p.next_flit < p.flits && o.credits > 0)
                         { cands.push_back({(int)acts.size(), (int)p.msg.owner, p.seq}); acts.push_back({ni, cls, v, p.seq, false}); }
                     }
@@ -320,15 +328,15 @@ namespace octopus { namespace net
             if (a.fresh)
             {
                 a.ni->injectQueue(a.cls).pop_front();
-                o.holder = a.seq; p.t_inject = m_tick; p.next_flit = 0;
+                o.holder = a.seq; o.holder_ep = a.ni->id(); p.t_inject = m_tick; p.next_flit = 0;
                 m_totals.injected_packets++;
                 if (m_class_stats[a.cls].first_inject == 0) m_class_stats[a.cls].first_inject = m_tick;
                 Logger::getLogger()->trace(p.msg, p.msg.data == NULL ? Logger::Role::REQ_BUS : Logger::Role::RESP_BUS, 0u, Logger::Phase::ENTER);
             }
             Flit f; f.seq = a.seq; f.index = p.next_flit; f.head = p.next_flit == 0; f.tail = p.next_flit == p.flits - 1; f.arrived = m_tick;
             m_routers[lp.router].in[lp.port][a.cls][a.vc].fifo.push_back(f);     // local link: zero latency
-            o.credits--; p.next_flit++; m_totals.injected_flits++; lp.last_sent = m_tick;
-            if (f.tail) o.holder = 0;
+            o.credits--; p.next_flit++; m_totals.injected_flits++; lp.last_sent = m_tick; m_last_move = m_tick;
+            if (f.tail) { o.holder = 0; o.holder_ep = -1; }
             (void)t;
         }
     }
@@ -458,7 +466,7 @@ namespace octopus { namespace net
         RouterState &R = m_routers[r];
         if (R.in_last_sent[q] == m_tick) fatal("input port " + std::to_string(q) + " of router " + std::to_string(t.routerId(r)) + " sent two flits in one tick");
         Flit f = v.fifo.front(); v.fifo.pop_front();
-        R.in_last_sent[q] = m_tick;
+        R.in_last_sent[q] = m_tick; m_last_move = m_tick;
         int p = v.out_port; OutPort &op = R.out[p]; OutVC &ov = op.vcs[c][v.out_vc];
         bool local = t.isLocalPort(r, p);
         int L = local ? 1 : m_cfg.linkLatency(c);

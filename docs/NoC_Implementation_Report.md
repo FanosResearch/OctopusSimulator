@@ -390,3 +390,113 @@ curves; `S4-ASAN` runs two simulations and the unit tests S1–S4 under the WSL 
 | S4-ASAN | PASS | no sanitizer report (2 sims + unit tests S1-S4) | none |
 
 Regression suite after the `Configurable` change: REG-BUS, REG-ENV, REG-MESH, REG-TDM all identical.
+
+## Step 5 — system wiring
+
+**Built**
+
+- `src/SystemConfigurations/MultiCoreSystem_Mesh.cpp`: `interconnect_type(s),Network` constructs
+  a `net::Network` next to the legacy `Mesh` and `NoC` (the three are held behind one
+  `interfaceFor(id)` callable, so the controller wiring did not change). Two values come from the
+  system level as spec §3.3 asks: `home_ids` defaults to the set of the cores'
+  `m_shared_memory_id` when the interconnect map carries none, and the system-level
+  `requires_ordering(s)` key is passed to `Network::requireOrdering`, which refuses a routing that
+  cannot provide it. An unknown interconnect type now exits 2 with a message instead of using an
+  uninitialised pointer.
+- `configuration/SystemConfigurations/MultiCoreSystem_Grid.csv`: the 2×2 preset of spec §21.
+  L1 0..3 on routers 0..3, the LLC (id 10) on router 3 with its own local port, `XY`,
+  `requires_ordering pair_per_class`, injection and ejection queues of 32 (the legacy
+  `buffers_max_size`), and `num_classes 2` (below). It is selected with
+  `-s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid`; `-p interconnect.node_map[10](i)=0` moves the
+  LLC to router 0.
+- `header/HangDump.h`: a registry of state dumpers. The network registers its router view at
+  construction; a controller's `OCTOPUS_HANG_DUMP` watchdog runs the registry after its own
+  dump, the network's own watchdog (no flit moved for `OCTOPUS_HANG_DUMP` ticks while packets
+  are in flight, which is what a NetworkOnly deadlock looks like) finalises the raw trace and
+  calls `fatal`, and `fatal` runs the registry when the variable is set (spec §16). The
+  `OCTOPUS_NET_DEBUG=nocheck` flag skips the construction-time deadlock check so that the
+  watchdog can be exercised on a cyclic configuration.
+- `src/Protocols/MSIDirectory.cpp`, `LLCMSIDirectory.cpp`: the "Fault Transaction" message now
+  prints the controller, line state, address, message id, source, owner, sender, type, kind and
+  data flag, as the snoop LLC protocol already did. Three of the step's findings were read off it.
+- `test/network/steps/step5.sh`: S5-EEMBC-2x2 (ten traces in parallel, each timed, completion
+  judged exactly as `sweeps/sweep_common.sh` judges it), S5-TILING (`OCTOPUS_EVENT_DEBUG=1` so
+  the Logger prints its `[EVENT-PATH]` self-check), S5-SPEED, S5-DETERMINISM, S5-PLACEMENT (a
+  one-request workload built from the first line of a2time01's core-0 trace, run with the LLC on
+  router 3 and on router 0), S5-XPLAT and S5-ASAN (the same a2time01 run under the WSL sanitizer
+  build, checksums compared with the Windows run), S5-HANGDUMP and S5-HANGDUMP-POS (a 4-ring
+  under `Table` routing, every node streaming 5-flit packets two hops clockwise with
+  `vc_depth 2`: refused at construction, or with the check disabled wedged and dumped), and
+  S5-RX-STRESS (XFAIL as planned).
+
+**Findings** (each one stopped an EEMBC run; all are recorded in the specification)
+
+- *The injecting endpoint is not `msg.from`.* The network identified a started packet's NI by
+  `msg.from` and derived the source router from it. The LLC's responses do not carry the LLC's id
+  there (the protocol copies the requester's), so the LLC's body flits were never injected and the
+  first run wedged with one head flit delivered. The local port now records the injecting
+  endpoint (`holder_ep`) and `newPacket` takes the source endpoint explicitly.
+- *Every Octopus interface stamps `msg.from`.* `MeshInterface`, `NoCInterface`, `BusInterface`
+  and `TripleBusInterface` all set `msg.from = m_interface_id` in `pushMessage`, and the directory
+  L1 tells the home's data (`Data_zeroAck`/`Data_nonZeroAck`, with an ack count) from an owner's
+  (`DataFromOwner`) by `from == m_shared_memory_id`. Without the stamp the home's data was taken
+  for owner data and `SM_ad` faulted. The NI now stamps it; spec §3.1 and §3.2 say so.
+- *A home's PutAck travels with its forwards.* With three classes the LLC's Inv (FORWARD) and its
+  later PutAck (RESPONSE) to the same cache are unordered, and the priority RX serving consumed the
+  PutAck first: the cache went to I and the Inv then faulted (`(I, Inv)` has no row; the FSM
+  handles Inv-then-PutAck through `SI_a`/`MI_a`/`II_a` only). A PutAck overtaking a FwdGetM would
+  even lose the forwarded request. The classifier now puts a home's data-less K_ACK in the
+  FORWARD class, which is deadlock-safe because an ack is consumed without injecting anything
+  (spec §6.3).
+- *The shipped directory FSMs assume FIFO over all non-data messages of a pair.* The LLC has no
+  row for a PutS arriving in state N: it expects a cache's PutS to reach it before that cache's
+  InvAck to the LLC's own eviction Inv, which three classes split into REQUEST and RESPONSE.
+  That is exactly the order the legacy request link gave (one FIFO link for every non-data
+  message), and the plan already placed three-class protocol operation in Phase 2
+  (P2-THREE-CLASS, with S5-RX-STRESS as its XFAIL placeholder). The grid preset therefore ships
+  with `num_classes 2`, the legacy split, under which all ten traces complete with both RX
+  serving policies; the network's own default stays 3 (NetworkOnly, synthetic traffic). The FSM
+  rows that make the protocol tolerant (`(I, Inv)` → InvAck, `(N, PutS/PutM)` → PutAck, and the
+  symmetric races) are the content of P2-THREE-CLASS, now written down in spec §6.3.
+- *`to` is delivered intact.* The legacy interfaces narrowed `to` to the one destination per
+  copy; the directory controllers only test membership, so the spec's bit-identical delivery
+  holds and is now stated with that caveat.
+- *An empty trace never ends.* A core whose trace file is empty never finishes, so the first
+  one-request workload for S5-PLACEMENT (one line for core 0, empty files for the others) ran
+  forever; the other cores now get one reference each to other lines, thousands of cycles later.
+- *Two legacy bugs under the sanitizer* (S5-ASAN runs a full EEMBC trace, which S4-ASAN's
+  synthetic runs never exercised): `Point2PointController` never initialised
+  `message_available_upper`/`clk_in_slot_upper` (UBSan: invalid bool load on every run), and
+  `CacheController::modifyData` released a `new Message` with `delete[]`, skipping the message
+  destructor. Both fixed; the regression suite is identical after the fix.
+- *`cond_addr` of the debug print is decimal.* `DebugPrint` parses `cond_addr` with
+  `std::stoull(addr)` in base 10, so a hex filter silently matches nothing; worth knowing when
+  reading these runs (the unfiltered print was used instead).
+
+**Measurements**
+
+| what | measured |
+|---|---|
+| EEMBC on the 2×2 grid, directory MSI, two classes | 10 of 10 complete, event-path tiling 275 304 ok / 0 fail / 0 noresp, byte-identical on a second run and on WSL |
+| placement (spec §21) | request bus 8, response bus 12 with the LLC on router 3; 2 and 6 on router 0 |
+| speed, a2time01 sequential | grid 5.4 s, legacy NoC 4.1 s (1.3×); the ten-trace parallel batch 6–11 s per trace |
+| hang dump | a 4-ring under `Table` with the check disabled wedges within 2000 ticks; the dump shows 4 held VCs with zero credits and the run exits 2; with the check on it is refused at construction |
+| RX stress (XFAIL) | `eject_queue_depth 2`, two classes: a2time01 completes |
+
+**Tests** (`bash test/network/run.sh 5`, about 6 minutes, the WSL sanitizer run of a2time01 being
+most of it):
+
+| id | status | measured | expected |
+|---|---|---|---|
+| S5-EEMBC-2x2 | PASS | 10/10 complete | complete |
+| S5-TILING | PASS | [EVENT-PATH] tiling ok=275304 fail=0 noresp=0 | fail=0 noresp=0 |
+| S5-SPEED | PASS | grid 5.4s vs legacy 4.1s (parallel batch: a2time01-trace=8.3s aifirf01-trace=8.7s basefp01-trace=8.7s cacheb01-trace=10. | <= 3x legacy |
+| S5-DETERMINISM | PASS | 2 traces byte-identical | identical |
+| S5-PLACEMENT | PASS | router 3: 8/12 |  router 0: 2/6 |
+| S5-XPLAT | PASS | identical checksums | identical |
+| S5-ASAN | PASS | no sanitizer report | none |
+| S5-HANGDUMP | PASS | exit 2 |  4 held VCs with zero credits |
+| S5-HANGDUMP-POS | PASS | refused at construction | refused |
+| S5-RX-STRESS | XFAIL |  | two classes |
+
+Regression suite after the legacy fixes (`Configurable`, `Point2PointController`, `CacheController::modifyData`): REG-BUS, REG-ENV, REG-MESH, REG-TDM all identical.

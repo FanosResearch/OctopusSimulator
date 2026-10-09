@@ -205,7 +205,7 @@ All `sim` on `NetworkOnly.csv` unless marked. Defaults: `flit_bytes` 16, `router
 
 | id | kind | assertion | expected |
 |---|---|---|---|
-| S5-EEMBC-2x2 | sim | directory MSI on `MultiCoreSystem_Grid` (2×2, LLC on router 3), all ten EEMBC traces | every run completes as the sweeps judge completion: own trace covered and footer written |
+| S5-EEMBC-2x2 | sim | directory MSI on `MultiCoreSystem_Grid` (2×2, LLC on router 3, `num_classes 2` as the preset ships it, spec §6.3), all ten EEMBC traces | every run completes as the sweeps judge completion: own trace covered and footer written |
 | S5-TILING | sim | the `[EVENT-PATH]` line of every S5 run | 100 percent tiled, zero `noresp` |
 | S5-DETERMINISM | sim | every S5 run twice | byte-identical reports |
 | S5-XPLAT | sim | `a2time01` on the grid, Windows and WSL | identical checksums of `LatencyReport_C*.csv` and `Summary.csv` |

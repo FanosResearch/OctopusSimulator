@@ -37,6 +37,8 @@ namespace octopus
         
         clk_in_slot_lower = 0;
         message_available_lower = false;
+        clk_in_slot_upper = 0;
+        message_available_upper = false;    // were never initialised (sanitizer: invalid bool load)
         
         vector<CommunicationInterface *> lower_interfaces;
         for(int i = 0; i < (int) lower_level_ids->size(); i++)

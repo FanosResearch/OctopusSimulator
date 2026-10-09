@@ -61,7 +61,7 @@ namespace octopus { namespace net
         void standalone(const std::vector<TrafficGenerator *> &gens);
 
         // ---- used by NetworkInterface
-        uint64_t newPacket(const Message &msg, int dst_endpoint, int cls);
+        uint64_t newPacket(const Message &msg, int src_endpoint, int dst_endpoint, int cls);
         Packet &packet(uint64_t seq) { return m_packets.at(seq); }
         bool hasPacket(uint64_t seq) const { return m_packets.count(seq) > 0; }
         int  classOf(const Message &m, int dst) const { return m_classifier->classifyOrFatal(m, dst); }
@@ -83,7 +83,7 @@ namespace octopus { namespace net
             uint32_t vc_mask = 0;
             uint64_t head_arrival = 0;
         };
-        struct OutVC { int credits = 0; uint64_t holder = 0; std::unique_ptr<Arbiter> va; };
+        struct OutVC { int credits = 0; uint64_t holder = 0; int holder_ep = -1; std::unique_ptr<Arbiter> va; };   // holder_ep: the injecting endpoint (local ports only)
         struct OutPort
         {
             std::vector<std::vector<OutVC>> vcs;      // [cls][vc]
@@ -154,7 +154,9 @@ namespace octopus { namespace net
         struct ClassStats { uint64_t packets = 0, sum_latency = 0, max_latency = 0, max_wait = 0, first_inject = 0, last_eject = 0; };
         struct EndpointStats { uint64_t packets = 0, sum_latency = 0, max_latency = 0, first_owner = 0, first_seq = 0, max_ahead = 0; };
         std::map<int, EndpointStats> m_ep_stats;
-        std::string m_debug;    // OCTOPUS_NET_DEBUG: credit | rx | mask (fatal-path tests)
+        std::string m_debug;    // OCTOPUS_NET_DEBUG: credit | rx | mask (fatal-path tests) | nocheck (skip the deadlock check)
+        long m_hang_ticks = 0;  // OCTOPUS_HANG_DUMP: ticks without a flit moving (packets in flight) before the dump
+        uint64_t m_last_move = 0;
         std::vector<ClassStats> m_class_stats;
         std::vector<TrafficGenerator *> m_gens; bool m_standalone = false;
         std::string m_ordering_req;

@@ -325,14 +325,14 @@ namespace octopus
             data_msg = *msg;
         else
         {
-            delete[] (uint8_t *)data_ptr;
+            delete msg;                     // MODIFY_DATA payloads are `new Message(msg)` (sanitizer: new/delete[] mismatch)
             return;
         }
 
         m_data_handler->modifyData(data_msg.addr, data_msg.data, data_msg.data_size);
         m_modifying_data_messages.erase(msg->msg_id);
 
-        delete[] (uint8_t *)data_ptr;
+        delete msg;
     }
     
     void CacheController::saveReqForWriteBack(void *data_ptr)

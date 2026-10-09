@@ -60,6 +60,7 @@ namespace octopus { namespace net
     bool NetworkInterface::pushMessage(Message &msg, uint64_t, MessageType)
     {
         if (msg.to.empty()) fatal("endpoint " + std::to_string(m_interface_id) + " pushed a message with no destination: " + Classifier::describe(msg, -1));
+        msg.from = m_interface_id;          // every interface stamps the sender (the directory L1 tells home data from owner data by it)
         // class per destination (the fallback rules look at the destination)
         std::vector<int> cls; std::vector<int> need(m_num_classes, 0);
         for (int dst : msg.to)
@@ -72,7 +73,7 @@ namespace octopus { namespace net
             if (need[c] > injectFree(c)) { m_refused++; return false; }
         for (size_t i = 0; i < msg.to.size(); i++)
         {
-            uint64_t seq = m_net->newPacket(msg, msg.to[i], cls[i]);
+            uint64_t seq = m_net->newPacket(msg, id(), msg.to[i], cls[i]);
             m_inject[cls[i]].push_back(seq);
         }
         return true;

@@ -4,6 +4,7 @@
  * dump if enabled, exit status 2. Never status 0.
  */
 #include "../../../header/Interconnect/Network/NetTypes.h"
+#include "../../../header/HangDump.h"
 #include <cstdlib>
 #include <iostream>
 
@@ -13,6 +14,7 @@ namespace octopus { namespace net
     {
         std::cout.flush();
         std::cerr << "Network: " << msg << std::endl;
+        if (std::getenv("OCTOPUS_HANG_DUMP")) HangDump::run();
         std::cerr.flush();
         std::exit(2);
     }
