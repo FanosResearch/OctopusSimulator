@@ -17,4 +17,7 @@ target_sources(Octopus_core PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/NoC.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/NoCController.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/NoCInterface.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/Network/Fatal.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/Network/Classifier.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/Network/Topology.cpp
     )
