@@ -16,7 +16,7 @@ import numpy as np
 MAGIC = b"OCTV2\0\0\0"
 REC = np.dtype([("cycle", "<u8"), ("msg_id", "<u8"), ("addr", "<u8"), ("resource", "u1"), ("phase", "u1"), ("kind", "u1"),
                 ("core", "u1"), ("comp", "<u2"), ("flags", "<u2")])
-RESOURCE = ["CPU", "L1", "REQ_BUS", "RESP_BUS", "LLC", "MEM_BUS", "DRAM", "?", "SVC_BUS", "ARRAY", "LLC_QUEUE", "FSM"]
+RESOURCE = ["CPU", "L1", "REQ_BUS", "RESP_BUS", "LLC", "MEM_BUS", "DRAM", "?", "SVC_BUS", "ARRAY", "LLC_QUEUE", "FSM", "NOC"]   # 12 NOC: router records, comp = router id
 PHASE = ["ENTER", "SERVICE", "EXIT"]
 KIND = ["UNKNOWN", "DEMAND", "GETS", "GETM", "PUTM", "INV", "MEM_READ", "EVICT", "WB_DATA", "WB_INV", "SUPPLY",
         "SUPPLY_DEFERRED", "RESP", "FILL", "FILL_ROLLBACK", "MEM_WRITE",

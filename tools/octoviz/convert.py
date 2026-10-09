@@ -46,6 +46,10 @@ def main():
     # read every core file; footer rows (fewer columns / text) are dropped by the numeric filter
     cols = ("id,addr,ready,cpu,l1s,reqb,l2s,l2a,resp,membus,dram,l1a,total,eff,oldest,"
             "llc_state,llc_gate,resp_ahead,resp_ahead_ref,array_ahead,array_ahead_w,llc_stall")
+    # runs on the multi-hop Network carry five more columns (docs/Logger.md, NoC Hops .. NoC Ahead Winner)
+    with open(files[0], encoding="utf-8", errors="replace") as fh:
+        noc_cols = "NoC Hops" in fh.readline()
+    if noc_cols: cols += ",noc_hops,noc_wait,noc_transfer,noc_ahead,noc_winner"
     names = cols.split(",")
     con.execute("CREATE TABLE raw AS SELECT * FROM (SELECT 1) WHERE 0")  # placeholder, replaced below
     parts = []
@@ -59,6 +63,8 @@ def main():
     con.execute("DROP TABLE raw")
     con.execute("CREATE TABLE raw AS " + " UNION ALL ".join(parts))
     # cast + derive absolute intervals
+    noc_sel = (", CAST(noc_hops AS INTEGER) noc_hops, CAST(noc_wait AS INTEGER) noc_wait, CAST(noc_transfer AS INTEGER) noc_transfer,"
+               " CAST(noc_ahead AS INTEGER) noc_ahead, CAST(noc_winner AS INTEGER) noc_winner") if noc_cols else ""
     con.execute(f"""
       CREATE TABLE req AS
       SELECT core, CAST(id AS BIGINT) AS id, CAST(addr AS VARCHAR) AS addr_hex,
@@ -71,7 +77,7 @@ def main():
              CAST(llc_state AS INTEGER) llc_state, CAST(llc_gate AS INTEGER) llc_gate,
              CAST(resp_ahead AS INTEGER) resp_ahead, CAST(resp_ahead_ref AS INTEGER) resp_ahead_ref,
              CAST(array_ahead AS INTEGER) array_ahead, CAST(array_ahead_w AS INTEGER) array_ahead_w,
-             CAST(llc_stall AS INTEGER) llc_stall
+             CAST(llc_stall AS INTEGER) llc_stall{noc_sel}
       FROM raw""")
     con.execute(f"""
       CREATE TABLE viz AS

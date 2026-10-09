@@ -40,6 +40,7 @@ namespace octopus { namespace net
         static bool registered = false;
         if (!registered) { std::atexit(statsAtExit); registered = true; }
         HangDump::add([this]() { std::cerr << dump(); });
+        Logger::getLogger()->enableNocColumns();
     }
     Network::~Network()
     {
@@ -344,10 +345,11 @@ namespace octopus { namespace net
                 o.holder = a.seq; o.holder_ep = a.ni->id(); p.t_inject = m_tick; p.next_flit = 0;
                 m_totals.injected_packets++;
                 if (m_class_stats[a.cls].first_inject == 0) m_class_stats[a.cls].first_inject = m_tick;
-                Logger::getLogger()->trace(p.msg, p.msg.data == NULL ? Logger::Role::REQ_BUS : Logger::Role::RESP_BUS, 0u, Logger::Phase::ENTER);
+                Logger::getLogger()->trace(p.msg, p.msg.data == NULL ? Logger::Role::REQ_BUS : Logger::Role::RESP_BUS, 0u, Logger::Phase::ENTER, (uint16_t)p.dst_endpoint);   // flags = destination: tells the copies of a multicast apart
             }
             Flit f; f.seq = a.seq; f.index = p.next_flit; f.head = p.next_flit == 0; f.tail = p.next_flit == p.flits - 1; f.arrived = m_tick;
             m_routers[lp.router].in[lp.port][a.cls][a.vc].fifo.push_back(f);     // local link: zero latency
+            if (f.head) Logger::getLogger()->trace(p.msg, Logger::Role::NOC, (uint32_t)m_topo->routerId(lp.router), Logger::Phase::ENTER, (uint16_t)((lp.port << 8) | a.vc));
             o.credits--; p.next_flit++; m_totals.injected_flits++; lp.last_sent = m_tick; m_last_move = m_tick;
             if (f.tail) { o.holder = 0; o.holder_ep = -1; }
             (void)t;
@@ -364,6 +366,7 @@ namespace octopus { namespace net
             if ((int)v.fifo.size() >= m_cfg.vc_depth)
                 fatal("VC overflow at router " + std::to_string(m_topo->routerId(a.router)) + " port " + std::to_string(a.port) + " class " + std::to_string(a.cls) + " vc " + std::to_string(a.vc));
             v.fifo.push_back(a.flit);
+            if (a.flit.head) Logger::getLogger()->trace(m_packets.at(a.flit.seq).msg, Logger::Role::NOC, (uint32_t)m_topo->routerId(a.router), Logger::Phase::ENTER, (uint16_t)((a.port << 8) | a.vc));
         }
         if (m_debug == "credit" && m_tick == 50) m_credits.emplace(m_tick, CreditEvt{false, 0, 0, 0, 0});   // one credit too many
         while (!m_credits.empty() && m_credits.begin()->first <= m_tick)
@@ -429,6 +432,7 @@ namespace octopus { namespace net
                     int w = cands.size() == 1 ? 0 : o.va->electIndex(m_tick, cands);
                     if (w < 0) continue;
                     VCState &v = *who[w]; v.out_vc = ov; o.holder = v.cur;
+                    Logger::getLogger()->trace(m_packets.at(v.cur).msg, Logger::Role::NOC, (uint32_t)t.routerId(r), Logger::Phase::SERVICE, (uint16_t)((p << 8) | ov));
                     if (local) m_nis.at(m_packets.at(v.cur).dst_endpoint)->reserve(c);
                 }
             }
@@ -471,7 +475,7 @@ namespace octopus { namespace net
             if (w < 0) continue;
             for (int i = 0; i < (int)cands.size(); i++) if (i != w)
             {
-                m_packets.at(cands[i].seq).ahead++;
+                { Packet &lp = m_packets.at(cands[i].seq); lp.ahead++; lp.ahead_by[cands[w].owner]++; }
                 auto [lr, lq, lc, lw] = who[i];
                 m_routers[lr].out[m_routers[lr].in[lq][lc][lw].out_port].losses++;   // counted at the loser's port
             }
@@ -490,6 +494,7 @@ namespace octopus { namespace net
         int p = v.out_port; OutPort &op = R.out[p]; OutVC &ov = op.vcs[c][v.out_vc];
         bool local = t.isLocalPort(r, p);
         int L = local ? 1 : m_cfg.linkLatency(c);
+        if (f.tail) Logger::getLogger()->trace(m_packets.at(f.seq).msg, Logger::Role::NOC, (uint32_t)t.routerId(r), Logger::Phase::EXIT, (uint16_t)((p << 8) | (m_packets.at(f.seq).flits & 0xff)));
         int occ = (local || m_cfg.link_model == "pipelined") ? 1 : L;          // ticks the link is held per flit
         m_link_busy[linkKey(r, p)] = m_tick + occ - 1;
         op.flits++; op.busy_ticks += occ;
@@ -535,10 +540,23 @@ namespace octopus { namespace net
         cs.packets++; cs.sum_latency += total; cs.max_latency = std::max(cs.max_latency, total); cs.max_wait = std::max(cs.max_wait, pk.wait_ticks); cs.last_eject = m_tick;
         EndpointStats &es = m_ep_stats[pk.dst_endpoint];
         if (es.packets == 0) { es.first_owner = pk.msg.owner; es.first_seq = pk.seq; }
-        es.packets++; es.sum_latency += total; es.max_latency = std::max(es.max_latency, total); es.max_ahead = std::max(es.max_ahead, pk.ahead);
+        es.packets++; es.sum_latency += total; es.max_latency = std::max(es.max_latency, total);
+        int winner = -1; uint32_t wins = 0;
+        for (auto &kv : pk.ahead_by) if (kv.second > wins) { wins = kv.second; winner = kv.first; }
+        if (pk.ahead > es.max_ahead) { es.max_ahead = pk.ahead; es.max_ahead_winner = winner; }
+        // trackers (spec s15.3): accumulated over the request's packets; untracked ids are ignored
+        Logger *lg = Logger::getLogger();
+        lg->accumulate(pk.msg.msg_id, Logger::Annot::NOC_HOPS, pk.hops);
+        lg->accumulate(pk.msg.msg_id, Logger::Annot::NOC_WAIT, (int64_t)pk.wait_ticks);
+        lg->accumulate(pk.msg.msg_id, Logger::Annot::NOC_TRANSFER, (int64_t)pk.transfer_ticks);
+        lg->accumulate(pk.msg.msg_id, Logger::Annot::NOC_AHEAD, (int64_t)pk.ahead);
+        lg->accumulateWinner(pk.msg.msg_id, winner, wins);
         Logger::Role role = pk.msg.data == NULL ? Logger::Role::REQ_BUS : Logger::Role::RESP_BUS;
-        Logger::getLogger()->event(pk.msg.msg_id, role, 0u, Logger::Phase::EXIT);
-        Logger::getLogger()->trace(pk.msg, role, 0u, Logger::Phase::EXIT);
+        // the report's response-bus stamp is the copy that reaches the requester (a supply also goes
+        // to the home; on a mesh the two cross different links and the home's copy may eject first)
+        if (role == Logger::Role::REQ_BUS || pk.dst_endpoint == (int)pk.msg.owner)
+            Logger::getLogger()->event(pk.msg.msg_id, role, 0u, Logger::Phase::EXIT);
+        Logger::getLogger()->trace(pk.msg, role, 0u, Logger::Phase::EXIT, (uint16_t)pk.dst_endpoint);
         ni->deliver(pk.cls, pk.msg);
         if (m_debug == "rx") ni->deliver(pk.cls, pk.msg);        // a second delivery without a reservation: must be fatal
         m_totals.ejected_packets++; m_totals.ejected_flits += pk.flits; m_totals.link_flit_hops += (uint64_t)links * pk.flits;
@@ -605,7 +623,7 @@ namespace octopus { namespace net
             auto es = m_ep_stats.count(kv.first) ? m_ep_stats.at(kv.first) : EndpointStats{};
             f << "endpoint," << kv.first << ",,," << kv.second->rxDelivered() << "," << kv.second->rxPopped() << "," << kv.second->pushRefused() << "," << es.packets << "\n";
             f << "received," << kv.first << ",,," << es.packets << "," << (es.packets ? (double)es.sum_latency / es.packets : 0.0) << "," << es.max_latency << "," << es.first_owner << "\n";
-            f << "ahead," << kv.first << ",,," << es.max_ahead << ",,,\n";
+            f << "ahead," << kv.first << ",,," << es.max_ahead << "," << es.max_ahead_winner << ",,\n";
         }
         for (auto g : m_gens)
             f << "generator," << g->id() << ",,," << g->sent() << "," << g->received() << "," << g->retries() << "," << g->outOfOrder() << "\n";

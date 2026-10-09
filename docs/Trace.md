@@ -20,7 +20,7 @@ latency decomposition; the trace is what the visualizer's resource lanes are bui
 | `cycle` u64 | global core cycle = `ClockManager` time / 100 + 1 (the 50 ns buses stamp in core‑cycle units too) |
 | `msg_id` u64 | the message id (a demand request keeps it across its life; write‑backs and evictions have their own — see `docs/MessageEncoding.md`) |
 | `addr` u64 | the message's address (so lanes and transitions can be filtered by line) |
-| `resource` u8 | `Logger::Role`: 0 CPU, 1 L1, 2 REQ_BUS, 3 RESP_BUS, 4 LLC, 5 MEM_BUS, 6 DRAM, 8 SVC_BUS, 9 ARRAY, 10 LLC_QUEUE, 11 FSM |
+| `resource` u8 | `Logger::Role`: 0 CPU, 1 L1, 2 REQ_BUS, 3 RESP_BUS, 4 LLC, 5 MEM_BUS, 6 DRAM, 8 SVC_BUS, 9 ARRAY, 10 LLC_QUEUE, 11 FSM, 12 NOC (a router of the multi-hop network, comp = router id: ENTER = head flit into an input VC, flags = in_port<<8 \| in_vc; SERVICE = head wins VC allocation, flags = out_port<<8 \| out_vc; EXIT = tail flit sent, flags = out_port<<8 \| flits; docs/NoC_Architecture_Spec.md s15.1) |
 | `phase` u8 | 0 ENTER, 1 SERVICE, 2 EXIT — for FSM records: the FSM **event id** |
 | `kind` u8 | `Message::Kind`, assigned by the producer: 1 DEMAND, 2 GETS, 3 GETM, 4 PUTM, 5 INV, 6 MEM_READ, 7 EVICT, 8 WB_DATA, 9 WB_INV, 10 SUPPLY, 11 SUPPLY_DEFERRED, 12 RESP, 13 FILL, 14 FILL_ROLLBACK, 15 MEM_WRITE, 16 PUTS, 17 FWD (FwdGetS/FwdGetM), 18 ACK (InvAck/PutAck); 0 = untagged |
 | `core` u8 | `Message::owner` (requester for requests/responses/supplies/fills, evicting L1 for write‑backs, LLC for invalidations) |
@@ -47,6 +47,7 @@ event, old, new`), the source of the viewer's per‑line transition table.
 | L1 / LLC EXIT | `hitAction`, `removePendingAndRespond`, `performWriteBack` | a data message emitted (RESP, SUPPLY, WB_*) |
 | REQ_BUS / RESP_BUS ENTER | `SplitBusController` election | **grant** = start of the slot |
 | REQ_BUS / RESP_BUS / MEM_BUS / SVC_BUS EXIT | `BusController::broadcast` / `send` | transmitted (end of the slot); the service channel (INV) and the point‑to‑point memory bus have no election event |
+| REQ_BUS / RESP_BUS ENTER / EXIT on the `Network` | `Network::phaseInject` / `Network::eject` | injection of a packet's head at its NI / ejection of its tail; one interval per packet spanning the whole traversal, comp = 0, **flags = the destination endpoint** so the copies of a multicast can be told apart; the per-router detail is in the NOC records |
 | ARRAY SERVICE | `CacheController::checkReadinessOfCache` | the data‑array port is claimed; `flags` = action (+ cut‑in bit) |
 | DRAM ENTER / EXIT | `MainMemoryController` / `MCsimInterface` | request accepted / read data returned (writes are fire‑and‑forget: ENTER only) |
 

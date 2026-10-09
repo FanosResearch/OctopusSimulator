@@ -79,15 +79,21 @@ class Streamer:
     """Feeds trace chunks in order; accumulates occupancy / fsm columns and writes Parquet parts."""
     # pairing groups: name -> (start selector, end selector, key columns)
     GROUPS = {
+        # (flags: 0 on the buses and the legacy mesh; the Network puts the destination there so the
+        #  copies of a multicast, which can overtake each other on different paths, pair correctly)
         "REQ_BUS":   (lambda a: (a["resource"] == R["REQ_BUS"]) & (a["phase"] == P["ENTER"]),
-                      lambda a: (a["resource"] == R["REQ_BUS"]) & (a["phase"] == P["EXIT"]), ["msg_id", "kind"]),
+                      lambda a: (a["resource"] == R["REQ_BUS"]) & (a["phase"] == P["EXIT"]), ["msg_id", "kind", "flags"]),
         "RESP_BUS":  (lambda a: (a["resource"] == R["RESP_BUS"]) & (a["phase"] == P["ENTER"]),
-                      lambda a: (a["resource"] == R["RESP_BUS"]) & (a["phase"] == P["EXIT"]), ["msg_id", "kind"]),
+                      lambda a: (a["resource"] == R["RESP_BUS"]) & (a["phase"] == P["EXIT"]), ["msg_id", "kind", "flags"]),
         "DRAM":      (lambda a: (a["resource"] == R["DRAM"]) & (a["phase"] == P["ENTER"]) & (a["kind"] == K["MEM_READ"]),
                       lambda a: (a["resource"] == R["DRAM"]) & (a["phase"] == P["EXIT"]), ["msg_id"]),
         "LLC_QUEUE": (lambda a: (a["resource"] == R["LLC_QUEUE"]) & (a["phase"] == P["ENTER"]),
                       lambda a: ((a["resource"] == R["L1"]) | (a["resource"] == R["LLC"])) & (a["phase"] == P["ENTER"]),
                       ["comp", "msg_id", "kind"]),
+        # network routers (docs/NoC_Architecture_Spec.md s15.1): one lane per router, a packet's
+        # stay from its head entering an input VC to its tail leaving on the output
+        "NOC":       (lambda a: (a["resource"] == R["NOC"]) & (a["phase"] == P["ENTER"]),
+                      lambda a: (a["resource"] == R["NOC"]) & (a["phase"] == P["EXIT"]), ["comp", "msg_id", "kind"]),
     }
 
     def __init__(self, out_dir, names, a_req=2, a_res=5, a_llc=10, a_l1=0, a_svc=1, logger_base=True, part_rows=2_000_000):
@@ -254,11 +260,13 @@ def check_against_requests(occ, viz, t0=None, t1=None):
         FROM v JOIN o ON o.msg_id = v.id AND o.resource='REQ_BUS' AND o.kind IN ('GETS','GETM') WHERE v.reqb > 0""")
     # (a data message with this id can also leave AFTER retirement: the line returned to the LLC
     #  when the request was invalidated while waiting -- IS_dI -- so only transfers before retire count)
-    # (on a mesh/NoC a response can cross several links: only its LAST crossing ends at RESP_BUS.EXIT)
+    # (on a mesh/NoC a response can cross several links: only its LAST crossing ends at RESP_BUS.EXIT;
+    #  the Network stamps the destination in flags, so a supply's copy to the LLC is excluded by it)
     c["respbus_end"] = q("""SELECT count(*), coalesce(sum(CASE WHEN l.e <> v.e_resp THEN 1 END),0)
         FROM v JOIN (SELECT o.msg_id, o.core, max(o."end") AS e
                      FROM o JOIN v ON o.msg_id = v.id AND o.core = v.core AND o."end" <= v.retire
                      WHERE o.resource='RESP_BUS' AND o.kind IN ('RESP','SUPPLY','SUPPLY_DEFERRED')
+                       AND (o.flags = 0 OR o.flags = v.core)
                      GROUP BY 1, 2) l ON l.msg_id = v.id AND l.core = v.core
         WHERE v.resp > 0""")
     c["array_start"] = q("""SELECT count(*), coalesce(sum(CASE WHEN o.start <> v.o_array_s THEN 1 END),0)

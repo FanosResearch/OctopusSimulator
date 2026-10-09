@@ -30,7 +30,7 @@ namespace octopus
         // Each checkpoint records WHICH component and WHICH phase stamped it, so
         // the per-stage decomposition is a generic walk over the event list --
         // never inferred from a vector's index/size (see docs/Logger_DesignB_plan.md).
-        enum class Role : uint8_t { CPU, L1, REQ_BUS, RESP_BUS, LLC, MEM_BUS, DRAM, UNKNOWN, SVC_BUS, ARRAY, LLC_QUEUE, FSM };
+        enum class Role : uint8_t { CPU, L1, REQ_BUS, RESP_BUS, LLC, MEM_BUS, DRAM, UNKNOWN, SVC_BUS, ARRAY, LLC_QUEUE, FSM, NOC };   // NOC: router records (docs/NoC_Architecture_Spec.md s15.1)
         enum class Phase : uint8_t { ENTER, SERVICE, EXIT };
         struct LogEvent
         {
@@ -53,7 +53,9 @@ namespace octopus
         struct EventMeta { uint64_t req_id; uint64_t addr; uint64_t trace;
                            int llc_state = -2; int llc_gate = 0;
                            int llc_stall_state = -2;   // line state at the FIRST NonReady verdict at the LLC (-2 = never stalled by the FSM)
-                           uint32_t array_ahead = 0; uint32_t array_ahead_writes = 0; };
+                           uint32_t array_ahead = 0; uint32_t array_ahead_writes = 0;
+                           // network trackers (spec s15.3), accumulated over the request's packets
+                           uint32_t noc_hops = 0, noc_wait = 0, noc_transfer = 0, noc_ahead = 0, noc_winner_count = 0; int noc_winner = -1; };
         // Response-bus grant history per core (issue, emit, grant, miss) to count, for a
         // request X, the younger own-core responses granted between X's emit and X's grant.
         struct GrantRec { uint64_t issue, emit, grant; bool miss; };
@@ -61,6 +63,8 @@ namespace octopus
         std::map<uint64_t, std::vector<LogEvent>> event_log;
         std::map<uint64_t, uint64_t> event_core;
         std::map<uint64_t, EventMeta> event_meta;
+        bool m_noc_columns = false;
+        std::map<uint64_t, uint32_t> worst_case_noc_wait, worst_case_noc_ahead;   // per core
 
         //core_id is the key, and the value is the latency
         std::map<uint64_t, uint64_t> worst_case_l1_stall;
@@ -115,8 +119,16 @@ namespace octopus
     public:
         // Design B: append a self-describing event to a tracked message's timeline.
         void event(uint64_t msg_id, Role role, uint32_t comp_id, Phase phase);
-        enum class Annot : uint8_t { LLC_STATE, LLC_GATE, ARRAY_AHEAD, ARRAY_AHEAD_WRITES, LLC_STALL_STATE };
+        enum class Annot : uint8_t { LLC_STATE, LLC_GATE, ARRAY_AHEAD, ARRAY_AHEAD_WRITES, LLC_STALL_STATE,
+                                     NOC_HOPS, NOC_WAIT, NOC_TRANSFER, NOC_AHEAD };
         void annotate(uint64_t msg_id, Annot key, int64_t value);
+        // network trackers: added to the request's running totals (spec s15.3); the winner is the
+        // endpoint that beat this request's flits most often, kept with its count
+        void accumulate(uint64_t msg_id, Annot key, int64_t delta);
+        void accumulateWinner(uint64_t msg_id, int owner, uint32_t count);
+        // a Network is present: the reports carry the NoC columns (legacy runs are unchanged)
+        void enableNocColumns() { m_noc_columns = true; }
+        bool nocColumns() const { return m_noc_columns; }
 
         // ---- Phase-3 raw event trace (OCTOPUS_TRACE=<file>): every resource event of EVERY
         // message (requests and non-request traffic alike), independent of the per-request

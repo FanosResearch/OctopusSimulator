@@ -586,3 +586,66 @@ switch-allocation restructure: 0 failures)
 |---|---|---|---|
 
 Regression suite: REG-BUS, REG-ENV, REG-MESH, REG-TDM identical.
+
+## Step 7 — observability
+
+**Built**
+
+- `Logger::Role::NOC` (index 12) with `comp = router id`: ENTER when a head flit is appended to an
+  input VC (at injection and on arrival over a link, flags `in_port << 8 | in_vc`), SERVICE when
+  the head wins VC allocation (`out_port << 8 | out_vc`), EXIT when the tail flit is sent on the
+  output, link or local (`out_port << 8 | flits`). The network's REQ_BUS/RESP_BUS trace records
+  (one interval per packet from injection to ejection) now carry the destination endpoint in
+  `flags`, which is what tells the copies of a multicast apart; the legacy buses and mesh leave
+  the field 0 (`docs/Trace.md`).
+- Four trackers in the LatencyReport, present only when a `Network` is the interconnect so the
+  legacy reports are byte-identical: `NoC Hops`, `NoC Wait`, `NoC Transfer`, `NoC Ahead`, plus
+  `NoC Ahead Winner` (the endpoint that beat the request's flits most often, −1 if never beaten).
+  They are accumulated over the request's packets through the new `Logger::accumulate` and
+  `accumulateWinner`, written at each packet's ejection; the footer and `Summary.csv` gain
+  `Worst-case NoC Wait` and `Worst-case NoC Ahead`. The packet keeps per-owner win counts
+  (`ahead_by`) for the winner; `NetworkStats.csv`'s `ahead` row gained the winner too.
+- The report's response-bus stamp is taken from the copy that reaches the requester: a supply
+  goes to the requester and to the home, and on a mesh the home's copy can eject first.
+- `tools/octoviz`: `tracefile.py` knows the NOC resource; `occupancy.py` builds one lane per router
+  from ENTER→EXIT pairs keyed on (router, msg_id, kind), keys the bus pairing on the new flags,
+  and its response-bus check uses the flag to pick the requester's copy; `convert.py` reads the
+  five extra report columns when the header announces them. The viewer discovers lanes from the
+  data, so router lanes appear without a UI change (S7-VIEWER is the manual check).
+- `test/network/s7check.py` (trace-versus-report checks: hop counts, tracker sum, time base),
+  `test/network/s7lanes.py`, `test/network/steps/step7.sh`.
+
+**Findings**
+
+- *Requests complete at `Ready + CPU + Total` in trace cycles*, and the Logger accumulates a
+  packet's trackers only until the request's row is written: a supply's copy to the home that
+  ejects after the requester's copy is not part of the request's `NoC Hops`/`Wait`/`Transfer`.
+  The checks apply the same cut-off; nine requests of a2time01 whose two supply copies straddle
+  the completion cannot be split from the trace alone and are skipped by the hop check.
+- *Copies of one message overtake each other.* The first version of the checks and the
+  converter paired a message's bus ENTER and EXIT records in FIFO order; a supply injected first
+  towards the home but ejected last (its path is longer) was paired with the requester copy's
+  ejection, which showed up as 7 to 12 response-bus mismatches in the converter's self-check and
+  13 946 hop mismatches. Stamping the destination in `flags` makes every pairing exact.
+- *The time base holds*: every bus ENTER has a router ENTER in the same trace cycle and every
+  bus EXIT a router EXIT, for all 461 075 bus records of a2time01; the converter's request-bus
+  and response-bus ends agree with the Logger rows without any calibration beyond the bus lanes'
+  existing one.
+- *The contention example of spec §21 reproduces* with a 9-flit write-back (the spec's 5-flit
+  one leaves at most one body flit for a request that arrives a router away): core 0's request
+  loses four switch elections to owner 1 and reports `NoC Wait = 4`, `NoC Ahead = 4`, winner 1;
+  alone it loses none.
+
+**Tests** (`bash test/network/run.sh 7`, about 4 minutes; the regression suite is identical, the
+NoC columns being present only with a `Network`)
+
+| id | status | measured | expected |
+|---|---|---|---|
+| S7-TRACE-HOPS | PASS | 711320 0 checked/mismatches | 0 mismatches |
+| S7-TRACKER-SUM | PASS | 275304 0 checked/mismatches | 0 mismatches |
+| S7-TIMEBASE | PASS | 461075 0 checked/mismatches | 0 mismatches |
+| S7-CONVERT | PASS | all checks mismatches=0 |  4 router lanes |
+| S7-AHEAD | PASS | ahead 4 to owner 1 |  wait 4; alone 0 |
+| S7-VIEWER | XFAIL |  | manual: the selected request's route across the router lanes is checked by eye once per release |
+
+Converter self-check on the traced a2time01 run: reqbus_end 63 034 / 0 mismatches, respbus_end 63 034 / 0, array_start 15 553 / 0, dram_length, fill_end and memread_leg 3 385 / 0 each; four NOC lanes.

@@ -7,6 +7,7 @@
 #define _NET_TYPES_H
 #include "CommunicationInterface.h"
 #include <cstdint>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -48,6 +49,7 @@ namespace octopus { namespace net
         int      hops = 0;
         uint64_t wait_ticks = 0, transfer_ticks = 0, ahead = 0;
         uint64_t pipe = 0, transit = 0;   // router pipeline ticks and link ticks accrued (transfer = pipe + transit + flits - 1)
+        std::map<int, uint32_t> ahead_by; // owner -> times that owner's flit beat this packet at switch allocation
     };
 
     struct Flit

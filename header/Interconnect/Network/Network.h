@@ -153,7 +153,7 @@ namespace octopus { namespace net
         uint64_t m_seq = 0, m_tick = 0, m_cycle_edges = 1;
         Totals m_totals;
         struct ClassStats { uint64_t packets = 0, sum_latency = 0, max_latency = 0, max_wait = 0, first_inject = 0, last_eject = 0; };
-        struct EndpointStats { uint64_t packets = 0, sum_latency = 0, max_latency = 0, first_owner = 0, first_seq = 0, max_ahead = 0; };
+        struct EndpointStats { uint64_t packets = 0, sum_latency = 0, max_latency = 0, first_owner = 0, first_seq = 0, max_ahead = 0; int max_ahead_winner = -1; };
         std::map<int, EndpointStats> m_ep_stats;
         std::string m_debug;    // OCTOPUS_NET_DEBUG: credit | rx | mask (fatal-path tests) | nocheck (skip the deadlock check)
         long m_hang_ticks = 0;  // OCTOPUS_HANG_DUMP: ticks without a flit moving (packets in flight) before the dump

@@ -140,7 +140,8 @@ namespace octopus
             this->report_files[core_id] << "L2 Stall Latency,L2 Access Latency,";
             this->report_files[core_id] << "Response Bus Latency,L2-DRAM Bus Latency,DRAM latency,";
             this->report_files[core_id] << "L1 Access Latency,Total Latency,Effective Latency,Oldest Latency,"
-                                        "LLC Arrival State,LLC Gate,Resp Ahead,Resp Ahead Refills,Array Ahead,Array Ahead Writes,LLC Stall State" << endl;
+                                        "LLC Arrival State,LLC Gate,Resp Ahead,Resp Ahead Refills,Array Ahead,Array Ahead Writes,LLC Stall State"
+                                        << (m_noc_columns ? ",NoC Hops,NoC Wait,NoC Transfer,NoC Ahead,NoC Ahead Winner" : "") << endl;
         }
     }
 
@@ -296,9 +297,31 @@ namespace octopus
             case Annot::ARRAY_AHEAD:        it->second.array_ahead = (uint32_t)value; break;
             case Annot::ARRAY_AHEAD_WRITES: it->second.array_ahead_writes = (uint32_t)value; break;
             case Annot::LLC_STALL_STATE:    if (it->second.llc_stall_state == -2) it->second.llc_stall_state = (int)value; break;  // first verdict only
+            default: break;
         }
     }
 
+    void Logger::accumulate(uint64_t msg_id, Annot key, int64_t delta)
+    {
+        if (g_no_log) return;
+        auto it = event_meta.find(msg_id);
+        if (it == event_meta.end()) return;   // untracked traffic
+        switch (key)
+        {
+            case Annot::NOC_HOPS:     it->second.noc_hops += (uint32_t)delta; break;
+            case Annot::NOC_WAIT:     it->second.noc_wait += (uint32_t)delta; break;
+            case Annot::NOC_TRANSFER: it->second.noc_transfer += (uint32_t)delta; break;
+            case Annot::NOC_AHEAD:    it->second.noc_ahead += (uint32_t)delta; break;
+            default: break;
+        }
+    }
+    void Logger::accumulateWinner(uint64_t msg_id, int owner, uint32_t count)
+    {
+        if (g_no_log || count == 0) return;
+        auto it = event_meta.find(msg_id);
+        if (it == event_meta.end()) return;
+        if (count > it->second.noc_winner_count) { it->second.noc_winner_count = count; it->second.noc_winner = owner; }
+    }
     void Logger::finalizeEvents(uint64_t msg_id)
     {
         static const bool dbg = (std::getenv("OCTOPUS_EVENT_DEBUG") != nullptr);
@@ -398,7 +421,7 @@ namespace octopus
         if (dump_left > 0 && (total > dump_min || (!dump_min_env && memout >= 0)))
         {
             dump_left--;
-            static const char *rn[] = {"CPU", "L1", "REQ_BUS", "RESP_BUS", "LLC", "MEM_BUS", "DRAM", "?", "SVC_BUS", "ARRAY", "LLC_QUEUE"};
+            static const char *rn[] = {"CPU", "L1", "REQ_BUS", "RESP_BUS", "LLC", "MEM_BUS", "DRAM", "?", "SVC_BUS", "ARRAY", "LLC_QUEUE", "FSM", "NOC"};
             static const char *pn[] = {"ENTER", "SERVICE", "EXIT"};
             fprintf(stderr, "EVDUMP msg=%llu total=%lld :", (unsigned long long)msg_id, total);
             for (auto &e : ev)
@@ -522,6 +545,12 @@ namespace octopus
         f << mit->second.llc_state << "," << mit->second.llc_gate << ","
           << ahead << "," << ahead_ref << ","
           << mit->second.array_ahead << "," << mit->second.array_ahead_writes << "," << mit->second.llc_stall_state;
+        if (m_noc_columns)
+        {
+            f << "," << mit->second.noc_hops << "," << mit->second.noc_wait << "," << mit->second.noc_transfer << "," << mit->second.noc_ahead << "," << mit->second.noc_winner;
+            if (mit->second.noc_wait > worst_case_noc_wait[core_id]) worst_case_noc_wait[core_id] = mit->second.noc_wait;
+            if (mit->second.noc_ahead > worst_case_noc_ahead[core_id]) worst_case_noc_ahead[core_id] = mit->second.noc_ahead;
+        }
         f << std::endl;
 
         average_latency[core_id] += eff;
@@ -548,15 +577,16 @@ namespace octopus
         report_files[core_id] << endl;
         report_files[core_id] << endl;
         report_files[core_id] << endl;
-        report_files[core_id] << stream.str() << ",Worst-case Oldest Latency" << endl;
+        const string noc_hdr = m_noc_columns ? ",Worst-case NoC Wait,Worst-case NoC Ahead" : "";
+        report_files[core_id] << stream.str() << ",Worst-case Oldest Latency" << noc_hdr << endl;
 
         if (!this->summary_file.is_open())
         {
             summary_file.open(report_file_path + string("/Summary.csv"));
             summary_file << "Core Id,";
             summary_file << stream.str();
-            summary_file << ",Finish Cycle,Worst-case Oldest Latency" << endl;
-            stringstream headers(stream.str() + ",Finish Cycle,Worst-case Oldest Latency");
+            summary_file << ",Finish Cycle,Worst-case Oldest Latency" << noc_hdr << endl;
+            stringstream headers(stream.str() + ",Finish Cycle,Worst-case Oldest Latency" + noc_hdr);
             string metric;
             summary_metrics.clear();
             while (getline(headers, metric, ','))
@@ -576,12 +606,13 @@ namespace octopus
         stream << max_effective_latency[core_id] << ",";
         stream << 1.0 * average_latency[core_id] / num_request[core_id];
 
-        report_files[core_id] << stream.str() << "," << worst_case_oldest_latency[core_id] << endl;
+        const string noc_val = m_noc_columns ? "," + to_string(worst_case_noc_wait[core_id]) + "," + to_string(worst_case_noc_ahead[core_id]) : "";
+        report_files[core_id] << stream.str() << "," << worst_case_oldest_latency[core_id] << noc_val << endl;
         report_files[core_id].close();
         report_files.erase(core_id);
 
         const string values = stream.str() + "," + to_string(last_checkpoint[core_id])
-                            + "," + to_string(worst_case_oldest_latency[core_id]);
+                            + "," + to_string(worst_case_oldest_latency[core_id]) + noc_val;
         summary_file << core_id << "," << values << endl;
         stringstream fields(values);
         string value;
