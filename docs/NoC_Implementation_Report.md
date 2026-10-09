@@ -120,3 +120,69 @@ on the single-switch NoC), four cores each, about ten seconds for the ten in par
 | S1-KEYS | None |
 
 Regression suite: REG-BUS, REG-ENV, REG-MESH, REG-TDM all identical.
+
+**Commit**: `fc7b30b6` "NoC step 1: packets, flits, classifier, topology".
+
+## Step 2 — routing and the routing-level deadlock check
+
+**Built**
+
+- `Routing.h/.cpp`: `RoutingAlgorithm` with `nextHop`, `ordering`, `needsEscapeVC`,
+  `deadlockFreeOn`, `name` and a `path()` helper that follows `nextHop` without adaptivity;
+  `Route {out_port, vc_mask}`; `RouterView` (credits only) as the one piece of router state a
+  routing function may read; `RoutingParams` (VCs, escape VC, CSV table); the factory
+  `createRouting(name, topology, params)`.
+- `Table`: BFS shortest paths from every destination, ties by lowest port index, CSV entries
+  overriding single (router, destination) cells with port validation; the escape VC excluded from
+  the mask when configured, and a packet already on the escape VC kept there.
+- `XY`: dimension order on `grid2d`; on `torus2d` the shorter direction per dimension and the
+  dateline rule as a function of (source, destination): a leg that wraps uses VC 1, otherwise VC 0.
+- `WestFirst`: west first when the destination is west, otherwise among the minimal outputs the
+  one with the most credits of the class, ties by lowest port, so it is genuinely adaptive.
+- `AdaptiveMinimal`: most credits among minimal outputs excluding the escape VC; falls back to XY
+  on the escape VC when on it or when no adaptive credit exists.
+- `channelDependencyAcyclic`: the channel dependency graph over (router, link port, VC) built from
+  every source/destination path with the per-hop `vc_mask`, DFS cycle detection, and a readable
+  cycle (router, port name, VC) on failure.
+- `checkOrderingRequirement`: refuses `pair_per_class` with an algorithm declaring `NONE`, or
+  with several VCs per class unless the torus dateline pins the VC.
+
+**Decisions and findings**
+
+- **Paths to a router without endpoints end on a virtual local port** at index `linkPorts(r)`,
+  so the deadlock check and the hop-count tests work on every router, not only on those with
+  caches attached.
+- **Rings are not routable with `Table` and one VC.** The checker, correctly, finds a cycle on
+  every ring whose minimal paths are longer than one hop (an even ring through tie-breaking, an
+  odd ring through the two-hop paths chaining around it). This is the textbook ring deadlock that
+  only a dateline VC removes, and `Table` has no dateline. The test plan's expectation that the
+  BFS table on a ring passes was wrong and has been corrected (S2-CDG-ESCAPE, S2-CDG-SHIPPED
+  assert the refusal). Consequence for the spec: the `ring` topology needs a ring-aware routing
+  with a dateline on VC 1, the same rule `XY` applies on the torus; it is added to the open
+  issues and scheduled with Phase 2. Until then a ring configuration is refused at construction,
+  which is the honest behaviour.
+- The escape-VC check for `Table` is conservative: the dependency chain follows the lowest
+  allowed VC of each hop; with single-bit masks (dateline, escape) it is exact.
+- `TDM_XY` is refused with a message saying it is deferred, as the specification requires.
+
+**Tests** (`bash test/network/run.sh 2`; the same 15 pass under the sanitizer build):
+
+| id | status |
+|---|---|
+| S2-TABLE-BFS | None |
+| S2-TABLE-TIES | None |
+| S2-TABLE-CSV | None |
+| S2-TABLE-BADPORT | None |
+| S2-XY | None |
+| S2-XY-LOCAL | None |
+| S2-XY-TORUS-VC | None |
+| S2-XY-TORUS-1VC | None |
+| S2-WF-TURNS | None |
+| S2-AM-MASK | None |
+| S2-CDG-CYCLE | None |
+| S2-CDG-ESCAPE | None |
+| S2-CDG-SHIPPED | None |
+| S2-ORDERING | None |
+| S2-REQUIRES | None |
+
+Regression suite: all four identical.
