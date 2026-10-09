@@ -22,6 +22,7 @@ namespace octopus
         ~FCFSArbiter();
 
         virtual bool elect(uint64_t cycle_number, vector<vector<Message>*>& buffers, Message *out_msg) override;
+        virtual int electIndex(uint64_t cycle_number, const vector<Candidate> &candidates) override;
     };
 }
 

@@ -41,4 +41,13 @@ namespace octopus
 
         return false;
     }
+    // lowest seq wins; ties (impossible for distinct packets) by lowest index
+    int FCFSArbiter::electIndex(uint64_t, const vector<Candidate> &c)
+    {
+        int best = -1;
+        for (int i = 0; i < (int)c.size(); i++)
+            if (best < 0 || c[i].seq < c[best].seq || (c[i].seq == c[best].seq && c[i].index < c[best].index))
+                best = i;
+        return best < 0 ? -1 : c[best].index;
+    }
 }

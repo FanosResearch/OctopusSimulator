@@ -4,6 +4,7 @@ add_executable(Octopus_tests
     main.cpp
     step1_foundations.cpp
     step2_routing.cpp
+    step3_arbiters.cpp
 )
 target_link_libraries(Octopus_tests Octopus_core)
 target_include_directories(Octopus_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

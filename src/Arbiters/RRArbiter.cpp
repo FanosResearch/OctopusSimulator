@@ -42,6 +42,21 @@ namespace octopus
         return coreElect(buffers, out_msg);
     }
 
+    // Same rotation as elect(): advance the pointer over the owner ids, the first owner with a
+    // candidate wins with its lowest-seq candidate, and the pointer rests on the winner so the
+    // next election starts after it. An owner without a candidate does not consume a turn.
+    int RRArbiter::electIndex(uint64_t cycle_number, const vector<Candidate> &c)
+    {
+        for (int i = 0; i < (int)m_candidates_ids->size(); i++)
+        {
+            candidate_id = selectCandidate(cycle_number);
+            int best = -1;
+            for (int k = 0; k < (int)c.size(); k++)
+                if (c[k].owner == (int)candidate_id && (best < 0 || c[k].seq < c[best].seq)) best = k;
+            if (best >= 0) return c[best].index;
+        }
+        return -1;
+    }
     uint64_t RRArbiter::selectCandidate(uint64_t cycle_number)
     {
         candidate_index = (candidate_index + 1) % m_candidates_ids->size();

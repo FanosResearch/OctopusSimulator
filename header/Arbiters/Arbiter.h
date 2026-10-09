@@ -18,6 +18,10 @@ using namespace std;
 
 namespace octopus
 {
+    // A candidate for the network's allocators (docs/NoC_Architecture_Spec.md s11.1): the
+    // caller's index, the owning endpoint id and the injection sequence (the age).
+    struct Candidate { int index; int owner; uint64_t seq; };
+
     class Arbiter
     {
     protected:
@@ -45,6 +49,10 @@ namespace octopus
 
         virtual bool elect(uint64_t cycle_number, vector<vector<Message> *> &buffers, Message *out_msg) = 0;
         virtual bool forceElect(uint64_t cycle_number, vector<vector<Message> *> &buffers, Message *out_msg);
+        // Index-based election over candidates, for the network's VC and switch allocators.
+        // Shares the rotation state with elect(). -1 = no winner. The base class does not
+        // support it (TDM's electIndex is deferred with the real-time phase).
+        virtual int electIndex(uint64_t cycle_number, const vector<Candidate> &candidates);
     };
 }
 

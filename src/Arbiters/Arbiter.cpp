@@ -62,4 +62,8 @@ namespace octopus
     {
         return elect(cycle_number, buffers, out_msg);
     }
+    int Arbiter::electIndex(uint64_t, const vector<Candidate> &)
+    {
+        return -1;
+    }
 }

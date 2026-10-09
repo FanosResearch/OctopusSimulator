@@ -186,3 +186,37 @@ Regression suite: REG-BUS, REG-ENV, REG-MESH, REG-TDM all identical.
 | S2-REQUIRES | None |
 
 Regression suite: all four identical.
+
+## Step 3 — arbiter extension
+
+**Built**
+
+- `Arbiter.h`: `struct Candidate { index, owner, seq }` and the virtual
+  `electIndex(cycle, candidates)`; the base returns -1 (not supported), which is what
+  `TDMArbiter` inherits until the real-time phase.
+- `FCFSArbiter::electIndex`: lowest `seq`, ties by lowest index.
+- `RRArbiter::electIndex`: the same rotation as `elect()`, through the same `selectCandidate`
+  and `candidate_index`: advance the pointer over the owner ids, the first owner with a candidate
+  wins with its lowest-`seq` candidate, the pointer rests on the winner, and an owner without a
+  candidate does not consume a turn.
+
+**Decisions**
+
+- The bus-side `elect()` is untouched, so every bus configuration keeps its behaviour; the
+  regression suite, which includes a TDM bus run specifically to guard these files, is identical.
+- Age on the network side is the injection sequence `seq`; on the bus side it is `Message::cycle`.
+  S3-EQUIV feeds both entry points the same draws with `cycle == seq` and checks the winners agree
+  for both policies over a thousand draws, which is the evidence that the two paths are one policy.
+
+**Tests** (`bash test/network/run.sh 3`; the four S3 tests also pass under the sanitizer build):
+
+| id | status |
+|---|---|
+| REG-BUS | PASS |
+| REG-ENV | PASS |
+| REG-MESH | PASS |
+| REG-TDM | PASS |
+| S3-FCFS | None |
+| S3-RR | None |
+| S3-EQUIV | None |
+| S3-STATE | None |
