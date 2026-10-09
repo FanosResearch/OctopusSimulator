@@ -26,6 +26,7 @@ add_compile_definitions(SYSTEM_CONFIGURATIONS=\"SystemConfigurations\")
 
 add_subdirectory(src)
 add_subdirectory(header)
+add_subdirectory(test/network/unit)   # Octopus_tests (docs/NoC_Test_Plan.md)
 
 add_executable(Octopus_Simulator Octopus_Simulator.cpp)
 add_library(Octopus SHARED Octopus_Simulator.cpp)
