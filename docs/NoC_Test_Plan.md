@@ -220,8 +220,8 @@ All `sim` on `NetworkOnly.csv` unless marked. Defaults: `flit_bytes` 16, `router
 
 | id | kind | assertion | expected |
 |---|---|---|---|
-| S6-IDENTITY | sim | `topology star`, `Table`, `flit_bytes 0`, `router_latency 0`, `vc_depth 1`, `num_classes 2`, `half_duplex 1`, `rx_serving alternate`, `class_link_latency 2,5`, directory MSI, all ten EEMBC traces | `LatencyReport_C*.csv` and `Summary.csv` checksums equal REG-MESH's references |
-| S6-FALLBACK | sim | only if S6-IDENTITY fails | per-core worst cases identical and totals within one tick; the diff is attached to the results and the decision to accept it is recorded by the user in the test's reference file |
+| S6-IDENTITY | sim | `MultiCoreSystem_NetNoC`: the legacy NoC matrix as a `custom` topology (implicit zero-latency endpoint routers, the switch an explicit router with `router_latency 1`), `Table`, `flit_bytes 0`, `vc_depth 32`, `num_classes 2`, `half_duplex 1`, `rx_serving alternate`, `link_model serial`, `class_link_latency 2,5` (spec §17.1), directory MSI, all ten EEMBC traces | `LatencyReport_C*.csv` and `Summary.csv` checksums equal REG-MESH's references |
+| S6-FALLBACK | sim | only if S6-IDENTITY fails | per-core worst cases identical and finish cycles within one tick; the per-trace, per-core deltas of every Summary column are written to `test/network/out/s6/fallback.csv` and the decision to accept them is the user's (recorded in the implementation report) |
 | S6-NOC-ALIAS | shell | after acceptance, `interconnect_type(s),NoC` | selects `Network` with the mapping of spec §17.2 and passes S6-IDENTITY |
 
 ## 10. Step 7 — observability

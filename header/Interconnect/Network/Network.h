@@ -149,6 +149,7 @@ namespace octopus { namespace net
         std::multimap<uint64_t, Arrival> m_arrivals;
         std::multimap<uint64_t, CreditEvt> m_credits;
         std::map<uint64_t, uint64_t> m_link_busy;             // linkKey -> busy_until
+        std::vector<std::vector<std::pair<int, int>>> m_sa_units;   // switch-allocation units: (router, port) lists; a half-duplex connection is one unit
         uint64_t m_seq = 0, m_tick = 0, m_cycle_edges = 1;
         Totals m_totals;
         struct ClassStats { uint64_t packets = 0, sum_latency = 0, max_latency = 0, max_wait = 0, first_inject = 0, last_eject = 0; };

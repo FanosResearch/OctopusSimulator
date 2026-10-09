@@ -500,3 +500,89 @@ most of it):
 | S5-RX-STRESS | XFAIL |  | two classes |
 
 Regression suite after the legacy fixes (`Configurable`, `Point2PointController`, `CacheController::modifyData`): REG-BUS, REG-ENV, REG-MESH, REG-TDM all identical.
+
+## Step 6 — degenerate equivalence with the legacy NoC
+
+**Built**
+
+- `configuration/SystemConfigurations/MultiCoreSystem_NetNoC.csv`: the legacy `NoC.csv` matrix
+  as a `custom` topology (cores and LLC with direct links, switch 200 as the only explicit
+  router), `Table`, one flit per message, `router_latency 1` for the switch, `vc_depth 32` (the
+  legacy RX depth), two classes, half duplex, `alternate` serving, `link_model serial`,
+  `class_link_latency 2,5`, a large injection queue. The spec's draft-2 recipe (a `star`) could not
+  carry the legacy link latencies, because local links cost nothing; §17.1 is rewritten.
+- Three engine refinements, all written into the spec as general semantics:
+  `link_model serial` delivers a flit `link_latency − 1` ticks after it was sent while holding the
+  link for `link_latency` (the legacy `Link::utilize` counts the sending cycle; §4.2); the implicit
+  routers of a `custom` matrix add no `router_latency` (they are the endpoint's own link ports,
+  §5.1); under `half_duplex` the two directions of a connection form one switch-allocation unit,
+  one election over both routers' candidates by age (§11.3), which is what the legacy per-link
+  arbiter did. `phaseSwitch` now iterates arbitration units built at construction.
+- `rx_serving alternate` moves its selector on every `peekMessage`, as `MeshInterface` does: a
+  peek that the controller does not pop (full processing queue) serves the other class next time.
+- The packet now accrues its own unloaded transfer time (`pipe`, `transit`), so the wait
+  statistic is right on topologies with mixed router latencies.
+- `src/Protocols/*Directory.cpp` fault messages print the transaction (from step 5); the
+  `[EVENT-PATH]` self-check is used again here.
+- `test/network/steps/step6.sh`: S6-IDENTITY (checksums against the REG-MESH references) and,
+  when it fails, S6-FALLBACK, which writes every differing Summary column per trace and core to
+  `test/network/out/s6/fallback.csv` and judges worst cases and finish cycles.
+
+**What matches exactly**
+
+Every single-message path reproduces the legacy figures to the tick (`NetworkOnly` on the same
+topology, and the one-request workload of step 5 through both systems):
+
+| path | legacy | network |
+|---|---|---|
+| core → LLC, request (direct link, latency 2) | 1 | 1 |
+| core → LLC, data (direct link, latency 5) | 4 | 4 |
+| core → core, request through the switch | 3 (1 + 1 + 1) | 3 |
+| core → core, data through the switch | 9 (4 + 1 + 4) | 9 |
+| the one-request workload, all thirteen report columns | 1,1,0,4,7,250,2,266 | identical |
+
+**What does not: S6-IDENTITY fails, S6-FALLBACK fails, the decision is the user's**
+
+All ten traces complete, and the aggregate figures are very close (average latency within
+±0.2 cycles on every core, finish cycles within −0.5 % to +0.1 %), but no report is
+byte-identical and the per-core worst cases differ. Over the ten traces, 416 Summary cells differ;
+the systematic ones:
+
+| column | cells | delta (network − legacy) |
+|---|---|---|
+| Worst-case Request Bus Latency | 39 | +1 to +19, mean +10.7 |
+| Worst-case L1 Access Latency | 36 | +4 to +24, mean +13.8 |
+| Worst-case Response Bus Latency | 33 | −7 to +11, mean +0.7 |
+| Finish Cycle | 36 | −5769 to +3722, mean −1450 (of ~1 000 000) |
+| Average Latency | 36 | −0.1 to +0.2 |
+
+The request-bus histogram of a2time01 core 0 shows the shape: the legacy NoC has 51 887 / 14 542 /
+1 952 / 333 / 86 / 22 / 4 requests at 0 / 1 / 2 / 3 / 4 / 5 / 6 ticks and one at 16; the network
+has 52 260 / 11 222 / 3 177 / 895 / 444 / 327 / 260 at the same values and a tail to 16. The cause
+is the network interface, not the links or the switch:
+
+- *One flit per tick per endpoint.* The legacy node pushed into one queue per link and every link
+  elected in the same cycle, so the LLC's three invalidations and a data response left together.
+  The NI injects one flit per tick on its local port, and the implicit router lets one flit per
+  tick leave that input port, so the same four messages leave over four ticks.
+- *One input VC per class.* A message whose link is busy (the half-duplex request link to a core
+  that is sending its own request) blocks the messages behind it in the class VC, where the legacy
+  node had a separate queue per link. This head-of-line blocking is the request-bus tail.
+- The L1-access worst cases move with the request-bus tail (the column spans the request's wait
+  to enter the network).
+
+Both are properties of a real network interface that the engine models on purpose. Reproducing
+the legacy numbers would need an emulation mode: unlimited injection per tick, one virtual output
+queue per link at the endpoint, and arrival-order forwarding at the switch. That is not a network
+feature, it is the old model's queue structure, and it would exist only to pass this test. The
+recommendation is to accept the divergence as documented here (the manual's NoC chapter carries
+the table above), keep the legacy `NoC` class selectable, and not introduce the `NoC` alias
+(S6-NOC-ALIAS stays XFAIL). The user decides; S6-FALLBACK records the deltas file either way.
+
+**Tests** (`bash test/network/run.sh 6`, about 2 minutes; step 4 re-run after the
+switch-allocation restructure: 0 failures)
+
+| id | status | measured | expected |
+|---|---|---|---|
+
+Regression suite: REG-BUS, REG-ENV, REG-MESH, REG-TDM identical.

@@ -46,6 +46,7 @@ namespace octopus { namespace net
             }
         }
         if (m_peeked < 0) return false;
+        m_last_served = m_peeked;                 // the selector moves on every peek (a peek without a pop skips the class next time), as MeshInterface does
         out_msg->copy(m_rx[m_peeked].front());
         return true;
     }
@@ -53,7 +54,7 @@ namespace octopus { namespace net
     {
         if (m_peeked < 0 || m_rx[m_peeked].empty()) return;
         m_rx[m_peeked].pop_front();
-        m_last_served = m_peeked; m_peeked = -1; m_popped++;
+        m_peeked = -1; m_popped++;
     }
 
     // ---- injection (spec §3.1): atomic for every destination of a multicast

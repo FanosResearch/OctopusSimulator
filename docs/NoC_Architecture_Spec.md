@@ -147,7 +147,7 @@ existing convention: `(i)` int, `(s)` string, `(vi)` int list, `(vs)` string lis
 | `class_link_latency` | vi | — | optional per-class link latency, index = class; overrides `link_latency`; used by the degenerate mapping (§17) and available generally | each ≥ 1 |
 | `credit_latency` | i | = `link_latency` | ticks for a credit to return | ≥ 0 |
 | `half_duplex` | i | 0 | `1`: the two links of a physical connection share one occupancy, so only one flit is in flight on the connection in either direction (legacy behaviour, §17) | 0 or 1 |
-| `link_model` | s | `pipelined` | `pipelined`: a link accepts one flit per tick and delivers it `link_latency` ticks later (a wire pipeline); `serial`: a flit holds the link for its whole latency, so a link carries one flit per `link_latency` ticks (the legacy transfer model, §17) | |
+| `link_model` | s | `pipelined` | `pipelined`: a link accepts one flit per tick and delivers it `link_latency` ticks later (a wire pipeline); `serial`: a flit holds the link for its whole latency and is at the far side `link_latency − 1` ticks after it was sent (the transfer counts the sending tick, as the legacy `MeshController::Link` does), so a link carries one flit per `link_latency` ticks and a message crosses a direct link in `link_latency − 1` ticks (the legacy transfer model, §17; `link_latency ≥ 2`) | |
 | `inject_queue_depth` | i | 16 | per class, packets, at the NI | ≥ 1 |
 | `eject_queue_depth` | i | 16 | per class, messages, at the NI (the endpoint's RX) | ≥ 1 |
 | `rx_serving` | s | `priority` | `priority`: response, forward, request; `alternate`: the legacy round-robin between RX queues (§7.4) | |
@@ -187,8 +187,10 @@ the two links share one occupancy.
 Coordinates: `grid2d` and `torus2d` number routers row-major, `r = y·k_x + x`; ports are ordered
 `east, west, north, south, local…` with absent directions skipped at edges. `ring` orders
 `clockwise, counter-clockwise, local…`. `custom` orders ports by the neighbour's position in the
-node's matrix row. `star` is one router whose ports are all local, and exists for the degenerate
-configuration (§17).
+node's matrix row; every endpoint node of a matrix gets an **implicit router** of its own id,
+which stands for the endpoint's link ports and adds no `router_latency` (only explicit routers,
+the matrix nodes that are not endpoints, are pipeline stages). `star` is one router whose ports
+are all local.
 
 ### 5.2 Endpoint attachment
 
@@ -305,7 +307,9 @@ step in the network and is inherent to delivering message objects.
 `rx_serving = priority`: `peekMessage` returns the front of the RESPONSE queue if non-empty, else
 FORWARD, else REQUEST. `rx_serving = alternate`: the legacy `MeshInterface` behaviour, a selector
 that alternates between the queues that are non-empty, applied to the class queues in index
-order. The degenerate configuration uses `alternate` with two classes, which reproduces the legacy
+order; the selector advances on every `peekMessage`, not on the pop, so a peek that is not
+followed by a pop (a full processing queue) serves the other class next time, exactly as the
+legacy interface does. The degenerate configuration uses `alternate` with two classes, which reproduces the legacy
 request/data alternation exactly.
 
 ### 7.5 Stamps at the NI
@@ -456,8 +460,11 @@ Per output port, per tick: candidates are the input VCs holding an output VC on 
 front flit is present and whose output VC has a credit (link ports) or whose reservation is held
 (local ports); the link must be free (`busy_until < tick`, and under `half_duplex` the opposite
 direction's link too). One winner per output port per tick; the winning flit is sent and the link
-is busy for one tick (`link_model = pipelined`) or for its latency (`serial`, §4.1). Per input port,
-at most one flit leaves per tick (one crossbar input).
+is busy for one tick (`link_model = pipelined`) or for its latency (`serial`, §4.2). Per input port,
+at most one flit leaves per tick (one crossbar input). Under `half_duplex` the two directions of a
+connection are one arbitration unit: the candidates of both routers' output ports compete in one
+election (by age, then by the lower router index), as the legacy link arbitrated between its two
+endpoints; otherwise each output port is its own unit.
 
 ## 12. Real-time arbitration (deferred)
 
@@ -625,17 +632,30 @@ class, owner, flits present, output port and VC, and credits available on its ou
 
 ### 17.1 The legacy single-switch NoC as a configuration
 
-`topology(s),star`, one router, `routing(s),Table`, `flit_bytes(i),0`, `router_latency(i),0`,
-`vcs_per_class(i),1`, `vc_depth(i),1`, `num_classes(i),2`, `half_duplex(i),1`,
-`rx_serving(s),alternate`, `local_ports(i),0`, `link_model(s),serial` (the legacy link holds a
-message for its whole latency), and `class_link_latency(vi),<m_request_latency>,
-<m_data_latency>`. Acceptance: `MultiCoreSystem_Mesh` on directory MSI over EEMBC produces
-byte-identical `LatencyReport` and `Summary` files to the legacy `NoC`. Known residual differences
-to watch: the legacy model arbitrates per link between the two endpoints of that link, while the
-router arbitrates per output port; with one flit per packet and `router_latency = 0` the two are
-expected to coincide, but if they do not, the fallback acceptance is identical per-core worst
-cases and totals within one tick, documented in the manual, and the decision to accept it is the
-user's. The legacy class is removed only after acceptance.
+The legacy `NoC` is a set of point-to-point links (every matrix connection: one request link
+and one data link, each shared by its two directions, each holding a message for its latency and
+delivering it `latency − 1` cycles after election) plus switch nodes that store a message and
+forward it one cycle later. Its configuration in the network (`MultiCoreSystem_NetNoC.csv`):
+`topology(s),custom` with the legacy `connection_matrix` rows and `router_ids` = the legacy
+`switch_ids` (endpoint nodes get implicit, zero-latency routers, §5.1; the switches are explicit
+routers), `routing(s),Table`, `flit_bytes(i),0` (one flit per message), `router_latency(i),1`
+(the switch's store-and-forward cycle), `vcs_per_class(i),1`, `vc_depth(i),<buffers_max_size>`
+(the legacy RX depth, in messages), `num_classes(i),2`, `half_duplex(i),1`,
+`rx_serving(s),alternate`, `local_ports(i),0`, `link_model(s),serial`,
+`class_link_latency(vi),<m_request_latency>,<m_data_latency>`, and a large
+`inject_queue_depth` (the legacy TX buffers were effectively unbounded). The star of draft 2 is
+not usable here: local links cost nothing, so it cannot carry the legacy link latencies.
+
+Acceptance: `MultiCoreSystem_Mesh` on directory MSI over EEMBC produces byte-identical
+`LatencyReport` and `Summary` files to the legacy `NoC`. Known residual differences to watch: the
+legacy node injects on every one of its links in the same cycle, while an NI injects one flit per
+tick on its local port and its implicit router lets one flit per tick leave that input port, so a
+node that sends several messages in one cycle (the LLC's invalidations and data) serialises them
+over consecutive ticks; a message to a busy link also blocks the messages behind it in the local
+input VC (one VC per class), where the legacy kept one queue per link. If the files are not
+identical, the fallback acceptance is identical per-core worst cases and totals within one tick,
+documented in the manual, and the decision to accept it is the user's. The legacy class is removed
+only after acceptance.
 
 ### 17.2 Legacy key mapping
 

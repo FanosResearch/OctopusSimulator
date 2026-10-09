@@ -193,6 +193,19 @@ namespace octopus { namespace net
                 }
             }
         }
+        // switch-allocation units (spec s11.3): one per output port; under half_duplex the two
+        // directions of a connection are one resource with one arbiter over both routers' candidates
+        m_sa_units.clear();
+        for (int r = 0; r < t.routers(); r++) for (int p = 0; p < t.ports(r); p++)
+        {
+            if (!t.isLocalPort(r, p) && m_cfg.half_duplex)
+            {
+                auto far = t.link(r, p);
+                if (far.router < r || (far.router == r && far.port < p)) continue;      // the other side owns the unit
+                m_sa_units.push_back({{r, p}, {far.router, far.port}});
+            }
+            else m_sa_units.push_back({{r, p}});
+        }
         for (int id : t.endpoints())
         {
             NetworkInterface *ni = new NetworkInterface(this, id, m_cfg.num_classes, m_cfg.inject_depth, m_cfg.eject_depth, m_cfg.rx_serving);
@@ -383,7 +396,7 @@ namespace octopus { namespace net
                 if (m_debug == "mask" && m_tick >= 50) rt.vc_mask = 0;
                 if (rt.vc_mask == 0) fatal("routing " + m_cfg.routing + " returned an empty vc_mask at router " + std::to_string(t.routerId(r)) + " for packet " + std::to_string(p.seq));
                 v.cur = p.seq; v.routed = true; v.out_port = rt.out_port; v.out_vc = -1; v.vc_mask = rt.vc_mask; v.head_arrival = v.fifo.front().arrived;
-                p.hops++;
+                p.hops++; p.pipe += t.implicitRouter(r) ? 0 : m_cfg.router_latency;
             }
         }
     }
@@ -407,7 +420,7 @@ namespace octopus { namespace net
                     {
                         VCState &v = R.in[q][c][w];
                         if (!v.routed || v.out_port != p || v.out_vc >= 0 || !(v.vc_mask & (1u << ov))) continue;
-                        if (m_tick < v.head_arrival + (uint64_t)m_cfg.router_latency) continue;
+                        if (m_tick < v.head_arrival + (uint64_t)(t.implicitRouter(r) ? 0 : m_cfg.router_latency)) continue;   // implicit routers add no latency
                         Packet &pk = m_packets.at(v.cur);
                         if (local && !m_nis.at(pk.dst_endpoint)->canReserve(c)) continue;
                         cands.push_back({(int)who.size(), (int)pk.msg.owner, pk.seq}); who.push_back(&v);
@@ -422,20 +435,23 @@ namespace octopus { namespace net
         }
     }
 
-    // ---- phase 5: switch allocation and link traversal (spec §11.3), ejection on the tail
+    // ---- phase 5: switch allocation and link traversal (spec s11.3), ejection on the tail.
+    // One arbitration per unit (an output port, or both directions of a half-duplex connection).
     void Network::phaseSwitch()
     {
         const Topology &t = *m_topo;
-        for (int r = 0; r < t.routers(); r++)
+        for (auto &unit : m_sa_units)
         {
-            RouterState &R = m_routers[r];
-            for (int p = 0; p < t.ports(r); p++)
+            int r0 = unit[0].first, p0 = unit[0].second;
+            uint64_t key = linkKey(r0, p0);
+            auto bz = m_link_busy.find(key);
+            if (bz != m_link_busy.end() && bz->second >= m_tick) continue;      // link busy
+            std::vector<Candidate> cands; std::vector<std::tuple<int, int, int, int>> who;
+            for (auto &rp : unit)
             {
+                int r = rp.first, p = rp.second; RouterState &R = m_routers[r];
                 bool local = t.isLocalPort(r, p);
-                uint64_t key = linkKey(r, p);
-                auto bz = m_link_busy.find(key);
-                if (bz != m_link_busy.end() && bz->second >= m_tick) continue;      // link busy
-                std::vector<Candidate> cands; std::vector<std::tuple<int, int, int>> who;
+                int before = (int)cands.size();
                 for (int q = 0; q < t.ports(r); q++)
                 {
                     if (R.in_last_sent[q] == m_tick) continue;                        // one flit per input port per tick
@@ -445,18 +461,22 @@ namespace octopus { namespace net
                         if (!v.routed || v.out_port != p || v.out_vc < 0 || v.fifo.empty() || v.fifo.front().seq != v.cur) continue;
                         if (!local && R.out[p].vcs[c][v.out_vc].credits <= 0) continue;
                         Packet &pk = m_packets.at(v.cur);
-                        cands.push_back({(int)who.size(), (int)pk.msg.owner, pk.seq}); who.push_back({q, c, w});
+                        cands.push_back({(int)who.size(), (int)pk.msg.owner, pk.seq}); who.push_back({r, q, c, w});
                     }
                 }
-                R.out[p].attempts += cands.size();
-                if (cands.empty()) continue;
-                int w = cands.size() == 1 ? 0 : R.out[p].sa->electIndex(m_tick, cands);
-                if (w < 0) continue;
-                R.out[p].losses += cands.size() - 1;
-                for (int i = 0; i < (int)cands.size(); i++) if (i != w) m_packets.at(cands[i].seq).ahead++;
-                auto [q, c, iv] = who[w];
-                sendFlit(r, q, c, iv, R.in[q][c][iv]);
+                R.out[p].attempts += cands.size() - before;
             }
+            if (cands.empty()) continue;
+            int w = cands.size() == 1 ? 0 : m_routers[r0].out[p0].sa->electIndex(m_tick, cands);
+            if (w < 0) continue;
+            for (int i = 0; i < (int)cands.size(); i++) if (i != w)
+            {
+                m_packets.at(cands[i].seq).ahead++;
+                auto [lr, lq, lc, lw] = who[i];
+                m_routers[lr].out[m_routers[lr].in[lq][lc][lw].out_port].losses++;   // counted at the loser's port
+            }
+            auto [r, q, c, iv] = who[w];
+            sendFlit(r, q, c, iv, m_routers[r].in[q][c][iv]);
         }
     }
 
@@ -487,8 +507,12 @@ namespace octopus { namespace net
         {
             ov.credits--;
             auto far = t.link(r, p);
-            f.arrived = m_tick + L;
-            m_arrivals.emplace(m_tick + L, Arrival{far.router, far.port, c, v.out_vc, f});
+            // serial (legacy) link: the transfer counts the sending tick, so the flit is at the far
+            // side L-1 ticks later while the link is held for L ticks (spec s4.2)
+            int arrive = m_cfg.link_model == "serial" ? std::max(1, L - 1) : L;
+            f.arrived = m_tick + arrive;
+            if (f.head) m_packets.at(f.seq).transit += arrive;
+            m_arrivals.emplace(m_tick + arrive, Arrival{far.router, far.port, c, v.out_vc, f});
         }
         if (f.tail)
         {
@@ -505,7 +529,7 @@ namespace octopus { namespace net
         NetworkInterface *ni = m_nis.at(pk.dst_endpoint);
         uint64_t total = m_tick - pk.t_inject;
         int links = pk.hops - 1;
-        uint64_t transfer = (uint64_t)pk.hops * m_cfg.router_latency + (uint64_t)links * m_cfg.linkLatency(pk.cls) + (pk.flits - 1);
+        uint64_t transfer = pk.pipe + pk.transit + (pk.flits - 1);        // what this packet would have taken unloaded
         pk.transfer_ticks = transfer; pk.wait_ticks = total >= transfer ? total - transfer : 0;
         ClassStats &cs = m_class_stats[pk.cls];
         cs.packets++; cs.sum_latency += total; cs.max_latency = std::max(cs.max_latency, total); cs.max_wait = std::max(cs.max_wait, pk.wait_ticks); cs.last_eject = m_tick;

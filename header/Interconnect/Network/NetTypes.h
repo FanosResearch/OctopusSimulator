@@ -47,6 +47,7 @@ namespace octopus { namespace net
         // per-hop statistics (spec §15.3)
         int      hops = 0;
         uint64_t wait_ticks = 0, transfer_ticks = 0, ahead = 0;
+        uint64_t pipe = 0, transit = 0;   // router pipeline ticks and link ticks accrued (transfer = pipe + transit + flits - 1)
     };
 
     struct Flit

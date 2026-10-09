@@ -57,6 +57,9 @@ namespace octopus { namespace net
         const std::vector<int> &endpointsAt(int r) const { return m_routers[r].endpoints; }
         std::vector<int> endpointsAtPort(int r, int p) const;
         bool isEndpoint(int id) const { return m_endpoint_router.count(id) > 0; }
+        // custom matrices give every endpoint node an implicit router: it stands for the endpoint's
+        // own link ports and adds no pipeline latency (spec s5.1)
+        bool implicitRouter(int r) const { return m_kind == Kind::Custom && isEndpoint(m_routers[r].id); }
 
         // Port names for messages and the hang dump: "east", "local0", "to 7", ...
         std::string portName(int r, int p) const;
