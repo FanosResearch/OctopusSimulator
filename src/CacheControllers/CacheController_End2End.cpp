@@ -92,10 +92,7 @@ namespace octopus
         msg->to.push_back(this->m_shared_memory_id);
 
         if (!m_upper_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::DATA_RESPONSE))
-        {
-            cout << "CacheController: Cannot insert the Msg into BusTxResp FIFO, FIFO is Full" << endl;
-            exit(0);
-        }
+            pushRefused("upper interface, response queue", *msg);
 
         delete msg;
     }
@@ -106,10 +103,7 @@ namespace octopus
         msg->cycle = this->m_cache_cycle;
 
         if (!m_lower_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::SERVICE_REQUEST))
-        {
-            cout << "CacheController_End2End(id = " << this->m_id << "): Cannot insert the Msg into the lower interface FIFO, FIFO is Full" << endl;
-            exit(0);
-        }
+            pushRefused("lower interface, service queue", *msg);
 
         delete msg;
     }

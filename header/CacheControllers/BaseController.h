@@ -95,12 +95,16 @@ namespace octopus
         // stderr once it has processed nothing for that many cycles (deadlock triage).
         uint64_t m_last_progress_cycle = 0;
         bool m_hang_dumped = false;
+        [[noreturn]] void pushRefused(const char *where, const Message &msg);
         virtual void dumpState();
 
         // Structural admission gate. Returns false when a ready request must be
         // held back (e.g., the derived controller has no free MSHR/PWB entry for
         // a new miss). Default: always admit. Overridden by CacheController.
         virtual bool canAdmitRequest(Message &msg) { return true; }
+        // transmit-side reservations (spec s14.2): released when the message's transition has run
+        virtual void txRelease(const Message &msg) { (void)msg; }
+        virtual void txAnswered(const Message &msg) { (void)msg; }   // a parked request has been answered from a fill
         // Pipelined data array: lets the derived controller take a ready
         // message off the FSM path and apply its event only once the array
         // has absorbed its bytes. Default: never.

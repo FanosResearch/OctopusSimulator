@@ -247,6 +247,7 @@ Recorded now so the XFAILs above have an owner:
 
 | id | assertion | turns green |
 |---|---|---|
+| P2-ADMISSION | the ten EEMBC traces on the grid with `inject_queue_depth 4` (= the number of caches) and `eject_queue_depth 2`, under `FCFSArbiter` and `RRArbiter`; then `inject_queue_depth 2` | the twenty runs complete and no endpoint reports a refused push (`NetworkStats.csv` `endpoint` rows); with depth 2 the home can never admit a replacement, the run wedges and the watchdog exits 2 (spec §14.2, `ADMIT-TX`) |
 | P2-THREE-CLASS | S5-RX-STRESS with `num_classes = 3` | DONE: injection in age order (spec §7.2) and the LLC rows `(N / NS_d / NM_d, PutS / last_PutS) → PutAck`; S5-RX-STRESS is a must-pass and the grid preset ships with three classes |
 | P2-ADMIT-RF | a controller with a full request queue still consumes a forward and a response | the named property of spec §14.2, on every shipped controller |
 | P2-FSM-CLASS | every action in the directory FSM CSVs carries its message class annotation | the checker's input exists |

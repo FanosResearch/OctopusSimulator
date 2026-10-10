@@ -126,6 +126,16 @@ namespace octopus
         // Stall a brand-new demand miss when the MSHR is full (outstanding-miss
         // limit reached) or the write-back buffer (PWB) has no headroom.
         virtual bool canAdmitRequest(Message &msg) override;
+        // transmit-side admission (docs/NoC_Architecture_Spec.md s14.2): room in the outgoing queues
+        // for everything this message's transition can emit, reserved at admission and released when
+        // the transition has run (its actions may fire cycles later through the data array)
+        struct TxNeed { int req = 0, fwd = 0, resp = 0; CommunicationInterface *iface = nullptr; };
+        struct TxHold { uint64_t msg_id; uint8_t kind; int source; TxNeed need; bool parked = false; };
+        TxNeed txNeed(const Message &msg);
+        bool txAdmit(const Message &msg);
+        void txRelease(const Message &msg) override;
+        void txAnswered(const Message &msg) override;
+        std::vector<TxHold> m_tx_holds;
         // Adds the MSHR and write-back-buffer bounds to the queue bound.
         virtual bool demandAdmissionBlocked(int outstanding) const override;
 

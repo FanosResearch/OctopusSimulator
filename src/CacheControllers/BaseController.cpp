@@ -101,8 +101,12 @@ namespace octopus
                     dumpState();
                     HangDump::run();            // the network router view, if a Network is present
                     // The run is wedged: finalize the raw trace now (records + chunk
-                    // index) so the cycles leading into the stall survive the kill.
+                    // index) so the cycles leading into the stall survive, then stop:
+                    // nothing after a wedge is a result (status 2, like the network's watchdog).
                     Logger::getLogger()->traceFinalize();
+                    fprintf(stderr, "[HANG] controller %d: no progress for %ld cycles with %d queued messages: the run is wedged, exiting with status 2\n",
+                            m_id, hang_dump, m_processing_queue->size());
+                    exit(2);
                 }
                 return;
             }
@@ -139,6 +143,7 @@ namespace octopus
 
             for (ControllerAction action : actions)
                 action_functions[action.type](action.data);
+            txRelease(ready_msg);
         }
     }
 
@@ -321,10 +326,8 @@ namespace octopus
                 Logger::getLogger()->trace(pending_messages.front(), m_log_role, (uint32_t)m_id, Logger::Phase::EXIT);
 
                 if (!m_lower_interface->pushMessage(pending_messages.front(), this->m_cache_cycle, MessageType::DATA_RESPONSE))
-                {
-                    cout << "CacheController: Cannot insert the Msg into lower interface." << endl;
-                    exit(0);
-                }
+                    pushRefused("lower interface, response queue", pending_messages.front());
+                txAnswered(pending_messages.front());
                 pending_messages.erase(pending_messages.begin());
             }
             this->m_pending_requests.erase(this->getAddressKey(msg->addr));
@@ -364,12 +367,22 @@ namespace octopus
         Logger::getLogger()->trace(*msg, m_log_role, (uint32_t)m_id, Logger::Phase::EXIT);
 
         if (!m_lower_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::DATA_RESPONSE))
-        {
-            cout << "CacheController: Cannot insert the Msg into lower interface." << endl;
-            exit(0);
-        }
+            pushRefused("lower interface, response queue", *msg);
 
         delete msg;
+    }
+
+    // A refused push means the transmit-side admission under-counted what a transition emits, or
+    // an exempt class (responses, acknowledgements, replacements) outgrew its queue: never silent,
+    // never status 0 (docs/NoC_Architecture_Spec.md s14.2).
+    void BaseController::pushRefused(const char *where, const Message &msg)
+    {
+        fprintf(stderr, "Controller %d: a push to the %s was refused (msg %llu, addr 0x%llx, kind %d, owner %d, %zu destinations, cycle %llu); "
+                        "the queue is full: size inject_queue_depth / buffers for the controller's bursts\n",
+                m_id, where, (unsigned long long)msg.msg_id, (unsigned long long)msg.addr, (int)msg.kind, (int)msg.owner, msg.to.size(), (unsigned long long)m_cache_cycle);
+        Logger::getLogger()->traceFinalize();
+        HangDump::run();
+        exit(2);
     }
 
     void BaseController::sendBusRequest(void *data_ptr)
@@ -397,10 +410,7 @@ namespace octopus
         }
 
         if (!m_upper_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::REQUEST))
-        {
-            cout << "CacheController(id = " << this->m_id << "): Cannot insert the Msg into the upper interface FIFO, FIFO is Full" << endl;
-            exit(0);
-        }
+            pushRefused("upper interface, request queue", *msg);
 
         delete msg;
     }
@@ -443,10 +453,7 @@ namespace octopus
         }
 
         if (!m_upper_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::DATA_RESPONSE))
-        {
-            cout << "CacheController: Cannot insert the Msg into BusTxResp FIFO, FIFO is Full" << endl;
-            exit(0);
-        }
+            pushRefused("upper interface, response queue", *msg);
 
         delete msg;
     }

@@ -757,3 +757,66 @@ a must-pass over all ten traces under both arbiters, the plan's P2-THREE-CLASS r
 **Tests** (`bash test/network/run.sh all` on the three-class preset)
 
 Full suite on the three-class preset (`bash test/network/run.sh all`): 59 PASS, 4 XFAIL (S4-ORDER-ADAPTIVE, S6-IDENTITY, S6-FALLBACK, S6-NOC-ALIAS, S7-VIEWER are the expected ones; S6-* by the user's acceptance), 0 FAIL once the WSL sanitizer binary was rebuilt with the age-order injection (a stale binary had made S5-XPLAT differ). S5-RX-STRESS: three classes, eject_queue_depth 2, FCFS and RR: 20/20 complete.
+
+## Phase 2, P2-ADMISSION — transmit-side admission (`ADMIT-TX`)
+
+The controllers exited with status 0 on a refused push to their lower interface ("FIFO is
+Full"), because the legacy mesh interface never refused one. The question was whether the
+right answer is to retry after the push; it is not: by then the transition has been taken and
+its other actions executed. The answer is admission before the transition, which the controllers
+already do for the MSHR and the write-back buffer, extended to the transmit side, with a refusal
+turned into a fatal error.
+
+**Built**
+
+- `CommunicationInterface::txFreeSlots(type)`, `txReserve`, `txRelease`: free slots in the
+  injection queue a push of that type would use (REQUEST → request class, SERVICE_REQUEST →
+  forward class, DATA_RESPONSE → response class), with reservations. The buses keep the
+  unbounded default, so nothing changes for them; the `NetworkInterface` implements all three
+  per class.
+- `CacheController::txNeed` / `txAdmit` / `txRelease`: the worst case a transition can emit,
+  checked and reserved when the message is popped, released when its actions have run. At the
+  home: a demand request needs `caches − 1` forward slots and one response; a PutS or PutM one
+  forward slot (its PutAck); a replacement `caches` forward slots (an invalidation to every
+  cache); a fill from memory one response **per request that coalesced on the line** while it
+  was outstanding (the home answers all of them). At a cache: a demand miss or a replacement one
+  request slot; anything from the home without data (a forwarded request, an invalidation, the
+  acknowledgement that completes a saved forward) two response slots. A refused message stays in
+  the processing queue as NonReady and is retried, exactly like a full MSHR.
+- Reservations are needed because the data array is pipelined: a transition admitted now pushes
+  cycles later, and its action list can be parked (`DataArrayOp::ACTIONS`) and fire later still;
+  `txRelease` waits for the parked list of the same message, and the requeue path releases too.
+- `BaseController::pushRefused`: every "FIFO is Full" `exit(0)` (six sites, directory and snoop
+  controllers alike) now prints the controller, queue, message and cycle, runs the hang dump and
+  exits 2. After admission a refusal is an accounting bug, never something to retry.
+- The controllers' `OCTOPUS_HANG_DUMP` watchdog now exits 2 after its dump, like the network's;
+  a wedged run used to keep running until the sweep's timeout killed it.
+- Parked requests: a demand request that becomes an outstanding miss at the home keeps its response
+  reservation until the fill answers it (`txAnswered`, also when the owner serves it instead), so a
+  fill reserves nothing and the count is exact however many requests coalesce while the fill waits
+  for the data array.
+- One more LLC row from the reordering the admission introduces: `(N_d, PutS/last_PutS) →
+  PutAck` (a stale PutS while the home evicts an M line); every LLC state now answers a stale PutS.
+
+**What the shallow queues showed, in order**
+
+| injection queue | outcome |
+|---|---|
+| 2 (below the home's replacement fan-out) | the home can never admit a replacement; the run wedges and the watchdog exits 2, as documented: the smallest workable depth is the number of caches |
+| 4, admission on demand requests only | the home's PutAcks and replacement invalidations (exempt) overflowed the forward queue on 9 traces |
+| 4, every producer gated | 9 of 10 complete; basefp01 overflowed the response queue: a fill answers every coalesced requester |
+| 4, fills reserve one slot per requester parked at admission | basefp01 still overflowed: requests coalesce while the fill waits for the data array |
+| 4, parked requests keep their own reservation until answered | all ten complete under FCFS and under round-robin, zero refused pushes (P2-ADMISSION) |
+
+**Tests** (`bash test/network/run.sh 5` and the regression suite)
+
+| id | status | measured | expected |
+|---|---|---|---|
+| S5-EEMBC-2x2 | PASS | 10/10 complete | complete |
+| S5-RX-STRESS | PASS | three classes |  eject_queue_depth 2 |
+| P2-ADMISSION | PASS | 20/20 complete with inject_queue_depth 4 |  0 refused pushes; depth 2 wedges and exits 2 |
+| S5-XPLAT | PASS | identical checksums | identical |
+| S5-ASAN | PASS | no sanitizer report | none |
+| REG-BUS | PASS | identical | identical |
+| REG-MESH | PASS | identical | identical |
+| REG-TDM | PASS | identical | identical |

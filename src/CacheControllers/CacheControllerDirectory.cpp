@@ -167,10 +167,7 @@ namespace octopus
         if(!msg->to.empty())
         {
             if (!m_lower_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::SERVICE_REQUEST))
-            {
-                cout << "CacheController(id = " << this->m_id << "): Cannot insert the Msg into the lower interface FIFO, FIFO is Full" << endl;
-                exit(0);
-            }
+                pushRefused("lower interface, forward queue", *msg);
         }
 
         delete msg;
@@ -181,7 +178,12 @@ namespace octopus
         Message *msg = (Message *)data_ptr;
 
         if (m_pending_requests.find(getAddressKey(msg->addr)) != m_pending_requests.end())
+        {
+            // the parked requests are served by the owner, not by this home: give back the
+            // response slots they held (spec s14.2)
+            for (auto &pm : m_pending_requests[getAddressKey(msg->addr)]) txAnswered(pm);
             this->m_pending_requests.erase(this->getAddressKey(msg->addr));
+        }
         else
         { 
             cout << "CacheControllerDirectory: Request is not found in the pending buffer." << endl;

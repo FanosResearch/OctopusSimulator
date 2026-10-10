@@ -7,6 +7,7 @@
  */
 
 #include "../../header/CacheControllers/CacheController.h"
+#include <algorithm>
 #include "../../header/Protocols/MSIProtocol.h"   // REQUEST_TYPE_GETS for the deferred-supply rule
 #include <cstdio>
 #include <cstdlib>
@@ -432,8 +433,89 @@ namespace octopus
         return false;
     }
 
+    CacheController::TxNeed CacheController::txNeed(const Message &msg)
+    {
+        // Every transition that emits packets is popped only when the outgoing queues it will use
+        // have room (spec s14.2). At the home: a demand request answers with one data response plus
+        // a forward or an invalidation to every other cache; a PutS or PutM answers with a PutAck
+        // (forward class); a replacement invalidates every cache; a fill from memory answers the
+        // requester. At a cache: a demand miss and a replacement each send one request; anything
+        // arriving from the home without data (a forwarded request, an invalidation, an
+        // acknowledgement that completes a saved forward) answers with up to two data messages.
+        // The buses report unbounded room, so nothing changes for them.
+        TxNeed n;
+        if (m_log_role == Logger::Role::LLC)
+        {
+            n.iface = m_lower_interface;
+            int caches = std::max(1, (int)m_arbiter_candidates.size());
+            if (msg.isDemandRequest()) { n.fwd = caches - 1; n.resp = 1; }
+            else if (msg.kind == Message::K_PUTS || msg.kind == Message::K_PUTM) n.fwd = 1;
+            else if (msg.kind == Message::K_EVICT) n.fwd = caches;
+            // a fill from memory answers the requests parked on the line, and each of those kept its
+            // own response reservation when it was parked (txRelease), so the fill reserves nothing
+            return n;
+        }
+        n.iface = m_upper_interface;
+        if (msg.isDemandRequest() || msg.kind == Message::K_EVICT) n.req = 1;
+        else if (msg.source == Message::Source::UPPER_INTERCONNECT && msg.data == NULL) n.resp = 2;
+        return n;
+    }
+
+    bool CacheController::txAdmit(const Message &msg)
+    {
+        TxNeed n = txNeed(msg);
+        if (!n.iface || (n.req == 0 && n.fwd == 0 && n.resp == 0)) return true;
+        if (n.iface->txFreeSlots(MessageType::REQUEST) < n.req || n.iface->txFreeSlots(MessageType::SERVICE_REQUEST) < n.fwd ||
+            n.iface->txFreeSlots(MessageType::DATA_RESPONSE) < n.resp)
+            return false;
+        if (n.req) n.iface->txReserve(MessageType::REQUEST, n.req);
+        if (n.fwd) n.iface->txReserve(MessageType::SERVICE_REQUEST, n.fwd);
+        if (n.resp) n.iface->txReserve(MessageType::DATA_RESPONSE, n.resp);
+        m_tx_holds.push_back({msg.msg_id, msg.kind, (int)msg.source, n});
+        return true;
+    }
+
+    void CacheController::txRelease(const Message &msg)
+    {
+        // a parked action list of this message still has to run: release when it has
+        for (auto &op : m_array_ops)
+            if (op.kind == DataArrayOp::ACTIONS && op.msg.msg_id == msg.msg_id && op.msg.kind == msg.kind) return;
+        for (auto it = m_tx_holds.begin(); it != m_tx_holds.end(); ++it)
+            if (!it->parked && it->msg_id == msg.msg_id && it->kind == msg.kind && it->source == (int)msg.source)
+            {
+                if (it->need.req) it->need.iface->txRelease(MessageType::REQUEST, it->need.req);
+                if (it->need.fwd) it->need.iface->txRelease(MessageType::SERVICE_REQUEST, it->need.fwd);
+                // a demand request parked as an outstanding miss is answered later, from the fill:
+                // its response slot stays reserved until then (txAnswered)
+                bool parked = false;
+                if (it->need.resp && msg.isDemandRequest())
+                {
+                    auto pr = m_pending_requests.find(getAddressKey(msg.addr));
+                    if (pr != m_pending_requests.end())
+                        for (auto &pm : pr->second) if (pm.msg_id == msg.msg_id) { parked = true; break; }
+                }
+                if (parked) { it->need.req = it->need.fwd = 0; it->parked = true; return; }
+                if (it->need.resp) it->need.iface->txRelease(MessageType::DATA_RESPONSE, it->need.resp);
+                m_tx_holds.erase(it);
+                return;
+            }
+    }
+
+    void CacheController::txAnswered(const Message &msg)
+    {
+        for (auto it = m_tx_holds.begin(); it != m_tx_holds.end(); ++it)
+            if (it->parked && it->msg_id == msg.msg_id)
+            {
+                if (it->need.resp) it->need.iface->txRelease(MessageType::DATA_RESPONSE, it->need.resp);
+                m_tx_holds.erase(it);
+                return;
+            }
+    }
+
     bool CacheController::canAdmitRequest(Message &msg)
     {
+        if (!txAdmit(msg))
+            return false;
         // Only a brand-new demand request can open a fresh outstanding miss (and
         // thus consume an MSHR slot). Responses, snoops, write-backs and self-
         // generated replacement messages must always proceed -- never back-pressure
@@ -706,6 +788,7 @@ namespace octopus
             {
                 m_pipe_requeues++;
                 traceMsg("requeue", op.msg);
+                txRelease(op.msg);
                 m_processing_queue->pushBack(op.msg, FRFCFS_State::NonReady, /*force=*/true);
                 m_pipe_firing = was_firing;
                 m_processing_queue->markDirty();
@@ -724,12 +807,14 @@ namespace octopus
             vector<ControllerAction> actions = m_protocol->processRequest(op.msg, dprint);
             for (ControllerAction action : actions)
                 action_functions[action.type](action.data);
+            txRelease(op.msg);
         }
         else
         {
             traceMsg("fire-actions", op.msg);
             for (ControllerAction action : op.actions)
                 action_functions[action.type](action.data);
+            txRelease(op.msg);
         }
 
         m_pipe_firing = was_firing;

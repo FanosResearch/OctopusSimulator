@@ -172,6 +172,17 @@ public:
     // in-flight reserve, so a response emitted by an already-broadcast transaction
     // never overflows. Default = effectively unbounded (non-bus interconnects).
     virtual int txResponseFreeSlots() { return 1 << 30; }
+    // Free slots in the outgoing queue that a push of this type would use: REQUEST -> the request
+    // queue, SERVICE_REQUEST -> the forward queue, DATA_RESPONSE -> the response queue (one queue
+    // per class on the Network; the buses are effectively unbounded). The controllers' transmit-side
+    // admission (CacheController::txAdmit) pops a message whose transition can emit packets only
+    // when these have room, so a push never fails (docs/NoC_Architecture_Spec.md s14.2).
+    virtual int txFreeSlots(MessageType type) { (void)type; return 1 << 30; }
+    // A transition admitted now may push cycles later (the data array is pipelined), so admission
+    // reserves the slots it counted and releases them when the transition has run; txFreeSlots
+    // excludes reservations held by others. Unbounded interfaces ignore both.
+    virtual void txReserve(MessageType type, int n) { (void)type; (void)n; }
+    virtual void txRelease(MessageType type, int n) { (void)type; (void)n; }
 
     virtual bool rollback(uint64_t address, uint64_t mask, Message *out_msg) { return false; }
     

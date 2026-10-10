@@ -87,5 +87,24 @@ step5() {
     for t in $EEMBC; do [ "$(cat "$O/rx-$arb/$t/.rc")" = 0 ] && completed "$O/rx-$arb/$t" "$ROOT/BMs/eembc-traces/$t" || { ok=0; detail="$detail $arb:$t"; }; done
   done
   if [ $ok = 1 ]; then pass S5-RX-STRESS "three classes, eject_queue_depth 2, FCFS and RR: 20/20 complete" "complete" "$(elapsed "$t0")"; else fail S5-RX-STRESS "$detail" "20/20 complete" "$(elapsed "$t0")"; fi
+  # ---------------- P2-ADMISSION (spec s14.2, ADMIT-TX): injection queues as shallow as the home's
+  # replacement fan-out (4 caches), both arbiters: every run completes and no push is ever refused;
+  # one slot less and the home can never admit a replacement: the watchdog reports the wedge
+  t0=$(now); ok=1; detail=""
+  for arb in FCFSArbiter RRArbiter; do
+    for t in $EEMBC; do rm -rf "${O:?}/adm-$arb/${t:?}"; mkdir -p "$O/adm-$arb/$t"; done
+    for t in $EEMBC; do
+      ( OCTOPUS_HANG_DUMP=200000 timeout 1800 "$BIN" $GRID -p "workload_path(s)=$(W $t)/" -p "interconnect.inject_queue_depth(i)=4" -p "interconnect.eject_queue_depth(i)=2" -p "interconnect.arbiter_type(s)=$arb" -o "$(wpath "$O/adm-$arb/$t")" > "$O/adm-$arb/$t/.stdout" 2> "$O/adm-$arb/$t/.stderr"; echo $? > "$O/adm-$arb/$t/.rc" ) &
+    done; wait
+    for t in $EEMBC; do
+      local refused; refused=$(grep "^endpoint" "$O/adm-$arb/$t/NetworkStats.csv" 2>/dev/null | cut -d, -f7 | awk '{s+=$1} END{print s+0}')
+      { [ "$(cat "$O/adm-$arb/$t/.rc")" = 0 ] && completed "$O/adm-$arb/$t" "$ROOT/BMs/eembc-traces/$t" && [ "$refused" = 0 ]; } || { ok=0; detail="$detail $arb:$t(rc=$(cat "$O/adm-$arb/$t/.rc"),refused=$refused)"; }
+    done
+  done
+  rm -rf "${O:?}/adm-min"; mkdir -p "$O/adm-min"
+  ( OCTOPUS_HANG_DUMP=20000 timeout 900 "$BIN" $GRID -p "workload_path(s)=$(W a2time01-trace)/" -p "interconnect.inject_queue_depth(i)=2" -o "$(wpath "$O/adm-min")" > "$O/adm-min/.stdout" 2> "$O/adm-min/.stderr" ); local mrc=$?
+  # "wedged" is printed by the controller watchdog and by the network's
+  if [ $ok = 1 ] && [ $mrc = 2 ] && grep -q "wedged" "$O/adm-min/.stderr"; then pass P2-ADMISSION "20/20 complete with inject_queue_depth 4, 0 refused pushes; depth 2 wedges and exits 2" "complete, 0 refused; depth 2 wedges" "$(elapsed "$t0")"
+  else fail P2-ADMISSION "$detail depth2:rc=$mrc" "20/20 complete, 0 refused; depth 2 wedges with exit 2" "$(elapsed "$t0")"; fi
   unset OCTOPUS_EVENT_DEBUG
 }

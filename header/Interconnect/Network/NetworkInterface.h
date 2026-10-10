@@ -27,6 +27,10 @@ namespace octopus { namespace net
         bool pushMessage2RX(Message &msg, MessageType type = MessageType::REQUEST) override;
         bool canAcceptRX(MessageType type = MessageType::REQUEST) override;
         int  txResponseFreeSlots() override;
+        int  txFreeSlots(MessageType type) override;
+        void txReserve(MessageType type, int n) override;
+        void txRelease(MessageType type, int n) override;
+        int  txClass(MessageType type) const;
         bool rollback(uint64_t address, uint64_t mask, Message *out_msg) override;
 
         // ---- the network's side
@@ -52,6 +56,7 @@ namespace octopus { namespace net
         int m_num_classes, m_inject_depth, m_eject_depth;
         bool m_priority;                        // rx_serving: priority (true) or alternate
         std::vector<std::deque<uint64_t>> m_inject;   // packet seqs per class
+        std::vector<int> m_tx_reserved;               // slots reserved by admitted transitions, per class
         std::vector<std::deque<Message>> m_rx;        // the endpoint's RX per class
         std::vector<int> m_reserved;
         int m_peeked = -1;                      // class peekMessage last returned

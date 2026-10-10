@@ -3,6 +3,7 @@
  * Specification: docs/NoC_Architecture_Spec.md §3.1, §7.
  */
 #include "../../../header/Interconnect/Network/NetworkInterface.h"
+#include <algorithm>
 #include "../../../header/Interconnect/Network/Network.h"
 
 namespace octopus { namespace net
@@ -88,6 +89,27 @@ namespace octopus { namespace net
     }
     bool NetworkInterface::canAcceptRX(MessageType type) { return rxFree(classOfType(type)) > 0; }
     int  NetworkInterface::txResponseFreeSlots() { return injectFree(m_num_classes - 1); }
+    int  NetworkInterface::txClass(MessageType type) const
+    {
+        return (type == MessageType::DATA_RESPONSE) ? m_num_classes - 1
+             : (type == MessageType::SERVICE_REQUEST && m_num_classes == 3) ? CLASS_FORWARD : CLASS_REQUEST;
+    }
+    int  NetworkInterface::txFreeSlots(MessageType type)
+    {
+        if (m_tx_reserved.empty()) m_tx_reserved.assign(m_num_classes, 0);
+        int cls = txClass(type);
+        return std::max(0, injectFree(cls) - m_tx_reserved[cls]);
+    }
+    void NetworkInterface::txReserve(MessageType type, int n)
+    {
+        if (m_tx_reserved.empty()) m_tx_reserved.assign(m_num_classes, 0);
+        m_tx_reserved[txClass(type)] += n;
+    }
+    void NetworkInterface::txRelease(MessageType type, int n)
+    {
+        if (m_tx_reserved.empty()) m_tx_reserved.assign(m_num_classes, 0);
+        int &r = m_tx_reserved[txClass(type)]; r = std::max(0, r - n);
+    }
     bool NetworkInterface::rollback(uint64_t, uint64_t, Message *) { return false; }   // as MeshInterface (its search is commented out)
 
     void NetworkInterface::deliver(int cls, const Message &msg)

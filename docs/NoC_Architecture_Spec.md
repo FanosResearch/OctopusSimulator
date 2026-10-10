@@ -85,6 +85,7 @@ The NI implements the existing interface and nothing else; its visible behaviour
 | `pushMessage2RX(msg, type)` | used only by the network itself on ejection. Because an RX slot is reserved for a packet when its head is admitted to the last router (§8.4), the call shall always succeed; a `false` is an internal error and fatal (§16). |
 | `canAcceptRX(type)` | true when the RX queue for that type's class has an unreserved free slot. |
 | `txResponseFreeSlots()` | free slots in the response-class injection queue. |
+| `txFreeSlots(type)` | free slots in the injection queue a push of that type would use: REQUEST the request class, SERVICE_REQUEST the forward class (the request class with two classes), DATA_RESPONSE the response class. The controllers' transmit-side admission reads it (§14.2). |
 | `rollback(addr, mask, out)` | unchanged semantics: searches the injection queues, as `MeshInterface::rollback` does. |
 
 Multicast: a `to` list with several destinations is split into one packet per destination at
@@ -554,6 +555,23 @@ controller chapter of the manual and guarded by a unit test (§20, item 5) that 
 controller with a full request queue and checks that a forward and a response are still consumed.
 `rx_serving = priority` is what lets the NI honour it when all three RX queues are non-empty.
 
+**Transmit-side admission (`ADMIT-TX`).** A push to an injection queue never fails: a controller
+pops a message whose transition emits packets only when the queues that transition will use have
+room, checked in the same cycle (`CacheController::txAdmit`). At the home a demand request needs
+one response slot and `caches − 1` forward slots (a forward or an invalidation to every other
+cache), a PutS or PutM one forward slot (the PutAck), a replacement `caches` forward slots (an
+invalidation to every cache), and a fill from memory one response slot (it answers the
+requester); at a cache a demand miss or a replacement needs one request slot, and a forwarded
+request or an invalidation two response slots (data to the requester and to the home). A refused
+message stays in the processing queue as NonReady and is retried, exactly as a full MSHR is
+handled; the queues it waits for drain on their own (a forward is consumed when its cache has
+response room, a response unconditionally), so no cycle closes. The buses report unbounded room
+and are unchanged. If a push is refused anyway the controller aborts with status 2, naming the
+queue and the message, after the hang dump: that is an accounting bug, never something to retry.
+The smallest workable `inject_queue_depth` is therefore the number of caches (the home's
+replacement fan-out); below it the home can never admit a replacement and the run wedges, which
+the watchdog reports.
+
 ### 14.3 Deadlock checks
 
 - **Routing-level** (`Table` only; `XY` and `WestFirst` are free by construction and
@@ -617,7 +635,7 @@ injection rate; the sweep harness can read it like any other report.
 ### 15.5 Hang dump
 
 `OCTOPUS_HANG_DUMP` prints, per router, per port, per VC: the current packet's `seq`, `msg_id`,
-class, owner, flits present, output port and VC, and credits available on its output VC. A routing deadlock reads as a ring of held VCs with zero credits.
+class, owner, flits present, output port and VC, and credits available on its output VC. A routing deadlock reads as a ring of held VCs with zero credits. Both watchdogs, the controllers' (`OCTOPUS_HANG_DUMP` cycles without progress on a non-empty processing queue) and the network's (as many ticks without a flit moving while packets are in flight), finalise the raw trace, print the dumps and exit with status 2: nothing after a wedge is a result.
 
 ## 16. Error handling and determinism
 
