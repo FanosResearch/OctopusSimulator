@@ -579,6 +579,10 @@ recommendation is to accept the divergence as documented here (the manual's NoC 
 the table above), keep the legacy `NoC` class selectable, and not introduce the `NoC` alias
 (S6-NOC-ALIAS stays XFAIL). The user decides; S6-FALLBACK records the deltas file either way.
 
+**Decision (2026-10-10): accepted by the user.** `test/network/ref/s6-accepted.txt` records it and
+turns S6-IDENTITY and S6-FALLBACK into XFAILs; the legacy `NoC` class stays selectable and no alias is
+introduced.
+
 **Tests** (`bash test/network/run.sh 6`, about 2 minutes; step 4 re-run after the
 switch-allocation restructure: 0 failures)
 

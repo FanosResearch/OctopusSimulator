@@ -1,0 +1,4 @@
+S6-IDENTITY / S6-FALLBACK: the divergence between MultiCoreSystem_NetNoC and the legacy NoC on full EEMBC
+traces (NI injection model: one flit per tick into one queue per class) was ACCEPTED by the user on
+2026-10-10 as a documented modelling difference (docs/NoC_Implementation_Report.md, step 6). The legacy
+NoC class stays selectable; the NoC alias is not introduced. Remove this file to make the tests hard failures again.
