@@ -36,6 +36,11 @@ namespace octopus
     protected:
         int m_id;
         int m_shared_memory_id;
+        // LLC banking (docs/NoC_Architecture_Spec.md s24): the homes of this controller's lines,
+        // interleaved by line address; one home = today's m_shared_memory_id
+        std::vector<int> m_home_ids; int m_home_shift = 0;
+        int  homeOf(uint64_t addr) const;
+        bool isHome(int id) const;
 
         // Perfect-LLC knob (default 0 = off). When 1, this controller never issues
         // to the memory above it: a miss's fetch is synthesized locally and looped

@@ -820,3 +820,47 @@ turned into a fatal error.
 | REG-BUS | PASS | identical | identical |
 | REG-MESH | PASS | identical | identical |
 | REG-TDM | PASS | identical | identical |
+
+## Phase 2, P2-BANKING — LLC banks
+
+**Design** (spec §24). The LLC is `N` banks, each a complete LLC controller as the single LLC is
+today, with its own endpoint and router; a static home map every requester shares assigns each
+line to one bank, `home_ids[((addr / block) >> shift) mod N]`; lines never move between banks and
+banks never exchange messages, so the protocol is unchanged and `N = 1` is today's system. The
+memory side is shared: the banks sit on one memory bus, arbitrated by the point-to-point
+controller's policy, and the memory answers the bank that asked.
+
+**Built**
+
+- `BaseController::homeOf(addr)` / `isHome(id)` from the new cache keys `home_ids(vi)` and
+  `home_interleave_shift(i)` (absent = today's `m_shared_memory_id`), and the same two on
+  `CoherenceProtocolHandler` (`setHomeMap`). The directory L1 protocol's three "to the home"
+  sends use `homeOf` and its one read of the id (home data versus owner data) uses `isHome`; the
+  perfect-LLC shortcut and the write-back path in `BaseController` likewise. The snoop protocols
+  keep the single id.
+- `MainMemoryController` and `MCsimInterface` answer `msg.from` (every interface stamps it),
+  `m_llc_id` remaining the fallback.
+- `MultiCoreSystem_Mesh` builds `llc_banks(i)` controllers from `llc_controller[k]` (the plain
+  `llc_controller` map when there is one bank, so every existing preset is untouched) and hands
+  the network the union of the cores' home maps.
+- `MultiCoreSystem_Grid2B.csv`: two banks, 10 on router 0 and 11 on router 3, lines interleaved,
+  the single LLC's capacity, MSHR, write-back buffer and queue halved per bank.
+- `test/network/homecheck.py`: every request to a home in a raw trace went to the bank the map
+  names. The visualizer gives the LLC array latency to every id from 10 up.
+
+**Findings**
+
+- `CacheController` re-creates the protocol handler its base class had just created, so the map
+  set on the first handler was lost: every GetS and GetM went to bank 10 while the write-backs
+  (sent from `BaseController`) went to the right bank, and bank 10 ended up evicting a line it
+  never homed. The second creation now sets the map too. Worth remembering: the handler is
+  constructed twice per controller.
+- With the map in place a2time01 splits 37 925 / 33 733 requests between the two banks with zero
+  mismatches, and the first core finishes at 986 354 against 973 251 with one LLC on router 3:
+  half the lines now live two hops further away for that core.
+
+**Tests** (`bash test/network/run.sh 5`)
+
+| id | status | measured | expected |
+|---|---|---|---|
+| REG-MESH | PASS | identical | identical |

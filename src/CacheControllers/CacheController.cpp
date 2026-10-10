@@ -52,6 +52,7 @@ namespace octopus
 
         m_data_handler = new CacheDataHandler_COTS(getSubMap(STRINGIFY(m_data_handler)), parent_name + "." + name);
         m_protocol = Protocols::getNewProtocol(protocol_type, m_data_handler, fsm_path, m_id, m_shared_memory_id);
+        m_protocol->setHomeMap(m_home_ids, m_home_shift);   // the handler is re-created here: give it the home map again (spec s24)
 
         m_processing_queue =
             new FRFCFS_Buffer<Message, CoherenceProtocolHandler>(&CoherenceProtocolHandler::getRequestState,

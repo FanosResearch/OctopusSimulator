@@ -49,8 +49,11 @@ namespace octopus
                 vector<int> homes;
                 for (int i = 0; i < num_cores; i++)
                 {
-                    int sid = std::get<int>(getSubMap(STRINGIFY(cache_controller), i).at("m_shared_memory_id").value);
-                    if (std::find(homes.begin(), homes.end(), sid) == homes.end()) homes.push_back(sid);
+                    ParametersMap cmap = getSubMap(STRINGIFY(cache_controller), i);
+                    vector<int> ids;
+                    if (cmap.count("home_ids")) ids = std::get<vector<int>>(cmap.at("home_ids").value);
+                    if (ids.empty() || ids[0] < 0) ids = {std::get<int>(cmap.at("m_shared_memory_id").value)};
+                    for (int sid : ids) if (std::find(homes.begin(), homes.end(), sid) == homes.end()) homes.push_back(sid);
                 }
                 net_map.erase("home_ids");
                 net_map.insert({"home_ids", Parameter("home_ids", Parameter::Vector_Integer, homes)});
@@ -85,16 +88,20 @@ namespace octopus
 
         Bus *bus = new Bus(getSubMap(STRINGIFY(bus)), NULL, name);
         bus->setMemBus();   // the LLC<->memory link: its crossings log as MEM_BUS (as in MultiCoreSystem)
-        BaseController *llc_controller;
-        int llc_id = std::get<int>(getSubMap(STRINGIFY(llc_controller)).at("m_id").value);
-        llc_controller = createController(cache_controller_type,
-                                          getSubMap(STRINGIFY(llc_controller)),
-                                          bus->getInterfaceFor(llc_id),
-                                          interfaceFor(llc_id), name);
-        // Without this the LLC's events carry no role: the LatencyReport's DRAM and LLC
-        // stages read 0 on Mesh/NoC and the event-path validator reports thousands of rows
-        // whose stages do not sum to Total. Mirrors MultiCoreSystem.
-        llc_controller->setLogRole(Logger::Role::LLC);
+        // LLC banks (spec s24): llc_banks(i) controllers, llc_controller[k] when banked, the plain
+        // llc_controller map when there is one (every existing preset). Each bank is a complete LLC
+        // controller with its own endpoint; the cores' home_ids map lines onto them.
+        int llc_banks = parameters.count("llc_banks") ? std::get<int>(parameters.at("llc_banks").value) : 1;
+        for (int k = 0; k < llc_banks; k++)
+        {
+            ParametersMap lmap = llc_banks == 1 ? getSubMap(STRINGIFY(llc_controller)) : getSubMap(STRINGIFY(llc_controller), k);
+            int llc_id = std::get<int>(lmap.at("m_id").value);
+            BaseController *llc_controller = createController(cache_controller_type, lmap, bus->getInterfaceFor(llc_id), interfaceFor(llc_id), name);
+            // Without this the LLC's events carry no role: the LatencyReport's DRAM and LLC
+            // stages read 0 on Mesh/NoC and the event-path validator reports thousands of rows
+            // whose stages do not sum to Total. Mirrors MultiCoreSystem.
+            llc_controller->setLogRole(Logger::Role::LLC);
+        }
 
         MainMemoryController *m_main_memory;
         int main_memory_id = std::get<int>(getSubMap(STRINGIFY(m_main_memory)).at("m_id").value);

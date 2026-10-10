@@ -252,7 +252,7 @@ Recorded now so the XFAILs above have an owner:
 | P2-ADMIT-RF | a controller with a full request queue still consumes a forward and a response | the named property of spec §14.2, on every shipped controller |
 | P2-FSM-CLASS | every action in the directory FSM CSVs carries its message class annotation | the checker's input exists |
 | P2-CHECKER | the two-class configuration with the directory protocol | refused by the protocol-level check, naming the cell |
-| P2-BANKING | two LLC banks on routers 0 and 3, address-interleaved | EEMBC 10/10; every address reaches the same bank from every core |
+| P2-BANKING | `MultiCoreSystem_Grid2B`: two LLC banks on routers 0 and 3, lines interleaved (spec §24) | EEMBC 10/10; every request to a home in a2time01's raw trace went to the bank the map names, from every core (`test/network/homecheck.py`); cacheb01 with `inject_queue_depth 4`, `eject_queue_depth 2`, RR completes (admission per bank); the first core's finish cycle is reported for one LLC, banks on routers 0 and 3, and banks on routers 0 and 1 |
 
 ## 13. Traceability
 

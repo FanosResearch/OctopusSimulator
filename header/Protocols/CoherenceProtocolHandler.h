@@ -26,6 +26,7 @@ namespace octopus
     protected:
         int m_id;
         int m_shared_memory_id;
+        std::vector<int> m_home_ids; int m_home_shift = 0;   // LLC banks (spec s24); default = {m_shared_memory_id}
         bool m_cache2Cache;
         int m_reqWbRatio;
 
@@ -33,6 +34,9 @@ namespace octopus
         CacheDataHandler *m_data_handler;
 
     public:
+        void setHomeMap(const std::vector<int> &ids, int shift) { m_home_ids = ids; m_home_shift = shift; }
+        int  homeOf(uint64_t addr) const;
+        bool isHome(int id) const;
         CoherenceProtocolHandler(CacheDataHandler *cache, const std::string& fsm_path, int id, int sharedMemId);
         virtual ~CoherenceProtocolHandler();
 

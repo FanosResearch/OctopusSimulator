@@ -24,6 +24,13 @@ namespace octopus
         //Parameters initialization
         m_id = std::get<int>(parameters.at(STRINGIFY(m_id)).value);
         m_shared_memory_id = std::get<int>(parameters.at(STRINGIFY(m_shared_memory_id)).value);
+        // home map: home_ids(vi) lists the LLC banks (absent or -1 = the single m_shared_memory_id),
+        // home_interleave_shift(i) selects the granularity (0 = consecutive lines alternate)
+        if (parameters.find(STRINGIFY(home_ids)) != parameters.end())
+            m_home_ids = std::get<vector<int>>(parameters.at(STRINGIFY(home_ids)).value);
+        if (m_home_ids.empty() || m_home_ids[0] < 0) m_home_ids = {m_shared_memory_id};
+        if (parameters.find(STRINGIFY(home_interleave_shift)) != parameters.end())
+            m_home_shift = std::get<int>(parameters.at(STRINGIFY(home_interleave_shift)).value);
 
         // Optional perfect-LLC knob, defaulted off so existing configs parse and
         // every non-LLC controller (which never sets it) behaves normally.
@@ -45,6 +52,7 @@ namespace octopus
         m_data_handler = new CacheDataHandler(getSubMap(STRINGIFY(m_data_handler)), parent_name + "." + name);
 
         m_protocol = Protocols::getNewProtocol(protocol_type, m_data_handler, fsm_path, m_id, m_shared_memory_id);
+        m_protocol->setHomeMap(m_home_ids, m_home_shift);
 
         m_processing_queue =
             new FRFCFS_Buffer<Message, CoherenceProtocolHandler>(&CoherenceProtocolHandler::getRequestState,
@@ -68,6 +76,18 @@ namespace octopus
     {
         delete m_protocol;
         delete m_data_handler;
+    }
+
+    int BaseController::homeOf(uint64_t addr) const
+    {
+        if (m_home_ids.size() <= 1) return m_home_ids.empty() ? m_shared_memory_id : m_home_ids[0];
+        uint64_t line = addr / m_data_handler->getBlockSize();
+        return m_home_ids[(line >> m_home_shift) % m_home_ids.size()];
+    }
+    bool BaseController::isHome(int id) const
+    {
+        for (int h : m_home_ids) if (h == id) return true;
+        return m_home_ids.empty() && id == m_shared_memory_id;
     }
 
     void BaseController::cycleProcess()
@@ -397,7 +417,7 @@ namespace octopus
         // arrives (BusController delivers responses via the same pushMessage2RX),
         // but with no bus transport and no DRAM latency. The existing fill FSM path
         // (transient --Data_fromUpperInterface--> resident) then completes normally.
-        if (m_perfect_llc && !msg->to.empty() && msg->to[0] == (uint16_t)m_shared_memory_id)
+        if (m_perfect_llc && !msg->to.empty() && isHome(msg->to[0]))
         {
             uint8_t return_data[64] = {0};
             Message fill(msg->msg_id, msg->addr, this->m_cache_cycle, 0, msg->owner);
@@ -438,7 +458,7 @@ namespace octopus
                 delete msg;
                 return;
             }
-            msg->to.push_back(this->m_shared_memory_id);
+            msg->to.push_back((uint16_t)homeOf(msg->addr));
         }
         else
         {

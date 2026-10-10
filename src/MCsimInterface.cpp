@@ -155,7 +155,7 @@ namespace octopus
                                       m_clk_cycle,                  // Cycle
                                       0,                            // Complementary_value
                                       m_pending_requests[i].owner); // Owner
-                msg.to.push_back((uint16_t)m_llc_id);               // To (back to the LLC)
+                msg.to.push_back(m_pending_requests[i].from ? m_pending_requests[i].from : (uint16_t)m_llc_id);   // To: the bank that asked
                 msg.kind = Message::K_FILL;
                 msg.copy((uint8_t *)&data);
                 m_output_buffer.push_back(msg);

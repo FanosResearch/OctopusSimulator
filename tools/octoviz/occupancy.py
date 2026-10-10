@@ -131,7 +131,7 @@ class Streamer:
         ie = np.flatnonzero((res == R["ARRAY"]) & (ph == P["SERVICE"]))
         fl = a["flags"][ie]
         pwb_merge = ((fl & 0x400) != 0) & ((fl & 0xff) == 6)
-        self._emit(a, "ARRAY", ie, cyc[ie], cyc[ie] + np.where(pwb_merge, 0, np.where(comp[ie] == 10, self.a_llc, self.a_l1)))
+        self._emit(a, "ARRAY", ie, cyc[ie], cyc[ie] + np.where(pwb_merge, 0, np.where(comp[ie] >= 10, self.a_llc, self.a_l1)))
         # DRAM writes
         iw = np.flatnonzero((res == R["DRAM"]) & (ph == P["ENTER"]) & (kind == K["MEM_WRITE"]))
         self._emit(a, "DRAM", iw, cyc[iw], cyc[iw] + 1)

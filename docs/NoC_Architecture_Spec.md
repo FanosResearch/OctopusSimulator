@@ -807,6 +807,48 @@ up to 4 ticks, recorded as `NoC Wait = 4`, `NoC Ahead = 4`, with core 1 as the w
 | — | review improvements | `class_link_latency` as a documented key; conservation checks first in the test list; the FSM action-to-class mapping scheduled in Phase 1 (§4.2, §20, §14.3) |
 | — | user decision 2026-10-09 | real-time arbitration deferred until the infrastructure is built; §12 reduced to the hooks |
 
+## 24. LLC banking
+
+### 24.1 Model
+
+The LLC is `N` banks. A bank is a complete LLC controller exactly as the single LLC is today (its
+own directory FSM, MSHR, write-back buffer, data array, processing queue, endpoint id and network
+interface, its own router in `node_map`). A bank is the home of a fixed subset of the lines, chosen
+by a static **home map** every requester shares; lines never move between banks and banks never
+exchange messages, so the coherence protocol is unchanged and `N = 1` is today's system. Capacity
+is per bank: two banks of 16 KiB are the 32 KiB LLC, and a preset that banks "the same LLC" divides
+`cache_size`, `num_mshr`, `pwb_size` and `processing_queue_size` by `N`.
+
+Home map: `home = home_ids[((addr / block) >> home_interleave_shift) mod N]`; shift 0 interleaves
+consecutive lines, 6 interleaves 4 KiB pages.
+
+### 24.2 Where the single home id lived
+
+- The caches: `BaseController::homeOf(addr)` for every message to a home and `isHome(id)` for the
+  one decision that reads the id (a home's data against an owner's); the protocol handler carries
+  the same map (`setHomeMap`). The snoop protocols keep the single id, which is correct with one LLC.
+- The memory: `MainMemoryController` and `MCsimInterface` answer the bank that asked (`msg.from`,
+  stamped by every interface), `m_llc_id` being the fallback. The banks share the memory bus:
+  `bus.m_lower_level_ids` lists them and the point-to-point controller arbitrates among them with
+  the configured policy, so the memory bus is a real shared resource.
+- The system: `llc_banks(i)` controllers, `llc_controller[k]` when banked (the plain
+  `llc_controller` map when there is one, so every existing preset is untouched), each with the LLC
+  log role; the network's `home_ids` are the union of the cores' maps.
+
+### 24.3 Keys
+
+System: `llc_banks(i)`, `llc_controller[k].*`, `interconnect.node_map[<bank id>]`,
+`bus.m_lower_level_ids`. Cache: `home_ids(vi)` (absent or `-1` = `m_shared_memory_id`),
+`home_interleave_shift(i)` (default 0). Shipped: `MultiCoreSystem_Grid2B.csv`, two banks on
+routers 0 and 3 of the 2×2 grid.
+
+### 24.4 Nothing else changes
+
+The network (home ids were a set since §3.3), the classifier, the transmit-side admission (its
+fan-out is per bank), the FSMs, the Logger columns (the LLC role covers every bank, `comp` tells
+them apart; the visualizer gives the LLC array latency to every id from 10 up). Validation:
+P2-BANKING in the test plan.
+
 ## 23. Open issues
 
 1. Whether `electIndex` should replace `elect` for buses too, giving one arbitration code path.
