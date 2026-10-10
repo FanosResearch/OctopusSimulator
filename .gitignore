@@ -74,20 +74,6 @@ docs/manual/build/
 .venv/
 *.csv#
 
-# Generated output for tutorial exercise 00
-/tutorial/00-setup-and-first-run/output/
-
-# Generated output for tutorial exercise 01
-/tutorial/01-exploration/output/
-
-# Generated output for tutorial exercise 02
-/tutorial/02-configuration/output/
-
-# Generated output for the arbiter extension exercise
-/tutorial/03-extending-octopus/01-arbiter/output/
-
-# Generated output for the protocol extension exercise
-/tutorial/03-extending-octopus/02-protocol/output/
 header/Arbiters/WRRArbiter.h
 src/Arbiters/WRRArbiter.cpp
 

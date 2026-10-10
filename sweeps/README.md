@@ -1,14 +1,14 @@
 # Configuration-axis sweeps
 
-## Plot manually collected tutorial runs
+## Plot manually collected runs
 
 You can run the simulator directly with different `-p` values and use `-o` to
-keep each setting's reports in `tutorial/<axis>/<setting>/`. Then compare a
+keep each setting's reports in `<output>/<axis>/<setting>/`. Then compare a
 single benchmark across those settings without invoking any sweep runner:
 
 ```bash
-python3 sweeps/plot_axis.py tutorial/Arbiter
-# From tutorial/ instead:
+python3 sweeps/plot_axis.py results/Arbiter
+# From the output directory instead:
 python3 ../sweeps/plot_axis.py Arbiter
 ```
 

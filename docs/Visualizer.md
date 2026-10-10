@@ -38,11 +38,11 @@ use `convert` explicitly to refresh its Parquet files.
 run once. Neither a `newLogger` directory name nor `Summary.csv` is required.
 Parquet files are written beside the latency reports. An optional `trace.bin`
 is read from the same directory, or from the parent of a legacy `newLogger/`
-directory. For example, after simulator runs using `-o tutorial/Arbiter/FCFS/`
-and `-o tutorial/Arbiter/RR/`:
+directory. For example, after simulator runs using `-o results/Arbiter/FCFS/`
+and `-o results/Arbiter/RR/`:
 
 ```bash
-./octoviz.sh serve tutorial/Arbiter
+./octoviz.sh serve results/Arbiter
 ```
 
 The one‑command way is the root script: `./octoviz.sh view <workload_dir>` simulates the

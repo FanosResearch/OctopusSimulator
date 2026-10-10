@@ -463,7 +463,7 @@ namespace octopus
         return true;
     }
 
-    // Array-port tracker (esweek-tutorial 443f0f39, docs/Logger.md S5): every
+    // Array-port tracker: every
     // access granted the array bumps m_array_served (+ writes). A demand read
     // that had to wait remembers the counters when it parks; at its grant the
     // difference is the number of accesses served ahead of it. port_busy and

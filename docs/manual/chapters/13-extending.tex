@@ -1,9 +1,8 @@
 \chapter{Extending Octopus}\label{ch:extending}
 
 \whatyoufind{Where to edit, for each kind of extension; what each costs in code and in
-rebuilds; the three worked extensions the tutorial uses --- an arbiter, a protocol change, a
-third cache level --- with the trap in each; and the extension points that are planned but not
-yet there.}
+rebuilds; the worked extension points for arbiters, protocols and cache levels; and the
+extension points that are planned but not yet there.}
 
 \section{The map}
 
@@ -115,7 +114,7 @@ and endpoint attachment, a \code{RoutingAlgorithm} plug-in with one method,
 credit-based back-pressure, and three virtual networks so that a directory protocol's
 request--forward--response dependency cannot deadlock. The current single-switch NoC becomes its
 degenerate case, and ``add a routing algorithm'' becomes the mesh's analogue of ``add an
-arbiter''. \file{docs/NoC_MultiHop_Plan.md} has the design and its phasing.
+arbiter''. Multi-hop routing remains future work.
 
 \begin{wherebox}
 \begin{itemize}[nosep,leftmargin=1.2em]
@@ -123,6 +122,5 @@ arbiter''. \file{docs/NoC_MultiHop_Plan.md} has the design and its phasing.
 \item \file{src/Interconnect/SplitBusController.cpp} --- the arbiter factory for the bus
 \item \file{header/ReplacementPolicies/ReplacementPolicy.h}, \file{src/ReplacementPolicies/} --- replacement (LRU, random)
 \item \file{src/SystemConfigurations/} --- the system classes
-\item \file{tutorial/03-extending-octopus/} --- the three exercises with their checks
 \end{itemize}
 \end{wherebox}

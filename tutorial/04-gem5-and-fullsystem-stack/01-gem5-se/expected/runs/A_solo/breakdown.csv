@@ -1,4 +1,0 @@
-core,requests,beyond_l1,dram,mean_l1_stall,mean_req_bus,mean_l2_stall,mean_l2_access,mean_resp_bus,mean_l2_dram_bus,mean_dram,mean_l1_access,mean_total,p99_total
-0,1208416,601,216,2.80,1.11,6.83,3.95,5.17,2.16,26.16,2.97,51.15,212
-1,2193423,9859,143,1.27,1.07,9.16,0.16,4.29,0.09,0.97,2.02,19.02,70
-2,2063825,5135,209,1.56,1.20,2.12,0.45,4.72,0.24,2.73,2.01,15.02,91

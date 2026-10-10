@@ -8,19 +8,19 @@ component and the coherence protocol an editable table. It was built so that mec
 predictable memory controllers --- could be built, observed and compared on one substrate rather
 than each in its own bespoke simulator.
 
-This manual is the reference for the simulator as it ships on the \code{esweek-tutorial}
-branch. It is written for three readers: someone running experiments, who needs
+This manual is the reference for the simulator as it ships. It is written for three
+readers: someone running experiments, who needs
 \cref{ch:getting-started,ch:configuration,ch:monitoring} and the appendices; someone reading or
 extending the code, who needs \cref{ch:system-organization} to \cref{ch:interconnects} and
-\cref{ch:extending}; and someone following the hands-on tutorial, who has \cref{ch:tutorial}
-and the figures the exercises point at.
+\cref{ch:extending}; and someone integrating the simulator with gem5, who needs
+\cref{ch:integration-modes}.
 
 \paragraph{How to read it.} Chapters are self-contained but ordered: the system
 (\cref{ch:system-organization}), its central component (\cref{ch:cache-controller}), the
 shipped LLC in detail (\cref{ch:llc-datapath}), the coherence engine
 (\cref{ch:coherence-engine}), one request end to end (\cref{ch:request-end-to-end}), then the
 interconnects, memory, configuration and monitoring, then tasks and the demo, extension,
-integration, the tutorial and evaluation. Every chapter opens with a box saying what it holds
+integration and evaluation. Every chapter opens with a box saying what it holds
 and closes with a \emph{Where in the code} box naming the files. Two other boxes recur:
 
 \begin{trapbox}

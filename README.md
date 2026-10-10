@@ -12,7 +12,7 @@ Octopus is a cycle-accurate cache system simulator with flexible interconnect mo
 ![What we gain: a common, cycle-accurate simulation framework](docs/imgs/solution.png)
 
 # Documentation
-* **[The reference manual](docs/manual/octopus-manual.pdf)** — everything below in one book: the system, the cache controller and the LLC datapath, the CSV-FSM coherence engine, a request end to end, interconnects, memory, configuration, monitoring, tasks and the demo, extending, gem5, the tutorial; with the configuration keys and the shipped FSM tables as appendices. Sources and build in [`docs/manual/`](docs/manual/README.md).
+* **[The reference manual](docs/manual/octopus-manual.pdf)** — everything below in one book: the system, the cache controller and the LLC datapath, the CSV-FSM coherence engine, a request end to end, interconnects, memory, configuration, monitoring, tasks and the demo, extending, gem5, and evaluation; with the configuration keys and the shipped FSM tables as appendices. Sources and build in [`docs/manual/`](docs/manual/README.md).
 * **[Supported configurations & features](SUPPORTED_CONFIGURATIONS.md)** — the full capability matrix: coherence protocols, interconnect topologies, bus arbitration, cache hierarchy, memory systems (incl. MCsim), operating/integration modes, predictable caching, and monitoring.
 * **[Architecture deep-dive](docs/Architecture.md)** — how the clocked, configurable components fit together, the CSV-FSM coherence engine, a request's end-to-end journey, and how to extend the tool.
 * **[Adding a coherence protocol](docs/AddingAProtocol.md)** — a worked example: implement **MI** (Modified/Invalid) as a CSV finite-state machine with no C++ and no recompile, with the MI-vs-MESI coherence trace.
@@ -101,15 +101,12 @@ Hossam, Mohamed, Salah Hessien, and Mohamed Hassan. "Octopus: a Cycle-Accurate C
 
 ## Zero-install: run Octopus in a browser (GitHub Codespaces)
 
-The `esweek-tutorial` branch carries a dev container, so you can get a working
-simulator without installing anything locally. On GitHub: **Code → Codespaces →
-Create codespace on esweek-tutorial**. The container installs the toolchain and the
-Python packages, fetches the EEMBC traces, builds the simulator and runs the
-environment check; port 8765 is forwarded so the visualizer opens by itself.
+The repository includes a dev container based on the gem5 development image, so you
+can get a working simulator without installing anything locally. On GitHub: **Code →
+Codespaces → Create codespace on this branch**. The container provides the toolchain
+and Python packages used by the simulator.
 
-Everything lives in two files you can also read as documentation of the
-dependencies: `.devcontainer/on-create.sh` (packages and benchmark traces) and
-`.devcontainer/post-create.sh` (build and check).
+Repository-specific setup is performed by `.devcontainer/on-create.sh`.
 
 ## Checking an environment
 
@@ -240,7 +237,7 @@ This also works with `-s MultiCoreSystem_Mesh`. Add `--trace` to record raw even
 as `trace.bin` (plus `trace.bin.names`) in the same output directory:
 
 ```bash
-# From tutorial/, using the workload configured in the system CSV:
+# Using the workload configured in the system CSV:
 ../build/Octopus_Simulator -s MultiCoreSystem -o Arbiter/FCFS --trace \
   -p "bus[0].interconnect_controller.arbiter_type(s)=FCFSArbiter"
 ```
@@ -367,5 +364,4 @@ The standalone lab presets are the regression check for library changes: run
 `MultiCoreSystem_Directory` and `MultiCoreSystem_Snoop` as described at the
 top of this file and diff `BMs/TestBM/newLogger/` against a build of the
 commit you started from.
-
 

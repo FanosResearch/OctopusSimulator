@@ -29,7 +29,7 @@ namespace octopus
         // ---- Design B: self-describing timeline events ------------------------
         // Each checkpoint records WHICH component and WHICH phase stamped it, so
         // the per-stage decomposition is a generic walk over the event list --
-        // never inferred from a vector's index/size (see docs/Logger_DesignB_plan.md).
+        // never inferred from a vector's index/size.
         enum class Role : uint8_t { CPU, L1, REQ_BUS, RESP_BUS, LLC, MEM_BUS, DRAM, UNKNOWN, SVC_BUS, ARRAY, LLC_QUEUE, FSM };
         enum class Phase : uint8_t { ENTER, SERVICE, EXIT };
         struct LogEvent

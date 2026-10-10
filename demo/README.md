@@ -182,7 +182,6 @@ stays live for minutes.
 | `build_page.py` | embed the records so the page is self‑contained |
 | `live_server.py`, `live.sh` | follow one or more runs while they simulate |
 | `octopus-tracking-demo.html` | the page: single act, compare, or live |
-| `octopus-demo-plan.md`, `periodic-task-spec.md`, `octopus-rt-demo-notes.md` | how this was designed and why |
 
 ## 9. What this demo does not claim
 

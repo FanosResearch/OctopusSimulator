@@ -53,7 +53,7 @@ def load_settings(axis):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('axis', type=Path, help='e.g. tutorial/Arbiter')
+    parser.add_argument('axis', type=Path, help='e.g. results/Arbiter')
     parser.add_argument('-o', '--out', type=Path, help='figure directory (default: AXIS/figures)')
     args = parser.parse_args()
     try:

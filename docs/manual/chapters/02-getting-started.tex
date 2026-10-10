@@ -21,18 +21,12 @@ The binary is \file{build/Octopus_Simulator} (\code{.exe} on Windows). A debug b
 same with \code{-DCMAKE\_BUILD\_TYPE=Debug}. The repository layout: \file{src/} and
 \file{header/} hold the simulator, \file{Protocols_FSM/} the coherence tables,
 \file{configuration/} the CSV parameters, \file{tools/octoviz/} the visualizer,
-\file{sweeps/} the experiment harness, \file{tutorial/} the exercises, \file{docs/} the
-documents this manual consolidates.
+\file{sweeps/} the experiment harness, and \file{docs/} the documents this manual consolidates.
 
 \section{Zero-install: a Codespace}
 
-The \code{esweek-tutorial} branch carries a dev container. On GitHub, choose \emph{Code},
-then \emph{Codespaces}, then \emph{Create codespace on esweek-tutorial}, and a working
-simulator opens in the browser: the container image (\file{ghcr.io/fanosresearch/esweek})
-carries the toolchain and the Python packages, \file{.devcontainer/on-create.sh} fetches the EEMBC traces,
-\file{post-create.sh} builds MCsim and the simulator and runs the environment check, and port
-8765 is forwarded so the visualizer opens by itself. The two scripts double as documentation of
-the dependencies.
+The repository includes a dev container based on \file{ghcr.io/gem5/devcontainer:latest}.
+Create a Codespace from the repository to use the supplied toolchain and Python packages.
 
 \section{Benchmarks}
 
