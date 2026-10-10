@@ -213,7 +213,7 @@ All `sim` on `NetworkOnly.csv` unless marked. Defaults: `flit_bytes` 16, `router
 | S5-PLACEMENT | sim | LLC on router 0 versus router 3, unloaded single request from core 0 | request-bus column 2 and 8 ticks respectively, response 6 and 12, i.e. the worked example of spec §21 |
 | S5-HANGDUMP | shell | the cyclic table of S2-CDG-CYCLE with the check disabled by a debug flag, a two-generator deadlock pattern, `OCTOPUS_HANG_DUMP` set | the run wedges, the dump prints a ring of held VCs with zero credits, exit status 2 |
 | S5-HANGDUMP-POS | shell | the same table with the check enabled | refused at construction, so the dump is never needed |
-| S5-RX-STRESS | sim | S5-EEMBC-2x2 with `eject_queue_depth = 2` and `num_classes = 2` | `XFAIL two-class` (forwards share the request class and can be held behind a full request RX); becomes a must-pass when §12 turns on three classes |
+| S5-RX-STRESS | sim | S5-EEMBC-2x2 with `eject_queue_depth = 2` on three classes, under `FCFSArbiter` and `RRArbiter` (round robin reorders the classes in the fabric) | all twenty runs complete (was XFAIL while the presets used two classes; a must-pass since P2-THREE-CLASS) |
 | S5-SPEED | sim | wall clock of S5-EEMBC-2x2 per trace, reported in `results.csv` | informational; flagged if above three times the legacy mesh run of the same trace |
 
 ## 9. Step 6 — degenerate equivalence
@@ -247,7 +247,7 @@ Recorded now so the XFAILs above have an owner:
 
 | id | assertion | turns green |
 |---|---|---|
-| P2-THREE-CLASS | S5-RX-STRESS with `num_classes = 3` | must pass; S5-RX-STRESS loses its XFAIL |
+| P2-THREE-CLASS | S5-RX-STRESS with `num_classes = 3` | DONE: injection in age order (spec §7.2) and the LLC rows `(N / NS_d / NM_d, PutS / last_PutS) → PutAck`; S5-RX-STRESS is a must-pass and the grid preset ships with three classes |
 | P2-ADMIT-RF | a controller with a full request queue still consumes a forward and a response | the named property of spec §14.2, on every shipped controller |
 | P2-FSM-CLASS | every action in the directory FSM CSVs carries its message class annotation | the checker's input exists |
 | P2-CHECKER | the two-class configuration with the directory protocol | refused by the protocol-level check, naming the cell |

@@ -76,10 +76,16 @@ step5() {
   rm -rf "$O/hang-pos"; mkdir -p "$O/hang-pos"
   ( export OCTOPUS_HANG_DUMP=2000; timeout 300 "$BIN" $RING -o "$(wpath "$O/hang-pos")" > "$O/hang-pos/.stdout" 2> "$O/hang-pos/.stderr" ); hrc=$?
   if [ $hrc = 2 ] && grep -q "not deadlock-free" "$O/hang-pos/.stderr"; then pass S5-HANGDUMP-POS "refused at construction" "refused"; else fail S5-HANGDUMP-POS "rc=$hrc $(head -c 100 "$O/hang-pos/.stderr")" "refused at construction"; fi
-  # ---------------- S5-RX-STRESS (XFAIL two-class): shallow RX, forwards share the request class
-  rm -rf "$O/rx-stress"; mkdir -p "$O/rx-stress"
-  ( export OCTOPUS_HANG_DUMP=100000; timeout 900 "$BIN" $GRID -p "workload_path(s)=$(W a2time01-trace)/" -p "interconnect.eject_queue_depth(i)=2" -p "interconnect.num_classes(i)=2" -o "$(wpath "$O/rx-stress")" > "$O/rx-stress/.stdout" 2> "$O/rx-stress/.stderr" ); local src=$?
-  local outcome; if [ $src = 0 ] && completed "$O/rx-stress" "$ROOT/BMs/eembc-traces/a2time01-trace"; then outcome="completed"; else outcome="rc=$src $(grep -m1 -e wedged -e HANG "$O/rx-stress/.stderr" | head -c 80)"; fi
-  xfail S5-RX-STRESS "two classes, eject_queue_depth 2: $outcome (forwards can be held behind a full request RX; must-pass once three classes are the protocol default)"
+  # ---------------- S5-RX-STRESS (P2-THREE-CLASS): three classes, shallow RX queues, all ten traces,
+  # under FCFS and under round-robin arbitration (which reorders the classes in the fabric)
+  t0=$(now); ok=1; detail=""
+  local arb; for arb in FCFSArbiter RRArbiter; do
+    for t in $EEMBC; do rm -rf "${O:?}/rx-$arb/${t:?}"; mkdir -p "$O/rx-$arb/$t"; done
+    for t in $EEMBC; do
+      ( OCTOPUS_HANG_DUMP=200000 timeout 1800 "$BIN" $GRID -p "workload_path(s)=$(W $t)/" -p "interconnect.eject_queue_depth(i)=2" -p "interconnect.arbiter_type(s)=$arb" -o "$(wpath "$O/rx-$arb/$t")" > "$O/rx-$arb/$t/.stdout" 2> "$O/rx-$arb/$t/.stderr"; echo $? > "$O/rx-$arb/$t/.rc" ) &
+    done; wait
+    for t in $EEMBC; do [ "$(cat "$O/rx-$arb/$t/.rc")" = 0 ] && completed "$O/rx-$arb/$t" "$ROOT/BMs/eembc-traces/$t" || { ok=0; detail="$detail $arb:$t"; }; done
+  done
+  if [ $ok = 1 ]; then pass S5-RX-STRESS "three classes, eject_queue_depth 2, FCFS and RR: 20/20 complete" "complete" "$(elapsed "$t0")"; else fail S5-RX-STRESS "$detail" "20/20 complete" "$(elapsed "$t0")"; fi
   unset OCTOPUS_EVENT_DEBUG
 }

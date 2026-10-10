@@ -303,7 +303,9 @@ namespace octopus { namespace net
             if (lp.last_sent == m_tick) continue;
             struct Act { NetworkInterface *ni; int cls, vc; uint64_t seq; bool fresh; };
             std::vector<Act> acts; std::vector<Candidate> cands;
-            for (int cls : m_cfg.classPriority())
+            // every class competes; the port goes to the oldest candidate (injection order), so an
+            // endpoint never reorders its own messages across classes (spec s7.2)
+            for (int cls = 0; cls < m_cfg.num_classes; cls++)
             {
                 for (NetworkInterface *ni : lp.nis)
                 {
@@ -333,7 +335,6 @@ namespace octopus { namespace net
                         }
                     }
                 }
-                if (!cands.empty()) break;           // the highest-priority class with a candidate wins the port
             }
             if (cands.empty()) continue;
             int w = cands.size() == 1 ? 0 : lp.arb->electIndex(m_tick, cands);

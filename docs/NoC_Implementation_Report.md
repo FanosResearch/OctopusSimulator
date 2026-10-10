@@ -709,3 +709,51 @@ builds it, a minute more)
 | id | status | measured | expected |
 |---|---|---|---|
 | S8-BOOKSIM | PASS | saturation throughput Octopus 0.288 (offered 0.35) vs BookSim 0.279313 (offered 0.30) flits/cycle/node |  rel. diff 0.03 |
+
+## Phase 2, P2-THREE-CLASS — the directory protocol on three virtual networks
+
+Step 5 had left the protocol presets on two classes because the three-class runs faulted. The
+user asked to see the full coherence story of a faulting line before any fix; the tool for that
+is `test/network/linetable.py` (every FSM transition of every controller on the line, in time
+order, interleaved with the injection and ejection of the messages that carried it, read from
+the raw trace). Two distinct mechanisms came out, and each got its own fix.
+
+**Mechanism 1: the NI's injection priority reordered a source's own messages** (a2time01, line
+0x7f79d30f7b00). The LLC evicts the line and invalidates its four sharers; L1 0 evicts the same
+line at the same time: at 142131 it goes `S --Replacement--> SI_a` and pushes its PutS, at
+142132 the Inv reaches it, `SI_a --Inv--> II_a`, and it pushes its InvAck. Its local port is
+busy with a 5-flit data supply for another line until 142135, so both wait in the NI; the NI
+then served by class priority (spec §7.2 as drafted: RESPONSE before REQUEST): the InvAck went
+at 142136, the PutS at 142137. The LLC counted the InvAck as the last one, finished the eviction
+(`N_a --last_InvAck--> N`), and received the PutS in `N`, a Fault cell. Fix: the local port goes
+to the oldest candidate across classes (injection order, through the port's arbiter) instead of
+class priority; there is no deadlock reason to prefer responses at injection, the virtual
+networks keep separate buffers downstream. With that alone all ten traces complete on three
+classes, also with `eject_queue_depth 2`.
+
+**Mechanism 2: the fabric reorders two classes under contention** (cacheb01 under `RRArbiter`
+with `eject_queue_depth 2`, line 0x7fbb082ca5c0). L1 1 injected its PutS at 241475 and its
+InvAck at 241479, in causal order; the InvAck reached the LLC at 241484, the PutS at 241492 (17
+ticks in flight against 5): the REQUEST-class packet lost round-robin elections to other
+traffic while the RESPONSE-class one flowed. Same fault, `(N, PutS)`. This one is inherent to
+virtual networks and is what the protocol must tolerate. Fix: the LLC FSM rows
+`(N, PutS)`, `(N, last_PutS)`, `(NS_d, …)`, `(NM_d, …)` now answer PutAck and stay, exactly what
+the FSM already did in `N_a`; the cache is in `II_a` waiting for that acknowledgement. The L1
+side needs no row: a home's Inv or Fwd and its later PutAck to the same cache both travel in
+the FORWARD class (step 5's choice), and `pair_per_class` routing keeps them in order, so
+`(I, Inv)` and `(I, Fwd*)` stay unreachable.
+
+**Also found**: `inject_queue_depth 2` ends every run with "Cannot insert the Msg into the lower
+interface FIFO, FIFO is Full" from the LLC. The controllers do not retry a refused push to their
+lower interface (the legacy mesh interface never refused, its TX bound was ineffective), so the
+NI's injection queue is the controllers' transmit buffer and must be sized for their bursts; the
+presets keep 32. Making the controllers back-pressure-aware on the lower interface is a separate
+item.
+
+**Changes**: `Network::phaseInject` (age order), spec §7.2 and §6.3, `Protocols_FSM/MSI_LLC_directory.csv`
+(six cells, no new states), `MultiCoreSystem_Grid.csv` ships `num_classes 3`, S5-RX-STRESS is
+a must-pass over all ten traces under both arbiters, the plan's P2-THREE-CLASS row is closed.
+
+**Tests** (`bash test/network/run.sh all` on the three-class preset)
+
+Full suite on the committed tree: 14 PASS, 0 XFAIL (), 0 FAIL. S5-RX-STRESS: three classes.

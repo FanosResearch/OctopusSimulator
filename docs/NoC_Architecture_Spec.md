@@ -252,16 +252,16 @@ legacy mesh delivered both on its request link in FIFO order; keeping them in on
 consumed without injecting anything, so the forward class still drains independently of the
 request class (found by S5-EEMBC-2x2, see the implementation report).
 
-That is not the only order the shipped directory protocol assumes. The LLC FSM has no row for a
-PutS or PutM arriving after the line was evicted (state N): it relies on a cache's PutS reaching
-the home before the cache's InvAck to the home's eviction Inv, which holds only when the two
-travel in one FIFO class, and three classes put them in REQUEST and RESPONSE. The legacy mesh
-carried every non-data message of a pair on one request link in order, and the FSMs were written
-against that. Until the FSMs are made tolerant of an unordered network (the plan's
-P2-THREE-CLASS: `(I, Inv)` → InvAck, `(N, PutS/PutM)` → PutAck, and the symmetric races), the
-protocol presets (`MultiCoreSystem_Grid.csv`) set `num_classes = 2`, which is the legacy split
-and reproduces the legacy ordering under `pair_per_class` routing. `num_classes = 3` remains the
-default for the network itself and is what synthetic traffic and the NetworkOnly system use.
+The other order the directory protocol assumed was a cache's PutS reaching the home before the
+same cache's InvAck to the home's eviction Inv; three classes put the two in REQUEST and
+RESPONSE, and the LLC had no row for a PutS arriving after the eviction completed (state N). Two
+things cover it (P2-THREE-CLASS): the NI injects in age order (§7.2), so a source never reorders
+its own messages, and the LLC FSM answers a stale PutS in `N`, `NS_d` and `NM_d` with a PutAck,
+exactly as it already did in `N_a`, because the fabric can still deliver the RESPONSE-class
+InvAck first (observed under round-robin arbitration). With those the protocol presets ship with
+`num_classes = 3`. The one order the protocol still relies on is within a class: `pair_per_class`
+routing keeps a home's Inv or Fwd ahead of its later PutAck to the same cache (both FORWARD), so
+`(I, Inv)` and `(I, Fwd*)` stay unreachable and need no rows.
 
 `num_classes = 2` is the legacy split and uses exactly the legacy rule, `data == NULL ? 0 : 1`,
 ignoring `kind`, so that the degenerate configuration (§17) classifies as the old mesh did. The
@@ -284,10 +284,15 @@ shared local port (§5.2) these counters belong to the port and the sharing NIs 
 
 ### 7.2 Injection
 
-Each tick, for each class in order RESPONSE, FORWARD, REQUEST, if the head packet of the class's
-injection queue has not started, a VC of its class on the local input port is free, and that VC
-has a credit, the NI sends the head flit; subsequent flits follow one per tick while credits allow.
-At most one flit per tick per local port. A packet, once started, is not interleaved with another
+Each tick the local port goes to the **oldest** candidate across the classes (by injection
+sequence, through the port's arbiter): a started packet whose next flit has a credit, or the head
+packet of a class's injection queue when a VC of its class on the local input port is free and
+has a credit; subsequent flits follow one per tick while credits allow. At most one flit per tick
+per local port. Age order rather than class priority, so that an endpoint never reorders its own
+messages: with class priority an InvAck (RESPONSE) overtook the same cache's earlier PutS
+(REQUEST) while the port was busy, and the home saw the acknowledgement before the PutS (found by
+the three-class EEMBC runs, implementation report P2-THREE-CLASS). The fabric can still reorder
+across classes downstream, which is what the protocol rows of P2-THREE-CLASS are for. A packet, once started, is not interleaved with another
 packet on the same VC (wormhole). Local links have zero latency: a flit sent in the injection
 phase is in the router's VC in the same tick (§13.2).
 
