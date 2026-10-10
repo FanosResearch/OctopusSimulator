@@ -65,7 +65,17 @@ namespace octopus
             DIRECTORY_LLC_MOESI,
         };
 
-        static CoherenceProtocolHandler* getNewProtocol(std::string type, CacheDataHandler *cache, const string &fsm_path, int cache_id, int shared_mem_id)
+        // home_ids / home_shift: the LLC banks a cache addresses (docs/NoC_Architecture_Spec.md s24);
+        // empty = the single shared_mem_id. Set here so that every creation site (BaseController and
+        // CacheController, which rebuilds the handler around its own data handler) gets it.
+        static CoherenceProtocolHandler* getNewProtocol(std::string type, CacheDataHandler *cache, const string &fsm_path, int cache_id, int shared_mem_id,
+                                                        const std::vector<int> &home_ids = {}, int home_shift = 0)
+        {
+            CoherenceProtocolHandler *p = make(type, cache, fsm_path, cache_id, shared_mem_id);
+            if (p && !home_ids.empty()) p->setHomeMap(home_ids, home_shift);
+            return p;
+        }
+        static CoherenceProtocolHandler* make(const std::string &type, CacheDataHandler *cache, const string &fsm_path, int cache_id, int shared_mem_id)
         {
             if(type == STRINGIFY(SNOOP_MSI))
                 return new MSIProtocol(cache, fsm_path, cache_id, shared_mem_id);

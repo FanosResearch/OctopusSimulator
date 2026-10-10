@@ -853,8 +853,9 @@ controller's policy, and the memory answers the bank that asked.
 - `CacheController` re-creates the protocol handler its base class had just created, so the map
   set on the first handler was lost: every GetS and GetM went to bank 10 while the write-backs
   (sent from `BaseController`) went to the right bank, and bank 10 ended up evicting a line it
-  never homed. The second creation now sets the map too. Worth remembering: the handler is
-  constructed twice per controller.
+  never homed. The map now travels through the factory (`Protocols::getNewProtocol` takes it and
+  sets it on every handler it makes), so no creation site can forget it; the handler is still
+  constructed twice per controller, consistently (data handler, handler and queue together).
 - With the map in place a2time01 splits 37 925 / 33 733 requests between the two banks with zero
   mismatches, and the first core finishes at 986 354 against 973 251 with one LLC on router 3:
   half the lines now live two hops further away for that core.
