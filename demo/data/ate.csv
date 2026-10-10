@@ -1,0 +1,4 @@
+act,label,jobs,deadline_misses,exec_mean_cycles,exec_max_cycles,ate_rmse_m,ate_median_m,ate_max_m
+act1,Alone (FCFS),200,0,4192.8,4747,0.129,0.128,0.184
+act2,Contention (FCFS),57,198,19716.8,181266,4.127,3.657,6.625
+act3,Protected (RR + reserved way),200,0,4192.8,4747,0.129,0.128,0.184

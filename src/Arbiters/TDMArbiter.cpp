@@ -21,18 +21,8 @@ namespace octopus
     bool TDMArbiter::coreElect(uint64_t cycle_number, vector<vector<Message> *> &buffers, Message *out_msg)
     {
         uint64_t candidate_id = selectCandidate(cycle_number);
-        for (int i = 0; i < (int)buffers.size(); i++)
-        {
-            int msg_index = findMessage(*buffers[i], candidate_id);
-            if (msg_index != -1)
-            {
-                out_msg->copy(buffers[i]->at(msg_index));
-                buffers[i]->erase(buffers[i]->begin() + msg_index);
-                return true;
-            }
-        }
-
-        return false;
+        // The slot owner's oldest pending message, wherever it sits (Arbiter::electOldestOwned).
+        return electOldestOwned(buffers, (int)candidate_id, out_msg);
     }
 
     bool TDMArbiter::elect(uint64_t cycle_number, vector<vector<Message> *> &buffers, Message *out_msg)

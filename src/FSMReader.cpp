@@ -83,6 +83,19 @@ namespace octopus
         out_actions = this->m_states[current_state].getActions(event);
     }
 
+    // reverse lookups: the CSV maps name->id; scan for the name of a given id
+    // (falls back to the number if unknown). Used only by opt-in debug traces.
+    std::string FSMReader::getStateName(int id)
+    {
+        for (const auto &kv : m_stateIds) if (kv.second == id) return kv.first;
+        return std::to_string(id);
+    }
+    std::string FSMReader::getEventName(int id)
+    {
+        for (const auto &kv : m_eventIds) if (kv.second == id) return kv.first;
+        return std::to_string(id);
+    }
+
     bool FSMReader::isValidState(int state)
     {
         return this->m_states[state].is_data_valid;
@@ -109,6 +122,17 @@ namespace octopus
             if(action == stall_id)
                 return true;
         }
+        return false;
+    }
+
+    bool FSMReader::hasAction(int state, int Event, const std::string &action_name)
+    {
+        auto it = this->m_actionIds.find(action_name);
+        if (it == this->m_actionIds.end())
+            return false;
+        for (int action : this->m_states[state].getActions(Event))
+            if (action == it->second)
+                return true;
         return false;
     }
 

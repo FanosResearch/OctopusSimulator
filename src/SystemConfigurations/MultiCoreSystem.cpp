@@ -12,8 +12,8 @@ using namespace std;
 
 namespace octopus
 {   
-    MultiCoreSystem::MultiCoreSystem(vector<string> cl_params) : 
-        Configurable(cl_params, string(CONFIGURATION_PATH) + string(SYSTEM_CONFIGURATIONS), STRINGIFY(MultiCoreSystem))
+    MultiCoreSystem::MultiCoreSystem(vector<string> cl_params, string config_name, string config_path) :
+        Configurable(cl_params, config_path, config_name)
     {
         string name = STRINGIFY(MultiCoreSystem);
         //Parameters initialization
@@ -27,6 +27,11 @@ namespace octopus
         string llc_controller_type = cache_controller_type;
         if (parameters.count(STRINGIFY(llc_controller_type)))
             llc_controller_type = std::get<string>(parameters.at(STRINGIFY(llc_controller_type)).value);
+        // Core model: the trace-driven CPU by default, or ExternalCPU when an
+        // embedder (the gem5 bridge) injects the requests itself.
+        string cpu_type = STRINGIFY(CPU);
+        if (parameters.count(STRINGIFY(cpu_type)))
+            cpu_type = std::get<string>(parameters.at(STRINGIFY(cpu_type)).value);
 
         //Constructor
         Bus *bus[bus_type.size()];
@@ -43,29 +48,55 @@ namespace octopus
             }
         }
 
+        // Design B: bus[1] is the LLC<->DRAM bus; its crossings log as MEM_BUS.
+        if (bus_type.size() > 1)
+            bus[1]->setMemBus();
+
         // iterate over each core
         for (int i = 0; i < num_cores; i++)
         {
-            string file_path = workload_path + "/trace_C" + std::to_string(i) + ".trc.shared";
+            // Workload per core: a periodic task program (docs/Tasks.md) if present, else the
+            // access trace, else nothing (an idle core).
+            string file_path = workload_path + "/task_C" + std::to_string(i) + ".task.csv";
+            if (!std::ifstream(file_path).good())
+            {
+                file_path = workload_path + "/trace_C" + std::to_string(i) + ".trc.shared";
+                if (!std::ifstream(file_path).good())
+                    file_path = "";
+            }
             BaseController *cache_controller;
             int cache_id = std::get<int>(getSubMap(STRINGIFY(cache_controller), i).at("m_id").value);
 
             DirectInterconnect *cpu_interconnect = new DirectInterconnect(getSubMap(STRINGIFY(cpu_interconnect), i), cache_id, -1, name);
 
-            CPU *cpu = new CPU(getSubMap(STRINGIFY(cpu), i), cache_id, cpu_interconnect->getInterfaceFor(-1), file_path, name);
+            ExternalCPU *external_cpu = NULL;
+            if (cpu_type == STRINGIFY(ExternalCPU))
+            {
+                external_cpu = new ExternalCPU(getSubMap(STRINGIFY(cpu), i), cache_id,
+                                               cpu_interconnect->getInterfaceFor(-1), name);
+                ExternalCPU::getExtCPUs()->emplace(cache_id, external_cpu);
+            }
+            else
+                new CPU(getSubMap(STRINGIFY(cpu), i), cache_id, cpu_interconnect->getInterfaceFor(-1), file_path, name);
 
             cache_controller = createController(cache_controller_type, 
                                                 getSubMap(STRINGIFY(cache_controller), i),
                                                 bus[0]->getInterfaceFor(cache_id),
                                                 cpu_interconnect->getInterfaceFor(cache_id), name);
+            if (external_cpu != NULL)
+            {
+                cache_controller->setCpuPort(external_cpu);
+                external_cpu->attachCache(cache_controller);
+            }
         }
 
         BaseController *llc_controller;
         int llc_id = std::get<int>(getSubMap(STRINGIFY(llc_controller)).at("m_id").value);
         llc_controller = createController(llc_controller_type,
                                           getSubMap(STRINGIFY(llc_controller)),
-                                          bus[1]->getInterfaceFor(llc_id), 
+                                          bus[1]->getInterfaceFor(llc_id),
                                           bus[0]->getInterfaceFor(llc_id), name);
+        llc_controller->setLogRole(Logger::Role::LLC);   // Design B: tag LLC events
 
         // Main memory: the basic MainMemoryController by default, or the MCsim DRAM
         // simulator when `main_memory_type=MCsim` (configured for DDR4 in MCsimInterface).
@@ -80,7 +111,7 @@ namespace octopus
             if (parameters.count(STRINGIFY(mcsim_scheduler)))
                 mem_system = std::get<string>(parameters.at(STRINGIFY(mcsim_scheduler)).value);
             new MCsimInterface(bus[1]->getInterfaceFor(main_memory_id), main_memory_id, llc_id,
-                               num_cores, /*block_size=*/64, mem_system);
+                               num_cores, /*block_size=*/64, llc_controller->getClkPeriod(), mem_system);
         }
         else
         {

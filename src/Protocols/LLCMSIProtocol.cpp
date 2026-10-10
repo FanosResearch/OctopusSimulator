@@ -7,6 +7,7 @@
  */
 
 #include "../../header/Protocols/LLCMSIProtocol.h"
+#include "../../header/Logger.h"
 using namespace std;
 
 namespace octopus
@@ -42,7 +43,14 @@ namespace octopus
         if (msg.data != NULL)
             return FRFCFS_State::Ready;
         else if (this->m_fsm->isStall(cache_line.state, (int)event_id))
+        {
+            // Mechanism tracker: the line state that first stalls a demand request at the
+            // LLC (recorded once per request; the per-line gate stalls a request BEFORE this
+            // callback, so a gate-only stall leaves the column at -2). docs/Logger.md S5.
+            if (msg.isDemandRequest())
+                Logger::getLogger()->annotate(msg.msg_id, Logger::Annot::LLC_STALL_STATE, cache_line.state);
             return FRFCFS_State::NonReady;
+        }
 
         return FRFCFS_State::Ready;
     }
@@ -59,6 +67,12 @@ namespace octopus
         this->readEvent(request_msg, cache_line, &event_id);
         this->m_fsm->getTransition(cache_line.state, (int)event_id, next_state, actions);
 
+        // coherence transition hook (docs/Debugger.md): readable "EorM --GetS--> S_d" for an
+        // enabled debugger, binary FSM record for the raw trace (docs/Trace.md).
+        if (dprint)
+            dprint->transition(&request_msg, (uint32_t)m_id, cache_line.state, (int)event_id, next_state,
+                               actions.size() > 0 && actions[0] == (int)ActionId::Stall, this->m_fsm);
+
         return handleAction(actions, request_msg, cache_line, next_state);
     }
 
@@ -73,7 +87,7 @@ namespace octopus
             switch (static_cast<ActionId>(action))
             {
             case ActionId::Stall:
-                std::cout << " LLCMSIProtocol: Stall Transaction is detected" << std::endl;
+                std::cout << " LLCMSIProtocol: Stall Transaction is detected (controller " << this->m_id << ", line state " << cache_line.state << ", addr 0x" << std::hex << msg.addr << std::dec << ", msg " << msg.msg_id << ", source " << (int)msg.source << ", owner " << msg.owner << ", type " << msg.complementary_value << ", data " << (msg.data != NULL) << ")" << std::endl;
                 exit(0);
                 break;
 
@@ -86,6 +100,7 @@ namespace octopus
                 ((Message *)controller_action.data)->copy(msg);
                 ((Message *)controller_action.data)->to.clear();
                 ((Message *)controller_action.data)->to.push_back(msg.owner); // DualTrans == false
+                ((Message *)controller_action.data)->kind = Message::K_RESP;
                 break;
 
             case ActionId::GetData:
@@ -103,6 +118,7 @@ namespace octopus
                                                              (uint16_t)action, // Complementary_value
                                                              msg.owner);       // Owner
                 ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+                ((Message *)controller_action.data)->kind = Message::K_MEM_READ;
                 break;
 
             case ActionId::SetOwner:
@@ -127,6 +143,7 @@ namespace octopus
                                                              (uint16_t)MSIProtocol::REQUEST_TYPE_INV, // Complementary_value
                                                              (uint16_t)this->m_id);              // Owner
                 ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_id);
+                ((Message *)controller_action.data)->kind = Message::K_INV;
                 break;
 
             case ActionId::WriteBack:
@@ -146,10 +163,11 @@ namespace octopus
                 // msg.data is NULL and performWriteBack reads the resident copy.
                 if (msg.data != NULL)
                     ((Message *)controller_action.data)->copy(msg.data);
+                ((Message *)controller_action.data)->kind = Message::K_MEM_WRITE;
                 break;
 
             case ActionId::Fault:
-                std::cout << " LLCMSIProtocol: Fault Transaction is detected" << std::endl;
+                std::cout << " LLCMSIProtocol: Fault Transaction is detected (controller " << this->m_id << ", line state " << cache_line.state << ", addr 0x" << std::hex << msg.addr << std::dec << ", msg " << msg.msg_id << ", source " << (int)msg.source << ", owner " << msg.owner << ", type " << msg.complementary_value << ", data " << (msg.data != NULL) << ")" << std::endl;
                 exit(0);
                 break;
             }
@@ -235,5 +253,22 @@ namespace octopus
         m_data_handler->initializeCacheLine(cache_line);
         cache_line->state = state;
         cache_line->valid = true;
+    }
+
+    bool LLCMSIProtocol::needsDataArray(const Message &msg)
+    {
+        // The rows whose actions read the line for a response or write the
+        // arriving bytes into it. A message on such a row is one array access:
+        // the controller defers it whole and runs the FSM when the access
+        // runs, so state and data change together (the L1 rule, applied here).
+        GenericCacheLine cache_line;
+        EventId event_id;
+        Message message = msg;   // readEvent may clear a one-shot flag; work on a copy
+        m_data_handler->readLineBits(message.addr, &cache_line);
+        this->readEvent(message, cache_line, &event_id);
+        int ev = (int)event_id;
+        return this->m_fsm->hasAction(cache_line.state, ev, "SendData") ||
+               this->m_fsm->hasAction(cache_line.state, ev, "SendExeclusiveData") ||
+               this->m_fsm->hasAction(cache_line.state, ev, "SaveData");
     }
 }

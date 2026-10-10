@@ -1,0 +1,55 @@
+% octopus-manual.tex -- the Octopus reference manual. Build with ./build.sh (or make).
+\documentclass[11pt,a4paper,twoside,openany]{book}
+\input{preamble}
+
+\title{Octopus\\[0.3em]\large A cycle-accurate memory-system simulator for predictable multicores\\[0.6em]\normalsize Reference manual}
+\author{Fanos Research Lab, McMaster University}
+\date{Revision \gitcommit\ \textperiodcentered\ \today}
+
+\begin{document}
+\frontmatter
+\begin{titlepage}
+  \centering
+  \vspace*{2.5cm}
+  \includegraphics[width=4.2cm]{logo.png}\par\vspace{1.4cm}
+  {\sffamily\bfseries\fontsize{40}{44}\selectfont\color{octink}Octopus\par}\vspace{0.5cm}
+  {\sffamily\Large\color{octquiet}A cycle-accurate memory-system simulator\\for predictable multicores\par}\vspace{1.2cm}
+  {\sffamily\LARGE\color{octink}Reference manual\par}\vspace{2.5cm}
+  {\sffamily\large Fanos Research Lab \textperiodcentered\ McMaster University\par}\vspace{0.4cm}
+  {\sffamily\color{octquiet}Revision \gitcommit\ \textperiodcentered\ \today\par}
+  \vfill
+  {\sffamily\small\color{octquiet}\url{https://github.com/FanosResearch/OctopusSimulator}\par}
+\end{titlepage}
+
+\input{chapters/00-front}
+\tableofcontents
+\listoffigures
+
+\mainmatter
+\include{chapters/01-introduction}
+\include{chapters/02-getting-started}
+\include{chapters/03-system-organization}
+\include{chapters/04-cache-controller}
+\include{chapters/05-llc-datapath}
+\include{chapters/06-coherence-engine}
+\include{chapters/07-request-end-to-end}
+\include{chapters/08-interconnects}
+\include{chapters/09-main-memory}
+\include{chapters/10-configuration}
+\include{chapters/11-monitoring}
+\include{chapters/12-tasks-and-demo}
+\include{chapters/13-extending}
+\include{chapters/14-integration-modes}
+\include{chapters/16-evaluation}
+
+\appendix
+\include{chapters/A-config-keys}
+\include{chapters/B-fsm-tables}
+\include{chapters/C-cli-reference}
+\include{chapters/D-file-formats}
+
+\backmatter
+\printbibliography[heading=bibintoc,title={References}]
+\printindex[cfg]
+\printindex[idx]
+\end{document}

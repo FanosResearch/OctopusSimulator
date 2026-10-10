@@ -1,0 +1,41 @@
+kind,a,b,c,d,comment
+# ============================================================================
+# Core 0 — periodic real-time control task: EKF pose localization (one job/period)
+# Working set (small, evictable under contention):
+#   0x600000  state vector x        (1 line)
+#   0x600040  measurement y         (1 line)
+#   0x600080  covariance P  (6x6)   (5 lines, 0x600080..0x6001C0)
+#   0x600200  Kalman gain K workspace (2 lines)
+# All compute values are CPU-cycle budgets (placeholder EKF profile; calibrate/profile later).
+# ============================================================================
+
+# ---- periodic attributes (the timing contract) --------------------------------
+attr,period,5000,,,control period in CPU cycles (= implicit deadline); chosen between the alone (~4.2k) and contended (~7k) job times measured in Octopus
+attr,jobs,200,,,run 200 control jobs then finish
+attr,ooo,1,,,in-order core (1 outstanding request) — clean compute<->memory sequencing
+attr,base,0x600000,,,working-set base (for reference)
+
+# ---- job body: one EKF iteration, replayed once per period --------------------
+# 1) acquire + preprocess the new measurement
+COMPUTE,300,,,,sensor read + preprocess
+READ,0x600040,,,,load measurement vector y
+
+# 2) predict step:  x = F*x ;  P = F*P*F' + Q
+COMPUTE,450,,,,state propagation (F*x)
+READ,0x600000,,,,load current state x
+LINEAR,0x600080,5,64,1.0,sweep covariance P (5 lines, read) for F*P*F'
+COMPUTE,900,,,,covariance propagation compute
+
+# 3) update step:  K = P*H'*(H*P*H' + R)^-1   (the heavy phase: matrix inverse)
+COMPUTE,1600,,,,innovation covariance + Kalman gain (dominant compute)
+LINEAR,0x600080,5,64,0.5,re-read P + write intermediate (rd_ratio 0.5)
+WRITE,0x600200,,,,store Kalman gain K row 0
+WRITE,0x600240,,,,store Kalman gain K row 1
+
+# 4) state + covariance correction:  x = x + K*y ;  P = (I - K*H)*P
+COMPUTE,700,,,,apply correction
+WRITE,0x600000,,,,write back updated state x
+LINEAR,0x600080,5,64,0.2,write corrected covariance P (mostly writes)
+
+# 5) housekeeping before next release
+COMPUTE,200,,,,log / bookkeeping

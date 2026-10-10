@@ -31,7 +31,7 @@ StateNum , State                  ,            ,                  ,             
 8        , N_a                    ,            ,                  ,                      ,            ,                  ,                  ,                        ,                        , 
          ,                        ,            ,                  ,                      ,            ,                  ,                  ,                        ,                        , 
 State    , stable                 , isDataValid, GetS             , GetM                 , Replacement, PutM_fromOwner   , PutM_fromNonOwner, Data_fromLowerInterface, Data_fromUpperInterface, Own_Invalidation
-N        , 1                      , 0          , GetData/NIorS_d  , GetData/SetOwner/NM_d,            , Fault/           , Fault/           , Fault/                 , Fault/                 , Fault/
+N        , 1                      , 0          , GetData/NIorS_d  , GetData/SetOwner/NM_d,            , Fault/           ,, Fault/                 , Fault/                 , Fault/
 NIorS_d  , 0                      , 1          , Stall/           , Stall/               , Stall/     , Fault/           , Fault/           , Fault/                 , SendData/IorS          , Fault/
 NM_d     , 0                      , 1          , Stall/           , Stall/               , Stall/     , Fault/           , Fault/           , Fault/                 , SendData/M             , Fault/
 IorS     , 1                      , 1          , SendData/        , SendData/SetOwner/M  , IssueInv/  , Fault/           ,                  , Fault/                 , Fault/                 , WriteBack/N

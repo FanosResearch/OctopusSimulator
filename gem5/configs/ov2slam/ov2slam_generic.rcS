@@ -1,0 +1,51 @@
+#!/bin/bash
+# Two-stage ov2slam driver.
+#  Stage A, fresh boot: environment, node-only launch, `m5 checkpoint`. The
+#    config saves the checkpoint (ov2_env_trim) and stops.
+#  Stage B, restored from that checkpoint with readfile = a params file:
+#    `m5 readfile` now returns the params, the bag plays, the run completes.
+export ROS_LOCALHOST_ONLY=1            # confine DDS to loopback (network-disabled image)
+
+echo "setting ros environment..."
+source /opt/ros/humble/setup.bash
+echo "setting ov2slam environment..."
+source /catkin_ws/install/setup.bash
+
+echo "writing node-only launch file..."
+tee /ov2slam/ov2slam_launch.py > /dev/null << 'PYEOF'
+from launch import LaunchDescription
+from launch.actions import Shutdown
+from launch_ros.actions import Node
+
+def generate_launch_description():
+    node = Node(
+        package='ov2slam',
+        executable='ov2slam_node',
+        name='ov2slam_node',
+        output='screen',
+        arguments=['/ov2slam/euroc_stereo.yaml'],
+        prefix=['taskset -c 0,1'],
+        on_exit=Shutdown(),
+    )
+    return LaunchDescription([node])
+PYEOF
+
+echo "starting ov2slam node..."
+ros2 launch /ov2slam/ov2slam_launch.py &
+LAUNCH_PID=$!
+sleep 20                                # node initialised and idle; idle guest time is cheap
+
+echo "environment ready: taking checkpoint"
+m5 checkpoint                           # stage A ends here; stage B resumes on the next line
+
+m5 readfile > /tmp/params               # after a restore: the restoring config's readfile
+if ! grep -q "^# OV2_PARAMS" /tmp/params; then
+    echo "no run parameters delivered; stopping"
+    kill $LAUNCH_PID
+    exit 0
+fi
+. /tmp/params
+echo "playing $CLIP $BAG_ARGS"
+taskset -c 2 ros2 bag play $CLIP $BAG_ARGS
+wait $LAUNCH_PID                        # the node ends the sequence itself; launch exits with it
+m5 writefile ov2slam_traj.txt

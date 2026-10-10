@@ -44,6 +44,16 @@ public:
     uint8_t *data = NULL;
     uint16_t data_size = 0;
 
+    // Producer-assigned classification (docs/MessageEncoding.md). The protocol decoders never
+    // read it; the event trace (OCTOPUS_TRACE) and the viewer do. 0 = not tagged (e.g. the
+    // directory protocols).
+    enum Kind : uint8_t { K_UNKNOWN = 0, K_DEMAND, K_GETS, K_GETM, K_PUTM, K_INV, K_MEM_READ, K_EVICT,
+                          K_WB_DATA, K_WB_INV, K_SUPPLY, K_SUPPLY_DEFERRED, K_RESP, K_FILL, K_FILL_ROLLBACK, K_MEM_WRITE,
+                          // directory protocols (docs/Trace.md): a sharer's PutS, the home's forward
+                          // (FwdGetS/FwdGetM) and the acknowledgements (InvAck, PutAck)
+                          K_PUTS, K_FWD, K_ACK };
+    uint8_t kind = K_UNKNOWN;
+
     Message(uint64_t msg_id = 0, uint64_t addr = 0, uint64_t cycle = 0, uint64_t complementary_value = 0, uint16_t owner = 0)
     {
         this->msg_id = msg_id;
@@ -81,6 +91,7 @@ public:
         from = M2.from;
         to = M2.to;
         data_size = M2.data_size;
+        kind = M2.kind;
 
         if (M2.data != NULL)
             this->copy(M2.data, M2.data_size);
@@ -124,6 +135,16 @@ public:
         return source == Source::LOWER_INTERCONNECT && data == NULL &&
                (complementary_value == 0 || complementary_value == 1);
     }
+
+    // A back-invalidation (INV = 10), carrying no data. Ordered together with
+    // demand requests under per-line FCFS so an eviction's invalidation cannot
+    // leapfrog an OLDER demand request to the same line (which would evict the
+    // line out from under earlier-broadcast GetS/GetM and orphan them). Data
+    // responses stay exempt so they can still advance waiting transients.
+    bool isInvalidation() const
+    {
+        return complementary_value == 10 && data == NULL;   // REQUEST_TYPE_INV
+    }
 };
 
 class CommunicationInterface
@@ -144,6 +165,13 @@ public:
     // deliverable to EVERY receiver before it is delivered to any. Default =
     // always acceptable (unbounded interconnects have no receive bound).
     virtual bool canAcceptRX(MessageType type = MessageType::REQUEST) { return true; }
+
+    // Free slots left in this interface's outgoing (TX) response buffer. Drives
+    // bus-level flow control: the request bus serializes no new coherence
+    // transaction while any response buffer's free space has fallen into its
+    // in-flight reserve, so a response emitted by an already-broadcast transaction
+    // never overflows. Default = effectively unbounded (non-bus interconnects).
+    virtual int txResponseFreeSlots() { return 1 << 30; }
 
     virtual bool rollback(uint64_t address, uint64_t mask, Message *out_msg) { return false; }
     

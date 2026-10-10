@@ -23,7 +23,7 @@
 #
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BIN="$ROOT/build/Octopus_Simulator.exe"
+BIN="$ROOT/build/Octopus_Simulator"; [ -x "$BIN.exe" ] && BIN="$BIN.exe"
 CFG="$ROOT/configuration/SystemConfigurations"
 MINGW="/c/Users/moham/AppData/Local/Microsoft/WinGet/Packages/BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe/mingw64/bin"
 [ -d "$MINGW" ] && export PATH="$MINGW:$ROOT/build:$PATH"
@@ -57,6 +57,8 @@ esac
 [ -f "$BIN" ]    || { echo "ERROR: binary not found: $BIN (build it first)" >&2; exit 1; }
 [ -f "$PRESET" ] || { echo "ERROR: preset not found: $PRESET" >&2; exit 1; }
 [ -d "$TR" ]     || { echo "ERROR: trace dir not found: $TR" >&2; exit 1; }
+# benchmarks live in their own repo (cloned into BMs/ on demand); fetch + inflate (idempotent)
+bash "$ROOT/get_benchmarks.sh" "$TR" || { echo "ERROR: could not get/prepare benchmarks under $TR" >&2; exit 1; }
 OUT="${OUT:-$ROOT/results/${PROTO}-${SUITE}}"
 mkdir -p "$OUT/rows"; : > "$OUT/progress.log"
 
@@ -79,7 +81,7 @@ run_one(){
   local start rc wall flt done_cores ncore status
   log "[start] $b @ $(date +%H:%M:%S)"
   start=$(date +%s)
-  timeout "${SAFETY}s" "$BIN" -s MultiCoreSystem -p "workload_path(s)=$(cygpath -m "$wp")/" \
+  timeout "${SAFETY}s" "$BIN" -s MultiCoreSystem -p "workload_path(s)=$(cygpath -m "$wp" 2>/dev/null || printf '%s' "$wp")/" \
       >/dev/null 2>"$OUT/rows/$b.stderr"
   rc=$?; wall=$(( $(date +%s) - start ))
   # per-core completion: each core drained its OWN trace + wrote the end-of-sim footer

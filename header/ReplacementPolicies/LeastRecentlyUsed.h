@@ -28,6 +28,7 @@ namespace octopus
 
         virtual void update(uint64_t set, int way, uint64_t cycle);
         virtual void getReplacementCandidate(uint64_t set, int* way);
+        virtual void getReplacementCandidate(uint64_t set, int* way, uint32_t allowed);
     };
 }
 

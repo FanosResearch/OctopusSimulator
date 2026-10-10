@@ -1,0 +1,28 @@
+% An excerpt of MESI_LLC.csv with the four things a reader must know about the format.
+\begin{tikzpicture}[font=\sffamily\footnotesize, >=Latex,
+  cell/.style={minimum height=6mm, inner sep=3pt, anchor=center, font=\ttfamily\footnotesize},
+  hdr/.style={cell, fill=octmem, font=\sffamily\bfseries\footnotesize},
+  st/.style={cell, fill=octctl, font=\ttfamily\bfseries\footnotesize},
+  note/.style={draw=octquiet, fill=octpaper, rounded corners=2pt, inner sep=4pt, align=left, font=\sffamily\scriptsize, text width=62mm},
+  pin/.style={->, octquiet, thick}]
+  \matrix (m) [matrix of nodes, nodes={cell}, column sep=-\pgflinewidth, row sep=-\pgflinewidth, nodes in empty cells,
+    column 1/.style={nodes={st}}, row 1/.style={nodes={hdr}}] {
+    State & stable & GetS & GetM & Replacement & Own\_Invalidation \\
+    N     & 1 & GetData/SetOwner/NE\_d & GetData/SetOwner/NM\_d & & SaveData/N \\
+    NE\_d & 0 & Stall/ & Stall/ & Stall/ & Fault/ \\
+    I     & 1 & SendExeclusiveData/SetOwner/EorM & SendData/SetOwner/EorM & IssueInv/ & WriteBack/N \\
+    EorM  & 1 & ClearOwner/S\_d & SetOwner/ & IssueInv/ & ClearOwner/MN\_d \\
+  };
+  \draw[octrule] (m-1-1.south west) -- (m-1-6.south east);
+  \draw[octrule] (m-1-1.north west) rectangle (m-5-6.south east);
+  % callouts above
+  \node[note, above=10mm of m-1-4.north, anchor=south] (nev) {\textbf{a column is an event}, one of the \code{EventNum} list at the top of the file; the handler's \code{readEvent} maps each message to one of them};
+  \draw[pin] (nev.south) -- (m-1-4.north);
+  \node[note, above=10mm of m-1-1.north, anchor=south west, xshift=-4mm] (nst) {\textbf{a row is a state}, stable (1) or transient (0); its \emph{position} in this table must equal its \code{StateNum}, so a new state's row goes \textbf{last}};
+  \draw[pin] (nst.south) -- (m-1-1.north);
+  % callouts below
+  \node[note, below=10mm of m-5-3.south, anchor=north] (ncell) {\textbf{a cell is \code{actions/next}}: do \code{SendData}, then \code{SetOwner}, then go to \code{EorM}. No trailing state (\code{IssueInv/}) means \emph{stay}; an empty cell \emph{ignores} the event};
+  \draw[pin] (ncell.north) -- (m-4-4.south);
+  \node[note, below=10mm of m-5-6.south, anchor=north east, xshift=4mm] (nf) {\textbf{\code{Fault/}} marks a pair that must be unreachable; the run halts and names it, which is how an incomplete table fails loudly};
+  \draw[pin] (nf.north) -- (m-3-6.south);
+\end{tikzpicture}

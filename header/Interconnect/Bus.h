@@ -52,6 +52,9 @@ namespace octopus
 
         CommunicationInterface* getInterfaceFor(int id);
 
+        // Design B: tag this bus as the LLC<->DRAM (mem) bus for logging.
+        void setMemBus() { if (interconnect_controller) interconnect_controller->setMemBus(); }
+
         vector<int> *getLowerLevelIds();
         
         virtual void init();

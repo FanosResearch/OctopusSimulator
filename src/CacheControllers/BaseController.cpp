@@ -7,6 +7,9 @@
  */
 
 #include "../../header/CacheControllers/BaseController.h"
+#include <cstdio>
+#include <cstdlib>
+#include "../../header/ExternalCPU.h"
 
 namespace octopus
 {
@@ -20,8 +23,16 @@ namespace octopus
         //Parameters initialization
         m_id = std::get<int>(parameters.at(STRINGIFY(m_id)).value);
         m_shared_memory_id = std::get<int>(parameters.at(STRINGIFY(m_shared_memory_id)).value);
+
+        // Optional perfect-LLC knob, defaulted off so existing configs parse and
+        // every non-LLC controller (which never sets it) behaves normally.
+        m_perfect_llc = 0;
+        if (parameters.find(STRINGIFY(perfect_llc)) != parameters.end())
+            m_perfect_llc = std::get<int>(parameters.at(STRINGIFY(perfect_llc)).value);
         m_clk_period = std::get<int>(parameters.at(STRINGIFY(m_clk_period)).value);
         int processing_queue_size = std::get<int>(parameters.at(STRINGIFY(processing_queue_size)).value);
+        m_processing_queue_size = processing_queue_size;
+        s_controllers.push_back(this);
         string protocol_type = std::get<string>(parameters.at(STRINGIFY(protocol_type)).value);
         string fsm_filename = std::get<string>(parameters.at(STRINGIFY(fsm_filename)).value);
         string fsm_path = string(FSM_PATH) + fsm_filename + ".csv";
@@ -73,13 +84,42 @@ namespace octopus
 
     void BaseController::processLogic()
     {
+        static const long hang_dump = std::getenv("OCTOPUS_HANG_DUMP") ? std::atol(std::getenv("OCTOPUS_HANG_DUMP")) : 0;
+
         this->addRequests2ProcessingQueue(*m_processing_queue);
 
         while(true)
         {
             Message ready_msg;
             if (m_processing_queue->getFirstReady(&ready_msg) == false)
+            {
+                if (hang_dump > 0 && !m_hang_dumped && m_processing_queue->size() > 0 &&
+                    m_cache_cycle - m_last_progress_cycle >= (uint64_t)hang_dump)
+                {
+                    m_hang_dumped = true;
+                    dumpState();
+                    // The run is wedged: finalize the raw trace now (records + chunk
+                    // index) so the cycles leading into the stall survive the kill.
+                    Logger::getLogger()->traceFinalize();
+                }
                 return;
+            }
+            m_last_progress_cycle = m_cache_cycle;
+            traceMsg("popped", ready_msg);
+
+            if (!canAdmitRequest(ready_msg))
+            {
+                traceMsg("admit-fail", ready_msg);
+                m_admit_fail_cycles++;
+                // Structural stall (e.g., MSHR/PWB full): put the request back
+                // and retry next cycle. A slot is guaranteed to be free because
+                // getFirstReady just removed this element.
+                m_processing_queue->pushBack(ready_msg, FRFCFS_State::NonReady);
+                return;
+            }
+
+            if (deferForDataArray(ready_msg))
+                continue;
 
             if (!canAdmitRequest(ready_msg))
             {
@@ -91,7 +131,10 @@ namespace octopus
             }
 
             if(ready_msg.source == Message::Source::LOWER_INTERCONNECT)
-                Logger::getLogger()->updateRequest(ready_msg.msg_id, Logger::EntryId::CACHE_CHECKPOINT);
+            {
+                Logger::getLogger()->event(ready_msg.msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::ENTER);
+                Logger::getLogger()->trace(ready_msg, m_log_role, (uint32_t)m_id, Logger::Phase::ENTER);
+            }
 
             // if(ready_msg.source == Message::Source::SELF)
             //     dprint->print(NULL, "Ready Message for Replacement");
@@ -106,6 +149,29 @@ namespace octopus
         }
     }
 
+    void BaseController::dumpState()
+    {
+        fprintf(stderr, "[HANG] %s id=%d cycle=%llu idle_since=%llu pq=%d pending_lines=%zu\n",
+                m_log_role == Logger::Role::LLC ? "LLC" : "L1", m_id,
+                (unsigned long long)m_cache_cycle, (unsigned long long)m_last_progress_cycle,
+                m_processing_queue->size(), m_pending_requests.size());
+        m_processing_queue->forEach([&](const Message &m, FRFCFS_State st) {
+            GenericCacheLine line;
+            bool resident = m_data_handler->readLineBits(m.addr, &line);
+            fprintf(stderr, "[HANG]   pq addr=%llx id=%llu src=%d cv=%llu data=%d demand=%d inv=%d state=%d line=%s(state=%d,valid=%d)\n",
+                    (unsigned long long)m.addr, (unsigned long long)m.msg_id, (int)m.source,
+                    (unsigned long long)m.complementary_value, m.data != NULL, m.isDemandRequest(), m.isInvalidation(), (int)st,
+                    resident ? "resident" : "absent", resident ? line.state : -1, resident ? line.valid : 0);
+        });
+        for (auto &kv : m_pending_requests)
+            fprintf(stderr, "[HANG]   pending line=%llx n=%zu first_id=%llu\n", (unsigned long long)kv.first, kv.second.size(),
+                    kv.second.empty() ? 0ull : (unsigned long long)kv.second.front().msg_id);
+        Message peek;
+        fprintf(stderr, "[HANG]   upper_rx_nonempty=%d lower_rx_nonempty=%d\n",
+                m_upper_interface->peekMessage(&peek), m_lower_interface->peekMessage(&peek));
+    }
+
+
     void BaseController::addRequests2ProcessingQueue(FRFCFS_Buffer<Message, CoherenceProtocolHandler> &buf)
     {
         Message msg;
@@ -113,13 +179,15 @@ namespace octopus
         if (m_upper_interface->peekMessage(&msg))
         {
             msg.source = Message::Source::UPPER_INTERCONNECT;
-            if (buf.pushFront(msg))
+            traceMsg("intake-upper", msg);
+            if (buf.pushFrontOrdered(msg))
                 m_upper_interface->popFrontMessage();
         }
 
         if (m_lower_interface->peekMessage(&msg))
         {
             msg.source = Message::Source::LOWER_INTERCONNECT;
+            traceMsg("intake-lower", msg);
             // Only demand requests are subject to the queue bound. Responses and
             // service traffic (data fills, write-backs, invalidations) must always
             // be admitted: a full queue of stalled demand requests would otherwise
@@ -127,8 +195,79 @@ namespace octopus
             // LLC, an L1 write-back is a response that arrives on the lower interface,
             // so route by message kind, not by interface.)
             if (buf.pushBack(msg, FRFCFS_State::NonReady, /*force=*/!msg.isDemandRequest()))
+            {
+                noteQueueArrival(msg, buf);
                 m_lower_interface->popFrontMessage();
+            }
+            else
+                m_intake_refusals++;
         }
+        if (buf.size() > m_queue_peak)
+            m_queue_peak = buf.size();
+    }
+
+    // A message admitted to the processing queue from the lower interface (L1: from its CPU;
+    // LLC: from the interconnect): the raw-trace record the visualizer's LLC_QUEUE lane is built
+    // from, and the mechanism trackers. Shared by every controller's intake, the directory's
+    // included, so the trackers and the lane do not depend on the controller class.
+    void BaseController::noteQueueArrival(const Message &msg, FRFCFS_Buffer<Message, CoherenceProtocolHandler> &buf)
+    {
+        Logger::getLogger()->trace(msg, Logger::Role::LLC_QUEUE, (uint32_t)m_id, Logger::Phase::ENTER);   // arrival in the controller's queue
+        // Mechanism trackers (LLC only): the line's state when the demand request
+        // arrives, and whether an older demand to the same line is already queued
+        // (per-line FCFS gate). A stable line => admitted immediately; a transient
+        // (S_d/I_d/MN_d/...) => waits a coherence round trip; NE_d/NM_d => waits
+        // for a DRAM fetch already in flight (coalesced hit). See docs/Logger.md S5.
+        if (m_log_role == Logger::Role::LLC && msg.isDemandRequest())
+        {
+            GenericCacheLine line;
+            int st = m_data_handler->readLineBits(msg.addr, &line) ? line.state : -1;
+            bool gated = false; uint64_t key = getAddressKey(msg.addr);
+            buf.forEach([&](const Message &m, FRFCFS_State) {
+                if (m.msg_id != msg.msg_id && m.isDemandRequest() && getAddressKey(m.addr) == key) gated = true; });
+            Logger::getLogger()->annotate(msg.msg_id, Logger::Annot::LLC_STATE, st);
+            Logger::getLogger()->annotate(msg.msg_id, Logger::Annot::LLC_GATE, gated ? 1 : 0);
+        }
+    }
+
+    std::vector<BaseController *> BaseController::s_controllers;
+
+    void BaseController::reportOccupancy(std::ostream &os)
+    {
+        for (BaseController *c : s_controllers)
+            if (c->m_admit_fail_cycles || c->m_intake_refusals)
+                os << "controller " << c->m_id << ": queue peak " << c->m_queue_peak
+                   << " of " << c->m_processing_queue_size
+                   << ", intake refusals (queue full) " << c->m_intake_refusals
+                   << ", admit-fail cycles (MSHR/PWB full) " << c->m_admit_fail_cycles << std::endl;
+    }
+
+    void BaseController::dataArrayReadFailed(const char *where, const Message *msg)
+    {
+        // A response that needs the line's bytes found no readable line: the
+        // line's state was changed (invalidated or evicted) before the array
+        // access that should have preceded it ran. With a data latency of 0
+        // the read runs inline first; with a latency it must be parked with
+        // the state change, or this is what happens.
+        m_data_read_failures++;
+        // Standalone traces carry mock data, so a response without bytes was
+        // always tolerated there; keep that. With an external core attached
+        // the bytes will matter (Stage 4), so make it fatal.
+        if (m_cpu_port == NULL)
+            return;
+        GenericCacheLine bits;
+        bool have_bits = m_data_handler->readLineBits(msg->addr, &bits);
+        cout << "CacheController(id = " << m_id << "): " << where
+             << " needs the data of line 0x" << std::hex << msg->addr << std::dec
+             << " but the array has no readable copy (state "
+             << (have_bits ? bits.state : -1) << ", valid " << (have_bits ? bits.valid : false)
+             << ", msg " << msg->msg_id << "). The state changed before the array read." << endl;
+        exit(0);
+    }
+
+    bool BaseController::demandAdmissionBlocked(int outstanding) const
+    {
+        return m_processing_queue_size >= 0 && outstanding >= m_processing_queue_size;
     }
 
     uint64_t BaseController::getAddressKey(uint64_t addr)
@@ -156,6 +295,8 @@ namespace octopus
             GenericCacheLine cache_line;
             if (m_data_handler->readCacheLine(msg->addr, &cache_line) && cache_line.m_data != NULL)
                 msg->copy(cache_line.m_data);
+            else
+                dataArrayReadFailed("removePendingAndRespond", msg);
         }
 
         if (m_pending_requests.find(getAddressKey(msg->addr)) != m_pending_requests.end())
@@ -169,12 +310,22 @@ namespace octopus
                     pending_messages.front().complementary_value = msg->complementary_value;
                     pending_messages.front().to = msg->to;
                     pending_messages.front().copy(msg->data);
+                    pending_messages.front().kind = Message::K_RESP;   // the parked request goes out as a data response
                 }
                 else
                 {
                     cout << "CacheController: Remove from pending without data" << endl;
                     exit(0);
                 }
+
+                // Design B: refill data available -> array access (SERVICE) then
+                // response emitted (EXIT) to this pending requester.
+                Logger::getLogger()->event(pending_messages.front().msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::SERVICE);
+                // Serialisation point of this CPU request.
+                if (m_cpu_port != NULL)
+                    m_cpu_port->commit(pending_messages.front().msg_id, pending_messages.front().addr);
+                Logger::getLogger()->event(pending_messages.front().msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::EXIT);
+                Logger::getLogger()->trace(pending_messages.front(), m_log_role, (uint32_t)m_id, Logger::Phase::EXIT);
 
                 if (!m_lower_interface->pushMessage(pending_messages.front(), this->m_cache_cycle, MessageType::DATA_RESPONSE))
                 {
@@ -198,12 +349,26 @@ namespace octopus
     {
         Message *msg = (Message *)data_ptr;
 
+        // Design B: data-array access granted (after any wait in the data-access
+        // buffer) -- the SERVICE point that splits L2-Stall from L2-Access.
+        Logger::getLogger()->event(msg->msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::SERVICE);
+
         if (msg->data == NULL)
         {
             GenericCacheLine cache_line;
             if (m_data_handler->readCacheLine(msg->addr, &cache_line) && cache_line.m_data != NULL)
                 msg->copy(cache_line.m_data);
+            else
+                dataArrayReadFailed("hitAction", msg);
         }
+
+        // Design B: response emitted to the response bus -- the LLC/L1 hand-off point.
+        msg->kind = Message::K_RESP;   // a hit's data response (L1 -> CPU, or LLC -> L1 over the response bus)
+        // Serialisation point of this CPU request.
+        if (m_cpu_port != NULL)
+            m_cpu_port->commit(msg->msg_id, msg->addr);
+        Logger::getLogger()->event(msg->msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::EXIT);
+        Logger::getLogger()->trace(*msg, m_log_role, (uint32_t)m_id, Logger::Phase::EXIT);
 
         if (!m_lower_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::DATA_RESPONSE))
         {
@@ -218,6 +383,25 @@ namespace octopus
     {
         Message *msg = (Message *)data_ptr;
         msg->cycle = this->m_cache_cycle;
+
+        // Perfect LLC: a fetch that would go to the memory above is served locally.
+        // Instead of transporting the REQUEST over the upper bus to DRAM, synthesize
+        // the data fill and inject it straight into this controller's own upper-
+        // interface receive path -- byte-identical to how a real memory response
+        // arrives (BusController delivers responses via the same pushMessage2RX),
+        // but with no bus transport and no DRAM latency. The existing fill FSM path
+        // (transient --Data_fromUpperInterface--> resident) then completes normally.
+        if (m_perfect_llc && !msg->to.empty() && msg->to[0] == (uint16_t)m_shared_memory_id)
+        {
+            uint8_t return_data[64] = {0};
+            Message fill(msg->msg_id, msg->addr, this->m_cache_cycle, 0, msg->owner);
+            fill.to.push_back((uint16_t)this->m_id); // response addressed to this LLC
+            fill.kind = Message::K_FILL;
+            fill.copy(return_data);
+            m_upper_interface->pushMessage2RX(fill, MessageType::DATA_RESPONSE);
+            delete msg;
+            return;
+        }
 
         if (!m_upper_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::REQUEST))
         {
@@ -235,14 +419,35 @@ namespace octopus
         if(msg->data == NULL)
         {
             GenericCacheLine cache_line;
-            m_data_handler->readCacheLine(msg->addr, &cache_line);
-            msg->copy(cache_line.m_data);
+            if (m_data_handler->readCacheLine(msg->addr, &cache_line) && cache_line.m_data != NULL)
+                msg->copy(cache_line.m_data);
+            else
+                dataArrayReadFailed("performWriteBack", msg);
         }
 
         if (msg->owner == this->m_id)
+        {
+            // Perfect LLC never writes back to DRAM: the (infinite, always-hit)
+            // LLC absorbs the dirty line. Nothing waits on a memory write, so drop
+            // it -- keeping bus[1] and the memory controller idle under perfect LLC.
+            if (m_perfect_llc)
+            {
+                delete msg;
+                return;
+            }
             msg->to.push_back(this->m_shared_memory_id);
+        }
         else
+        {
+            // Cache-to-cache supply: this cache (the line's owner) answers ANOTHER core's
+            // request off its own copy, so it -- not the LLC -- is the responder.
+            // Design B: stamp the responder's array access (SERVICE) and emit (EXIT) so
+            // the Logger can anchor Response-Bus at the actual emit point.
             msg->to.push_back(msg->owner);
+            Logger::getLogger()->event(msg->msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::SERVICE);
+            Logger::getLogger()->event(msg->msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::EXIT);
+            Logger::getLogger()->trace(*msg, m_log_role, (uint32_t)m_id, Logger::Phase::EXIT);
+        }
 
         if (!m_upper_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::DATA_RESPONSE))
         {
@@ -262,7 +467,10 @@ namespace octopus
     
         if (msg->data != NULL)
         {
-            if (!m_data_handler->updateLineData(msg->addr, msg->data))
+            m_data_handler->setRequester((int)msg->owner);   // way partitioning: fill lands in the requester's ways
+            bool ok = m_data_handler->updateLineData(msg->addr, msg->data);
+            m_data_handler->setRequester(-1);
+            if (!ok)
             {
                 cout << "CacheController: update data of an unfound line" << endl;
                 exit(0);

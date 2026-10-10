@@ -24,6 +24,15 @@ namespace octopus
 
         virtual void update(uint64_t set, int way, uint64_t cycle) = 0;
         virtual void getReplacementCandidate(uint64_t set, int* way) = 0;
+        // way partitioning (docs/Tasks.md "Protection"): the victim must be one of the ways
+        // in `allowed` (bit i = way i). Default: the unrestricted choice if it is allowed,
+        // else the lowest allowed way.
+        virtual void getReplacementCandidate(uint64_t set, int* way, uint32_t allowed)
+        {
+            getReplacementCandidate(set, way);
+            if (allowed & (1u << *way)) return;
+            for (uint32_t i = 0; i < m_ways_count; i++) if (allowed & (1u << i)) { *way = (int)i; return; }
+        }
     };
 }
 

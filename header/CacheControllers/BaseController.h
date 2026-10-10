@@ -22,6 +22,7 @@
 #include "Logger.h"
 
 #include <functional>
+#include <ostream>
 #include <string>
 #include <queue>
 #include <vector>
@@ -29,11 +30,25 @@
 
 namespace octopus
 {
+    class ExternalCPU;
     class BaseController : public ClockedObj, public Initializable, public Configurable
     {
     protected:
         int m_id;
         int m_shared_memory_id;
+
+        // Perfect-LLC knob (default 0 = off). When 1, this controller never issues
+        // to the memory above it: a miss's fetch is synthesized locally and looped
+        // back as an upper-interface data response (no bus transport, no DRAM
+        // latency), and a dirty eviction's write-back to memory is dropped. Set
+        // only on the LLC (llc_controller.perfect_llc). Models the "perfect LLC"
+        // assumption of predictable-coherence analyses. Allocation/eviction are
+        // unchanged, so a perfect-vs-real run isolates exactly the DRAM leg.
+        int m_perfect_llc;
+
+        // Design B logging role for this controller (L1 by default; the LLC is
+        // tagged via setLogRole). Used to stamp self-describing timeline events.
+        Logger::Role m_log_role = Logger::Role::L1;
 
         uint64_t m_cache_cycle;
 
@@ -45,6 +60,20 @@ namespace octopus
 
         // This queue is used mainly to serialize messages that come from different sources
         FRFCFS_Buffer<Message, CoherenceProtocolHandler> *m_processing_queue;
+        int m_processing_queue_size;   // demand admission bound of that queue (-1 = none)
+        // Set when an external core model (the gem5 bridge) drives this L1.
+        // Receives the commit of each CPU request and the loss of any
+        // readable line; NULL in the standalone simulator.
+        ExternalCPU *m_cpu_port = NULL;
+        uint64_t m_data_read_failures = 0;   // responses built without line data
+        // Occupancy diagnostics, reported at the end of a run (reportOccupancy):
+        // cycles a popped request was turned away by canAdmitRequest (MSHR or
+        // write-back buffer full), interconnect intakes refused because the
+        // demand queue was at its bound, and the queue's peak occupancy.
+        uint64_t m_admit_fail_cycles = 0;
+        uint64_t m_intake_refusals = 0;
+        int m_queue_peak = 0;
+        static std::vector<BaseController *> s_controllers;   // every controller built, for the report
 
         // key is the msg.addr & mask(nbits of CacheLineSize) and the value is vector of Messages
         // to ensure order of requests of the same cache line
@@ -58,11 +87,25 @@ namespace octopus
         virtual void cycleProcess();
         virtual void processLogic();
         virtual void addRequests2ProcessingQueue(FRFCFS_Buffer<Message, CoherenceProtocolHandler> &);
+        // after a lower-interface message is admitted to the queue: the LLC_QUEUE trace record and
+        // the LLC mechanism trackers (arrival state, per-line gate); every intake calls it
+        void noteQueueArrival(const Message &msg, FRFCFS_Buffer<Message, CoherenceProtocolHandler> &buf);
+
+        // Diagnostics: OCTOPUS_HANG_DUMP=<cycles> dumps this controller's queues to
+        // stderr once it has processed nothing for that many cycles (deadlock triage).
+        uint64_t m_last_progress_cycle = 0;
+        bool m_hang_dumped = false;
+        virtual void dumpState();
 
         // Structural admission gate. Returns false when a ready request must be
         // held back (e.g., the derived controller has no free MSHR/PWB entry for
         // a new miss). Default: always admit. Overridden by CacheController.
         virtual bool canAdmitRequest(Message &msg) { return true; }
+        // Pipelined data array: lets the derived controller take a ready
+        // message off the FSM path and apply its event only once the array
+        // has absorbed its bytes. Default: never.
+        virtual bool deferForDataArray(Message &msg) { return false; }
+        virtual void traceMsg(const char *what, const Message &msg) {}   // debug trace hook (CacheController)
 
         virtual uint64_t getAddressKey(uint64_t addr);
 
@@ -81,6 +124,26 @@ namespace octopus
         ~BaseController();
 
         virtual void init();
+        void setCpuPort(ExternalCPU *port) { m_cpu_port = port; }
+        // One line per controller that ever refused or stalled: how close the
+        // queue, MSHR and write-back bounds came to binding in this run.
+        static void reportOccupancy(std::ostream &os);
+        // Mirror of a classic cache's blocked CPU port. `outstanding` is the
+        // number of the external core's requests accepted and not yet
+        // answered. The queue bound is read as the total the core is credited
+        // with: an accepted request holds a credit until its response,
+        // whether it waits in this queue, in the pending table, or on its way
+        // back, so every buffer between the core and this controller is
+        // bounded by that same number. The L1 controller adds its MSHR and
+        // write-back-buffer bounds.
+        virtual bool demandAdmissionBlocked(int outstanding) const;
+        // Fatal diagnostic for a response that needs line data the array no
+        // longer holds (replaces a memcpy from NULL).
+        void dataArrayReadFailed(const char *where, const Message *msg);
+        int demandQueueSize() const { return m_processing_queue_size; }
+
+        // Design B: tag this controller's logging role (e.g. LLC). Default is L1.
+        void setLogRole(Logger::Role role) { m_log_role = role; }
 
         virtual void initialize(uint64_t address, const uint8_t* data, int size) {} //for Initializable
         virtual void read(uint64_t address, uint8_t* data) {} //for Initializable

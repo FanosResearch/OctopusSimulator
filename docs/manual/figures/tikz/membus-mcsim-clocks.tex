@@ -1,0 +1,16 @@
+% The LLC, the memory bus and the two memory models, with their clocks.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, node distance=5mm and 8mm,
+  b/.style={draw=octrule, fill=octmem, rounded corners=2pt, inner sep=5pt, align=center, minimum height=12mm},
+  bus/.style={b, fill=octio, draw=octpurple},
+  mem/.style={b, fill=white},
+  w/.style={<->, thick, octink}, l/.style={font=\sffamily\scriptsize, text=octquiet, align=center}]
+  \node[b] (llc) {\textbf{LLC}\\period 100\\\code{GetData} $\rightarrow$ read\\\code{WriteBack} $\rightarrow$ write};
+  \node[bus, right=of llc] (bus) {\textbf{bus[1]}\\\code{Point2Point}\\period 50: 2 ticks per core cycle\\request 2, data 5 ticks};
+  \node[mem, right=of bus, yshift=10mm] (fx) {\textbf{MainMemoryController}\\period 100, queue 32\\every read: \code{m\_memory\_latency} = 250\\stamps \code{DRAM.ENTER/EXIT}};
+  \node[mem, right=of bus, yshift=-10mm] (mc) {\textbf{MCsimInterface} $\rightarrow$ MCsim\\period = the LLC's: one DRAM tick per core cycle\\DDR4-2400, scheduler from \code{mcsim\_scheduler}\\read: callback with the data; write: fire-and-forget};
+  \draw[w] (llc) -- (bus);
+  \draw[w] (bus.east) -- ++(3mm,0) |- (fx.west);
+  \draw[w] (bus.east) -- ++(3mm,0) |- (mc.west);
+  \node[l, above=1mm of fx] {\code{main\_memory\_type(s)=MainMemoryController} (default)};
+  \node[l, below=1mm of mc] {\code{main\_memory\_type(s)=MCsim -p mcsim\_scheduler(s)=FRFCFS}};
+\end{tikzpicture}

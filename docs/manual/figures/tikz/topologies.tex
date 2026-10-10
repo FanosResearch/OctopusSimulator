@@ -1,0 +1,35 @@
+% The three shipped interconnect shapes between the L1s and the LLC.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex,
+  n/.style={draw=octrule, fill=octmem, rounded corners=2pt, minimum width=9mm, minimum height=5.5mm, font=\sffamily\scriptsize\bfseries},
+  llc/.style={n, fill=octctl, draw=octamber, minimum width=12mm},
+  sw/.style={draw=octpurple, fill=octio, circle, minimum size=7mm, font=\sffamily\scriptsize\bfseries},
+  lane/.style={octpurple, thick},
+  link/.style={octrule, thick},
+  ttl/.style={font=\sffamily\small\bfseries, text=octink},
+  sub/.style={font=\sffamily\scriptsize, text=octquiet, align=center, text width=44mm}]
+  % ---- TripleBus ----
+  \begin{scope}
+    \node[ttl] at (18mm, 14mm) {TripleBus (shipped)};
+    \foreach \i in {0,1,2,3} { \node[n] (b\i) at (\i*11mm, 6mm) {L1 \i}; \draw[link] (b\i.south) -- (\i*11mm, -2mm); }
+    \foreach \y/\t in {-2/request, -5/response, -8/service} { \draw[lane] (-4mm, \y mm) -- (37mm, \y mm) node[right, text=octpurple] {\t}; }
+    \node[llc] (bl) at (16.5mm, -16mm) {LLC}; \draw[link] (bl.north) -- (16.5mm, -8mm);
+    \node[sub] at (18mm, -25mm) {three lanes, one arbiter each; every L1 sees every request (snooping); the service lane carries back-invalidations};
+  \end{scope}
+  % ---- Mesh ----
+  \begin{scope}[xshift=62mm]
+    \node[ttl] at (18mm, 14mm) {Mesh (\code{MultiCoreSystem\_Mesh})};
+    \foreach \i/\x/\y in {0/0/6, 1/12/6, 2/24/6, 3/36/6} { \node[n] (m\i) at (\x mm, \y mm) {L1 \i}; }
+    \node[llc] (ml) at (18mm, -10mm) {LLC};
+    \foreach \a/\b in {m0/m1, m1/m2, m2/m3, m0/ml, m1/ml, m2/ml, m3/ml, m0/m2, m1/m3, m0/m3} { \draw[link] (\a) -- (\b); }
+    \node[sub] at (18mm, -25mm) {\code{connection\_matrix} lists every node's neighbours; as shipped it is the complete graph, so every pair has a direct link with its own request and data channels};
+  \end{scope}
+  % ---- NoC ----
+  \begin{scope}[xshift=124mm]
+    \node[ttl] at (18mm, 14mm) {NoC (one switch)};
+    \node[sw] (s) at (18mm, -3mm) {sw};
+    \foreach \i/\x/\y in {0/0/6, 1/12/6, 2/24/6, 3/36/6} { \node[n] (n\i) at (\x mm, \y mm) {L1 \i}; \draw[link] (n\i) -- (s); }
+    \node[llc] (nl) at (18mm, -14mm) {LLC}; \draw[link] (nl) -- (s);
+    \foreach \i in {0,1,2,3} { \draw[link, octquiet, densely dotted] (n\i.south) to[bend right=12] (nl.north); }
+    \node[sub] at (18mm, -25mm) {L1s link to the LLC directly (dotted) and to each other through switch 200, which forwards in the same cycle from a static next-hop table; at most one switch per message today};
+  \end{scope}
+\end{tikzpicture}

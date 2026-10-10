@@ -129,7 +129,7 @@ namespace octopus
     {
         int way;
         
-        m_replacement_policy->getReplacementCandidate(set, &way);
+        m_replacement_policy->getReplacementCandidate(set, &way, allowedWays());   // way partitioning (no-op when unconfigured)
         return way;
     }
 
@@ -152,5 +152,18 @@ namespace octopus
         if (checkMSHR(mask_offset(address)) || checkPWB(mask_offset(address)))
             return true;
         return CacheDataHandler::isReady(address);
+    }
+
+    CacheDataHandler::LineLocation CacheDataHandler_COTS::lineLocation(uint64_t address)
+    {
+        uint64_t set;
+        int way;
+        if (CacheDataHandler::findline(address, &set, &way))
+            return LineLocation::ARRAY;
+        if (checkMSHR(mask_offset(address)))
+            return LineLocation::MSHR;
+        if (checkPWB(mask_offset(address)))
+            return LineLocation::PWB;
+        return LineLocation::NONE;
     }
 }

@@ -10,3 +10,74 @@ __pycache__
 
 Rename_results.sh
 Run_testcases.sh
+
+# --- run outputs / scratch (not part of the artifact) ---
+*-results/
+sweep-protocols/
+sweep_big/
+build_dbg/
+.ua/
+# --- the benchmarks live in their own repository (FanosResearch/OctopusBMs);
+#     get_benchmarks.sh clones it into BMs/ on demand. Never tracked here. ---
+BMs/
+a2time_4980_fault.csv
+block_3d00_trace.csv
+sweep_pwb.sh
+
+# --- work-in-progress multi-cycle-latency FSM variants (kept on latency-wip) ---
+Protocols_FSM/*_v2.csv
+Protocols_FSM/*_v3.csv
+Protocols_FSM/*_v4.csv
+Protocols_FSM/*_v5.csv
+Protocols_FSM/*_v6.csv
+Protocols_FSM/MSI_LLC_v2.csv
+Protocols_FSM/MSI_LLC_faulting.csv
+header/Protocols/TraceTransition.h
+
+# --- not part of the public code artifact ---
+ESSC_submission/
+EMSOFT2026_Octopus/
+EMSOFT2026_OCtopus/
+/ECRTS_ARM_2025*.pdf
+ESSC_paper_draft.md
+results/iirflt01_*
+BMs/**/coh*.csv
+DATE2027_RTCoherence/
+
+# --- per-run sweep outputs (hardlinked workloads, LatencyReports, Parquet: up to 100s of GB) ---
+results/**/wl_*/
+results/**/rows/*.stderr
+results/pcc_par/oldest/
+results/pcc_par/pccperfect/
+results/**/*.log
+results/giants/.*
+*.parquet
+results_kept_fixedfsm/
+results/**/.*/
+demo/workloads/*/newLogger/
+demo/workloads/*/.out*
+
+# gem5 integration: octopus_test build products, python cache, stale copies kept for reference
+gem5/octopus_test/*
+!gem5/octopus_test/*.cc
+!gem5/octopus_test/build.sh
+gem5/configs/__pycache__/
+gem5/attic/
+build_asan/
+
+# --- LaTeX manual aux files (the PDF itself is committed) ---
+docs/manual/build/
+
+*.o
+*.so
+
+.venv/
+*.csv#
+
+header/Arbiters/WRRArbiter.h
+src/Arbiters/WRRArbiter.cpp
+
+# Build products for the harness directory before the upstream rename
+gem5/harness/*
+!gem5/harness/*.cc
+!gem5/harness/build.sh

@@ -41,16 +41,27 @@ namespace octopus
     protected:
         vector<CommunicationInterface *> *m_interfaces;
         vector<int> *m_lower_level_ids;
+        // Arbiter candidates = every agent that transmits on this bus (all interface
+        // ids: lower-level L1s AND the upper-level LLC). Owner-matched arbiters
+        // (RR/TDM) need the full set, else LLC-sourced traffic (owner = LLC id) can
+        // never be elected and starves. Populated by SplitBusController.
+        vector<int> m_arbiter_candidate_ids;
         vector<Arbiter *> m_arbiters;
         DebugPrint* dprint;
 
         int m_request_latency;
         int m_response_latency;
 
+        // Design B: true for the LLC<->DRAM bus, so its crossings log as MEM_BUS
+        // rather than the L1<->LLC REQ_BUS/RESP_BUS. Set via setMemBus() at build.
+        bool m_is_mem_bus = false;
+
         virtual bool broadcast(Message &msg, MessageType type = MessageType::REQUEST);
         virtual void send(Message &msg, MessageType type = MessageType::DATA_RESPONSE);
 
     public:
+        void setMemBus() { m_is_mem_bus = true; }
+
         BusController(ParametersMap map, vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids,
                       string pname = "",
                       string config_path = string(CONFIGURATION_PATH) + string(INTERCONNECT),

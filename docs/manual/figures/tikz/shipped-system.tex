@@ -1,0 +1,36 @@
+% The system MultiCoreSystem.csv builds: four cores with private L1s on a TripleBus, one
+% shared inclusive LLC, a point-to-point memory bus and a fixed-latency main memory.
+\begin{tikzpicture}[
+  font=\sffamily\small, >=Latex,
+  box/.style={draw=octrule, rounded corners=2pt, inner sep=4pt, align=center, minimum height=8mm},
+  core/.style={box, fill=white, minimum width=27mm, minimum height=19mm},
+  cpu/.style={box, fill=octctl, draw=octamber, minimum width=23mm, minimum height=6mm, font=\sffamily\scriptsize},
+  l1/.style={box, fill=octmem, minimum width=23mm, minimum height=6mm, font=\sffamily\scriptsize},
+  bus/.style={box, fill=octio, draw=octpurple, minimum height=11mm},
+  llc/.style={box, fill=octmem, draw=octrule, minimum height=12mm},
+  mem/.style={box, fill=white, minimum height=9mm},
+  sidenote/.style={font=\sffamily\scriptsize, text=octquiet},
+  wire/.style={thick, octink},
+]
+  \foreach \k in {0,1,2,3} {
+    \node[core] (c\k) at (\k*31mm, 0) {};
+    \node[cpu] (cpu\k) at ($(c\k.north)+(0,-4.5mm)$) {CPU \k \quad OoO 8};
+    \node[l1] (l1\k) at ($(c\k.south)+(0,4.5mm)$) {L1 \k \quad id \k};
+    \draw[wire, <->] (cpu\k) -- (l1\k);
+  }
+  \node[font=\sffamily\scriptsize, text=octquiet, align=center, above=1mm of $(c1.north)!0.5!(c2.north)$]
+    {\code{CacheControllerExclusive}, snoop MESI (\code{MESI\_splitBus\_snooping.csv}) \\ 16\,KB direct-mapped, 64\,B lines, untimed port, 16 MSHRs, 8-entry write-back buffer, queue 16};
+  \node[bus, below=9mm of $(c1.south)!0.5!(c2.south)$, minimum width=120mm] (b0)
+    {\textbf{bus[0]} \quad TripleBus, \code{SplitBusController}: request / response / service lanes \\ \scriptsize 256-deep buffers, 128 reserved for responses \textperiodcentered\ arbiter per lane: FCFS as shipped (RR, TDM selectable)};
+  \foreach \k in {0,1,2,3} \draw[wire] (l1\k.south) -- (l1\k.south |- b0.north);
+  \node[llc, below=8mm of b0, minimum width=120mm] (llc)
+    {\textbf{LLC} \quad \code{CacheController\_End2End}, snoop MESI home (\code{MESI\_LLC.csv}) \quad id 10 \\ \scriptsize shared, inclusive \textperiodcentered\ 32\,KB, 2-way, 64\,B lines \textperiodcentered\ 10-cycle data port, FCFS port arbiter \textperiodcentered\ 64 MSHRs, 32-entry write-back buffer, queue 64};
+  \draw[wire, <->] (b0.south) -- (llc.north);
+  \node[bus, below=8mm of llc, minimum width=120mm] (b1)
+    {\textbf{bus[1]} \quad \code{Point2Point}: LLC $\leftrightarrow$ memory, one message per direction per cycle};
+  \draw[wire, <->] (llc.south) -- (b1.north);
+  \node[mem, below=8mm of b1, minimum width=120mm] (mem)
+    {\textbf{Main memory} \quad \code{MainMemoryController}, fixed 250-cycle latency, queue 32 \quad id 100 \\ \scriptsize or \code{MCsim} (DDR4, FR-FCFS) with \code{-p main\_memory\_type(s)=MCsim}};
+  \draw[wire, <->] (b1.south) -- (mem.north);
+  \node[sidenote, right=3mm of b0.east, align=left] {all clocks:\\period 100};
+\end{tikzpicture}

@@ -1,0 +1,43 @@
+\chapter*{About this manual}
+\addcontentsline{toc}{chapter}{About this manual}
+
+Octopus is a cycle-accurate simulator of the memory system of a multicore: private caches,
+interconnects, a shared last-level cache, coherence and main memory, every layer a configurable
+component and the coherence protocol an editable table. It was built so that mechanisms for
+\emph{predictable} multicores --- arbiters, partitioned caches, real-time coherence protocols,
+predictable memory controllers --- could be built, observed and compared on one substrate rather
+than each in its own bespoke simulator.
+
+This manual is the reference for the simulator as it ships. It is written for three
+readers: someone running experiments, who needs
+\cref{ch:getting-started,ch:configuration,ch:monitoring} and the appendices; someone reading or
+extending the code, who needs \cref{ch:system-organization} to \cref{ch:interconnects} and
+\cref{ch:extending}; and someone integrating the simulator with gem5, who needs
+\cref{ch:integration-modes}.
+
+\paragraph{How to read it.} Chapters are self-contained but ordered: the system
+(\cref{ch:system-organization}), its central component (\cref{ch:cache-controller}), the
+shipped LLC in detail (\cref{ch:llc-datapath}), the coherence engine
+(\cref{ch:coherence-engine}), one request end to end (\cref{ch:request-end-to-end}), then the
+interconnects, memory, configuration and monitoring, then tasks and the demo, extension,
+integration and evaluation. Every chapter opens with a box saying what it holds
+and closes with a \emph{Where in the code} box naming the files. Two other boxes recur:
+
+\begin{trapbox}
+Something that bites in practice --- a rule that is easy to break, with the symptom and the
+fix.
+\end{trapbox}
+\begin{notebox}
+A design fact that is not obvious from the code or the configuration --- what the model does
+and does not do, and why.
+\end{notebox}
+
+Figures use one palette throughout: \textcolor{octamber}{amber} is waiting, \textcolor{octpurple}{purple} a
+bus transfer, \textcolor{octteal}{teal} being served, \textcolor{octred}{red} damage or a fault. Code,
+keys and file names are set in \code{monospace}; configuration keys are indexed at the back.
+
+\paragraph{Where the sources live.} The manual is built from \file{docs/manual/} by
+\file{build.sh}; the SVG figures it embeds are the ones in \file{docs/imgs/}, the tables of
+configuration keys and FSMs are generated from \file{configuration/} and \file{Protocols_FSM/}
+at build time, and the Markdown documents under \file{docs/} remain the per-topic references
+this manual consolidates. The revision stamp on the title page is the commit it was built from.

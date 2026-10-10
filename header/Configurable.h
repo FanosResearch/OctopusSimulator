@@ -21,7 +21,7 @@
 #define MAX_LINE_SIZE   4096
 #define MAX_NAME_SIZE   100
 #define MAX_TYPE_SIZE   10
-#define MAX_STRING_SIZE 100
+#define MAX_STRING_SIZE MAX_LINE_SIZE   // a string value can be as long as the line that holds it
 
 #define EXTENDS_KEYWORD "Extends"
 #define WILDCARD        "*"
@@ -83,6 +83,7 @@ namespace octopus
         Configurable(std::vector<std::string> cl_params, std::string config_path, std::string name, std::string pname = "");
 
         static bool print_config_global;
+        static FILE* print_config_output;
     };
 }
 

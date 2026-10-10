@@ -1,0 +1,3 @@
+Extends,CPU
+#The adaptor for an external core model (gem5). Same clock as the trace CPU; the request rate comes from the core.
+log_requests(i),0,,#1: report this core's requests to the Logger (LatencyReport_C<core>.csv, Summary.csv under <workload_path>/newLogger) while logging is on; the gem5 bridge turns it on at a stats reset and writes the reports at the next stats dump

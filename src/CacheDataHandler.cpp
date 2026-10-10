@@ -17,6 +17,15 @@ namespace octopus
         m_block_size = std::get<int>(parameters.at(STRINGIFY(m_block_size)).value);
         m_ways_count = std::get<int>(parameters.at(STRINGIFY(m_ways_count)).value);
         m_data_access_latency = std::get<int>(parameters.at(STRINGIFY(m_data_access_latency)).value);
+        // Optional, so presets written before these existed keep the occupancy model.
+        m_data_array_pipelined = false;
+        if (parameters.find(STRINGIFY(m_data_array_pipelined)) != parameters.end())
+            m_data_array_pipelined = std::get<int>(parameters.at(STRINGIFY(m_data_array_pipelined)).value) != 0;
+        m_data_array_ports = 1;
+        if (parameters.find(STRINGIFY(m_data_array_ports)) != parameters.end())
+            m_data_array_ports = std::get<int>(parameters.at(STRINGIFY(m_data_array_ports)).value);
+        if (m_data_array_ports == 0)
+            m_data_array_ports = 1;
 
         string replacement_policy_name = std::get<string>(parameters.at(STRINGIFY(replacement_policy_name)).value);
 
@@ -26,6 +35,29 @@ namespace octopus
 
         m_cache = new GenericCacheLine[lines_count];
         m_replacement_policy = Policy::getReplacementPolicy(replacement_policy_name, m_ways_count);
+
+        // way_partition(s): "<cores>:<ways>;..." with ranges a-b, e.g. "0:0;1-3:1" (core 0 owns
+        // way 0, cores 1..3 way 1). Cores not listed share the ways nobody claimed.
+        m_all_mask = (m_ways_count >= 32) ? 0xffffffffu : ((1u << m_ways_count) - 1);
+        m_shared_mask = m_all_mask;
+        if (parameters.find(STRINGIFY(way_partition)) != parameters.end())
+        {
+            std::string spec = std::get<std::string>(parameters.at(STRINGIFY(way_partition)).value);
+            auto range = [](const std::string &s, int &lo, int &hi) {
+                size_t d = s.find('-'); lo = atoi(s.c_str()); hi = (d == std::string::npos) ? lo : atoi(s.c_str() + d + 1); };
+            size_t p = 0;
+            while (p < spec.size())
+            {
+                size_t e = spec.find(';', p); if (e == std::string::npos) e = spec.size();
+                std::string entry = spec.substr(p, e - p); p = e + 1;
+                size_t c = entry.find(':'); if (c == std::string::npos || entry.empty()) continue;
+                int c0, c1, w0, w1; range(entry.substr(0, c), c0, c1); range(entry.substr(c + 1), w0, w1);
+                uint32_t mask = 0; for (int w = w0; w <= w1 && w < (int)m_ways_count; w++) mask |= 1u << w;
+                for (int core = c0; core <= c1; core++) m_way_mask[core] = mask;
+                m_shared_mask &= ~mask;
+            }
+            if (!m_way_mask.empty() && m_shared_mask == 0) m_shared_mask = m_all_mask;   // everything claimed: unlisted cores fall back to all ways
+        }
 
         dprint = new DebugPrint(getSubMap(STRINGIFY(dprint)), name, parent_name + "." + name);
 
@@ -110,7 +142,7 @@ namespace octopus
             return false;
 
         if(line->m_data != NULL)
-            m_ready_cycle = m_cycle + m_data_access_latency;
+            if (!m_data_array_pipelined) m_ready_cycle = m_cycle + m_data_access_latency;
         
         return writeCacheLine_bypassLatency(address, line);
     }
@@ -136,7 +168,7 @@ namespace octopus
         if (findline(address, &set, &way) && isReady(address))
         {
             ((GenericCacheLine *)getLine(set, way))->copyData(data);
-            m_ready_cycle = m_cycle + m_data_access_latency;
+            if (!m_data_array_pipelined) m_ready_cycle = m_cycle + m_data_access_latency;
             m_replacement_policy->update(set, way, m_cycle); //ToDo: this should change to support allocation on miss
             return true;
         }
@@ -153,7 +185,7 @@ namespace octopus
             uint16_t offset = address & (m_block_size - 1);
             ((GenericCacheLine *)getLine(set, way))->modifyData(data, offset, size);
 
-            m_ready_cycle = m_cycle + m_data_access_latency;
+            if (!m_data_array_pipelined) m_ready_cycle = m_cycle + m_data_access_latency;
             if(!soft_write)
                 m_replacement_policy->update(set, way, m_cycle); //ToDo: this should change to support allocation on miss
             return true;
@@ -171,7 +203,7 @@ namespace octopus
             if (out_line != NULL)
             {    
                 *out_line = *((GenericCacheLine *)getLine(set, way));
-                m_ready_cycle = m_cycle + m_data_access_latency;
+                if (!m_data_array_pipelined) m_ready_cycle = m_cycle + m_data_access_latency;
             }
             if(!soft_read)
                 m_replacement_policy->update(set, way, m_cycle); //ToDo: this should change to support allocation on miss
@@ -199,8 +231,10 @@ namespace octopus
     {
         uint64_t set = calculate_set(address);
 
+        uint32_t allowed = allowedWays();
         for (uint32_t way = 0; way < m_ways_count; way++)
         {
+            if (!(allowed & (1u << way))) continue;
             GenericCacheLine *cache_line = (GenericCacheLine *)getLine(set, way);
 
             if (cache_line->valid == false)
@@ -231,7 +265,8 @@ namespace octopus
 
     bool CacheDataHandler::isReady()
     {
-        if(m_ready_cycle <= m_cycle)
+        // Pipelined: the array never closes; the controller paces accesses.
+        if(m_data_array_pipelined || m_ready_cycle <= m_cycle)
             return true;
         
         return false;
@@ -240,5 +275,12 @@ namespace octopus
     bool CacheDataHandler::isReady(uint64_t address)
     {
         return isReady();
+    }
+
+    CacheDataHandler::LineLocation CacheDataHandler::lineLocation(uint64_t address)
+    {
+        uint64_t set;
+        int way;
+        return CacheDataHandler::findline(address, &set, &way) ? LineLocation::ARRAY : LineLocation::NONE;
     }
 }

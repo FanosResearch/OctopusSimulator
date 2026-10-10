@@ -1,0 +1,16 @@
+\chapter{The shipped coherence FSMs}\label{app:fsm-tables}
+
+The transition tables of the protocol families that ship as complete presets (snoop MSI and
+MESI, directory MSI) and the snoop MOESI pair, generated from \file{Protocols_FSM/*.csv} by
+\file{docs/manual/tools/gen_fsm_tables.py}. Rows are states (\textbf{bold} = stable,
+\emph{italic} = transient), columns are events, a cell is \code{actions/next\_state}.
+\Cref{ch:coherence-engine} explains how to read and edit them.
+
+\section{\texttt{MSI\_splitBus\_snooping}}\input{generated/fsm_MSI_splitBus_snooping}
+\section{\texttt{MSI\_LLC}}\input{generated/fsm_MSI_LLC}
+\section{\texttt{MESI\_splitBus\_snooping}}\input{generated/fsm_MESI_splitBus_snooping}
+\section{\texttt{MESI\_LLC}}\input{generated/fsm_MESI_LLC}
+\section{\texttt{MOESI\_splitBus\_snooping}}\input{generated/fsm_MOESI_splitBus_snooping}
+\section{\texttt{MOESI\_LLC}}\input{generated/fsm_MOESI_LLC}
+\section{\texttt{MSI\_directory}}\input{generated/fsm_MSI_directory}
+\section{\texttt{MSI\_LLC\_directory}}\input{generated/fsm_MSI_LLC_directory}

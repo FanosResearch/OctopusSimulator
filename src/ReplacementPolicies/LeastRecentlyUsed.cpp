@@ -28,6 +28,20 @@ namespace octopus
             last_access_cycle[set].push_back(cycle);
     }
 
+    // least recently used among the allowed ways (a way never touched counts as oldest)
+    void LeastRecentlyUsed::getReplacementCandidate(uint64_t set, int* way, uint32_t allowed)
+    {
+        std::vector<uint64_t> &v = last_access_cycle[set];
+        *way = -1; uint64_t best = 0;
+        for (uint32_t i = 0; i < m_ways_count; i++)
+        {
+            if (!(allowed & (1u << i))) continue;
+            uint64_t stamp = (i < v.size()) ? v[i] : 0;
+            if (*way < 0 || stamp < best) { *way = (int)i; best = stamp; }
+        }
+        if (*way < 0) getReplacementCandidate(set, way);
+    }
+
     void LeastRecentlyUsed::getReplacementCandidate(uint64_t set, int* way)
     {
         if(last_access_cycle.find(set) == last_access_cycle.end() &&

@@ -1,0 +1,155 @@
+\chapter{Interconnects and arbitration}\label{ch:interconnects}
+
+\whatyoufind{The three-part model every interconnect is built from; the bus family that the
+shipped systems use, with its lanes, latencies and back-pressure; the three arbiters and the
+one rule they share; the mesh and the single-switch NoC, with what they do and do not model
+today; and where each of these is a plug-in.}
+
+\section{Topology, controller, interfaces}
+
+\figmed{Interconnect2.pdf}{An interconnect is a topology that creates a connection map and
+instantiates one controller and the interfaces; the interfaces are the queues that hold
+messages at each node; the controller moves messages between interfaces according to the map
+and the configured latencies.}{fig:interconnect}{0.5}
+
+An interconnect has two parts (\cref{fig:interconnect}). The \emph{topology}
+(\code{InterconnectTopology}) is a set of message-holding interfaces plus a \emph{connection
+map} describing who talks to whom. The \emph{controller} (\code{InterconnectController}) moves
+messages between interfaces, and its arbiter resolves contention on shared links. Swapping the topology and controller pair yields a point-to-point
+link, a unified, split or triple bus, a mesh or a NoC; swapping the arbiter yields FCFS,
+round-robin or TDM. The controllers on either side see only interfaces, so nothing else in the
+system changes.
+
+Interconnects have their own clock: \key{m\_clk\_period} is 50 for every bus and mesh against
+100 for the cores, so an interconnect steps twice per core cycle. The reason is resolution, not
+speed: the periods are the units the \code{ClockManager} schedules in (\cref{ch:system-organization}),
+and an interconnect that ticks between two core ticks can arbitrate a lane and deliver what it
+carries within the same core cycle, so a request that wins the lane is at the LLC's queue one
+core cycle after it was issued, and transfer times can be set in half core cycles. A transfer
+occupies a link for \key{m\_request\_latency} (2) interconnect ticks for a request and
+\key{m\_response\_latency} (5) for data: one core cycle and two and a half, the 2- and 5-tick
+slots the visualizer draws. Both are configuration keys, so a slower link is a number, not a
+clock change.
+
+\section{The bus family}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/topologies}\end{adjustbox}
+\caption{The three shapes that ship between the L1s and the LLC.}
+\label{fig:topologies}
+\end{figure}
+
+\begin{description}
+\item[Point-to-point] (\code{Point2PointController}) joins exactly two components, one message
+  per direction per tick, no arbitration. \code{bus[1]} between the LLC and memory is one.
+\item[Unified bus] (\code{UnifiedBusController}) carries requests and data on one shared link
+  under one arbiter.
+\item[Split bus] (\code{SplitBusController}) separates the request lane from the response lane,
+  each with its own arbiter, so a long data transfer does not block the next request.
+\item[TripleBus] (\code{TripleBus} with a \code{Split} controller; \cref{fig:topologies} left)
+  adds a third, \emph{service} lane for the LLC's back-invalidations. It is what the shipped
+  snooping systems use as \code{bus[0]}: every L1 sees every request on the request lane, data
+  travels the response lane to its destinations only, and an \code{INV} on the service lane is
+  broadcast to every interface including the LLC's own.
+\end{description}
+
+\paragraph{Back-pressure.} Each interface holds \key{buffers\_max\_size} messages (256 as
+shipped). On the TripleBus \key{response\_reserve} (128) keeps that many entries of the response
+buffers free for in-flight responses: the request lane stalls when the response buffer's free
+space falls to the reserve, so responses --- which must always be able to drain --- can never
+overflow. Delivery order at the receiving side is the subject of \cref{ch:cache-controller}.
+
+\section{Arbiters}\label{sec:arbiters}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/arbitration-strip}\end{adjustbox}
+\caption{Three requests ready at the same cycle on one request lane --- two from core 0, one
+from core 1 --- under the three shipped arbiters.}
+\label{fig:arbitration}
+\end{figure}
+
+An arbiter is a subclass of \code{Arbiter} implementing one method:
+
+\begin{lstlisting}[style=cpp]
+virtual bool elect(uint64_t cycle_number,
+                   vector<vector<Message> *> &buffers,   // one TX buffer per interface
+                   Message *out_msg) = 0;                // the winner, if any
+\end{lstlisting}
+
+It is called once per interconnect tick for each lane that is free, with every interface's TX
+buffer, and names the message that gets the lane (\cref{fig:arbitration}):
+
+\begin{description}
+\item[FCFS] (\code{FCFSArbiter}) picks the oldest message across all buffers: minimal average
+  wait, no bound on how long a core may be starved by a busier one.
+\item[Round-robin] (\code{RRArbiter}) rotates a pointer over the cores and grants the pointed
+  core's oldest message if it has one, otherwise the next core that does: every core gets at
+  most one slot per round, so a core's wait is bounded by one slot per competitor.
+\item[TDM] (\code{TDMArbiter}) gives each core a fixed slot in a fixed cycle, whether or not it
+  has anything to send; an owner with nothing ready leaves its slot idle. The wait is bounded by
+  the period regardless of what other cores do --- the property real-time analyses want --- at
+  the cost of throughput. It is the shipped default on \code{bus[0]}
+  (\file{SplitBusController.csv}).
+\end{description}
+
+An arbiter that grants by owner takes the owner's \emph{oldest} message across all buffers,
+not the first buffer in interface order that holds one: a core's cache-to-cache supplies sit in a
+different buffer from its own requests and would otherwise be passed over round after round.
+The helper is \code{electOldestOwned} in \code{Arbiter}; a new arbiter should use it too.
+
+The arbiter of a bus is a configuration key, \key{arbiter\_type}, in the controller's CSV or
+overridden per instance: \code{-p "bus[0].interconnect\_controller.arbiter\_type(s)=RRArbiter"}.
+The LLC's data port has its own arbiter under the same interface, \key{llc\_controller.arbiter\_type}.
+Adding an arbiter is a subclass, a line in \file{src/Arbiters/CMakeLists.txt} and a name in the
+controller's factory (\cref{ch:extending}).
+
+\section{Mesh and NoC}
+
+\code{MultiCoreSystem\_Mesh.csv} replaces the bus with a \code{Mesh}: one node per entry of
+\key{component\_ids}, and \key{connection\_matrix[i]} listing node $i$'s neighbours, the first
+entry being the node itself. As shipped (\file{configuration/Interconnect/Mesh.csv}) the matrix
+is the complete graph on the four L1s and the LLC (\cref{fig:topologies} middle), so every pair
+has a direct link:
+
+\begin{lstlisting}[style=csv]
+component_ids(vi),0,1,2,3,10
+connection_matrix[0](vi),0,1,2,3,10    # node 0 (L1 0) links to L1 1, L1 2, L1 3 and the LLC
+connection_matrix[1](vi),1,0,2,3,10
+connection_matrix[2](vi),2,0,1,3,10
+connection_matrix[3](vi),3,0,1,2,10
+connection_matrix[4](vi),10,0,1,2,3    # the LLC links to every L1
+\end{lstlisting}
+
+A different shape is a different matrix, no code: a ring is each node listing its two
+neighbours. Each link each link carries requests and data on separate channels with
+their own latencies (2 and 5 ticks) and its own arbiter (FCFS by default), half-duplex, one
+message in flight per latency window. It is the natural home of the directory protocol, which
+sends point-to-point and never broadcasts; directory MSI runs the whole EEMBC suite on it.
+
+The \code{NoC} is the mesh plus \emph{switch} nodes (\key{switch\_ids}, 200 as shipped). A
+switch is an interface that forwards whatever it receives in the same cycle, with no latency or
+arbitration of its own, from a static per-source next-hop table built at construction: every
+direct neighbour maps to itself, and everything a neighbouring switch lists maps to that
+switch. As shipped (\cref{fig:topologies} right) the L1s link to the LLC directly and to each
+other through the switch. A message can cross at most one switch, because a switch's own table
+knows only its direct neighbours.
+
+\begin{notebox}[What the NoC does not model yet]
+Three things are worth knowing before measuring on it. A destination the routing table does not
+know is dropped silently and \code{pushMessage} returns true; the TX-side capacity check
+compares the \emph{number of per-link queues}, a constant, against the limit, so there is no
+back-pressure on that side and congestion exits instead of stalling; and a hop is logged as one
+opaque bus event, so the report's bus columns and the visualizer cannot see the path. A
+multi-hop network with pluggable routing, per-hop credits and virtual networks per message
+class remains future work; the current single-switch NoC is the supported implementation.
+\end{notebox}
+
+\begin{wherebox}
+\begin{itemize}[nosep,leftmargin=1.2em]
+\item \file{header/Interconnect/}, \file{src/Interconnect/} --- \code{Bus}, \code{TripleBus} and their interfaces
+\item \file{src/Interconnect/BusController.cpp}, \file{src/Interconnect/SplitBusController.cpp}, \file{src/Interconnect/TripleBusController.cpp}, \file{src/Interconnect/UnifiedBusController.cpp}, \file{src/Interconnect/Point2PointController.cpp} --- the bus controllers
+\item \file{src/Interconnect/Mesh.cpp}, \file{src/Interconnect/MeshController.cpp}, \file{src/Interconnect/NoC.cpp}, \file{src/Interconnect/NoCController.cpp} --- the mesh and the NoC
+\item \file{header/Arbiters/}, \file{src/Arbiters/} --- \code{Arbiter}, \code{FCFSArbiter}, \code{RRArbiter}, \code{TDMArbiter}
+\item \file{configuration/Interconnect/} --- latencies, buffer depths, arbiter names, the mesh and NoC connection matrices (\cref{app:config-keys})
+\end{itemize}
+\end{wherebox}
