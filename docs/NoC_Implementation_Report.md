@@ -756,4 +756,4 @@ a must-pass over all ten traces under both arbiters, the plan's P2-THREE-CLASS r
 
 **Tests** (`bash test/network/run.sh all` on the three-class preset)
 
-Full suite on the committed tree: 14 PASS, 0 XFAIL (), 0 FAIL. S5-RX-STRESS: three classes.
+Full suite on the three-class preset (`bash test/network/run.sh all`): 59 PASS, 4 XFAIL (S4-ORDER-ADAPTIVE, S6-IDENTITY, S6-FALLBACK, S6-NOC-ALIAS, S7-VIEWER are the expected ones; S6-* by the user's acceptance), 0 FAIL once the WSL sanitizer binary was rebuilt with the age-order injection (a stale binary had made S5-XPLAT differ). S5-RX-STRESS: three classes, eject_queue_depth 2, FCFS and RR: 20/20 complete.
