@@ -12,6 +12,8 @@
 
 using namespace std;
 
+using namespace std;
+
 namespace octopus
 {
     MCsimInterface::MCsimInterface(CommunicationInterface *lower_interface, int dram_id, int llc_id,

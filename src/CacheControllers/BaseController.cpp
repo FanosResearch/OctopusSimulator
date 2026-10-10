@@ -121,6 +121,15 @@ namespace octopus
             if (deferForDataArray(ready_msg))
                 continue;
 
+            if (!canAdmitRequest(ready_msg))
+            {
+                // Structural stall (e.g., MSHR/PWB full): put the request back
+                // and retry next cycle. A slot is guaranteed to be free because
+                // getFirstReady just removed this element.
+                m_processing_queue->pushBack(ready_msg, FRFCFS_State::NonReady);
+                return;
+            }
+
             if(ready_msg.source == Message::Source::LOWER_INTERCONNECT)
             {
                 Logger::getLogger()->event(ready_msg.msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::ENTER);
