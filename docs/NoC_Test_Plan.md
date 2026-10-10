@@ -239,7 +239,7 @@ All `sim` on `NetworkOnly.csv` unless marked. Defaults: `flit_bytes` 16, `router
 
 | id | kind | assertion | expected |
 |---|---|---|---|
-| S8-BOOKSIM | sim | S4-SAT-DEF's configuration mirrored in a BookSim config file committed beside the test: 4×4 mesh, dimension-order routing, one VC, 4-flit buffers, 5-flit packets, uniform random | the saturation rates agree within 10 percent of the injection rate; if BookSim is not built on the machine, the published BookSim figure for that configuration is the reference and the test says so in its output |
+| S8-BOOKSIM | sim | S4-SAT-DEF's configuration mirrored in a BookSim config file committed beside the test (`test/network/booksim/mesh44_dor.cfg`): 4×4 mesh, dimension-order routing, one VC, 4-flit buffers, 5-flit packets, uniform random, BookSim's three-cycle router (VA, SA, ST) and one-cycle links and credits; Octopus runs with `router_latency 3` and `credit_latency 4`, the mapping of BookSim's buffer residency (a slot is held until the flit has traversed the switch) onto the credit loop | the **saturation throughputs** (accepted flits per cycle per node at the first offered rate past saturation: BookSim's unstable point, Octopus's accepted < 0.9 offered) agree within 10 percent; BookSim 2 is built under WSL by the test (`test/network/out/booksim2`, bison and flex from `$HOME/local` when the distribution has none); if it cannot be built the test is XFAIL and prints Octopus's figure next to the published range |
 
 ## 12. Phase 2 additions
 

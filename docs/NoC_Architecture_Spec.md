@@ -145,7 +145,7 @@ existing convention: `(i)` int, `(s)` string, `(vi)` int list, `(vs)` string lis
 | `router_latency` | i | 2 | ticks from a head's arrival at an input VC to its earliest switch traversal | ≥ 0 |
 | `link_latency` | i | 1 | ticks per link traversal between routers; local links cost 0 | ≥ 1 |
 | `class_link_latency` | vi | — | optional per-class link latency, index = class; overrides `link_latency`; used by the degenerate mapping (§17) and available generally | each ≥ 1 |
-| `credit_latency` | i | = `link_latency` | ticks for a credit to return | ≥ 0 |
+| `credit_latency` | i | = `link_latency` | ticks for a credit to return; it is also where a longer buffer residency is modelled (a router that holds a slot through switch allocation and traversal, as BookSim's does, returns its credit later: §20, S8-BOOKSIM) | ≥ 0 |
 | `half_duplex` | i | 0 | `1`: the two links of a physical connection share one occupancy, so only one flit is in flight on the connection in either direction (legacy behaviour, §17) | 0 or 1 |
 | `link_model` | s | `pipelined` | `pipelined`: a link accepts one flit per tick and delivers it `link_latency` ticks later (a wire pipeline); `serial`: a flit holds the link for its whole latency and is at the far side `link_latency − 1` ticks after it was sent (the transfer counts the sending tick, as the legacy `MeshController::Link` does), so a link carries one flit per `link_latency` ticks and a message crosses a direct link in `link_latency − 1` ticks (the legacy transfer model, §17; `link_latency ≥ 2`) | |
 | `inject_queue_depth` | i | 16 | per class, packets, at the NI | ≥ 1 |
@@ -724,7 +724,7 @@ runnable by one script, in this order:
    measured ticks equal `R·router_latency + (R − 1)·link_latency + (f − 1)`.
 3. **Network-only harness.** `NetworkOnly.csv` on a 4×4 `grid2d`, `XY`, `flit_bytes` 16, 5-flit
    packets, `vc_depth` 4, uniform random: the mean latency versus injection rate curve saturates
-   within 10 percent of the injection rate at which BookSim's equivalent configuration saturates
+   within 10 percent of the saturation throughput of BookSim's equivalent configuration, with BookSim's buffer residency mapped onto `router_latency` and `credit_latency` (test plan S8-BOOKSIM)
    (the BookSim config file is checked in beside the test). Hotspot and transpose produce the
    expected ordering of saturation points.
 4. **Degenerate equivalence** (§17.1).

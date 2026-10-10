@@ -649,3 +649,59 @@ NoC columns being present only with a `Network`)
 | S7-VIEWER | XFAIL |  | manual: the selected request's route across the router lanes is checked by eye once per release |
 
 Converter self-check on the traced a2time01 run: reqbus_end 63 034 / 0 mismatches, respbus_end 63 034 / 0, array_start 15 553 / 0, dram_length, fill_end and memread_leg 3 385 / 0 each; four NOC lanes.
+
+## Step 8 — the BookSim comparison
+
+**Built**
+
+- `test/network/booksim/mesh44_dor.cfg`: BookSim 2 configuration mirroring S4-SAT-DEF (4×4
+  mesh, dimension-order routing, one VC, 4-flit buffers, 5-flit packets, uniform random traffic,
+  `sim_type latency`), with BookSim's input-queued router (VA, SA and ST one cycle each,
+  `st_final_delay` must be 1 or BookSim asserts), one-cycle links and credits.
+- `test/network/steps/step8.sh`: builds BookSim 2 under WSL into `test/network/out/booksim2`
+  (a shallow clone of `github.com/booksim/booksim2`; this machine's WSL has no bison, flex, m4 or
+  sudo, so the three were built from source into `$HOME/local` with `CFLAGS=-std=gnu17`, GCC 15
+  defaulting to C23 which old gnulib does not compile under), sweeps both simulators and
+  compares their **saturation throughputs**: the accepted flit rate per cycle per node at the first
+  offered rate past saturation (BookSim: its own "simulation unstable" verdict; Octopus: accepted
+  below 0.9 of offered, as in S4-SAT-DEF).
+
+**Finding: buffer residency is the difference, and it maps onto the credit loop**
+
+With the same 4-flit buffers and the shipped pipeline (`router_latency 2`, `credit_latency 1`)
+Octopus carries 0.48 flits/cycle/node and BookSim 0.28, a 45 percent gap. The cause is where a
+flit's buffer slot is released. A BookSim slot stays occupied until the flit has gone through
+switch allocation and switch traversal (two cycles after it is eligible), and the credit then
+takes `credit_delay`; an Octopus VC slot is released the tick the flit is forwarded (a body flit
+is forwarded in its arrival tick), and the credit takes `credit_latency`. So BookSim's credit loop
+is about four cycles longer, and under load the 4-flit buffers behind a blocked packet drain
+that much more slowly. The sensitivity measurements that established this:
+
+| simulator | configuration | saturation throughput (flits/cycle/node) |
+|---|---|---|
+| BookSim | 4-flit buffers, 1 VC (the reference) | 0.28 |
+| BookSim | 8-flit buffers | 0.45 |
+| BookSim | 16-flit buffers | 0.50 |
+| BookSim | 2 VCs, 4-flit buffers | 0.55 |
+| BookSim | speculative VA/SA | 0.30 |
+| Octopus | `vc_depth 4`, rl 2, cl 1 (shipped) | 0.48 |
+| Octopus | `vc_depth 2`, rl 2, cl 1 | 0.30 |
+| Octopus | `vc_depth 4`, rl 3, cl 2 | 0.37 |
+| Octopus | `vc_depth 4`, rl 2, cl 3 | 0.37 |
+| Octopus | `vc_depth 4`, rl 3, cl 3 | 0.33 |
+| Octopus | `vc_depth 4`, rl 2, cl 4 | 0.32 |
+| Octopus | `vc_depth 4`, rl 3, cl 4 (BookSim's pipeline mapped) | 0.29 |
+
+The mapping is `router_latency = VA + SA + ST = 3` and `credit_latency = SA + ST + credit_delay
+= 4`; with it the two simulators agree to 3.5 percent (0.289 against 0.279), and the test runs
+Octopus with those two keys. The shipped defaults are kept: a slot released on forwarding with a
+one-tick credit is the faster router Octopus means to model, and the spec's `credit_latency` row
+now says that a longer residency is modelled there (§4.2, §20). The BookSim side of the sweep is
+in `test/network/out/s8/booksim.txt` and the Octopus side in `octopus.txt`.
+
+**Tests** (`bash test/network/run.sh 8`, about 2 minutes once BookSim is built; the first run
+builds it, a minute more)
+
+| id | status | measured | expected |
+|---|---|---|---|
+| S8-BOOKSIM | PASS | saturation throughput Octopus 0.288 (offered 0.35) vs BookSim 0.279313 (offered 0.30) flits/cycle/node |  rel. diff 0.03 |
