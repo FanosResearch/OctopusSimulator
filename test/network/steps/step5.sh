@@ -87,6 +87,9 @@ step5() {
     for t in $EEMBC; do [ "$(cat "$O/rx-$arb/$t/.rc")" = 0 ] && completed "$O/rx-$arb/$t" "$ROOT/BMs/eembc-traces/$t" || { ok=0; detail="$detail $arb:$t"; }; done
   done
   if [ $ok = 1 ]; then pass S5-RX-STRESS "three classes, eject_queue_depth 2, FCFS and RR: 20/20 complete" "complete" "$(elapsed "$t0")"; else fail S5-RX-STRESS "$detail" "20/20 complete" "$(elapsed "$t0")"; fi
+  # ---------------- P2-ADMIT-RF (spec s14.2): a controller with a full request queue still consumes a
+  # forward and a response (unit tests on the shipped controllers with stub interfaces)
+  unit P2-ADMIT-RF
   # ---------------- P2-ADMISSION (spec s14.2, ADMIT-TX): injection queues as shallow as the home's
   # replacement fan-out (4 caches), both arbiters: every run completes and no push is ever refused;
   # one slot less and the home can never admit a replacement: the watchdog reports the wedge

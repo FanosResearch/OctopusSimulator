@@ -865,3 +865,19 @@ controller's policy, and the memory answers the bank that asked.
 | id | status | measured | expected |
 |---|---|---|---|
 | REG-MESH | PASS | identical | identical |
+
+## Phase 2, P2-ADMIT-RF — the endpoint admission property, tested
+
+The network's deadlock freedom rests on every endpoint consuming RESPONSE and FORWARD packets
+regardless of whether it can admit REQUESTs (spec §14.2, `ADMIT-RF`). The controllers had the
+behaviour (forwards and responses are force-admitted into the processing queue); it now has a
+test. `test/network/unit/p2_admit.cpp` builds the directory L1 and LLC from the grid preset and
+the snoop L1 from the bus preset, each between two stub interfaces that keep one receive queue
+per class and serve responses, forwards, requests in that order as the network interface does
+(a request left outside a full queue must not hide a response behind it, which a single FIFO in
+the first version of the stub did). With a two-deep processing queue filled by stalled demand
+requests and a fourth demand waiting outside, the L1 consumes and answers an invalidation and then
+the home's data; the LLC, after three fills to one set have evicted a line and invalidated its
+sharer, consumes the InvAck that completes the eviction and then a memory fill; the snoop L1
+consumes a snooped request and a data response. Run by `bash test/network/run.sh 5` (`unit
+P2-ADMIT-RF`): 3 PASS.
