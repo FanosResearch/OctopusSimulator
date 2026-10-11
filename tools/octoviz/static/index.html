@@ -62,6 +62,17 @@
   body.solo #hot, body.solo #fsm { max-height:calc(100vh - 230px); height:calc(100vh - 230px); }
   body.solo #bottom { grid-template-columns:1fr; padding-top:0; }
   body.solo #legend, body.solo #legend2 { padding-bottom:8px; }
+  /* maximize: one view fills the page in place (the filter and view bars stay); ⤢ or Esc toggles */
+  body.maxi .view { display:none !important; }
+  body.maxi .view.on { display:block !important; }
+  body.maxi #bottom { grid-template-columns:1fr; }
+  body.maxi #gantt { height:calc(100vh - 290px); }
+  body.maxi #lanes { height:calc(100vh - 300px); }
+  body.maxi .panel canvas { height:calc(100vh - 320px); }
+  body.maxi #hot, body.maxi #fsm { max-height:calc(100vh - 320px); height:calc(100vh - 320px); }
+  #views .vb .max { color:var(--muted); padding:0 2px; border-radius:3px; }
+  #views .vb .max:hover { color:var(--accent); background:#0f1114; }
+  #views .vb.maxed { outline:1px solid var(--accent); }
   /* transition table: wide (one column per agent), so it scrolls sideways with an always-visible bar and a sticky header */
   #fsm { height:340px; resize:vertical; overflow-y:auto; overflow-x:scroll; border:1px solid var(--line); }
   #fsm table { width:max-content; min-width:100%; white-space:nowrap; }
@@ -96,11 +107,11 @@
   <label class="keep">Wheel action <select id="wheel-mode"><option value="zoom">Zoom (Ctrl: pan)</option><option value="pan">Pan (Ctrl: zoom)</option></select></label>
 </div>
 <div id="views">views
-  <span class="vb" data-view="pipeline" aria-pressed="true">pipeline<span class="pop" title="open in a new window">⧉</span></span>
-  <span class="vb" data-view="lanes" aria-pressed="true">resource lanes<span class="pop" title="open in a new window">⧉</span></span>
-  <span class="vb" data-view="dist" aria-pressed="true">distribution<span class="pop" title="open in a new window">⧉</span></span>
-  <span class="vb" data-view="hot" aria-pressed="true">hot lines<span class="pop" title="open in a new window">⧉</span></span>
-  <span class="vb" data-view="fsm" aria-pressed="true">coherence transitions<span class="pop" title="open in a new window">⧉</span></span>
+  <span class="vb" data-view="pipeline" aria-pressed="true">pipeline<span class="max" title="maximize in this window (Esc to restore)">⤢</span><span class="pop" title="open in a new window">⧉</span></span>
+  <span class="vb" data-view="lanes" aria-pressed="true">resource lanes<span class="max" title="maximize in this window (Esc to restore)">⤢</span><span class="pop" title="open in a new window">⧉</span></span>
+  <span class="vb" data-view="dist" aria-pressed="true">distribution<span class="max" title="maximize in this window (Esc to restore)">⤢</span><span class="pop" title="open in a new window">⧉</span></span>
+  <span class="vb" data-view="hot" aria-pressed="true">hot lines<span class="max" title="maximize in this window (Esc to restore)">⤢</span><span class="pop" title="open in a new window">⧉</span></span>
+  <span class="vb" data-view="fsm" aria-pressed="true">coherence transitions<span class="max" title="maximize in this window (Esc to restore)">⤢</span><span class="pop" title="open in a new window">⧉</span></span>
   <span style="margin-left:auto">click a name to hide it here · ⧉ opens it in its own window, kept in sync</span>
 </div>
 <div id="status">loading…</div>
@@ -236,6 +247,15 @@ function showView(v, on) {
   const b = document.querySelector(`.vb[data-view="${v}"]`); if (b) b.setAttribute("aria-pressed", String(on));
   resize(); draw();
 }
+// maximize one view in place; the same control (or Esc) restores the page
+function maximize(v) {
+  const on = document.body.classList.contains("maxi") && $("#v-" + v).classList.contains("on");
+  $$(".view").forEach(el => el.classList.remove("on")); $$("#views .vb").forEach(b => b.classList.remove("maxed"));
+  if (on) document.body.classList.remove("maxi");
+  else { document.body.classList.add("maxi"); $("#v-" + v).classList.add("on"); document.querySelector(`.vb[data-view="${v}"]`).classList.add("maxed"); showView(v, true); }
+  resize(); draw(); if (v === "fsm") refreshFsm();
+}
+window.addEventListener("keydown", e => { if (e.key === "Escape" && document.body.classList.contains("maxi")) { const v = $(".view.on"); if (v) maximize(v.dataset.view); } });
 function popOut(v) {
   const u = new URL(location.href); u.searchParams.set("solo", v); u.hash = location.hash;
   window.open(u.toString(), "octoviz_" + v, "width=1200,height=760");
@@ -431,7 +451,8 @@ function drawNocHeat() {
       g.fillStyle = u > 0.55 ? "#111" : css("--ink"); g.fillText(cw > 150 ? `${c[3]} cycles · ${c[2]} packets · worst ${c[4]}` : `${c[3]} · ${c[2]} pk`, lw + j * cw + 4, y + ch / 2 + 4); }); });
 }
 function drawLanes() {
-  if (!document.body.classList.contains("solo")) $("#lanes").style.height = traceMode() && TRES.length > 7 ? (TRES.length * 30 + 8) + "px" : "";   // one lane per router / bank needs room
+  if (!document.body.classList.contains("solo") && !document.body.classList.contains("maxi")) $("#lanes").style.height = traceMode() && TRES.length > 7 ? (TRES.length * 30 + 8) + "px" : "";
+  else $("#lanes").style.height = "";   // one lane per router / bank needs room
   const [g, W, H] = fit($("#lanes")); g.clearRect(0, 0, W, H); ticks(g, W, H);
   if (traceMode()) { if (occData && occData.trace) { drawTraceLanes(g, W, H); return; } g.fillStyle = css("--muted"); g.fillText("no trace for this run (run with OCTOPUS_TRACE and convert.py --trace)", 4, 26); return; }
   const lh = (H - 4) / RES.length; if (!data) return;
@@ -652,7 +673,7 @@ async function selectRun(name) { run = runs.find(r => r.run === name) || runs[0]
 // view toggles and pop-out buttons
 $$("#views .vb").forEach(b => {
   const v = b.dataset.view;
-  b.onclick = e => { if (e.target.classList.contains("pop")) { popOut(v); return; } showView(v, b.getAttribute("aria-pressed") !== "true"); };
+  b.onclick = e => { if (e.target.classList.contains("pop")) { popOut(v); return; } if (e.target.classList.contains("max")) { maximize(v); return; } showView(v, b.getAttribute("aria-pressed") !== "true"); };
 });
 if (SOLO) {                                    // this window shows one view only
   document.body.classList.add("solo");

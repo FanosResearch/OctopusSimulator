@@ -74,6 +74,10 @@ Dependency: Python 3 + `duckdb` (`python -m pip install duckdb`).
 - **Minimap** — request density over the whole run; click to move the window.
 
 ## One page or many windows
+
+Every view's pill in the views bar has three controls: click the name to hide or show the view, **⤢** to
+maximize it in this window (the filter and view bars stay; ⤢ again or **Esc** restores the page), and
+**⧉** to open it in its own window.
 The views share one page, which gets busy. Two controls sit in the bar under the filters:
 
 - **click a view's name** to hide or show it on this page;
