@@ -881,3 +881,38 @@ the home's data; the LLC, after three fills to one set have evicted a line and i
 sharer, consumes the InvAck that completes the eviction and then a memory fill; the snoop L1
 consumes a snooped request and a data response. Run by `bash test/network/run.sh 5` (`unit
 P2-ADMIT-RF`): 3 PASS.
+
+## Phase 2, P2-FSM-CLASS and P2-CHECKER — the protocol-and-network deadlock check
+
+**Built.** `Network::checkProtocols` (`src/Interconnect/Network/ProtocolCheck.cpp`), run by
+`MultiCoreSystem_Mesh` once every controller exists. It walks each protocol's FSM table
+(`FSMReader` gained `numStates`, `numEvents`, `getActionName`), asks the handler what each event
+consumes and each action emits (`consumedBy`, `emittedBy`: tables in `MSIDirectory` and
+`LLCMSIDirectory`, next to the code that builds the messages), classifies both with the network's
+own classifier, and checks the consumption order RESPONSE > FORWARD > REQUEST cell by cell: a
+cell may emit only a class strictly higher than the one it consumes, the top class excepted (a
+response may be answered by a response; the top class is drained unconditionally, `ADMIT-RF`).
+Cells consuming from the CPU, the memory or the controller itself are unconstrained. The verdict
+is printed once; a violation names the cell and is fatal unless `deadlock_check(s),warn`, which
+the legacy-equivalent two-class preset sets. Unannotated protocols are reported and skipped.
+
+**Findings.**
+
+- With three classes the directory tables hold: 273 cells, 60 network emissions, edges
+  REQUEST → FORWARD, REQUEST → RESPONSE, FORWARD → RESPONSE, RESPONSE → RESPONSE. The first run
+  flagged one cell, `(I, last_InvAck) → PutAck` in the LLC table: a response consumed, a forward
+  emitted. The cell is dead (the eviction counts its acks exactly, so a last InvAck in `I` cannot
+  occur; a2time01's trace shows `(I, InvAck)` and `(I, last_InvAck)` never firing, and the
+  neighbouring `(I, InvAck)` is Fault) and its PutAck was also an emission the transmit-side
+  admission did not reserve for. It now emits nothing.
+- With two classes the same tables give 36 violations, every one of the kind the step-5 runs had
+  met the hard way: an Inv answered by an InvAck in the same class, a PutS by a PutAck, a GetS
+  forwarded in its own class. The check refuses the configuration and names them; the
+  legacy-equivalent preset runs with `warn`.
+- The rule as drafted ("strictly higher") would have rejected the saved-forward completion on the
+  last InvAck (RESPONSE → RESPONSE); the exemption for the top class is the ADMIT-RF argument
+  made explicit.
+
+**Tests** (`bash test/network/run.sh 5`): P2-FSM-CLASS (three-class grid: "consumption order
+holds", no unannotated name), P2-CHECKER (two-class grid: exit 2, cells named); step 6 covers the
+`warn` path on the legacy-equivalent preset.

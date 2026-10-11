@@ -21,3 +21,4 @@ rx_serving(s),priority,,,#priority (response,forward,request) | alternate (legac
 routing(s),auto,,,#auto (XY on grids, Table otherwise) | Table | XY | WestFirst | AdaptiveMinimal,,
 escape_vc(i),-1,,,#AdaptiveMinimal: VC reserved for the escape route; -1 = none,,
 arbiter_type(s),FCFSArbiter,,,#VC and switch allocation: FCFSArbiter | RRArbiter,,
+deadlock_check(s),refuse,,,#protocol-and-network check at construction (spec s14.3): refuse | warn,,

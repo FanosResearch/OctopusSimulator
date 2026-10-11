@@ -161,6 +161,7 @@ existing convention: `(i)` int, `(s)` string, `(vi)` int list, `(vs)` string lis
 | `routing_table[<router>]` | vi | computed | `Table`: `dest,port,dest,port,...`; absent entries computed by BFS |
 | `escape_vc` | i | -1 | VC index reserved for the escape routing function under `AdaptiveMinimal`; -1 = none |
 | `arbiter_type` | s | `FCFSArbiter` | policy for VC and switch allocation: `FCFSArbiter`, `RRArbiter` (real-time policies deferred, §12) |
+| `deadlock_check` | s | `refuse` | the protocol-and-network check of §14.3: `refuse` aborts on a violation, `warn` prints it and runs |
 
 `requires_ordering(s)` is a system-level key (§3.3), not an interconnect key.
 
@@ -578,14 +579,25 @@ the watchdog reports.
   `AdaptiveMinimal` by its escape VC): build the channel dependency graph whose nodes are (link, VC)
   and whose edges are the transitions the table can produce for any destination; a cycle rejects
   the table unless `escape_vc` is set, in which case the escape VC's own graph must be acyclic.
-- **Protocol-level** (Phase 2): read the protocol FSM CSVs in use, enumerate the message types the
-  actions can emit, classify each (§6.3), and verify that every class a controller may need to
-  emit while holding a REQUEST is strictly higher in the consumption order RESPONSE > FORWARD >
-  REQUEST. A protocol that emits a REQUEST while blocked on a FORWARD fails the check with the
-  offending table cell named. The check runs at construction when both artefacts are present and
-  its verdict is printed once. Its input, an action-to-message-class mapping, does not exist in
-  data today (§23, issue 4); producing it is scheduled in Phase 1 so the check can be built in
-  Phase 2 without touching the protocols twice.
+- **Protocol-level** (`Network::checkProtocols`, `src/Interconnect/Network/ProtocolCheck.cpp`):
+  at construction, after every controller exists, read each protocol's FSM table and, for every
+  cell with actions, the class of the message the event consumes and the classes of the messages
+  the actions emit onto the network, classified exactly as the network classifies them (§6.3,
+  with the emitter's role deciding "from a home"). The consumption order RESPONSE > FORWARD >
+  REQUEST must hold: a cell may emit only classes strictly higher than the one it consumes, except
+  that the top class may emit itself (a response answered by a response, the saved forward
+  completed by the last InvAck: the top class is drained unconditionally, `ADMIT-RF`, so the
+  dependency is on buffer space that always frees). Cells consuming from the CPU, the memory or
+  the controller itself are unconstrained. The verdict is printed once (cells, emissions, the
+  class edges found, unannotated names); a violation names the cell, the consumed and the emitted
+  class and is fatal, unless `deadlock_check(s),warn` (the legacy-equivalent two-class preset uses
+  it: two classes put forwards behind requests, which the legacy ordering made safe). The input
+  is a class annotation per protocol handler (`consumedBy(event)`, `emittedBy(action)`,
+  `hasClassAnnotation()`); the directory MSI pair carries it, an unannotated protocol is reported
+  and skipped. With three classes the shipped directory tables give the edges
+  REQUEST → FORWARD, REQUEST → RESPONSE, FORWARD → RESPONSE, RESPONSE → RESPONSE and hold; with
+  two classes 36 cells violate (every Inv answered by an InvAck in the same class, every PutS by
+  a PutAck, the GetS forwarded in its own class).
 
 ## 15. Observability and statistics
 
@@ -856,9 +868,7 @@ P2-BANKING in the test plan.
    payload in real fabrics; data headers larger).
 3. Local-port bandwidth: one flit per tick per local port is assumed; a wider ejection path would
    need a parameter.
-4. The protocol-level deadlock check needs the FSM CSVs to name, per action, the message type and
-   class it emits; today that mapping lives in the C++ handlers. A small annotation column in the
-   FSM CSVs, or a table in the handler, is required; it is scheduled in Phase 1 (§14.3) and the
-   form of the annotation is still to be chosen.
+4. Resolved: the action-to-class mapping is a table in each protocol handler (`consumedBy`,
+   `emittedBy`, §14.3), next to the code that builds the messages, so it cannot drift from it.
 5. The exact byte-identity of §17.1 may be unreachable even with `half_duplex` and `alternate`;
    the fallback is specified but the decision to accept it is the user's.

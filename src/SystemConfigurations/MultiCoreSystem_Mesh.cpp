@@ -26,6 +26,7 @@ namespace octopus
 
         //Constructor
         std::function<CommunicationInterface *(int)> interfaceFor;
+        net::Network *m_network = nullptr;
         if(interconnect_type == STRINGIFY(Mesh))
         {
             Mesh *mesh = new Mesh(getSubMap(STRINGIFY(interconnect)), name);
@@ -59,6 +60,7 @@ namespace octopus
                 net_map.insert({"home_ids", Parameter("home_ids", Parameter::Vector_Integer, homes)});
             }
             net::Network *net = new net::Network(net_map, name);
+            m_network = net;
             if (parameters.count("requires_ordering"))
                 net->requireOrdering(std::get<string>(parameters.at("requires_ordering").value));
             interfaceFor = [net](int id) { return net->getInterfaceFor(id); };
@@ -106,6 +108,9 @@ namespace octopus
         MainMemoryController *m_main_memory;
         int main_memory_id = std::get<int>(getSubMap(STRINGIFY(m_main_memory)).at("m_id").value);
         m_main_memory = new MainMemoryController(getSubMap(STRINGIFY(MainMemoryController)), bus->getInterfaceFor(main_memory_id), name);
+
+        if (interconnect_type == STRINGIFY(Network))
+            m_network->checkProtocols(BaseController::controllers());      // spec s14.3: after every controller exists
 
         Logger::getLogger()->registerReportPath(workload_path + string("/newLogger"));
     }

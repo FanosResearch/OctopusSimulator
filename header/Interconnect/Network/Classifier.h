@@ -20,6 +20,7 @@ namespace octopus { namespace net
         // The class of a message for destination `dst`, or -1 if no rule matches.
         // Counts fallback-classified messages (spec §6.3: reported once per run).
         int classify(const Message &m, int dst) const;
+        bool isHome(int id) const { return m_homes.count(id) > 0; }
         // Same, but fatal() on -1 with the message's fields printed.
         int classifyOrFatal(const Message &m, int dst) const;
 

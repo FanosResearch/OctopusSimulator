@@ -109,6 +109,15 @@ step5() {
   # "wedged" is printed by the controller watchdog and by the network's
   if [ $ok = 1 ] && [ $mrc = 2 ] && grep -q "wedged" "$O/adm-min/.stderr"; then pass P2-ADMISSION "20/20 complete with inject_queue_depth 4, 0 refused pushes; depth 2 wedges and exits 2" "complete, 0 refused; depth 2 wedges" "$(elapsed "$t0")"
   else fail P2-ADMISSION "$detail depth2:rc=$mrc" "20/20 complete, 0 refused; depth 2 wedges with exit 2" "$(elapsed "$t0")"; fi
+  # ---------------- P2-CHECKER / P2-FSM-CLASS (spec s14.3): the protocol-and-network check passes on three
+  # classes with every FSM cell annotated, and refuses two classes naming the offending cells
+  rm -rf "${O:?}/chk3" "${O:?}/chk2"; mkdir -p "$O/chk3" "$O/chk2"
+  timeout 600 "$BIN" $GRID -p "workload_path(s)=$(W mi_pingpong)/" -o "$(wpath "$O/chk3")" > "$O/chk3/.stdout" 2> "$O/chk3/.stderr"; local c3=$?
+  ( timeout 600 "$BIN" $GRID -p "workload_path(s)=$(W mi_pingpong)/" -p "interconnect.num_classes(i)=2" -o "$(wpath "$O/chk2")" > "$O/chk2/.stdout" 2> "$O/chk2/.stderr" ); local c2=$?
+  local l3; l3=$(grep "Protocol-network check" "$O/chk3/.stdout" | head -1)
+  if [ $c3 = 0 ] && echo "$l3" | grep -q "consumption order holds" && ! echo "$l3" | grep -q "unannotated"; then pass P2-FSM-CLASS "$(echo "$l3" | cut -c1-110)" "holds, 0 unannotated"; else fail P2-FSM-CLASS "rc=$c3 $l3" "holds, 0 unannotated"; fi
+  local nv; nv=$(grep -c " cell (" "$O/chk2/.stderr")
+  if [ $c2 = 2 ] && [ "$nv" -gt 0 ] && grep -q "emits" "$O/chk2/.stderr"; then pass P2-CHECKER "two classes refused, $nv cells named" "refused, cells named"; else fail P2-CHECKER "rc=$c2 cells=$nv" "exit 2, cells named"; fi
   # ---------------- P2-BANKING (spec s24): two LLC banks on routers 0 and 3, lines interleaved; the ten
   # traces complete, every request to a home went to the bank the map names (from the raw trace of
   # a2time01), the shallow-queue admission still holds per bank, and the placement of the banks matters

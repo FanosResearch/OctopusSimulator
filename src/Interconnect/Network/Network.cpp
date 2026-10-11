@@ -71,6 +71,7 @@ namespace octopus { namespace net
         c.link_model = gets("link_model");
         c.inject_depth = geti("inject_queue_depth"); c.eject_depth = geti("eject_queue_depth");
         c.rx_serving = gets("rx_serving"); c.routing = gets("routing"); c.escape_vc = geti("escape_vc"); c.arbiter_type = gets("arbiter_type");
+        if (has("deadlock_check")) c.deadlock_check = gets("deadlock_check");
         m_home_ids = optvi("home_ids");
 
         auto bad = [](const std::string &m) { throw ConfigError(m); };
@@ -89,6 +90,7 @@ namespace octopus { namespace net
         }
         if (geti("half_duplex") != 0 && geti("half_duplex") != 1) bad("half_duplex must be 0 or 1");
         if (c.link_model != "pipelined" && c.link_model != "serial") bad("link_model must be pipelined or serial, got " + c.link_model);
+        if (c.deadlock_check != "refuse" && c.deadlock_check != "warn") bad("deadlock_check must be refuse or warn, got " + c.deadlock_check);
         if (c.inject_depth < 1 || c.eject_depth < 1) bad("inject_queue_depth and eject_queue_depth must be >= 1");
         if (c.escape_vc >= c.vcs_per_class) bad("escape_vc must be < vcs_per_class");
         if (c.arbiter_type == "TDMArbiter" || c.arbiter_type == "PriorityArbiter")

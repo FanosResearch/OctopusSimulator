@@ -153,6 +153,10 @@ namespace octopus
 
         // Design B: tag this controller's logging role (e.g. LLC). Default is L1.
         void setLogRole(Logger::Role role) { m_log_role = role; }
+        Logger::Role logRole() const { return m_log_role; }
+        static const std::vector<BaseController *> &controllers() { return s_controllers; }
+        CoherenceProtocolHandler *protocol() const { return m_protocol; }
+        int id() const { return m_id; }
 
         virtual void initialize(uint64_t address, const uint8_t* data, int size) {} //for Initializable
         virtual void read(uint64_t address, uint8_t* data) {} //for Initializable

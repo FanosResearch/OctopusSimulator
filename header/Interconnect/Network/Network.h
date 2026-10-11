@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 
+namespace octopus { class BaseController; }
 namespace octopus { namespace net
 {
     struct NetConfig
@@ -32,6 +33,7 @@ namespace octopus { namespace net
         std::string link_model = "pipelined";         // pipelined: one flit per tick per link; serial: a flit holds the link for its latency
         int inject_depth = 16, eject_depth = 16, local_ports = 0, escape_vc = -1;
         std::string rx_serving = "priority", routing = "Table", arbiter_type = "FCFSArbiter", topology = "custom";
+        std::string deadlock_check = "refuse";        // protocol-and-network check (spec s14.3): refuse | warn
         int linkLatency(int cls) const { return class_link_latency.empty() ? link_latency : class_link_latency[cls]; }
         std::vector<int> classPriority() const;        // classes in serving order, highest first
     };
@@ -56,6 +58,9 @@ namespace octopus { namespace net
         uint64_t tick() const { return m_tick; }
         // the system may state the protocol's ordering requirement (spec §14.1)
         void requireOrdering(const std::string &req);
+        // the protocol-and-network deadlock check (spec s14.3) over the controllers on this network:
+        // prints its verdict; a violation is fatal unless deadlock_check = warn
+        void checkProtocols(const std::vector<octopus::BaseController *> &controllers);
         // network-only mode: the network is the clock trigger and stops when every generator is
         // done and no packet is in flight
         void standalone(const std::vector<TrafficGenerator *> &gens);

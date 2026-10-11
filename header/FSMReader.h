@@ -48,6 +48,10 @@ namespace octopus
         // reverse lookups (id -> name) for readable coherence traces / debugging
         std::string getStateName(int id);
         std::string getEventName(int id);
+        // enumeration for the protocol-and-network check (docs/NoC_Architecture_Spec.md s14.3)
+        int numStates() const { return (int)m_states.size(); }
+        int numEvents() const { return (int)m_eventIds.size(); }
+        std::string getActionName(int id) const { for (auto &kv : m_actionIds) if (kv.second == id) return kv.first; return "?"; }
 
     private:
         class FSMState

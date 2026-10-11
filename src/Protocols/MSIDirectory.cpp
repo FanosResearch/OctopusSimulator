@@ -320,3 +320,34 @@ namespace octopus
         }
     }
 }
+// ---- class annotation (docs/NoC_Architecture_Spec.md s14.3): what each FSM event consumes and
+// each action emits, as the handler above builds them
+namespace octopus
+{
+    bool MSIDirectory::consumedBy(const std::string &e, MsgClass &o) const
+    {
+        o = MsgClass();
+        if (e == "Load" || e == "Store" || e == "Replacement") return true;                       // the CPU / the controller itself
+        if (e == "Fwd_GetS" || e == "Fwd_GetM") { o.kind = Message::K_FWD; o.from_home = true; return true; }
+        if (e == "Inv") { o.kind = Message::K_INV; o.from_home = true; return true; }
+        if (e == "Put_Ack") { o.kind = Message::K_ACK; o.from_home = true; return true; }
+        if (e == "Data_zeroAck" || e == "Data_nonZeroAck") { o.kind = Message::K_RESP; o.data = true; o.from_home = true; return true; }
+        if (e == "DataFromOwner") { o.kind = Message::K_SUPPLY; o.data = true; return true; }
+        if (e == "InvAck" || e == "lastInvAck") { o.kind = Message::K_ACK; return true; }
+        return false;
+    }
+    bool MSIDirectory::emittedBy(const std::string &a, std::vector<MsgClass> &o) const
+    {
+        o.clear(); MsgClass m;
+        if (a == "Stall" || a == "Hit" || a == "Ack_dec" || a == "AckNum_set" || a == "SaveReq" || a == "Fault") return true;
+        if (a == "GetS") { m.kind = Message::K_GETS; o.push_back(m); return true; }
+        if (a == "GetM") { m.kind = Message::K_GETM; o.push_back(m); return true; }
+        if (a == "PutS") { m.kind = Message::K_PUTS; o.push_back(m); return true; }
+        if (a == "PutM_Data") { m.kind = Message::K_PUTM; m.data = true; o.push_back(m); return true; }
+        if (a == "Data2Both") { m.kind = Message::K_SUPPLY; m.data = true; o.push_back(m); o.push_back(m); return true; }   // requester and home
+        if (a == "Data2Req") { m.kind = Message::K_SUPPLY; m.data = true; o.push_back(m); return true; }
+        if (a == "InvAck2Req") { m.kind = Message::K_ACK; o.push_back(m); return true; }
+        if (a == "InvAck_Data") { m.kind = Message::K_ACK; m.data = true; o.push_back(m); return true; }
+        return false;
+    }
+}

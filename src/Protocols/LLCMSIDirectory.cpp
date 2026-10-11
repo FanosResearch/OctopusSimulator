@@ -350,3 +350,31 @@ namespace octopus
                this->m_fsm->hasAction(cache_line.state, ev, "SaveData");
     }
 }
+
+// ---- class annotation (docs/NoC_Architecture_Spec.md s14.3)
+namespace octopus
+{
+    bool LLCMSIDirectory::consumedBy(const std::string &e, MsgClass &o) const
+    {
+        o = MsgClass();
+        if (e == "Replacement" || e == "Data_fromUpperInterface") return true;                     // the controller itself / the memory
+        if (e == "GetS") { o.kind = Message::K_GETS; return true; }
+        if (e == "GetM") { o.kind = Message::K_GETM; return true; }
+        if (e == "PutS" || e == "last_PutS") { o.kind = Message::K_PUTS; return true; }
+        if (e == "InvAck" || e == "last_InvAck") { o.kind = Message::K_ACK; return true; }
+        if (e == "PutM_Data_fromOwner" || e == "PutM_Data_fromNonOwner") { o.kind = Message::K_PUTM; o.data = true; return true; }
+        if (e == "Data_fromLowerInterface") { o.kind = Message::K_SUPPLY; o.data = true; return true; }
+        return false;
+    }
+    bool LLCMSIDirectory::emittedBy(const std::string &a, std::vector<MsgClass> &o) const
+    {
+        o.clear(); MsgClass m; m.from_home = true;
+        if (a == "Stall" || a == "SaveData" || a == "SetOwner" || a == "ClearOwner" || a == "IncSharers" || a == "DecSharers" || a == "Fault") return true;
+        if (a == "GetData" || a == "WriteBack") return true;                                      // the memory bus, not the network
+        if (a == "SendData") { m.kind = Message::K_RESP; m.data = true; o.push_back(m); return true; }
+        if (a == "SendInv") { m.kind = Message::K_INV; o.push_back(m); return true; }
+        if (a == "FwdGetS" || a == "FwdGetM") { m.kind = Message::K_FWD; o.push_back(m); return true; }
+        if (a == "PutAck") { m.kind = Message::K_ACK; o.push_back(m); return true; }
+        return false;
+    }
+}
