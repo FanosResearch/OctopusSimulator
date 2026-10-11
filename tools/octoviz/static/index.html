@@ -394,14 +394,25 @@ function drawTraceLanes(g, W, H) {
   if (me && isNet && occData.mode === "rows") {     // route: every router stay of the selected request's packets, per packet kind, joined in time order
     const hops = g.__hits.filter(h => h.res === "NOC" && occKey(h.r) === me), byKind = {};
     hops.forEach(h => (byKind[oget(h.r, "kind")] = byKind[oget(h.r, "kind")] || []).push(h));
-    g.strokeStyle = css("--accent"); g.lineWidth = 1.5; g.setLineDash([4, 3]);
     // one chain per packet: a hop continues the copy that left its previous router just before it
     // arrived (copies of a multicast share kind and id but follow different paths)
-    Object.values(byKind).forEach(hs => { hs.sort((a, b) => oget(a.r, "start") - oget(b.r, "start")); const chains = [];
+    const chains = [];
+    Object.values(byKind).forEach(hs => { hs.sort((a, b) => oget(a.r, "start") - oget(b.r, "start")); const mine = [];
       hs.forEach(h => { const s = oget(h.r, "start"); let best = null;
-        chains.forEach(c => { const e = oget(c[c.length - 1].r, "end"); if (e <= s && s - e <= 3 && (!best || e > oget(best[best.length - 1].r, "end"))) best = c; });
-        if (best) { const a = best[best.length - 1]; g.beginPath(); g.moveTo(a.x1, (a.y0 + a.y1) / 2); g.lineTo(h.x0, (h.y0 + h.y1) / 2); g.stroke(); best.push(h); } else chains.push([h]); }); });
-    g.setLineDash([]); g.lineWidth = 1;
+        mine.forEach(c => { const l = c[c.length - 1], e = oget(l.r, "end"); if (oget(l.r, "comp") !== oget(h.r, "comp") && e <= s && s - e <= 3 && (!best || e > oget(best[best.length - 1].r, "end"))) best = c; });
+        if (best) best.push(h); else mine.push([h]); });
+      chains.push(...mine); });
+    const arrow = (x0, y0, x1, y1) => { g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+      const a = Math.atan2(y1 - y0, x1 - x0), L = 7; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x1 - L * Math.cos(a - 0.45), y1 - L * Math.sin(a - 0.45)); g.lineTo(x1 - L * Math.cos(a + 0.45), y1 - L * Math.sin(a + 0.45)); g.closePath(); g.fill(); };
+    const MAIN = new Set(["GETS", "GETM", "FWD", "RESP", "SUPPLY", "SUPPLY_DEFERRED", "DEMAND"]);
+    const SHORT = { GETS: "GetS", GETM: "GetM", FWD: "Fwd", RESP: "data", SUPPLY: "supply", SUPPLY_DEFERRED: "supply", DEMAND: "req" };
+    chains.filter(c => !MAIN.has(oget(c[0].r, "kind"))).forEach(c => { g.strokeStyle = "rgba(150,160,175,.55)"; g.fillStyle = "rgba(150,160,175,.55)"; g.lineWidth = 1;
+      for (let i = 1; i < c.length; i++) { const a = c[i - 1], h = c[i]; arrow(a.x1, (a.y0 + a.y1) / 2, h.x0 - 1, (h.y0 + h.y1) / 2); } });
+    g.strokeStyle = css("--accent"); g.fillStyle = css("--accent"); g.lineWidth = 2.2; g.font = "bold 10px system-ui";
+    chains.filter(c => MAIN.has(oget(c[0].r, "kind"))).forEach(c => { c.forEach((h, i) => { const ym = (h.y0 + h.y1) / 2;
+        if (i > 0) { const a = c[i - 1]; arrow(a.x1, (a.y0 + a.y1) / 2, h.x0 - 1, ym); } });
+      const h = c[0]; g.fillText((SHORT[oget(h.r, "kind")] || oget(h.r, "kind")) + " ▸", Math.max(2, h.x0 - 46), (h.y0 + h.y1) / 2 + 4); });
+    g.lineWidth = 1;
   }
   drawNocHeat();
 }
@@ -555,6 +566,11 @@ async function inspect() {
     TRES.forEach(([res, comp, name], li) => { const list = oa[li]; if (!list || !list.length) return;
       h += `<h4>trace: ahead of it on the ${name} (${list.length})</h4><table><tr><td>kind</td><td>msg</td><td>owner</td><td>occupied</td></tr>` +
            list.map(r => `<tr class="jump" data-id="${oget(r,"msg_id")}" data-core="${oget(r,"core")}"><td>${KIND_TXT[oget(r,"kind")] || oget(r,"kind")}${oget(r,"cutin") ? " (cut-in)" : ""}</td><td>${oget(r,"msg_id")}</td><td>${oget(r,"core") > 3 ? "LLC" : oget(r,"core") + (oget(r,"core") == r_core ? " (own)" : "")}</td><td>${oget(r,"start")}–${oget(r,"end")}</td></tr>`).join("") + "</table>"; }); }
+  if (d.occ && d.occ.length) { const C0 = occData ? occData.cols : ["resource","comp","start","end","kind","core","msg_id","flags","cutin"], gk0 = (r, k) => r[C0.indexOf(k)];
+    const hops = d.occ.filter(r => gk0(r, "resource") === "NOC").sort((a, b) => gk0(a, "start") - gk0(b, "start")), chains = [];
+    hops.forEach(h => { let best = null; chains.forEach(c => { const l = c[c.length - 1]; if (gk0(l, "kind") === gk0(h, "kind") && gk0(l, "comp") !== gk0(h, "comp") && gk0(l, "end") <= gk0(h, "start") && gk0(h, "start") - gk0(l, "end") <= 3 && (!best || gk0(l, "end") > gk0(best[best.length - 1], "end"))) best = c; }); if (best) best.push(h); else chains.push([h]); });
+    if (chains.length) h += `<h4>route through the network: the ${chains.length} packet${chains.length > 1 ? "s" : ""} of this transaction (request, forwards, data, invalidations, acks)</h4><table><tr><td>packet</td><td>routers</td><td>cycles</td></tr>` +
+      chains.map(c => `<tr><td>${KIND_TXT[gk0(c[0], "kind")] || gk0(c[0], "kind")}</td><td>${c.map(x => "router " + gk0(x, "comp")).join(" → ")}</td><td>${gk0(c[0], "start")}–${gk0(c[c.length - 1], "end")}</td></tr>`).join("") + "</table>"; }
   if (d.occ && d.occ.length) { const C = occData ? occData.cols : ["resource","comp","start","end","kind","core","msg_id","flags","cutin"]; const gk = (r, k) => r[C.indexOf(k)];
     h += `<h4>trace intervals of this id (${d.occ.length})</h4><table><tr><td>resource</td><td>kind</td><td>owner</td><td>cycles</td></tr>` +
          d.occ.map(r => `<tr><td>${gk(r,"resource")}${gk(r,"resource") === "MEM_BUS" ? (gk(r,"comp") ? " →LLC" : " →DRAM") : gk(r,"resource") === "LLC_QUEUE" || gk(r,"resource") === "ARRAY" ? " @" + (gk(r,"comp") == 10 ? "LLC" : "L1-" + gk(r,"comp")) : ""}</td><td>${KIND_TXT[gk(r,"kind")] || gk(r,"kind")}${gk(r,"cutin") ? " (cut-in)" : ""}</td><td>${gk(r,"core") > 3 ? "LLC" : gk(r,"core")}</td><td>${gk(r,"start")}–${gk(r,"end")} (${gk(r,"end") - gk(r,"start")})</td></tr>`).join("") + "</table>"; }
@@ -629,6 +645,9 @@ async function refreshFsm() {
 $("#fsmwin").onchange = refreshFsm;
 
 async function selectRun(name) { run = runs.find(r => r.run === name) || runs[0]; $("#run").value = run.run; mini = await api("/api/minimap", { run: run.run }); selected = null;
+  // a network run with a trace opens on the trace lanes: the router lanes exist only there
+  if (run.trace && run.__lanes === undefined) { const l = await api("/api/lanes", { run: run.run }); run.__lanes = l && l.lanes ? l.lanes : [];
+    if (run.__lanes.some(x => x[0] === "NOC") && !applying) $("#lanesrc").value = "trace"; }
   if (!(view.t1 > view.t0)) { view.t0 = run.tmin; view.t1 = Math.min(run.tmax, run.tmin + 20000); } refresh(); }
 // view toggles and pop-out buttons
 $$("#views .vb").forEach(b => {

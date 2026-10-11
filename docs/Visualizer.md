@@ -150,8 +150,15 @@ are built from the run itself (`/api/lanes`):
 - **request / response packets (inject→eject)**: the whole traversal of each packet, from its injection at
   the sender's network interface to its ejection at the receiver.
 - **LLC bank k array**: one lane per LLC bank when the LLC is banked.
-- **Route of the selected request**: its router stays are outlined and joined by a dashed line in time
-  order, one chain per packet copy, so the path through the grid reads off the lanes.
+- **Route of the selected request**: its router stays are outlined and joined by arrows in time order,
+  one chain per packet copy (a packet never visits a router twice). The request's own path (its GetS or
+  GetM, any forward, the data coming back) is drawn bold and labelled at its first router; the
+  invalidations and acknowledgements of the same transaction are thin grey arrows. The inspector lists
+  every packet of the transaction as text ("GetM: router 0 → router 1 → router 3, cycles a–b"), in either
+  lane mode.
+- A network run that has a trace opens on the trace lanes: the router stays exist only in the raw trace
+  (the per-request report rows know a request's stages, not its routers), and the lanes around a route
+  are what explain its waits.
 - **Network contention** (the grid under the lanes): per router and input port, the cycles packets stayed
   beyond the shortest stay of their kind at that router, summed over the visible window, with the packet
   count and the worst single excess. Ports are numbered with the link ports first and the local ports last
