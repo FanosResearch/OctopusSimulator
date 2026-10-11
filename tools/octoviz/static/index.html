@@ -120,6 +120,7 @@
 <section class="view" id="v-lanes" data-view="lanes">
   <div class="vhead"><b>Resource lanes</b> — what occupied each resource<span class="link" id="link-lanes"></span></div>
 <canvas id="lanes"></canvas>
+<div id="nocheatbox" style="display:none"><div class="vhead"><b>Network contention</b> — per router and input port, cycles packets stayed beyond the shortest stay of their kind there (waiting for a VC, the switch or a credit), summed over the window; port numbers: link ports first, local ports last (docs/NoC_Architecture_Spec.md §5.1)</div><canvas id="nocheat" style="display:block;width:100%;height:150px;background:#0f1114"></canvas></div>
 <div id="legend2"><b style="color:var(--ink)">Resource lanes</b> — one segment = one request occupying the resource, coloured by
   <span class="lc-core"><span style="--sw:var(--c0)">core 0</span> <span style="--sw:var(--c1)">core 1</span> <span style="--sw:var(--c2)">core 2</span> <span style="--sw:var(--c3)">core 3</span></span>
   <span class="lc-cls" style="display:none"><span style="--sw:var(--k-stable)">stable hit</span> <span style="--sw:var(--k-transient)">transient hit</span> <span style="--sw:var(--k-coalesced)">coalesced hit</span> <span style="--sw:var(--k-miss)">miss</span></span>
@@ -150,8 +151,27 @@ const occ = (row, C, r) => r === "llc" ? [get(row, C, "reqb") > 0 || get(row, C,
 const STATE = {"-2":"never reached the LLC","-1":"absent","0":"N","1":"NE_d (DRAM fetch in flight, exclusive)","2":"NM_d (DRAM fetch in flight, modified)","3":"I","4":"S","5":"EorM (owned by an L1)","6":"IorS_a","7":"MN_d (eviction, owner data awaited)","8":"S_d (owner supply in flight)","9":"I_d (owner write-back in flight)","10":"N_a"};
 const A_RES = 5, A_LLC = 10;
 // trace lanes (docs/Trace.md): every message's busy intervals from occupancy.parquet; the memory bus is full duplex (comp = direction)
-const TRES = [["REQ_BUS",0,"request bus","reqbus"],["SVC_BUS",0,"service bus (INV)",null],["ARRAY",10,"LLC array port","array"],["MEM_BUS",0,"mem bus → DRAM",null],["MEM_BUS",1,"mem bus → LLC",null],["DRAM",100,"DRAM (banks overlap)",null],["RESP_BUS",0,"response bus","respbus"]];
+const TRES_BUS = [["REQ_BUS",0,"request bus","reqbus"],["SVC_BUS",0,"service bus (INV)",null],["ARRAY",10,"LLC array port","array"],["MEM_BUS",0,"mem bus → DRAM",null],["MEM_BUS",1,"mem bus → LLC",null],["DRAM",100,"DRAM (banks overlap)",null],["RESP_BUS",0,"response bus","respbus"]];
+let TRES = TRES_BUS, isNet = false;
+// the lanes present in the run (/api/lanes): one per router on a network run (resource NOC, comp = router id),
+// one per LLC bank's array port, and the request / response "bus" intervals read as packets (inject -> eject)
+function lanesFor(list) {
+  if (!list || !list.length) return TRES_BUS;
+  const has = (r, c) => list.some(l => l[0] === r && (c == null || l[1] === c)), comps = r => [...new Set(list.filter(l => l[0] === r).map(l => l[1]))].sort((a, b) => a - b);
+  isNet = has("NOC");
+  const banks = comps("ARRAY").filter(c => c >= 10), out = [];
+  out.push(["REQ_BUS", 0, isNet ? "request packets (inject→eject)" : "request bus", "reqbus"]);
+  if (has("SVC_BUS")) out.push(["SVC_BUS", 0, "service bus (INV)", null]);
+  comps("NOC").forEach(r => out.push(["NOC", r, "router " + r, null]));
+  banks.forEach(b => out.push(["ARRAY", b, banks.length > 1 ? "LLC bank " + b + " array" : "LLC array port", "array"]));
+  if (has("MEM_BUS", 0)) out.push(["MEM_BUS", 0, "mem bus → DRAM", null]);
+  if (has("MEM_BUS", 1)) out.push(["MEM_BUS", 1, "mem bus → LLC", null]);
+  if (has("DRAM")) out.push(["DRAM", 100, "DRAM (banks overlap)", null]);
+  out.push(["RESP_BUS", 0, isNet ? "response packets (inject→eject)" : "response bus", "respbus"]);
+  return out;
+}
 const KIND_TXT = { DEMAND:"CPU request", GETS:"GetS", GETM:"GetM", PUTM:"PutM", INV:"back-invalidation", EVICT:"L1 replacement", WB_DATA:"eviction write-back", WB_INV:"INV-forced write-back", SUPPLY:"cache-to-cache supply", SUPPLY_DEFERRED:"deferred supply (parked request)", RESP:"LLC/L1 data response", FILL:"DRAM fill", FILL_ROLLBACK:"fill (rollback)", MEM_READ:"memory read", MEM_WRITE:"LLC eviction to memory", PUTS:"PutS", FWD:"forward (FwdGetS/FwdGetM)", ACK:"acknowledgement (InvAck/PutAck)", UNKNOWN:"untagged" };
+let nocHeat = null;
 let runs = [], run = null, view = { t0: 0, t1: 0 }, data = null, ctxData = null, occData = null, mini = null, hover = null, timer = null, selected = null, laneHover = null;
 /* ---- views: hide/show here, or pop one out into its own window.
    Windows of the same origin share a BroadcastChannel, so the cycle window, the
@@ -229,6 +249,9 @@ async function refresh() {
   const [d, c, o] = await Promise.all([api("/api/window", { ...f, t0: view.t0, t1: view.t1 }),
                                     ($("#context").checked || selected) ? api("/api/window", { run: run.run, t0: view.t0, t1: view.t1, limit: 20000 }) : Promise.resolve(null),
                                     traceMode() ? api("/api/occupancy", { run: run.run, t0: view.t0, t1: view.t1, core: f.core, addr: f.addr, mask: f.addr ? f.mask : "" }) : Promise.resolve(null)]);
+  if (traceMode() && run.__lanes === undefined) { const l = await api("/api/lanes", { run: run.run }); run.__lanes = l && l.lanes ? l.lanes : []; }
+  TRES = traceMode() ? lanesFor(run.__lanes) : TRES_BUS;
+  nocHeat = traceMode() && isNet ? await api("/api/nocheat", { run: run.run, t0: view.t0, t1: view.t1 }) : null;
   data = d; ctxData = c; occData = o; draw(); refreshHist(); refreshHot(); refreshFsm(); sendState("state");
   const statusPrefix = `${run.run} · cycles ${view.t0}–${view.t1} (${view.t1 - view.t0}) · total recorded cycles: ${run.tmax}`;
   setStatus(d.mode === "rows" ? `${statusPrefix} · ${d.rows.length} of ${d.total} matching requests shown` :
@@ -355,19 +378,49 @@ function drawTraceLanes(g, W, H) {
   TRES.forEach(([res, comp, name, wk], li) => { const y = 2 + li * lh; g.fillStyle = css("--muted"); g.font = "11px system-ui"; g.fillText(name, 4, y + 11);
     if (occData.mode === "bins") { const C = occData.cols; occData.bins.filter(b => b[C.indexOf("resource")] === res && (anyComp(res) || b[C.indexOf("comp")] === comp)).forEach(b => { const i = b[0], u = Math.min(1, b[C.indexOf("busy")] / occData.bw), un = Math.min(1, b[C.indexOf("busy_nonreq")] / occData.bw);
         const x0 = x(occData.t0 + i * occData.bw) * W, w = Math.max(1, occData.bw / (view.t1 - view.t0) * W); g.fillStyle = `rgba(242,176,61,${0.15 + 0.85 * u})`; g.fillRect(x0, y + 14, w, lh - 16); g.fillStyle = `rgba(177,151,252,${un})`; g.fillRect(x0, y + 14, w, (lh - 16) * 0.35); }); return; }
-    if (ww && wk && ww[wk]) { const x0 = x(ww[wk][0]) * W, x1 = x(ww[wk][1]) * W; g.fillStyle = hatch(); g.fillRect(x0, y + 12, Math.max(1, x1 - x0), lh - 12); g.strokeStyle = css("--wait"); g.lineWidth = 1.5; g.strokeRect(x0 + .5, y + 12.5, Math.max(1, x1 - x0), lh - 13); g.lineWidth = 1; }
-    const rows = laneRows(res, comp), sub = pack(rows), nsub = Math.max(1, ...sub.map(k => k + 1)), sh = (lh - 16) / nsub;
+    const rows = laneRows(res, comp), sub = pack(rows),
+          bankOfMine = res !== "ARRAY" || TRES.filter(t => t[0] === "ARRAY").length < 2 || (me && rows.some(r => occKey(r) === me));
+    if (ww && wk && ww[wk] && bankOfMine) { const x0 = x(ww[wk][0]) * W, x1 = x(ww[wk][1]) * W; g.fillStyle = hatch(); g.fillRect(x0, y + 12, Math.max(1, x1 - x0), lh - 12); g.strokeStyle = css("--wait"); g.lineWidth = 1.5; g.strokeRect(x0 + .5, y + 12.5, Math.max(1, x1 - x0), lh - 13); g.lineWidth = 1; }
+    const nsub = Math.max(1, ...sub.map(k => k + 1)), sh = (lh - 16) / nsub;
     rows.forEach((r, i) => { const s = oget(r, "start"), e = oget(r, "end"); if (e <= s) return; const x0 = x(s) * W, x1 = x(e) * W, yy = y + 14 + sub[i] * sh, key = occKey(r);
       const mode = $("#lanecolor").value; g.fillStyle = mode === "kind" ? css("--kd-" + oget(r, "kind")) : mode === "cls" ? "#3b4250" : css("--c" + Math.min(3, oget(r, "core")));
       if (oget(r, "core") > 3) g.fillStyle = css("--kd-INV");
-      g.fillRect(x0, yy, Math.max(1, x1 - x0), Math.max(2, sh - 1)); g.__hits.push({ x0, x1: x0 + Math.max(1, x1 - x0), y0: yy, y1: yy + Math.max(2, sh - 1), r, li });
-      if (oget(r, "cutin")) { g.setLineDash([2, 2]); g.strokeStyle = "#fff"; g.strokeRect(x0 + .5, yy + .5, Math.max(1, x1 - x0) - 1, Math.max(2, sh - 1) - 1); g.setLineDash([]); }
+      g.fillRect(x0, yy, Math.max(1, x1 - x0), Math.max(2, sh - 1)); g.__hits.push({ x0, x1: x0 + Math.max(1, x1 - x0), y0: yy, y1: yy + Math.max(2, sh - 1), r, li, res });
+      if (oget(r, "cutin") && res !== "NOC") { g.setLineDash([2, 2]); g.strokeStyle = "#fff"; g.strokeRect(x0 + .5, yy + .5, Math.max(1, x1 - x0) - 1, Math.max(2, sh - 1) - 1); g.setLineDash([]); }
       if (me && key === me) { g.strokeStyle = css("--accent"); g.lineWidth = 2; g.strokeRect(x0 - 1, yy - 1, Math.max(2, x1 - x0) + 2, sh + 1); g.lineWidth = 1; }
       if (ahead && ahead[li] && ahead[li].includes(r)) { g.strokeStyle = css("--hl"); g.strokeRect(x0 - .5, yy - .5, Math.max(2, x1 - x0) + 1, sh); } });
     const hoveredInterval = laneHover && g.__hits.find(h => h.li === li && h.r === laneHover.r);
     if (hoveredInterval) { g.strokeStyle = "#fff"; g.lineWidth = 1.5; g.strokeRect(hoveredInterval.x0, hoveredInterval.y0, hoveredInterval.x1 - hoveredInterval.x0, hoveredInterval.y1 - hoveredInterval.y0); g.lineWidth = 1; } });
+  if (me && isNet && occData.mode === "rows") {     // route: every router stay of the selected request's packets, per packet kind, joined in time order
+    const hops = g.__hits.filter(h => h.res === "NOC" && occKey(h.r) === me), byKind = {};
+    hops.forEach(h => (byKind[oget(h.r, "kind")] = byKind[oget(h.r, "kind")] || []).push(h));
+    g.strokeStyle = css("--accent"); g.lineWidth = 1.5; g.setLineDash([4, 3]);
+    // one chain per packet: a hop continues the copy that left its previous router just before it
+    // arrived (copies of a multicast share kind and id but follow different paths)
+    Object.values(byKind).forEach(hs => { hs.sort((a, b) => oget(a.r, "start") - oget(b.r, "start")); const chains = [];
+      hs.forEach(h => { const s = oget(h.r, "start"); let best = null;
+        chains.forEach(c => { const e = oget(c[c.length - 1].r, "end"); if (e <= s && s - e <= 3 && (!best || e > oget(best[best.length - 1].r, "end"))) best = c; });
+        if (best) { const a = best[best.length - 1]; g.beginPath(); g.moveTo(a.x1, (a.y0 + a.y1) / 2); g.lineTo(h.x0, (h.y0 + h.y1) / 2); g.stroke(); best.push(h); } else chains.push([h]); }); });
+    g.setLineDash([]); g.lineWidth = 1;
+  }
+  drawNocHeat();
+}
+// ---- network contention: router x input port, cycles beyond the shortest stay of the same packet kind ----
+function drawNocHeat() {
+  const cv = $("#nocheat"), box = $("#nocheatbox"); if (!cv || !box) return;
+  box.style.display = nocHeat && nocHeat.cells && nocHeat.cells.length ? "" : "none"; if (box.style.display === "none") return;
+  const [g, W, H] = fit(cv); g.clearRect(0, 0, W, H);
+  const cells = nocHeat.cells, routers = [...new Set(cells.map(c => c[0]))].sort((a, b) => a - b), ports = [...new Set(cells.map(c => c[1]))].sort((a, b) => a - b);
+  const max = Math.max(1, ...cells.map(c => c[3])), lw = 70, th = 16, cw = Math.min(260, (W - lw) / Math.max(1, ports.length)), ch = Math.min(28, (H - th) / Math.max(1, routers.length));
+  g.font = "11px system-ui"; g.fillStyle = css("--muted");
+  ports.forEach((p, j) => g.fillText("in port " + p, lw + j * cw + 4, 12));
+  routers.forEach((r, i) => { const y = th + i * ch; g.fillStyle = css("--muted"); g.fillText("router " + r, 4, y + ch / 2 + 4);
+    ports.forEach((p, j) => { const c = cells.find(c => c[0] === r && c[1] === p); if (!c) return; const u = c[3] / max;
+      g.fillStyle = `rgba(242,176,61,${0.08 + 0.92 * u})`; g.fillRect(lw + j * cw + 1, y + 1, cw - 2, ch - 2);
+      g.fillStyle = u > 0.55 ? "#111" : css("--ink"); g.fillText(cw > 150 ? `${c[3]} cycles · ${c[2]} packets · worst ${c[4]}` : `${c[3]} · ${c[2]} pk`, lw + j * cw + 4, y + ch / 2 + 4); }); });
 }
 function drawLanes() {
+  if (!document.body.classList.contains("solo")) $("#lanes").style.height = traceMode() && TRES.length > 7 ? (TRES.length * 30 + 8) + "px" : "";   // one lane per router / bank needs room
   const [g, W, H] = fit($("#lanes")); g.clearRect(0, 0, W, H); ticks(g, W, H);
   if (traceMode()) { if (occData && occData.trace) { drawTraceLanes(g, W, H); return; } g.fillStyle = css("--muted"); g.fillText("no trace for this run (run with OCTOPUS_TRACE and convert.py --trace)", 4, 26); return; }
   const lh = (H - 4) / RES.length; if (!data) return;

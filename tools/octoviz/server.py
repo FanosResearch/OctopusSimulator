@@ -21,6 +21,11 @@ convert.py.  Everything stays on this machine.
         trace (occupancy.parquet next to octoviz.parquet, see docs/Trace.md): rows (small window,
         filters kinds=GETS,FILL,.. core=0,1 res=REQ_BUS,ARRAY,..) or per-bin busy cycles per lane
         (wide window). {"trace": false} when the run has no trace. addr=<hex>&mask=<hex> filters by line.
+  GET /api/lanes?run=..                -> the (resource, comp) lanes present in the run's occupancy, so the
+        viewer draws one lane per router on a network run and one per LLC bank (docs/Visualizer.md)
+  GET /api/nocheat?run=..&t0=..&t1=..  -> network runs: per router and input port, the cycles packets spent
+        in the router beyond the shortest stay of their kind there (waiting for VC / switch allocation or
+        credits), summed over the window, with the packet count and the worst single excess
   GET /api/fsm?run=..&addr=<hex>[&mask=<hex>][&t0=..&t1=..][&limit=3000] -> the coherence transitions
         every controller made on that line (fsm.parquet from the trace): cycle, agent, message, event,
         old -> new state, in cycle order. The UI turns it into the per-line transition table.
@@ -104,6 +109,23 @@ def occupancy(q):
              SUM(CASE WHEN o.kind IN ('FILL','WB_DATA','WB_INV','INV','MEM_WRITE','MEM_READ','PUTM','EVICT') THEN GREATEST(0, LEAST(o."end", b.b1) - GREATEST(o.start, b.b0)) ELSE 0 END) AS busy_nonreq
       FROM b JOIN o ON o."end" >= b.b0 AND o.start < b.b1 GROUP BY 1,2,3 ORDER BY 1,2,3""").fetchall()
     return {"trace": True, "mode": "bins", "bw": bw, "cols": ["i", "resource", "comp", "busy", "busy_nonreq"], "bins": bins, "t0": t0, "t1": t1}
+
+def lanes(q):
+    p = occ_path(q["run"])
+    if not p: return {"trace": False, "lanes": []}
+    rows = CON.execute(f"SELECT resource, comp, count(*) FROM '{p}' WHERE resource <> 'LLC_QUEUE' GROUP BY 1, 2 ORDER BY 1, 2").fetchall()
+    return {"trace": True, "lanes": [[r[0], int(r[1]), int(r[2])] for r in rows]}
+
+def nocheat(q):
+    p = occ_path(q["run"])
+    if not p: return {"trace": False, "cells": []}
+    t0, t1 = int(q["t0"]), int(q["t1"])
+    rows = CON.execute(f"""
+      WITH n AS (SELECT comp, flags AS port, kind, "end" - start AS dwell, start FROM '{p}' WHERE resource = 'NOC'),
+           m AS (SELECT comp, kind, min(dwell) AS md FROM n GROUP BY 1, 2)
+      SELECT n.comp, n.port, count(*), sum(n.dwell - m.md), max(n.dwell - m.md)
+      FROM n JOIN m USING (comp, kind) WHERE n.start BETWEEN {t0} AND {t1} GROUP BY 1, 2 ORDER BY 1, 2""").fetchall()
+    return {"trace": True, "cols": ["router", "port", "packets", "excess", "worst"], "cells": [[int(v) for v in r] for r in rows]}
 
 def run_path(run):
     for r in runs():
@@ -225,6 +247,8 @@ class H(SimpleHTTPRequestHandler):
             elif u.path == "/api/hotlines": body = hotlines(q)
             elif u.path == "/api/occupancy": body = occupancy(q)
             elif u.path == "/api/fsm": body = fsm(q)
+            elif u.path == "/api/lanes": body = lanes(q)
+            elif u.path == "/api/nocheat": body = nocheat(q)
             else: self.send_error(404); return
             data = json.dumps(body, default=lambda o: int(o) if hasattr(o, "item") else str(o)).encode()
             self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(data))); self.end_headers(); self.wfile.write(data)

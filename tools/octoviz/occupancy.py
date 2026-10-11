@@ -142,8 +142,11 @@ class Streamer:
 
     def _emit(self, a, name, ie, start, end, comp_arr=None):
         if len(ie) == 0: return
-        shift = -1 if (self.logger_base and name in BUS_ROLES) else 0
+        # router intervals (NOC) share the bus lanes' time base (the network stamps both in the same
+        # cycle) and their ENTER flags are in_port<<8 | in_vc: keep the port, no cut-in / region bits
+        shift = -1 if (self.logger_base and (name in BUS_ROLES or name == "NOC")) else 0
         fl = a["flags"][ie]
+        if name == "NOC": fl = (fl >> 8) & 0xff
         self.occ.append((np.full(len(ie), name, dtype=object), (a["comp"][ie] if comp_arr is None else comp_arr).astype(np.int32),
                          start + shift, end + shift, a["kind"][ie].astype(np.int16), a["core"][ie].astype(np.int16),
                          a["msg_id"][ie].astype(np.int64), (fl & 0xff).astype(np.int32), ((fl >> 8) & 1).astype(np.bool_),

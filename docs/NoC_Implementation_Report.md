@@ -614,8 +614,9 @@ Regression suite: REG-BUS, REG-ENV, REG-MESH, REG-TDM identical.
 - `tools/octoviz`: `tracefile.py` knows the NOC resource; `occupancy.py` builds one lane per router
   from ENTER→EXIT pairs keyed on (router, msg_id, kind), keys the bus pairing on the new flags,
   and its response-bus check uses the flag to pick the requester's copy; `convert.py` reads the
-  five extra report columns when the header announces them. The viewer discovers lanes from the
-  data, so router lanes appear without a UI change (S7-VIEWER is the manual check).
+  five extra report columns when the header announces them. (Correction, written later: this
+  report first claimed the viewer discovers its lanes from the data. It did not; the lane list was
+  hard-coded and the router intervals were never drawn. The viewer work section below fixes it.)
 - `test/network/s7check.py` (trace-versus-report checks: hop counts, tracker sum, time base),
   `test/network/s7lanes.py`, `test/network/steps/step7.sh`.
 
@@ -916,3 +917,27 @@ the legacy-equivalent two-class preset sets. Unannotated protocols are reported 
 **Tests** (`bash test/network/run.sh 5`): P2-FSM-CLASS (three-class grid: "consumption order
 holds", no unannotated name), P2-CHECKER (two-class grid: exit 2, cells named); step 6 covers the
 `warn` path on the legacy-equivalent preset.
+
+## Phase 2, the viewer on network runs
+
+**Built.**
+
+- `/api/lanes` lists the (resource, comp) lanes present in a run, and the viewer builds its trace lanes from
+  it: one lane per router on a network run, one array lane per LLC bank, and the request and response
+  intervals labelled "packets (inject→eject)", since on the network they span a packet's whole traversal.
+  Bus runs keep the lanes they had. The lanes canvas grows with the number of lanes.
+- Route of the selected request: its packets' router stays are outlined and joined in time order, one
+  chain per packet copy (a hop continues the copy that left the previous router just before it arrived;
+  the copies of a supply share kind and id but follow different paths). The array wait window is hatched
+  only on the bank that served the request.
+- `/api/nocheat` and a "Network contention" grid under the lanes: per router and input port, the cycles
+  packets stayed beyond the shortest stay of their kind at that router (waiting for a VC, the switch or a
+  credit), summed over the visible window, with the packet count and the worst single excess. It is built
+  from the router intervals the trace already has, so the trace format did not change.
+- Converter: router intervals keep the input port in `flags` (no cut-in or region bits read from the port
+  number, which had drawn spurious cut-in outlines) and share the bus lanes' one-cycle time base.
+
+**Tests.** S7-VIEWER-API (`test/network/s7viewer.py`, in step 7): on a converted two-bank grid run the
+server lists four router lanes and both bank lanes, a heat cell for every router and the router intervals.
+The drawing was checked by eye on that run: request 7507 of core 0 shows its GetS through routers 0, 1 and
+3, and the two copies of its data response each on their own path. S7-VIEWER stays the manual check.

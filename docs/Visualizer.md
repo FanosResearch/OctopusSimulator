@@ -140,6 +140,23 @@ memory traffic) overlaid in purple. The trace lanes are shifted onto the Logger'
 which differs between the bus and the mesh systems) so they line up with the request rows;
 `occupancy.py --global-clock` keeps the physical stamps.
 
+## Network runs (multi-hop NoC)
+
+On a run whose interconnect is the multi-hop `Network` (docs/NoC_Architecture_Spec.md), the trace lanes
+are built from the run itself (`/api/lanes`):
+
+- **router 0 … router N**: one lane per router; a segment is a packet's stay in that router, from its head
+  entering an input VC to its tail leaving. Overlapping stays stack.
+- **request / response packets (inject→eject)**: the whole traversal of each packet, from its injection at
+  the sender's network interface to its ejection at the receiver.
+- **LLC bank k array**: one lane per LLC bank when the LLC is banked.
+- **Route of the selected request**: its router stays are outlined and joined by a dashed line in time
+  order, one chain per packet copy, so the path through the grid reads off the lanes.
+- **Network contention** (the grid under the lanes): per router and input port, the cycles packets stayed
+  beyond the shortest stay of their kind at that router, summed over the visible window, with the packet
+  count and the worst single excess. Ports are numbered with the link ports first and the local ports last
+  (spec §5.1; on a 2×2 grid router 0 has east 0, south 1, then one local port per attached endpoint).
+
 ## Coherence transition table (per line)
 The full‑width panel at the bottom lists every event a controller's FSM processed on one 64‑B
 line, in cycle order, from `fsm.parquet` (the trace's FSM records, docs/Trace.md): columns

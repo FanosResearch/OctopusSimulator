@@ -35,5 +35,13 @@ step7() {
   m=$(grep "^ahead,3" "$O/ahead/NetworkStats.csv" | cut -d, -f5,6); e=$(grep "^ahead,3" "$O/alone/NetworkStats.csv" | cut -d, -f5,6)
   local wait; wait=$($PY "$HERE/netstat.py" "$O/ahead/NetworkStats.csv" class 0 4)
   if [ "$m" = "4,1" ] && [ "$e" = "0,-1" ] && [ "$wait" = 4 ]; then pass S7-AHEAD "ahead 4 to owner 1, wait 4; alone 0" "4,1 / 0"; else fail S7-AHEAD "contended $m wait $wait, alone $e" "4,1 wait 4 / 0,-1"; fi
-  xfail S7-VIEWER "manual: the selected request's route across the router lanes is checked by eye once per release"
+  # ---- S7-VIEWER-API: the viewer's server lists a lane per router and per LLC bank, the contention grid
+  # and the router intervals, on a converted two-bank grid run
+  t0=$(now); local vr="$O/viewer"; rm -rf "${vr:?}"; mkdir -p "$vr/grid2b"
+  OCTOPUS_TRACE="$(wpath "$vr/grid2b/trace.bin")" timeout 1800 "$BIN" -s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid2B -p "workload_path(s)=$(W a2time01-trace)/" -o "$(wpath "$vr/grid2b")" > "$vr/grid2b/.stdout" 2> "$vr/grid2b/.stderr"
+  if $PY -c "import duckdb, numpy" 2>/dev/null && ( cd "$ROOT" && PY=$PY bash octoviz.sh convert "$vr/grid2b" > "$vr/.convert" 2>&1 ); then
+    local va; va=$($PY "$HERE/s7viewer.py" "$vr" 4 10,11 2>&1 | tail -1)
+    case "$va" in ok*) pass S7-VIEWER-API "${va#ok }" "4 router lanes, banks 10 and 11, heat and intervals" "$(elapsed "$t0")";; *) fail S7-VIEWER-API "$va" "4 router lanes, banks 10 and 11" "$(elapsed "$t0")";; esac
+  else xfail S7-VIEWER-API "python lacks duckdb/numpy or the conversion failed (see $vr/.convert)"; fi
+  xfail S7-VIEWER "manual: the router lanes, the route of a selected request and the contention grid are checked by eye once per release"
 }

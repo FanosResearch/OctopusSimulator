@@ -233,7 +233,8 @@ All `sim` on `NetworkOnly.csv` unless marked. Defaults: `flit_bytes` 16, `router
 | S7-AHEAD | sim | the contention case of spec §21 built with two generators on the grid | `NoC Ahead = 4`, winner core 1; zero on the unloaded run |
 | S7-CONVERT | shell | `octoviz.sh convert` on the run | zero mismatches, one lane per router in `occupancy.parquet` |
 | S7-TIMEBASE | sim | router lane intervals against the report's bus columns after the converter's calibration | the first hop's ENTER is at `L1.ENTER + Request Bus start` and the last hop's EXIT at `REQ_BUS.EXIT`, within the one-cycle calibration the bus lanes already use |
-| S7-VIEWER | manual | the selected request's route drawn across the lanes, screenshot filed under `test/network/ref/` | checked by eye once per release |
+| S7-VIEWER-API | sim | a converted two-bank grid run (`MultiCoreSystem_Grid2B`, a2time01) through the viewer's server (`test/network/s7viewer.py`) | `/api/lanes` lists one NOC lane per router and one ARRAY lane per LLC bank; `/api/nocheat` has a cell for every router; `/api/occupancy` returns router intervals |
+| S7-VIEWER | manual | the router lanes, the selected request's route drawn across them and the contention grid | checked by eye once per release |
 
 ## 11. Step 8 — the BookSim comparison
 
