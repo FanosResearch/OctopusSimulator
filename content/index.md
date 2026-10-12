@@ -8,6 +8,8 @@ framework.
 The project is designed for **configuration-driven experiments**: hierarchy
 parameters live in CSV files, coherence protocols are CSV finite-state machines,
 and command-line overrides let you run a design-space sweep without editing C++.
+These pages are maintained for the `stable` and `dev-stable` development lines;
+commands that depend on another branch are not part of the supported workflow.
 
 ## Start here
 
@@ -19,6 +21,8 @@ and command-line overrides let you run a design-space sweep without editing C++.
 | Understand the design | [Architecture](architecture.md) |
 | Add or modify coherence behavior | [Add a coherence protocol](add-a-protocol.md) |
 | Reproduce published experiments | [Reproducibility](reproducibility.md) |
+| Integrate with gem5 and inspect results | [gem5 integration](gem5-integration.md) |
+| Search the complete developer reference | [Tutorial and developer reference](tutorial/Architecture.md) |
 | Cite Octopus | [Publications and citation](publications.md) |
 
 ## Why Octopus?
@@ -48,9 +52,10 @@ traces are maintained in the separate
 fetched only when a benchmark run needs them.
 
 !!! note
-    The hands-on exercise tree is maintained on the `esweek-tutorial` branch.
-    The [tutorial page](demo.md#hands-on-tutorial) explains how to use it without
-    making it a prerequisite for the stable branch.
+    The complete tutorial and developer reference is published in this site under
+    [Tutorial and developer reference](tutorial/Architecture.md). The pages cover
+    architecture, messages, state and data, logging, tracing, debugging,
+    visualization, tasks, interconnect plans, and protocol extension.
 
 ## Citation
 

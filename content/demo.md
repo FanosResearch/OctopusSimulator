@@ -39,16 +39,20 @@ It provides a request pipeline, shared-resource lanes, an inspector, and a
 coherence transition table. Add `--trace` to the simulator run to include
 non-request traffic such as invalidations, write-backs, and fills.
 
-## Hands-on tutorial
+## Complete developer reference
 
-The structured tutorial lives on the `esweek-tutorial` branch because it is not
-part of every stable checkout:
+The complete tutorial and developer reference is available in this site:
 
-```bash
-git clone -b esweek-tutorial https://github.com/FanosResearch/OctopusSimulator.git octopus-tutorial
-cd octopus-tutorial/tutorial
-```
+- [Architecture](tutorial/Architecture.md)
+- [Logging and monitoring](tutorial/Logger.md)
+- [Tracing](tutorial/Trace.md)
+- [Debugger](tutorial/Debugger.md)
+- [Visualizer](tutorial/Visualizer.md)
+- [Tasks](tutorial/Tasks.md)
+- [Adding a coherence protocol](tutorial/AddingAProtocol.md)
+- [Message encoding](tutorial/MessageEncoding.md)
+- [State and data](tutorial/StateAndData.md)
+- [Interconnect and multi-hop design](tutorial/NoC_MultiHop_Plan.md)
 
-Start with `tutorial/00-setup-and-first-run/`, then continue through exploration,
-configuration, extension, and gem5 integration. Treat the branch name as part of
-the instructions; the stable branch does not promise the tutorial tree.
+These pages are part of the unified documentation and are intended to be
+searchable alongside the stable and dev-stable usage guides.

@@ -35,11 +35,19 @@ markdown_extensions:
   - attr_list
   - pymdownx.details
   - pymdownx.highlight
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
   - footnotes
   - tables
+
+extra_javascript:
+  - https://unpkg.com/mermaid@11/dist/mermaid.min.js
+  - javascripts/mermaid.js
 
 plugins:
   - search
@@ -50,16 +58,32 @@ nav:
       - Install and verify: quick-start.md
       - Run a benchmark: run-a-benchmark.md
       - Demo and visualizer: demo.md
-  - Concepts:
-      - Architecture: architecture.md
-      - Supported configurations: supported-configurations.md
-      - Monitoring: monitoring.md
-  - Components:
-      - Configuration: configuration.md
-      - Interconnects and memory: components.md
-  - Extend Octopus:
-      - Add a coherence protocol: add-a-protocol.md
-      - Contributing: contributing.md
+      - gem5 integration: gem5-integration.md
+  - Documentation:
+      - Fundamentals:
+          - Architecture overview: architecture.md
+          - Supported configurations: supported-configurations.md
+      - Components and configuration:
+          - Configuration: configuration.md
+          - Interconnects and memory: components.md
+          - Message encoding: tutorial/MessageEncoding.md
+          - State and data: tutorial/StateAndData.md
+          - Architecture deep dive: tutorial/Architecture.md
+      - Monitoring and analysis:
+          - Monitoring overview: monitoring.md
+          - Logger: tutorial/Logger.md
+          - Debugger: tutorial/Debugger.md
+          - Trace format: tutorial/Trace.md
+          - Visualizer: tutorial/Visualizer.md
+          - Tasks: tutorial/Tasks.md
+      - Extending Octopus:
+          - Add a coherence protocol: add-a-protocol.md
+          - Protocol worked example: tutorial/AddingAProtocol.md
+          - Interconnect multi-hop plan: tutorial/NoC_MultiHop_Plan.md
+          - Logger design plan: tutorial/Logger_DesignB_plan.md
+          - Contributing: contributing.md
+  - Reference:
+      - Reference manual: reference-manual.md
   - Research:
       - Reproducibility: reproducibility.md
       - Publications and citation: publications.md

@@ -2,6 +2,8 @@
 
 This page gets a fresh checkout to a known-good simulator build. Commands assume
 Ubuntu or another Linux environment with Bash, a C++17 compiler, CMake, and Git.
+Use `stable` for the released documentation baseline or `dev-stable` when
+developing against the integration branch.
 
 ## Option 1: GitHub Codespaces
 
@@ -23,6 +25,8 @@ Clone and build:
 ```bash
 git clone https://github.com/FanosResearch/OctopusSimulator.git
 cd OctopusSimulator
+# Optional for development work:
+# git switch dev-stable
 mkdir -p build
 cmake -S . -B build
 cmake --build build -j
