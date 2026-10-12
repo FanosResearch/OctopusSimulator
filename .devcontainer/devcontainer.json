@@ -1,6 +1,6 @@
 {
-  "name": "gem5 Development Container",
-  "image": "ghcr.io/gem5/devcontainer:latest",
+  "name": "Octopus Development Container",
+  "image": "mcr.microsoft.com/devcontainers/cpp:1-ubuntu-24.04",
   "hostRequirements": {
     "cpus": 8,
     "memory": "16gb",
@@ -29,6 +29,20 @@
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers-extra/features/actionlint:1": {},
     "ghcr.io/devcontainers-extra/features/vscode-cli:1": {}
+  },
+  "forwardPorts": [
+    8765,
+    8770
+  ],
+  "portsAttributes": {
+    "8765": {
+      "label": "Octoviz trace viewer",
+      "onAutoForward": "openBrowser"
+    },
+    "8770": {
+      "label": "Octopus live demo",
+      "onAutoForward": "openBrowser"
+    }
   },
   "onCreateCommand": "./.devcontainer/on-create.sh"
 }

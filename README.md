@@ -101,10 +101,10 @@ Hossam, Mohamed, Salah Hessien, and Mohamed Hassan. "Octopus: a Cycle-Accurate C
 
 ## Zero-install: run Octopus in a browser (GitHub Codespaces)
 
-The repository includes a dev container based on the gem5 development image, so you
-can get a working simulator without installing anything locally. On GitHub: **Code →
-Codespaces → Create codespace on this branch**. The container provides the toolchain
-and Python packages used by the simulator.
+The repository includes a GitHub Codespaces dev container, so you can get a working
+simulator without installing anything locally. On GitHub: **Code → Codespaces →
+Create codespace on this branch**. The container installs the C++ toolchain, Python
+packages, plotting/documentation tools, and benchmark traces used by the repository.
 
 Repository-specific setup is performed by `.devcontainer/on-create.sh`.
 
@@ -364,4 +364,3 @@ The standalone lab presets are the regression check for library changes: run
 `MultiCoreSystem_Directory` and `MultiCoreSystem_Snoop` as described at the
 top of this file and diff `BMs/TestBM/newLogger/` against a build of the
 commit you started from.
-
