@@ -17,6 +17,7 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommen
     cmake \
     gdb \
     git \
+    git-lfs \
     ninja-build \
     pkg-config \
     python3 \
@@ -43,7 +44,7 @@ python3 -m pip install --quiet --break-system-packages -r requirements.txt \
     || python3 -m pip install --quiet -r requirements.txt
 
 echo "== toolchain check"
-for tool in g++ cmake make ninja python3 xz latexmk biber pdfcrop scons; do
+for tool in g++ cmake make ninja python3 xz latexmk biber pdfcrop scons git-lfs; do
     command -v "$tool" >/dev/null || {
         echo "on-create: '$tool' is missing after installation" >&2
         exit 1
