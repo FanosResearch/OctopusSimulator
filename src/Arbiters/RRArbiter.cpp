@@ -21,18 +21,9 @@ namespace octopus
 
     bool RRArbiter::coreElect(vector<vector<Message> *> &buffers, Message *out_msg)
     {
-        for (int i = 0; i < (int)buffers.size(); i++)
-        {
-            int msg_index = findMessage(*buffers[i], candidate_id);
-            if (msg_index != -1)
-            {
-                out_msg->copy(buffers[i]->at(msg_index));
-                buffers[i]->erase(buffers[i]->begin() + msg_index);
-                return true;
-            }
-        }
-
-        return false;
+        // The elected owner's slot serves its oldest pending message wherever it
+        // sits (see Arbiter::electOldestOwned) -- the FIFO premise of per-core RR.
+        return electOldestOwned(buffers, (int)candidate_id, out_msg);
     }
 
     bool RRArbiter::elect(uint64_t cycle_number, vector<vector<Message> *> &buffers, Message *out_msg)

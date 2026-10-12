@@ -10,6 +10,8 @@
 
 namespace octopus
 {
+    uint64_t BusInterface::s_rx_delivery_seq = 0;
+
     BusInterface::BusInterface(int id, int buffer_max_size) : CommunicationInterface(id)
     {
         m_buffer_selector = -1;
@@ -42,9 +44,15 @@ namespace octopus
     void BusInterface::popFrontMessage()
     {
         if (m_buffer_selector == 0)
+        {
             m_rx_request_buffer.erase(m_rx_request_buffer.begin());
+            m_rx_request_seq.erase(m_rx_request_seq.begin());
+        }
         else if (m_buffer_selector == 1)
+        {
             m_rx_response_buffer.erase(m_rx_response_buffer.begin());
+            m_rx_response_seq.erase(m_rx_response_seq.begin());
+        }
     }
 
     bool BusInterface::pushMessage(Message &msg, uint64_t cycle = 0, MessageType type)
@@ -78,11 +86,13 @@ namespace octopus
             if (msg.isDemandRequest() && (int)m_rx_request_buffer.size() >= m_buffer_max_size)
                 return false;
             m_rx_request_buffer.push_back(msg);
+            m_rx_request_seq.push_back(++s_rx_delivery_seq);
             return true;
         }
         else if (type == MessageType::DATA_RESPONSE)
         {
             m_rx_response_buffer.push_back(msg);
+            m_rx_response_seq.push_back(++s_rx_delivery_seq);
             return true;
         }
 

@@ -13,6 +13,7 @@
 #include "DebugPrint.h"
 
 #include "CPU.h"
+#include "ExternalCPU.h"
 
 #include "Bus.h"
 #include "TripleBus.h"
@@ -39,7 +40,9 @@ namespace octopus
                                          CommunicationInterface *lower_interface, 
                                          string pname = "");
     public:
-        MultiCoreSystem(std::vector<std::string> cl_params);
+        MultiCoreSystem(std::vector<std::string> cl_params,
+            std::string config_name = "MultiCoreSystem",
+            std::string config_path = std::string(CONFIGURATION_PATH) + SYSTEM_CONFIGURATIONS);
     };
 }
 

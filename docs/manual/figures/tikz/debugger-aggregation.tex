@@ -1,0 +1,19 @@
+% Every component owns a DebugPrint; instances that share a target interleave into one file.
+\begin{tikzpicture}[font=\sffamily\footnotesize, >=Latex,
+  comp/.style={draw=octrule, fill=octmem, rounded corners=2pt, minimum width=26mm, minimum height=9mm, align=center},
+  file/.style={draw=octrule, fill=white, minimum width=20mm, minimum height=8mm, align=center, font=\ttfamily\footnotesize},
+  w/.style={->, thick, octink}]
+  \node[comp] (a) {L1 core 0\\\scriptsize\code{dprint}};
+  \node[comp, right=4mm of a] (b) {L1 core 1\\\scriptsize\code{dprint}};
+  \node[comp, right=4mm of b] (c) {LLC\\\scriptsize\code{dprint}};
+  \node[comp, right=4mm of c] (d) {bus\\\scriptsize\code{dprint}};
+  \node[file, below=12mm of $(a)!0.5!(b)$] (fa) {coh.csv};
+  \node[file, below=12mm of c] (fb) {llc.csv};
+  \node[file, below=12mm of d, draw=octquiet, text=octquiet] (so) {stdout};
+  \draw[w] (a) -- node[left, font=\sffamily\scriptsize, text=octquiet] {target = coh.csv} (fa);
+  \draw[w] (b) -- (fa);
+  \draw[w] (c) -- node[right, font=\sffamily\scriptsize, text=octquiet] {target = llc.csv} (fb);
+  \draw[w] (d) -- node[right, font=\sffamily\scriptsize, text=octquiet] {target empty} (so);
+  \node[below=2mm of fa, font=\sffamily\scriptsize, text=octquiet, align=center] {one aggregated file:\\lines interleave, \code{Name} and \code{Clock}\\tell them apart};
+  \node[below=2mm of fb, font=\sffamily\scriptsize, text=octquiet, align=center] {a per-component file};
+\end{tikzpicture}

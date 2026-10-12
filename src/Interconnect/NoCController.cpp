@@ -50,9 +50,9 @@ namespace octopus
     void NoCController::send(Message &msg, int to_id)
     {
         if(msg.data == NULL)
-            Logger::getLogger()->updateRequest(msg.msg_id, Logger::EntryId::REQ_BUS_CHECKPOINT);
+            Logger::getLogger()->event(msg.msg_id, Logger::Role::REQ_BUS, 0u, Logger::Phase::EXIT);
         else
-            Logger::getLogger()->updateRequest(msg.msg_id, Logger::EntryId::RESP_BUS_CHECKPOINT);
+            Logger::getLogger()->event(msg.msg_id, Logger::Role::RESP_BUS, 0u, Logger::Phase::EXIT);
 
         
         auto iter = std::find_if(m_interfaces->begin(), m_interfaces->end(), [=](CommunicationInterface *a)->bool{
@@ -82,10 +82,12 @@ namespace octopus
                 if(link.arbiter->elect(cycle_number, link.buffers, &elected_msg))
                 {
                     link.utilize(cycle_number, elected_msg);
+                    traceLink(elected_msg, link, Logger::Phase::ENTER);
                 }
             }
             else if(link.utilization_cycle == cycle_number)
             {
+                traceLink(link.msg, link, Logger::Phase::EXIT);
                 if(link.msg.from == link.id_a)
                     send(link.msg, link.id_b);
                 else

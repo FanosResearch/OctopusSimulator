@@ -1,0 +1,30 @@
+% The five ways to evaluate a predictable-architecture idea, and what each gives up.
+% Each card names the five criteria and rates the path on each; the colour is the rating.
+% The card frame is drawn separately from the text node, so the text sits at the top of the
+% card and the criterion rows at the bottom, whatever the text's height.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex,
+  cardtext/.style={inner sep=5pt, text width=27mm, align=left, anchor=north},
+  rhigh/.style={fill=octteal}, rmed/.style={fill=octamber}, rlow/.style={fill=octred},
+  crit/.style={font=\sffamily\tiny, text=octink, anchor=west, inner sep=0}]
+  \def\cardh{56mm}
+  \foreach \px/\pt/\pd/\ra/\rb/\rc/\rd/\re in {
+      0/{Analytical model}/{sum per-resource bounds; fast; blind to interactions and reorderings}/rhigh/rhigh/rlow/rhigh/rhigh,
+      31/{Custom simulator}/{models exactly the idea and nothing comparable; neither reproducible nor reusable}/rlow/rhigh/rmed/rlow/rhigh,
+      62/{Existing simulator}/{gem5, zsim, Sniper: reproducible, not built for worst case or for swapping a protocol}/rmed/rmed/rmed/rhigh/rmed,
+      93/{Custom RTL}/{exact timing; months of work; one design point per effort}/rlow/rlow/rhigh/rmed/rhigh,
+      124/{COTS hardware}/{real and available; closed: profiling and OS-level fixes only, no architectural change}/rmed/rhigh/rhigh/rlow/rlow} {
+    \node[cardtext] (c) at (\px mm, 0) {\textbf{\pt}\\[2pt]\pd};
+    \coordinate (sw) at ($(c.north west)+(0,-\cardh)$);
+    \begin{pgfonlayer}{background}
+      \draw[draw=octrule, fill=white, rounded corners=3pt] (c.north west) rectangle ($(c.north east)+(0,-\cardh)$);
+    \end{pgfonlayer}
+    % one labelled row per criterion, bottom-up, so the names are on the card and not in a legend
+    \begin{scope}[shift={($(sw)+(3mm,3.5mm)$)}]
+      \foreach \col/\name [count=\i] in {\re/{control and visibility},\rd/{reproducibility},\rc/{fidelity},\rb/{run-time speed},\ra/{development speed}} {
+        \fill[\col, draw=octrule!50] (0.9mm, \i*3.4mm-1.7mm) circle (0.9mm);
+        \node[crit] at (2.6mm, \i*3.4mm-1.7mm) {\name};
+      }
+    \end{scope}
+  }
+  \node[text=octquiet, anchor=north west, text width=150mm] at (0, -\cardh-3mm) {\tikz\fill[octteal] circle (0.9mm); high \quad \tikz\fill[octamber] circle (0.9mm); medium \quad \tikz\fill[octred] circle (0.9mm); low \quad --- how well each path serves the criterion};
+\end{tikzpicture}

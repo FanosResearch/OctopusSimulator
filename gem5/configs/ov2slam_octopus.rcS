@@ -1,0 +1,40 @@
+#!/bin/bash
+export ROS_LOCALHOST_ONLY=1            # confine DDS to loopback (network-disabled image)
+
+echo "setting ros environment..."
+source /opt/ros/humble/setup.bash
+echo "setting ov2slam environment..."
+source /catkin_ws/install/setup.bash
+
+echo "overwriting ros2 launch file..."
+
+tee /ov2slam/ov2slam_launch.py > /dev/null << 'PYEOF'
+from launch import LaunchDescription
+from launch.actions import ExecuteProcess, Shutdown
+from launch_ros.actions import Node
+
+def generate_launch_description():
+    node = Node(
+        package='ov2slam',
+        executable='ov2slam_node',
+        name='ov2slam_node',
+        output='screen',
+        arguments=['/ov2slam/euroc_stereo.yaml'],
+        prefix=['taskset -c 0,1'],
+        on_exit=Shutdown(),
+    )
+    bag = ExecuteProcess(
+        cmd=['ros2', 'bag', 'play', '/ov2slam/3sout_humble'],
+        output='screen',
+        prefix=['taskset -c 2'],
+    )
+    return LaunchDescription([node, bag])
+PYEOF
+
+echo "starting ov2slam..."
+
+# m5 workbegin
+ros2 launch /ov2slam/ov2slam_launch.py
+m5 writefile ov2slam_traj.txt
+# m5 workend
+

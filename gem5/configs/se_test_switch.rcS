@@ -1,0 +1,14 @@
+#!/bin/sh
+# Delivered by `m5 readfile` on a fresh boot (fs_arm.py --switch-at-workbegin). The
+# kernel boots on ATOMIC cores; se_test's m5_work_begin triggers the gem5-side
+# switch to O3 + Octopus for the measured region.
+echo "=== FS se_test switch run ==="
+if [ ! -x /se_test ]; then
+    echo "ERROR: /se_test not present/executable in the image"
+    ls -la / 2>/dev/null
+    m5 exit
+fi
+echo "running /se_test 4 256 500 (threads KiB iters)"
+/se_test 4 256 500
+echo "se_test exit code: $?"
+m5 exit

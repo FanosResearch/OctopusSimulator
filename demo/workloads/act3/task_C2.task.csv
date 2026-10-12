@@ -1,0 +1,20 @@
+kind,a,b,c,d,comment
+# ============================================================================
+# Core 2 — memory contender / aggressor. Not a real-time task:
+# no period, just streams memory to pollute the shared LLC and saturate the
+# bus + DRAM. Authored with generator rows only (gem5-style) — no hand traces.
+# Working set is far larger than the 32 KB / 2-way LLC, so it evicts core 0.
+# ============================================================================
+
+# ---- attributes ---------------------------------------------------------------
+attr,jobs,-1,,,-1 = loop forever (until core 0 finishes and the run ends)
+attr,ooo,8,,,memory-level parallelism: 8 outstanding per aggressor (3 x 8 saturates the DDR4 FR-FCFS controller; at 3 x 4 the control task is barely touched)
+attr,base,0x4000000,,,contender working-set base (disjoint from core 0)
+attr,start,6000,,,first body released at cycle 6000: the control task warms its working set first (one job), then the aggressors start
+
+# ---- body: pure streaming, no compute (maximally aggressive) -------------------
+# LINEAR:  base, count, stride, rd_ratio   — a long sequential sweep, read-heavy
+LINEAR,0x4000000,4096,64,0.85,sequential stream over 256 KB (>> LLC), 85% reads
+# RANDOM:  base, range, count, rd_ratio    — thrash a large region to defeat locality
+RANDOM,0x4000000,0x400000,1024,0.85,random 1024 accesses over 4 MB region
+COMPUTE,50,,,,tiny gap so it is not literally back-to-back
