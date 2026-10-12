@@ -1,0 +1,21 @@
+% What a run produces, and what reads it.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, node distance=7mm and 9mm,
+  f/.style={draw=octrule, fill=white, rounded corners=2pt, inner sep=4pt, align=left, font=\ttfamily\scriptsize},
+  p/.style={draw=octrule, fill=octmem, rounded corners=2pt, inner sep=5pt, align=center, font=\sffamily\footnotesize\bfseries},
+  w/.style={->, thick, octink}, l/.style={font=\sffamily\scriptsize, text=octquiet}]
+  \node[p] (sim) {Octopus\_Simulator\\\scriptsize\mdseries -s MultiCoreSystem -p "workload\_path(s)=\ldots"};
+  \node[f, right=of sim] (rep) {<workload>/newLogger/\\\ LatencyReport\_C<n>.csv\\\ Summary.csv\\\ JobReport\_C<n>.csv};
+  \node[f, below=of rep] (tr) {<workload>/trace.bin\\\scriptsize (with OCTOPUS\_TRACE)};
+  \node[f, below=of tr] (dp) {dprint.csv\\\scriptsize (with dprint.enable=1)};
+  \node[p, right=12mm of rep] (sw) {sweeps/*.sh\\\scriptsize\mdseries results/<axis>/<suite>.csv\\\scriptsize\mdseries plot\_results.py $\rightarrow$ figures};
+  \node[p, right=12mm of tr] (viz) {octoviz\\\scriptsize\mdseries convert.py $\rightarrow$ Parquet\\\scriptsize\mdseries server.py $\rightarrow$ browser};
+  \node[p, right=12mm of dp] (eye) {you\\\scriptsize\mdseries column -s, -t \ldots\ | less -S};
+  \draw[w] (sim) -- (rep);
+  \draw[w] (sim.east) -- ++(3mm,0) |- (tr.west);
+  \draw[w] (sim.east) -- ++(3mm,0) |- (dp.west);
+  \draw[w] (rep) -- (sw);
+  \draw[w] (rep.east) -- ++(4mm,0) |- (viz.west);
+  \draw[w] (tr) -- (viz);
+  \draw[w] (dp) -- (eye);
+  \draw[w] (rep.east) -- ++(4mm,0) |- (eye.west);
+\end{tikzpicture}

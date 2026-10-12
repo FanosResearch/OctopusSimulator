@@ -96,6 +96,10 @@ namespace octopus
 
         void initializeLinks(map<int, vector<int>> *topology);
         virtual void send(Message &msg);
+        // raw-trace record for a link crossing (docs/Trace.md): REQ_BUS for a request, RESP_BUS
+        // for data, comp = the link's index so that every link is its own lane and parallel
+        // links never look double-booked; ENTER at the grant, EXIT when the message is delivered
+        void traceLink(const Message &msg, const Link &link, Logger::Phase phase);
 
     public:
         MeshController(ParametersMap pmap, vector<CommunicationInterface *> *interfaces, map<int, vector<int>> *topology,

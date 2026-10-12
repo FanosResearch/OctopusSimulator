@@ -1,0 +1,14 @@
+{
+ "label": "protected: RR bus + LLC way reserved for core 0",
+ "core": 0,
+ "cycle_ns": 1.0,
+ "jobs": 200,
+ "period_cycles": 5000,
+ "deadline_misses": 0,
+ "exec_mean": 4192.8,
+ "exec_max": 4747,
+ "exec_p99": 4190,
+ "access_mean_ns": 2.14,
+ "access_max_ns": 95.0,
+ "llc_miss_share": 0.002
+}

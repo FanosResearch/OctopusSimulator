@@ -1,0 +1,14 @@
+{
+ "label": "contention: 3 streaming cores, FCFS bus",
+ "core": 0,
+ "cycle_ns": 1.0,
+ "jobs": 57,
+ "period_cycles": 5000,
+ "deadline_misses": 198,
+ "exec_mean": 19716.8,
+ "exec_max": 181266,
+ "exec_p99": 154366,
+ "access_mean_ns": 778.34,
+ "access_max_ns": 30920.0,
+ "llc_miss_share": 0.171
+}

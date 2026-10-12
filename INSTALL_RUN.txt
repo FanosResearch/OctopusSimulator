@@ -1,0 +1,107 @@
+================================================================================
+ Octopus Cache-System Simulator -- INSTALL & RUN
+ ESWEEK Embedded Systems Research Software Competition (ESSC) 2026
+================================================================================
+
+Octopus is a cycle-accurate, trace-driven multicore cache-system simulator.
+Its coherence protocols are specified entirely as editable CSV finite-state
+machines (state x event -> actions / next-state), so a new or modified protocol
+can be added WITHOUT changing any C++ source. This package ships MSI, MESI, and
+MOESI in both snooping (split-bus) and directory flavours.
+
+--------------------------------------------------------------------------------
+ 1. DEPENDENCIES
+--------------------------------------------------------------------------------
+  - A C++17 compiler (g++ >= 9 or clang >= 10)
+  - CMake >= 3.10
+  - GNU Make (or Ninja)
+  - bash + coreutils (to run the provided example/sweep scripts)
+
+  Tested on Ubuntu 20.04 / 22.04. Also builds on Windows via MinGW-w64 (UCRT).
+
+--------------------------------------------------------------------------------
+ 2. BUILD
+--------------------------------------------------------------------------------
+  cd Octopus
+  cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+  cmake --build build -j 8
+
+  This produces the simulator executable:
+      build/Octopus_Simulator          (Linux/macOS)
+      build/Octopus_Simulator.exe      (Windows/MinGW)
+
+--------------------------------------------------------------------------------
+ 3. CONFIGURE THE SYSTEM
+--------------------------------------------------------------------------------
+  The active system is described by:
+      configuration/SystemConfigurations/MultiCoreSystem.csv
+
+  Two ready-made presets are provided (copy one over MultiCoreSystem.csv, or
+  point the run scripts at them):
+      MultiCoreSystem_Snoop.csv        4-core snoop / split-bus
+      MultiCoreSystem_Directory.csv    4-core directory
+
+  A protocol is selected by two lines (L1) and two lines (LLC), e.g. for
+  snooping MESI:
+      cache_controller[*].protocol_type(s),SNOOP_MESI
+      cache_controller[*].fsm_filename(s),MESI_splitBus_snooping
+      llc_controller.protocol_type(s),SNOOP_LLC_MESI
+      llc_controller.fsm_filename(s),MESI_LLC
+
+  NOTE: snooping MESI and MOESI keep an Exclusive (E) copy at the L1 and so use
+  the exclusive L1 controller -- set (this is done automatically by
+  sweep_protocols.sh):
+      cache_controller_type(s),CacheControllerExclusive
+  MSI and all directory protocols use the default controller.
+
+  The FSM files referenced above live in:
+      Protocols_FSM/*.csv
+  Each is a human-readable transition table -- open one to see how a protocol
+  is defined, and copy/edit it to create your own.
+
+--------------------------------------------------------------------------------
+ 4. RUN A SINGLE WORKLOAD
+--------------------------------------------------------------------------------
+  ./build/Octopus_Simulator -s MultiCoreSystem \
+      -p "workload_path(s)=BMs/eembc-traces/a2time01-trace/"
+
+  Per-request latency reports are written to:
+      BMs/eembc-traces/<bench>/newLogger/LatencyReport_C0..C3.csv
+
+  (Create the newLogger/ directory first if it does not exist; the helper
+  scripts below do this automatically.)
+
+--------------------------------------------------------------------------------
+ 5. EXAMPLE USE CASES / TEST BENCHES (provided scripts)
+--------------------------------------------------------------------------------
+  a) Run the whole EEMBC suite under the current protocol and summarize:
+         ./run_eembc.sh
+     -> writes eembc-results/summary.csv (per-benchmark completed requests
+        and mean latency).
+
+  b) Reproduce ALL protocols (MSI/MESI/MOESI x snoop+directory) across EEMBC
+     and report per-benchmark completion:
+         ./sweep_protocols.sh --suite eembc
+     -> writes sweep-protocols/results.csv. Every listed protocol should run
+        each benchmark to completion, fault-free.
+
+  c) SPLASH-2 (if the traces are present under BMs/splash/):
+         ./run_splash.sh
+
+--------------------------------------------------------------------------------
+ 6. WORKLOADS INCLUDED
+--------------------------------------------------------------------------------
+  BMs/eembc-traces/   9 EEMBC automotive/consumer benchmarks, 4-core shared
+                      traces (trace_C0..C3.trc.shared) -- the test benches.
+  BMs/TestBM/         a tiny 4-core example to smoke-test the build.
+
+--------------------------------------------------------------------------------
+ 7. ADDING / EDITING A PROTOCOL (the extensibility path)
+--------------------------------------------------------------------------------
+  1. Copy an existing Protocols_FSM/*.csv (e.g. MESI_splitBus_snooping.csv).
+  2. Edit the transition table: each row is a state; each column an event; each
+     cell is "action[/action.../next_state]". States/events/actions are declared
+     in the header blocks at the top of the same file.
+  3. Point the config's fsm_filename(s) at your new file and run -- no rebuild.
+
+================================================================================

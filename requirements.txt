@@ -1,0 +1,4 @@
+# Python dependencies for the visualizer, trace analysis, and sweep plots.
+duckdb
+numpy
+matplotlib

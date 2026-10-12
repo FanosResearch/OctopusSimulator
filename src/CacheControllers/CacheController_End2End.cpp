@@ -47,6 +47,7 @@ namespace octopus
             if(returned_msg.data != NULL)
             {
                 msg->copy(returned_msg.data);
+                msg->kind = Message::K_FILL_ROLLBACK;
                 m_upper_interface->pushMessage2RX(*msg, MessageType::DATA_RESPONSE);
             }
             else
@@ -66,13 +67,25 @@ namespace octopus
     {
         Message *msg = (Message *)data_ptr;
 
+        // Perfect LLC never writes back to DRAM (see BaseController::m_perfect_llc):
+        // the infinite always-hit LLC absorbs the dirty line, nothing waits on a
+        // memory write, so drop it -- keeping bus[1] and memory idle. End2End
+        // overrides performWriteBack, so the guard must live here too.
+        if (m_perfect_llc)
+        {
+            delete msg;
+            return;
+        }
+
         if(msg->data == NULL)
         {
             if(!checkReadinessOfCache(*msg, ControllerAction::Type::WRITE_BACK, data_ptr))
                 return;
             GenericCacheLine cache_line;
-            m_data_handler->readCacheLine(msg->addr, &cache_line);
-            msg->copy(cache_line.m_data);
+            if (m_data_handler->readCacheLine(msg->addr, &cache_line) && cache_line.m_data != NULL)
+                msg->copy(cache_line.m_data);
+            else
+                dataArrayReadFailed("performWriteBack", msg);
         }
 
         msg->owner = (m_owner_of_latest_data > -1) ? m_owner_of_latest_data : this->m_id;

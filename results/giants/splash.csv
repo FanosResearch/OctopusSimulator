@@ -1,0 +1,4 @@
+value,benchmark,status,avg,wcTotal,wcEff,wcL1stall,wcReqBus,wcL2stall,wcL2access,wcRespBus,wcDramBus,wcDRAM,finish
+baseline,radiosity,INCOMPLETE,4.66,378,319,357,16,297,85,321,7,294,98782272
+baseline,radix,OK,7.24,390,336,370,16,297,86,321,13,375,848708295
+baseline,raytrace,INCOMPLETE,

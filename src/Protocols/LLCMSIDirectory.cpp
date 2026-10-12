@@ -47,9 +47,8 @@ namespace octopus
         this->readEvent(request_msg, cache_line, &event_id);
         this->m_fsm->getTransition(cache_line.state, (int)event_id, next_state, actions);
 
-        if(dprint)
-            dprint->print(&request_msg, "state(%d) to nextState(%d) due to event(%d) and num of actions = %d", 
-                            cache_line.state, next_state, (int)event_id, actions.size());
+        if (dprint)   // coherence transition hook (docs/Debugger.md): readable names + raw-trace FSM record
+            dprint->transition(&request_msg, (uint32_t)m_id, cache_line.state, (int)event_id, next_state, false, this->m_fsm);
 
         return handleAction(actions, request_msg, cache_line, next_state);
     }
@@ -85,6 +84,7 @@ namespace octopus
                                                              (uint16_t)action, // Complementary_value
                                                              msg.owner);       // Owner
                 ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+                ((Message *)controller_action.data)->kind = Message::K_MEM_READ;
                 break;
             case ActionId::SendData: // remove request from pending and respond to request
             {
@@ -96,6 +96,7 @@ namespace octopus
                 ((Message *)controller_action.data)->copy(msg);
                 ((Message *)controller_action.data)->to.clear();
                 ((Message *)controller_action.data)->to.push_back(msg.owner);
+                ((Message *)controller_action.data)->kind = Message::K_RESP;
 
                 if(cache_line.owner_id != -1)
                 {
@@ -136,6 +137,7 @@ namespace octopus
                 controller_action.data = (void *)new Message(msg);
 
                 ((Message *)controller_action.data)->complementary_value = (uint16_t)MSIDirectory::REQUEST_TYPE_INV;
+                ((Message *)controller_action.data)->kind = Message::K_INV;
 
                 ((Message *)controller_action.data)->to.clear();
                 for(uint64_t id : protocol_counters->at(msg.addr & ~uint64_t(m_data_handler->getBlockSize() -1)))
@@ -151,6 +153,7 @@ namespace octopus
                 controller_action.data = (void *)new Message(msg);
                 
                 ((Message *)controller_action.data)->complementary_value = (uint16_t)MSIDirectory::REQUEST_TYPE_GETS;
+                ((Message *)controller_action.data)->kind = Message::K_FWD;
 
                 ((Message *)controller_action.data)->to.clear();
                 ((Message *)controller_action.data)->to.push_back(old_owner);
@@ -163,6 +166,7 @@ namespace octopus
                 controller_action.data = (void *)new Message(msg);
                 
                 ((Message *)controller_action.data)->complementary_value = (uint16_t)MSIDirectory::REQUEST_TYPE_GETM;
+                ((Message *)controller_action.data)->kind = Message::K_FWD;
 
                 ((Message *)controller_action.data)->to.clear();
                 ((Message *)controller_action.data)->to.push_back(old_owner);
@@ -178,6 +182,7 @@ namespace octopus
                                                              (uint16_t)MSIDirectory::REQUEST_TYPE_PUT_ACK, // Complementary_value
                                                              (uint16_t)this->m_id);                         // Owner
                 ((Message *)controller_action.data)->to.push_back((uint16_t)msg.owner);
+                ((Message *)controller_action.data)->kind = Message::K_ACK;
                 break;
 
             case ActionId::WriteBack:
@@ -188,6 +193,7 @@ namespace octopus
                                                              0,          // Cycle
                                                              0,          // Complementary_value
                                                              m_id); // Owner
+                ((Message *)controller_action.data)->kind = Message::K_MEM_WRITE;
                 break;
 
             case ActionId::IncSharers:
@@ -266,7 +272,16 @@ namespace octopus
                 {
                     uint64_t addr_key = msg.addr & ~uint64_t(m_data_handler->getBlockSize() -1);
 
-                    if((protocol_counters->find(addr_key) != protocol_counters->end()) && ((protocol_counters->at(addr_key).size() - 1) == 0))
+                    // "Last" only if the SENDER is the one remaining sharer. A PutS can arrive
+                    // from a core that is no longer a sharer: it left S (PutS in flight) and was
+                    // then invalidated by a GetM, which reset the sharer set. Judging by size
+                    // alone, that stale PutS looked like the last sharer leaving whenever exactly
+                    // one OTHER core still held the line: S -> I with a live sharer, then the next
+                    // GetM was granted from I with a non-zero ack count and no Inv sent to that
+                    // sharer -- a requester waiting for an ack nobody will send (iirflt01, bus).
+                    // A stale PutS is a plain PutS: PutAck, and DecSharers finds nothing to erase.
+                    auto it = protocol_counters->find(addr_key);
+                    if (it != protocol_counters->end() && it->second.size() == 1 && it->second.front() == msg.owner)
                         *out_id = EventId::last_PutS;
                     else
                         *out_id = EventId::PutS;
@@ -316,5 +331,22 @@ namespace octopus
         m_data_handler->initializeCacheLine(cache_line);
         cache_line->state = state;
         cache_line->valid = true;
+    }
+
+    bool LLCMSIDirectory::needsDataArray(const Message &msg)
+    {
+        // The rows whose actions read the line for a response or write the
+        // arriving bytes into it. A message on such a row is one array access:
+        // the controller defers it whole and runs the FSM when the access
+        // runs, so state and data change together (the L1 rule, applied here).
+        GenericCacheLine cache_line;
+        EventId event_id;
+        Message message = msg;   // readEvent may clear a one-shot flag; work on a copy
+        m_data_handler->readLineBits(message.addr, &cache_line);
+        this->readEvent(message, cache_line, &event_id);
+        int ev = (int)event_id;
+        return this->m_fsm->hasAction(cache_line.state, ev, "SendData") ||
+               this->m_fsm->hasAction(cache_line.state, ev, "SendExeclusiveData") ||
+               this->m_fsm->hasAction(cache_line.state, ev, "SaveData");
     }
 }

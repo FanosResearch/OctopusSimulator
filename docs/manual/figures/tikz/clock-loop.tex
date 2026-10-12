@@ -1,0 +1,26 @@
+% The clock model: one ClockManager advances every ClockedObj by one tick; components
+% never call each other, they only exchange Messages through interfaces between ticks.
+\begin{tikzpicture}[
+  font=\sffamily\small, >=Latex,
+  box/.style={draw=octrule, fill=white, rounded corners=2pt, minimum height=9mm, inner sep=5pt, align=center},
+  clk/.style={box, fill=octctl, draw=octamber, minimum width=34mm},
+  comp/.style={box, fill=octmem, draw=octrule, minimum width=36mm},
+  iface/.style={box, fill=octio, draw=octpurple, minimum width=22mm, minimum height=6mm, font=\sffamily\scriptsize},
+  wire/.style={->, thick, octink},
+  msg/.style={->, thick, octpurple, dashed},
+]
+  \node[clk] (cm) {\textbf{ClockManager}\\\footnotesize \code{init()} $\rightarrow$ \code{run()}: one \code{clkStep} per tick};
+  \node[comp, below left=11mm and 18mm of cm] (cpu) {\textbf{CPU}\\\footnotesize \code{cycleProcess()}};
+  \node[comp, right=6mm of cpu] (l1) {\textbf{CacheController}\\\footnotesize \code{cycleProcess()}};
+  \node[comp, right=6mm of l1] (ic) {\textbf{Interconnect}\\\footnotesize \code{cycleProcess()}};
+  \node[comp, right=6mm of ic] (mem) {\textbf{MainMemory}\\\footnotesize \code{cycleProcess()}};
+  \foreach \c in {cpu,l1,ic,mem} \draw[wire] (cm.south) -- ++(0,-4mm) -| (\c.north);
+  \node[iface, below=7mm of $(cpu.south)!0.5!(l1.south)$] (i1) {CommunicationInterface};
+  \node[iface, below=7mm of $(l1.south)!0.5!(ic.south)$] (i2) {CommunicationInterface};
+  \node[iface, below=7mm of $(ic.south)!0.5!(mem.south)$] (i3) {CommunicationInterface};
+  \draw[msg] (cpu.south) |- (i1.west);  \draw[msg] (i1.east) -| (l1.south);
+  \draw[msg] (l1.south) |- (i2.west);   \draw[msg] (i2.east) -| (ic.south);
+  \draw[msg] (ic.south) |- (i3.west);   \draw[msg] (i3.east) -| (mem.south);
+  \node[below=3mm of i2, font=\sffamily\footnotesize, text=octquiet, align=center] {messages are pushed into an interface on one tick and drained by the next component on \emph{its} tick:\\no component ever calls another synchronously, and every interface is bounded and back-pressured};
+  \node[right=2mm of cm, font=\sffamily\footnotesize, text=octquiet, align=left] {every component is a \code{ClockedObj}\\with its own \code{m\_clk\_period}};
+\end{tikzpicture}

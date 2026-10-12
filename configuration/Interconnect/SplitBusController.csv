@@ -1,2 +1,3 @@
 Extends,BusController,,
-arbiter_type(s),FCFSArbiter,,#Type should match the name of the arbiter class
+arbiter_type(s),TDMArbiter,,#Type should match the name of the arbiter class
+response_reserve(i),0,,#Response-buffer slots reserved for in-flight responses; request bus stalls when free space falls to this. 0 = stall at full.

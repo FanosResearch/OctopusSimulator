@@ -19,6 +19,24 @@ namespace octopus
     {
     }
 
+    bool MSIProtocol::needsDataArray(const Message &msg)
+    {
+        GenericCacheLine cache_line;
+        EventId event_id;
+        Message message = msg;   // readEvent may clear a one-shot flag; work on a copy
+        m_data_handler->readLineBits(message.addr, &cache_line);
+        this->readEvent(message, &event_id);
+        int ev = (int)event_id;
+        return this->m_fsm->hasAction(cache_line.state, ev, "Hit") ||
+               this->m_fsm->hasAction(cache_line.state, ev, "Data2Req") ||
+               this->m_fsm->hasAction(cache_line.state, ev, "Data2Both");
+    }
+
+    bool MSIProtocol::isReadableState(int state)
+    {
+        return this->m_fsm->isHit(state, (int)EventId::Load);
+    }
+
     FRFCFS_State MSIProtocol::getRequestState(const Message &msg, FRFCFS_State req_state)
     {
         GenericCacheLine cache_line;
@@ -54,6 +72,12 @@ namespace octopus
 
         this->readEvent(request_msg, &event_id);
         this->m_fsm->getTransition(cache_line.state, (int)event_id, next_state, actions);
+
+        // coherence transition hook (docs/Debugger.md): readable "I --Store--> IM_ad" for an
+        // enabled debugger, binary FSM record for the raw trace (docs/Trace.md).
+        if (dprint)
+            dprint->transition(&request_msg, (uint32_t)m_id, cache_line.state, (int)event_id, next_state,
+                               actions.size() > 0 && actions[0] == (int)ActionId::Stall, this->m_fsm);
 
         return handleAction(actions, request_msg, cache_line, next_state);
     }
@@ -123,6 +147,7 @@ namespace octopus
                                                              (uint16_t)this->m_id);                                       // Owner
 
                 ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+                ((Message *)controller_action.data)->kind = (action == (int)ActionId::GetS) ? Message::K_GETS : Message::K_GETM;
                 break;
             case ActionId::PutM:
                 // send Bus request, update cache line
@@ -133,6 +158,7 @@ namespace octopus
                                                              MSIProtocol::REQUEST_TYPE_PUTM, // Complementary_value
                                                              (uint16_t)this->m_id);     // Owner
                 ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+                ((Message *)controller_action.data)->kind = Message::K_PUTM;
                 break;
 
             case ActionId::Data2Req:
@@ -140,6 +166,15 @@ namespace octopus
                 // Do writeback, update cache line
                 controller_action.type = ControllerAction::Type::WRITE_BACK;
                 controller_action.data = (void *)new Message(msg);
+
+                // Kind from the TRIGGERING message (docs/MessageEncoding.md): our own PutM
+                // (cv=2, no data) -> eviction write-back; a back-invalidation (cv=10) ->
+                // write-back forced by the LLC; a snooped GetS/GetM -> immediate supply;
+                // our own data arriving (data != NULL) -> deferred supply of a parked request.
+                ((Message *)controller_action.data)->kind =
+                    (msg.data != NULL) ? Message::K_SUPPLY_DEFERRED :
+                    (msg.complementary_value == MSIProtocol::REQUEST_TYPE_PUTM) ? Message::K_WB_DATA :
+                    (msg.complementary_value == MSIProtocol::REQUEST_TYPE_INV)  ? Message::K_WB_INV : Message::K_SUPPLY;
 
                 ((Message *)controller_action.data)->to.clear();
                 if (action == (int)ActionId::Data2Both)
@@ -150,17 +185,20 @@ namespace octopus
                 break;
 
             case ActionId::SaveReq:
-                // send Bus request, update cache line
+                // Park a snooped GetS/GetM to answer once our own data arrives. Keep the
+                // request type (complementary_value): the deferred supply must copy the
+                // LLC for a GetS (the LLC sits in S_d/MN_d waiting for that data) and
+                // must NOT for a GetM (the LLC keeps the line in EorM for the new owner).
                 controller_action.type = ControllerAction::Type::SAVE_REQ_FOR_WRITE_BACK;
-                controller_action.data = (void *)new Message(msg.msg_id, // Id
-                                                             msg.addr,   // Addr
-                                                             0,          // Cycle
-                                                             0,          // Complementary_value
-                                                             msg.owner); // Owner
+                controller_action.data = (void *)new Message(msg.msg_id,              // Id
+                                                             msg.addr,                // Addr
+                                                             0,                       // Cycle
+                                                             msg.complementary_value, // GETS / GETM
+                                                             msg.owner);              // Owner
                 break;
 
             case ActionId::Fault:
-                std::cout << " MSIProtocol: Fault Transaction is detected" << std::endl;
+                std::cout << " MSIProtocol: Fault Transaction is detected (controller " << this->m_id << ", line state " << cache_line.state << ", addr 0x" << std::hex << msg.addr << std::dec << ", msg " << msg.msg_id << ", source " << (int)msg.source << ", owner " << msg.owner << ", type " << msg.complementary_value << ", data " << (msg.data != NULL) << ")" << std::endl;
                 exit(0);
                 break;
             }

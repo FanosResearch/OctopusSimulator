@@ -1,0 +1,24 @@
+% What print(msg, ...) does: the enable gate, then condition(msg).
+\begin{tikzpicture}[font=\sffamily\footnotesize, >=Latex, node distance=5mm and 8mm,
+  stp/.style={draw=octrule, fill=white, rounded corners=2pt, minimum height=7mm, inner sep=4pt, align=center},
+  q/.style={draw=octamber, fill=octctl, diamond, aspect=2.4, inner sep=1pt, align=center, font=\sffamily\scriptsize},
+  outp/.style={stp, fill=octmem},
+  no/.style={stp, draw=octquiet, text=octquiet},
+  w/.style={->, thick, octink},
+  l/.style={font=\sffamily\scriptsize, text=octquiet}]
+  \node[stp] (p) {\code{print(msg, fmt, ...)}};
+  \node[q, right=of p] (en) {\code{enable}?};
+  \node[q, right=of en] (cond) {\code{condition(msg)}?};
+  \node[outp, right=of cond] (o) {preamble + text, flush};
+  \node[no, below=of en] (x) {return: no output};
+  \draw[w] (p) -- (en);
+  \draw[w] (en) -- node[l, above] {yes} (cond);
+  \draw[w] (cond) -- node[l, above] {yes} (o);
+  \draw[w] (en) -- node[l, left] {no} (x);
+  \draw[w] (cond) |- node[l, below, pos=0.75] {no} (x);
+  \node[draw=octrule!60, fill=octpaper, rounded corners=2pt, inner sep=5pt, align=left, below=9mm of cond.south, anchor=north, text width=92mm, font=\sffamily\scriptsize] (rule) {
+    \textbf{\code{condition(msg)}}\\
+    \code{msg == NULL} (a general event print) $\Rightarrow$ true.\\
+    no filter configured $\Rightarrow$ true: print everything.\\
+    some filters configured $\Rightarrow$ the message must match \textbf{every} active category (AND across \code{cond\_addr}, \code{cond\_msg\_id}, \code{cond\_from}, \code{cond\_owner}), and within a category \textbf{any} listed value matches (OR). \code{cond\_addr} compares \code{(addr \& addr\_filter) == entry}, so a mask of \code{FFFFFFC0} filters by 64-byte line.};
+\end{tikzpicture}

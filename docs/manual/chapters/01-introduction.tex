@@ -1,0 +1,108 @@
+\chapter{Introduction}\label{ch:introduction}
+
+\whatyoufind{Why shared-memory interference makes timing an end-to-end problem; the five ways
+the field evaluates its answers and what each gives up; what Octopus is, in four capabilities;
+what ships; and what it deliberately does not model.}
+
+\section{The problem}
+
+Modern embedded platforms are multicore, but their adoption in real-time and safety-critical
+domains is throttled by \emph{shared-memory interference}: the latency of a memory request
+depends not only on the request itself but on the concurrent activity of every other core
+across the interconnect, the coherence fabric, the shared cache and the DRAM controller.
+Deriving safe \emph{and} tight timing bounds is therefore an end-to-end problem.
+
+The field's first instinct is additive: analyse each resource in isolation, bound the worst
+wait at each, and sum. \Cref{ch:request-end-to-end} shows why that is unsafe in a real
+hierarchy: resources interact and reorder. A request that was first onto the request bus can
+return last because three younger requests hit open DRAM rows and took the response channel
+ahead of it; a core whose working set fits its private cache still goes to DRAM because another
+core's streaming evicted its lines from an inclusive shared cache. Measured on a four-core
+system with round-robin arbitration at every resource, the worst observed latency of the oldest
+request was $35\times$ the per-resource bound. Mechanisms proposed in response --- predictable
+arbiters, partitioned caches, predictable memory controllers, real-time coherence protocols
+--- are each usually prototyped in a bespoke simulator, which makes cross-comparison, reuse and
+whole-hierarchy studies difficult.
+
+\section{Five ways to evaluate an idea}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/evaluation-paths}\end{adjustbox}
+\caption{The evaluation paths open to predictable-architecture research, and what each trades
+away.}
+\label{fig:evaluation-paths}
+\end{figure}
+
+\Cref{fig:evaluation-paths} is the choice every such paper makes. An analytical model is fast
+and precise about what it models, and blind to the interactions above. A custom simulator models
+exactly the idea and nothing comparable; reviewers cannot reproduce it and the next group
+cannot reuse it. The general-purpose architecture simulators are reproducible but were not
+built for worst-case questions or for swapping a coherence protocol. RTL is exact and a
+one-design-point effort. COTS hardware is real and closed. What is lost without a common
+substrate is concrete (\cref{fig:cards}): no fair comparison, no composability of mechanisms,
+no reproducibility, a high barrier to entry, and slow exploration.
+
+\begin{figure}[htbp]\centering
+\begin{subfigure}{\textwidth}\centering\includegraphics[width=\textwidth]{problems_we_address.png}\caption{What is lost without one.}\end{subfigure}\\[8pt]
+\begin{subfigure}{\textwidth}\centering\includegraphics[width=\textwidth]{solution.png}\caption{What a common framework gives.}\end{subfigure}
+\caption{The case for a common, cycle-accurate simulation framework.}
+\label{fig:cards}
+\end{figure}
+
+\section{What Octopus is}
+
+Octopus is a reusable, whole-hierarchy, cycle-accurate substrate in which memory-system ideas
+can be built, observed, validated and verified under one roof. Unlike simulators that fix an
+architecture, it treats every layer as a configurable, swappable component and makes the hardest
+component to change --- the coherence protocol --- an editable spreadsheet rather than C++
+(\cref{ch:coherence-engine}). Five capabilities follow, each tied to a mechanism in this manual:
+
+\begin{table}[htbp]\centering\small
+\caption{Five pillars, and where each is realised.}\label{tab:pillars}
+\begin{tabularx}{\textwidth}{@{}lYl@{}}
+\toprule pillar & capability & chapter \\ \midrule
+Configurability & every component reads its parameters from its own CSV, inherits and overrides along the hierarchy, and any key is reachable from the command line; the whole design space without recompiling & \ref{ch:configuration} \\
+Controllability & swap the mechanism at any layer --- coherence protocol, arbiter, replacement policy, interconnect, memory model --- as a component behind the same interface, and sweep it & \ref{ch:configuration}, \ref{ch:extending} \\
+Observability & per-request latency in nine stages with per-core worst cases; an address-filtered coherence trace; a raw trace of every message & \ref{ch:request-end-to-end}, \ref{ch:monitoring} \\
+Timing validation & cycle-accurate worst-case latency, deterministic and platform-independent; analytical against measured & \ref{ch:evaluation} \\
+Verification & auditable CSV FSMs; undefined transitions halt the run; deterministic replay & \ref{ch:coherence-engine} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[htbp]\centering\small
+\caption{What ships, by axis. Every cell is a configuration choice or an editable CSV.}\label{tab:features}
+\begin{tabularx}{\textwidth}{@{}lY@{}}
+\toprule axis & ships with \\ \midrule
+coherence & snoop and directory MSI, MESI, MOESI as CSV FSMs with stable and transient states (\cref{ch:coherence-engine}); the predictable protocols listed below in research configurations \\
+interconnect & point-to-point, unified, split and triple bus, mesh, single-switch NoC (\cref{ch:interconnects}) \\
+arbitration & FCFS, round-robin, TDM on every shared lane and on the LLC port \\
+cache hierarchy & any depth, private or shared, non-blocking with MSHRs and write-back buffers, allocate-on-fill; LRU, FIFO, random replacement; way partitioning \\
+main memory & a fixed-latency model, or cycle-accurate DDR4 through MCsim with twenty schedulers (\cref{ch:main-memory}) \\
+operating modes & standalone trace replay or periodic tasks; full system behind gem5 with Arm cores under Linux (\cref{ch:integration-modes}) \\
+monitoring & the Logger, the Debugger, the raw trace and the visualizer (\cref{ch:monitoring}) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Built on Octopus}
+
+Octopus has been the modelling and evaluation platform for a body of peer-reviewed work on
+real-time memory systems, developed since 2018: the simulator itself (IEEE Computer Architecture
+Letters, 2024) and its gem5-integrated full-system extension (ECRTS Industrial Challenge, 2025);
+the predictable coherence protocols DISCO (ECRTS 2020, IEEE TC 2022), PISCOT (RTSS 2020, ACM
+TECS 2022), Duetto (DATE 2021), DUPECO (ECRTS 2022), PCC (ECRTS 2022) and CoHoRT (DATE 2025);
+the coordinated arbitration scheme GRROF (ECRTS 2023); and the earlier predictable protocols
+PMSI, PMESI, PENDULUM, PMSI* and PMESI*, re-implemented in Octopus so that they can be compared
+head to head under identical conditions. \file{PUBLICATIONS.md} keeps the list current.
+
+\section{What it is not}
+
+Octopus is a \emph{timing} model of the memory system. The trace-driven core issues addresses
+with compute gaps between them and carries no data values; a periodic task is a fixed compute
+budget plus accesses. There is no instruction set, no branch, no data-dependent control flow
+--- for those, run it behind gem5 (\cref{ch:integration-modes}). There is no preemption and no
+multi-task scheduling on a core. Deadlines are observed and reported, never enforced. The DRAM
+model, when not MCsim, is a single fixed latency. These are the lines the demo
+(\cref{ch:tasks-and-demo}) is careful to draw between what is measured and what is drawn, and
+they are the lines to keep in mind when reading any number out of it.

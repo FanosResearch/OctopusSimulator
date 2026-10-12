@@ -43,6 +43,7 @@ namespace octopus
         };
 
         virtual void readEvent(Message &msg, GenericCacheLine &cache_line, EventId *out_id);
+        virtual bool needsDataArray(const Message &msg) override;   // rows that read or write the array: SendData / SendExeclusiveData / SaveData
 
         virtual std::vector<ControllerAction> handleAction(std::vector<int> &actions, Message &msg,
                                                             GenericCacheLine &cache_line, int next_state);

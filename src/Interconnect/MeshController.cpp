@@ -72,12 +72,18 @@ namespace octopus
         }
     }
 
+    void MeshController::traceLink(const Message &msg, const Link &link, Logger::Phase phase)
+    {
+        Logger::getLogger()->trace(msg, msg.data == NULL ? Logger::Role::REQ_BUS : Logger::Role::RESP_BUS,
+                                   (uint32_t)(&link - links.data()), phase);
+    }
+
     void MeshController::send(Message &msg)
     {
         if(msg.data == NULL)
-            Logger::getLogger()->updateRequest(msg.msg_id, Logger::EntryId::REQ_BUS_CHECKPOINT);
+            Logger::getLogger()->event(msg.msg_id, Logger::Role::REQ_BUS, 0u, Logger::Phase::EXIT);
         else
-            Logger::getLogger()->updateRequest(msg.msg_id, Logger::EntryId::RESP_BUS_CHECKPOINT);
+            Logger::getLogger()->event(msg.msg_id, Logger::Role::RESP_BUS, 0u, Logger::Phase::EXIT);
 
         for (int i = 0; i < (int)msg.to.size(); i++)
         {
@@ -109,10 +115,14 @@ namespace octopus
                 if(link.arbiter->elect(cycle_number, link.buffers, &elected_msg))
                 {
                     link.utilize(cycle_number, elected_msg);
+                    traceLink(elected_msg, link, Logger::Phase::ENTER);
                 }
             }
             else if(link.utilization_cycle == cycle_number)
+            {
+                traceLink(link.msg, link, Logger::Phase::EXIT);
                 send(link.msg);
+            }
         }
     }
 }

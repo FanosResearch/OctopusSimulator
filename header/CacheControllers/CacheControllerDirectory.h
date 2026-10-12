@@ -19,6 +19,9 @@ namespace octopus
     {
     protected:
         virtual void addRequests2ProcessingQueue(FRFCFS_Buffer<Message, CoherenceProtocolHandler> &) override;
+
+        // The snooping deferred-supply rule does not apply here (CacheController.h).
+        virtual bool deferredSupplyCopiesToLLC() const override { return false; }
     
         // key is the addr & mask(nbits of CacheLineSize) and the value is a list of sharers ids
         std::map<uint64_t, std::list<uint64_t>> m_sharers; 
