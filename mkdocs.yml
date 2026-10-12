@@ -1,0 +1,70 @@
+site_name: Octopus Simulator
+site_description: A cycle-accurate cache system simulator with configurable interconnects
+site_url: https://fanosresearch.github.io/OctopusSimulator/
+repo_url: https://github.com/FanosResearch/OctopusSimulator
+repo_name: FanosResearch/OctopusSimulator
+edit_uri: edit/gh-page/content/
+docs_dir: content
+site_dir: site
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - toc.follow
+    - content.code.copy
+    - content.action.edit
+    - search.suggest
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - footnotes
+  - tables
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Quick start:
+      - Install and verify: quick-start.md
+      - Run a benchmark: run-a-benchmark.md
+      - Demo and visualizer: demo.md
+  - Concepts:
+      - Architecture: architecture.md
+      - Supported configurations: supported-configurations.md
+      - Monitoring: monitoring.md
+  - Components:
+      - Configuration: configuration.md
+      - Interconnects and memory: components.md
+  - Extend Octopus:
+      - Add a coherence protocol: add-a-protocol.md
+      - Contributing: contributing.md
+  - Research:
+      - Reproducibility: reproducibility.md
+      - Publications and citation: publications.md
+  - Project:
+      - License: license.md
+      - Links: links.md
+
+copyright: Copyright belongs to the respective contributors and upstream projects.
