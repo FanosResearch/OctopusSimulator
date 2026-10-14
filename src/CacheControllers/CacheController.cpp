@@ -448,9 +448,11 @@ namespace octopus
         {
             n.iface = m_lower_interface;
             int caches = std::max(1, (int)m_arbiter_candidates.size());
-            if (msg.isDemandRequest()) { n.fwd = caches - 1; n.resp = 1; }
+            n.up_iface = m_upper_interface;
+            if (msg.isDemandRequest()) { n.fwd = caches - 1; n.resp = 1; n.up_fwd = 1; }   // a miss reads memory
             else if (msg.kind == Message::K_PUTS || msg.kind == Message::K_PUTM) n.fwd = 1;
-            else if (msg.kind == Message::K_EVICT) n.fwd = caches;
+            else if (msg.kind == Message::K_EVICT) { n.fwd = caches; n.up_resp = 1; }        // a victim may be written back
+            if (msg.data != NULL && msg.source == Message::Source::LOWER_INTERCONNECT) n.up_resp = 1;   // an L1's data may be written back (N_d)
             // a fill from memory answers the requests parked on the line, and each of those kept its
             // own response reservation when it was parked (txRelease), so the fill reserves nothing
             return n;
@@ -464,13 +466,19 @@ namespace octopus
     bool CacheController::txAdmit(const Message &msg)
     {
         TxNeed n = txNeed(msg);
-        if (!n.iface || (n.req == 0 && n.fwd == 0 && n.resp == 0)) return true;
+        if (!n.up_iface) n.up_fwd = n.up_resp = 0;
+        if (!n.iface || (n.req == 0 && n.fwd == 0 && n.resp == 0 && n.up_fwd == 0 && n.up_resp == 0)) return true;
         if (n.iface->txFreeSlots(MessageType::REQUEST) < n.req || n.iface->txFreeSlots(MessageType::SERVICE_REQUEST) < n.fwd ||
             n.iface->txFreeSlots(MessageType::DATA_RESPONSE) < n.resp)
+            return false;
+        if (n.up_iface && (n.up_iface->txFreeSlots(MessageType::SERVICE_REQUEST) < n.up_fwd ||
+                           n.up_iface->txFreeSlots(MessageType::DATA_RESPONSE) < n.up_resp))
             return false;
         if (n.req) n.iface->txReserve(MessageType::REQUEST, n.req);
         if (n.fwd) n.iface->txReserve(MessageType::SERVICE_REQUEST, n.fwd);
         if (n.resp) n.iface->txReserve(MessageType::DATA_RESPONSE, n.resp);
+        if (n.up_fwd) n.up_iface->txReserve(MessageType::SERVICE_REQUEST, n.up_fwd);
+        if (n.up_resp) n.up_iface->txReserve(MessageType::DATA_RESPONSE, n.up_resp);
         m_tx_holds.push_back({msg.msg_id, msg.kind, (int)msg.source, n});
         return true;
     }
@@ -485,6 +493,9 @@ namespace octopus
             {
                 if (it->need.req) it->need.iface->txRelease(MessageType::REQUEST, it->need.req);
                 if (it->need.fwd) it->need.iface->txRelease(MessageType::SERVICE_REQUEST, it->need.fwd);
+                if (it->need.up_fwd) it->need.up_iface->txRelease(MessageType::SERVICE_REQUEST, it->need.up_fwd);
+                if (it->need.up_resp) it->need.up_iface->txRelease(MessageType::DATA_RESPONSE, it->need.up_resp);
+                it->need.up_fwd = it->need.up_resp = 0;
                 // a demand request parked as an outstanding miss is answered later, from the fill:
                 // its response slot stays reserved until then (txAnswered)
                 bool parked = false;

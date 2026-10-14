@@ -33,6 +33,8 @@ namespace octopus
         if (m_home_ids.empty() || m_home_ids[0] < 0) m_home_ids = {m_shared_memory_id};
         if (parameters.find(STRINGIFY(home_interleave_shift)) != parameters.end())
             m_home_shift = std::get<int>(parameters.at(STRINGIFY(home_interleave_shift)).value);
+        if (parameters.find(STRINGIFY(mem_port_id)) != parameters.end())
+            m_mem_port_id = std::get<int>(parameters.at(STRINGIFY(mem_port_id)).value);
 
         // Optional perfect-LLC knob, defaulted off so existing configs parse and
         // every non-LLC controller (which never sets it) behaves normally.
@@ -108,6 +110,9 @@ namespace octopus
     {
         static const long hang_dump = std::getenv("OCTOPUS_HANG_DUMP") ? std::atol(std::getenv("OCTOPUS_HANG_DUMP")) : 0;
 
+        while (!m_local_fills.empty() && m_upper_interface->pushMessage2RX(m_local_fills.front(), MessageType::DATA_RESPONSE))
+            m_local_fills.erase(m_local_fills.begin());
+
         this->addRequests2ProcessingQueue(*m_processing_queue);
 
         while(true)
@@ -138,10 +143,11 @@ namespace octopus
             {
                 traceMsg("admit-fail", ready_msg);
                 m_admit_fail_cycles++;
-                // Structural stall (e.g., MSHR/PWB full): put the request back
-                // and retry next cycle. A slot is guaranteed to be free because
-                // getFirstReady just removed this element.
-                m_processing_queue->pushBack(ready_msg, FRFCFS_State::NonReady);
+                // Structural stall (e.g., MSHR/PWB full, no transmit slot): put the request back
+                // and retry next cycle. It was admitted already, so it must not meet the demand
+                // cap again: force-admitted traffic can hold the queue above the cap, and a
+                // refused re-queue would silently drop the request.
+                m_processing_queue->pushBack(ready_msg, FRFCFS_State::NonReady, /*force=*/true);
                 return;
             }
 
@@ -340,9 +346,15 @@ namespace octopus
         fill.kind = Message::K_FILL_ROLLBACK;
         std::vector<uint8_t> zeros(m_data_handler->getBlockSize(), 0);
         fill.copy(it->second.data.empty() ? zeros.data() : it->second.data.data());
-        m_upper_interface->pushMessage2RX(fill, MessageType::DATA_RESPONSE);
+        pushLocalFill(fill);
         MemHazard::llcForwarded();
         return true;
+    }
+
+    void BaseController::pushLocalFill(Message &fill)
+    {
+        if (!m_local_fills.empty() || !m_upper_interface->pushMessage2RX(fill, MessageType::DATA_RESPONSE))
+            m_local_fills.push_back(fill);
     }
 
     bool BaseController::consumeMemAck(const Message &msg)

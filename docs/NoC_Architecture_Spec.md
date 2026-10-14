@@ -874,7 +874,7 @@ toward memory) and the system hands it two network interfaces, the bank id for t
 memory-port id for the upper, attached to the same router or another. The controllers and protocols
 do not change: the bank addresses memory by `m_shared_memory_id` (or `memOf(addr)`, §25.4), the
 interface stamps `msg.from` with the memory-port id, and the memory controller answers `msg.from`.
-`memory_on_network(b) = 0`, the default, keeps the point-to-point memory bus of §24 and every existing
+`memory_on_network(i) = 0`, the default, keeps the point-to-point memory bus of §24 and every existing
 preset byte-identical.
 
 ### 25.2 Read after write
@@ -926,7 +926,7 @@ draws the memory routes and one DRAM lane per controller.
 
 ### 25.6 Keys
 
-System: `memory_on_network(b)`, `interconnect.node_map[<memory id>]`,
+System: `memory_on_network(i)`, `interconnect.node_map[<memory id>]`,
 `interconnect.node_map[<memory-port id>]`, `llc_controller[k].mem_port_id(i)`, `main_memory_type(s)`
 (M6). LLC: `mem_ids(vi)` (absent or `-1` = `m_shared_memory_id`), `mem_interleave_shift(i)`
 (default 0). Validation: MEM-* in the test plan.

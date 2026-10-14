@@ -140,6 +140,8 @@ namespace octopus { namespace net
         void returnCredit(int router, int in_port, int cls, int vc);
         int  classIndexOf(int cls) const { return cls; }
         std::string flitName(const Flit &f) const;
+        static Logger::Role busRole(const Message &m);   // MEM_BUS for memory packets (spec s25.5)
+        static uint32_t busComp(const Message &m);
 
         NetConfig m_cfg;
         std::vector<int> m_component_ids, m_home_ids, m_lower_ids;

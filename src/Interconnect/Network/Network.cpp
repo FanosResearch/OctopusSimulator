@@ -348,7 +348,7 @@ namespace octopus { namespace net
                 o.holder = a.seq; o.holder_ep = a.ni->id(); p.t_inject = m_tick; p.next_flit = 0;
                 m_totals.injected_packets++;
                 if (m_class_stats[a.cls].first_inject == 0) m_class_stats[a.cls].first_inject = m_tick;
-                Logger::getLogger()->trace(p.msg, p.msg.data == NULL ? Logger::Role::REQ_BUS : Logger::Role::RESP_BUS, 0u, Logger::Phase::ENTER, (uint16_t)p.dst_endpoint);   // flags = destination: tells the copies of a multicast apart
+                Logger::getLogger()->trace(p.msg, busRole(p.msg), busComp(p.msg), Logger::Phase::ENTER, (uint16_t)p.dst_endpoint);   // flags = destination: tells the copies of a multicast apart
             }
             Flit f; f.seq = a.seq; f.index = p.next_flit; f.head = p.next_flit == 0; f.tail = p.next_flit == p.flits - 1; f.arrived = m_tick;
             m_routers[lp.router].in[lp.port][a.cls][a.vc].fifo.push_back(f);     // local link: zero latency
@@ -549,17 +549,21 @@ namespace octopus { namespace net
         if (pk.ahead > es.max_ahead) { es.max_ahead = pk.ahead; es.max_ahead_winner = winner; }
         // trackers (spec s15.3): accumulated over the request's packets; untracked ids are ignored
         Logger *lg = Logger::getLogger();
-        lg->accumulate(pk.msg.msg_id, Logger::Annot::NOC_HOPS, pk.hops);
-        lg->accumulate(pk.msg.msg_id, Logger::Annot::NOC_WAIT, (int64_t)pk.wait_ticks);
-        lg->accumulate(pk.msg.msg_id, Logger::Annot::NOC_TRANSFER, (int64_t)pk.transfer_ticks);
-        lg->accumulate(pk.msg.msg_id, Logger::Annot::NOC_AHEAD, (int64_t)pk.ahead);
-        lg->accumulateWinner(pk.msg.msg_id, winner, wins);
-        Logger::Role role = pk.msg.data == NULL ? Logger::Role::REQ_BUS : Logger::Role::RESP_BUS;
+        Logger::Role role = busRole(pk.msg);
+        if (role != Logger::Role::MEM_BUS)      // the NoC trackers count coherence packets only (spec s25.5)
+        {
+            lg->accumulate(pk.msg.msg_id, Logger::Annot::NOC_HOPS, pk.hops);
+            lg->accumulate(pk.msg.msg_id, Logger::Annot::NOC_WAIT, (int64_t)pk.wait_ticks);
+            lg->accumulate(pk.msg.msg_id, Logger::Annot::NOC_TRANSFER, (int64_t)pk.transfer_ticks);
+            lg->accumulate(pk.msg.msg_id, Logger::Annot::NOC_AHEAD, (int64_t)pk.ahead);
+            lg->accumulateWinner(pk.msg.msg_id, winner, wins);
+        }
         // the report's response-bus stamp is the copy that reaches the requester (a supply also goes
-        // to the home; on a mesh the two cross different links and the home's copy may eject first)
-        if (role == Logger::Role::REQ_BUS || pk.dst_endpoint == (int)pk.msg.owner)
-            Logger::getLogger()->event(pk.msg.msg_id, role, 0u, Logger::Phase::EXIT);
-        Logger::getLogger()->trace(pk.msg, role, 0u, Logger::Phase::EXIT, (uint16_t)pk.dst_endpoint);
+        // to the home; on a mesh the two cross different links and the home's copy may eject first);
+        // memory packets stamp MEM_BUS both ways, as the point-to-point memory bus does
+        if (role != Logger::Role::RESP_BUS || pk.dst_endpoint == (int)pk.msg.owner)
+            Logger::getLogger()->event(pk.msg.msg_id, role, busComp(pk.msg), Logger::Phase::EXIT);
+        Logger::getLogger()->trace(pk.msg, role, busComp(pk.msg), Logger::Phase::EXIT, (uint16_t)pk.dst_endpoint);
         ni->deliver(pk.cls, pk.msg);
         if (m_debug == "rx") ni->deliver(pk.cls, pk.msg);        // a second delivery without a reservation: must be fatal
         m_totals.ejected_packets++; m_totals.ejected_flits += pk.flits; m_totals.link_flit_hops += (uint64_t)links * pk.flits;
@@ -568,6 +572,19 @@ namespace octopus { namespace net
     }
 
     // ------------------------------------------------------------------ observability
+    // memory packets (spec s25.5) log as the memory bus does, comp 1; coherence packets as the L1-LLC bus
+    Logger::Role Network::busRole(const Message &m)
+    {
+        switch (m.kind)
+        {
+            case Message::K_MEM_READ: case Message::K_MEM_WRITE: case Message::K_FILL: case Message::K_MEM_WACK:
+                return Logger::Role::MEM_BUS;
+            default:
+                return m.data == NULL ? Logger::Role::REQ_BUS : Logger::Role::RESP_BUS;
+        }
+    }
+    uint32_t Network::busComp(const Message &m) { return busRole(m) == Logger::Role::MEM_BUS ? 1u : 0u; }
+
     std::string Network::flitName(const Flit &f) const
     {
         auto it = m_packets.find(f.seq);

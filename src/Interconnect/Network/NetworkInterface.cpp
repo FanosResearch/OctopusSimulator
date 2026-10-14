@@ -3,6 +3,7 @@
  * Specification: docs/NoC_Architecture_Spec.md §3.1, §7.
  */
 #include "../../../header/Interconnect/Network/NetworkInterface.h"
+#include "../../../header/MemHazard.h"
 #include <algorithm>
 #include "../../../header/Interconnect/Network/Network.h"
 
@@ -78,6 +79,8 @@ namespace octopus { namespace net
             uint64_t seq = m_net->newPacket(msg, id(), msg.to[i], cls[i]);
             m_inject[cls[i]].push_back(seq);
         }
+        if (msg.kind == Message::K_MEM_READ) MemHazard::readSent(msg.msg_id, msg.addr, msg.cycle);
+        else if (msg.kind == Message::K_MEM_WRITE) MemHazard::writeSent(msg.addr, msg.msg_id, msg.cycle);
         return true;
     }
     bool NetworkInterface::pushMessage2RX(Message &msg, MessageType type)
@@ -118,6 +121,8 @@ namespace octopus { namespace net
         m_reserved[cls]--;
         if ((int)m_rx[cls].size() + m_reserved[cls] >= m_eject_depth)
             fatal("endpoint " + std::to_string(m_interface_id) + ": RX of class " + std::to_string(cls) + " full at delivery despite the reservation");
+        if (msg.kind == Message::K_MEM_WRITE) MemHazard::writeDelivered(msg.addr);
+        else if (msg.kind == Message::K_MEM_READ) MemHazard::readDelivered(msg.msg_id, msg.addr);
         m_rx[cls].push_back(msg); m_delivered++;
     }
 }}

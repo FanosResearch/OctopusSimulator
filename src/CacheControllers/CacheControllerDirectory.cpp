@@ -34,7 +34,9 @@ namespace octopus
 
         if (m_upper_interface->peekMessage(&msg))
         {
-            if(find(msg.to.begin(), msg.to.end(), m_id) == msg.to.end()) //check if this message is destined to this controller
+            // destined to this controller: its id, or its memory port when memory is on the network (spec s25.1)
+            if(find(msg.to.begin(), msg.to.end(), m_id) == msg.to.end() &&
+               (m_mem_port_id < 0 || find(msg.to.begin(), msg.to.end(), m_mem_port_id) == msg.to.end()))
                 m_upper_interface->popFrontMessage();
             else if (consumeMemAck(msg))     // memory acknowledged a write: not a protocol event
                 m_upper_interface->popFrontMessage();

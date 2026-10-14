@@ -129,7 +129,9 @@ namespace octopus
         // transmit-side admission (docs/NoC_Architecture_Spec.md s14.2): room in the outgoing queues
         // for everything this message's transition can emit, reserved at admission and released when
         // the transition has run (its actions may fire cycles later through the data array)
-        struct TxNeed { int req = 0, fwd = 0, resp = 0; CommunicationInterface *iface = nullptr; };
+        // up_*: the LLC's memory side (a read travels in the forward class, a write in the response class)
+        struct TxNeed { int req = 0, fwd = 0, resp = 0; CommunicationInterface *iface = nullptr;
+                        int up_fwd = 0, up_resp = 0; CommunicationInterface *up_iface = nullptr; };
         struct TxHold { uint64_t msg_id; uint8_t kind; int source; TxNeed need; bool parked = false; };
         TxNeed txNeed(const Message &msg);
         bool txAdmit(const Message &msg);

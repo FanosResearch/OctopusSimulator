@@ -974,3 +974,42 @@ directory 884, Grid2B 548, MEDUSA 3 196 on EEMBC, snoop 0 (End2End's rollback). 
 configurations, 70/70 runs complete. REG-HAZARD (directory, Grid2B, MEDUSA on `cacheb01`) joins the
 regression. Finish cycles move within ±2.1% except `cacheb01` under MEDUSA (−11%); REG-BUS (the tutorial's
 `expected/Summary.csv`), REG-MESH and REG-TDM references were regenerated.
+
+## Memory M2 — one memory controller as a network endpoint (spec §25.1–§25.3)
+
+**Built.**
+
+- `MultiCoreSystem_Mesh`: with `memory_on_network(i) = 1` (needs `interconnect_type Network`) no memory
+  bus is built; each LLC bank's upper interface is the network interface of its `mem_port_id`, and the
+  memory controller's is the network interface of its own id. Preset `MultiCoreSystem_Grid2BM`: banks
+  10/11 on routers 0/3, memory ports 110/111 on the same routers, memory controller 100 on router 1.
+- The directory LLC takes a message addressed to its memory port as its own (memory answers `msg.from`,
+  the port).
+- Classes: `K_MEM_READ` moves to FORWARD; writes, fills and acknowledgements stay in RESPONSE.
+- Transmit-side admission covers the LLC's memory side: a demand reserves one forward slot there (a miss
+  reads memory), a replacement and an L1's data one response slot (a write-back). Buses report unbounded
+  room, so nothing changes for them.
+- `MainMemoryController` always accepts a write (bounded by the banks' write-back buffers) and pushes a
+  response only into a free slot; its ordered output queue holds the rest.
+- A fill the LLC makes from its own pending write waits in `m_local_fills` when the upper RX is full
+  (bounded on a network) instead of being lost.
+- Network logging: memory packets stamp `MEM_BUS` both ways (comp 1, as the memory bus), so the L2-DRAM
+  bus stages are their network time and the event-path tiling holds (275 304 rows, 0 failures on
+  a2time01); they no longer add to the coherence NoC trackers (§25.5; their own columns are M4).
+- The hazard detector's hooks are also in `NetworkInterface` (push, delivery).
+
+**Found on the way.**
+
+1. A request that admission refuses is put back with `pushBack`, which honoured the demand cap; with the
+   queue held above the cap by force-admitted traffic the push failed and the request was dropped (an L1
+   waited forever, the network empty). The re-queue is now forced. It was latent on every system;
+   memory-side admission made refusals frequent enough to hit it.
+2. The back-invalidation race of M1 has a sibling: an upgrade (`S` + Store → `SM_ad`) granted and then
+   evicted by the home receives the Inv in `SM_a` (`Fault`). `MSI_directory_v3` and `MESI_directory_v2`
+   now stall it there too (`SM_a` + Inv → `Stall/`), as `MOESI_directory` already did.
+
+**Tests** (`bash test/network/run.sh M2`). MEM-OFF: Grid2B, Grid and the directory preset, ten traces
+each, byte-identical to references taken with the M0 build (`test/network/ref/mem-off/`). MEM-EEMBC 10/10
+with the DRAM stage present. MEM-HAZARD: FCFS and RR, 20/20 complete, 0 overtakes. MEM-ADMISSION:
+`inject_queue_depth 4`, `eject_queue_depth 2`, FCFS and RR, 20/20 complete, 0 refused pushes. MEM-DETERMINISM.
+S1-CLS-3 updated for the new class of `K_MEM_READ`. `run.sh all`: 0 failures.

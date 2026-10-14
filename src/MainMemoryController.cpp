@@ -58,7 +58,9 @@ namespace octopus
 
     void MainMemoryController::flushOut()
     {
-        while (!m_out.empty() && m_lower_interface->pushMessage(m_out.front(), m_clk_cycle, MessageType::DATA_RESPONSE))
+        // push only into a free response slot (a network interface is bounded; a bus reports room)
+        while (!m_out.empty() && m_lower_interface->txFreeSlots(MessageType::DATA_RESPONSE) > 0 &&
+               m_lower_interface->pushMessage(m_out.front(), m_clk_cycle, MessageType::DATA_RESPONSE))
             m_out.pop_front();
     }
 
@@ -110,7 +112,9 @@ namespace octopus
         {
             msg.source = Message::Source::LOWER_INTERCONNECT;
             msg.cycle = m_clk_cycle;
-            if (buf.pushBack(msg, FRFCFS_State::NonReady))
+            // a write is always accepted (its number is bounded by the LLCs' write-back buffers, which
+            // hold every write until it is acknowledged); a read waits for room (spec s25.3)
+            if (buf.pushBack(msg, FRFCFS_State::NonReady, /*force=*/msg.data != NULL))
             {
                 m_lower_interface->popFrontMessage();
                 if (msg.data == NULL) MemHazard::readArrived(msg.msg_id, msg.addr, m_clk_cycle);

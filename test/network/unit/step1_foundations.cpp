@@ -32,14 +32,15 @@ TEST("S1-CLS-3")
         {Message::K_RESP, true, 10, 0, 0, CLASS_RESPONSE}, {Message::K_SUPPLY, true, 1, 0, 0, CLASS_RESPONSE},
         {Message::K_SUPPLY_DEFERRED, true, 1, 0, 0, CLASS_RESPONSE}, {Message::K_FILL, true, 100, 0, 10, CLASS_RESPONSE},
         {Message::K_FILL_ROLLBACK, true, 100, 0, 10, CLASS_RESPONSE}, {Message::K_ACK, false, 2, 0, 0, CLASS_RESPONSE},
-        {Message::K_WB_DATA, true, 1, 1, 10, CLASS_RESPONSE}, {Message::K_MEM_READ, false, 10, 0, 100, CLASS_RESPONSE},
+        {Message::K_WB_DATA, true, 1, 1, 10, CLASS_RESPONSE}, {Message::K_MEM_READ, false, 110, 0, 100, CLASS_FORWARD},   // spec s25.3
         {Message::K_MEM_WRITE, true, 10, 10, 100, CLASS_RESPONSE}, {Message::K_EVICT, true, 10, 10, 100, CLASS_RESPONSE},
+        {Message::K_MEM_WACK, false, 100, 100, 110, CLASS_RESPONSE},
         // fallbacks: untagged
         {Message::K_UNKNOWN, true, 1, 0, 0, CLASS_RESPONSE},        // data -> response
         {Message::K_UNKNOWN, false, 0, 0, 10, CLASS_REQUEST},       // to a home -> request
         {Message::K_UNKNOWN, false, 10, 10, 1, CLASS_FORWARD},      // from a home -> forward
     };
-    CHECK_EQ((int)rows.size(), 20);
+    CHECK_EQ((int)rows.size(), 21);
     for (size_t i = 0; i < rows.size(); i++)
     {
         Message m = mk(rows[i].kind, rows[i].data, rows[i].from, rows[i].owner);

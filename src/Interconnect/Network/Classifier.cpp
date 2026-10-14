@@ -24,6 +24,7 @@ namespace octopus { namespace net
             case Message::K_DEMAND:
                 return CLASS_REQUEST;
             case Message::K_FWD: case Message::K_INV:
+            case Message::K_MEM_READ:          // a home's read of memory: consumed by a memory controller that answers with a fill (spec s25.3)
                 return CLASS_FORWARD;
             case Message::K_ACK:
                 // A home's PutAck travels with its forwards: the directory L1 FSM relies on a home's
@@ -33,7 +34,7 @@ namespace octopus { namespace net
                 return (m.data == NULL && m_homes.count(m.from)) ? CLASS_FORWARD : CLASS_RESPONSE;
             case Message::K_RESP: case Message::K_SUPPLY: case Message::K_SUPPLY_DEFERRED:
             case Message::K_FILL: case Message::K_FILL_ROLLBACK:
-            case Message::K_WB_DATA: case Message::K_MEM_READ: case Message::K_MEM_WRITE:
+            case Message::K_WB_DATA: case Message::K_MEM_WRITE:
             case Message::K_EVICT: case Message::K_MEM_WACK:
                 return CLASS_RESPONSE;
             default: break;

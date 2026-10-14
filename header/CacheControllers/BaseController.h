@@ -39,6 +39,7 @@ namespace octopus
         // LLC banking (docs/NoC_Architecture_Spec.md s24): the homes of this controller's lines,
         // interleaved by line address; one home = today's m_shared_memory_id
         std::vector<int> m_home_ids; int m_home_shift = 0;
+        int m_mem_port_id = -1;   // an LLC bank's upper (memory-side) endpoint id on a network (spec s25.1); -1 = none
         int  homeOf(uint64_t addr) const;
         bool isHome(int id) const;
 
@@ -113,6 +114,8 @@ namespace octopus
         void memWriteDone(uint64_t addr);            // acknowledged, or cancelled by a rollback
         bool forwardFromMemWrite(Message *msg);      // a K_MEM_READ of a written line: fill it here
         bool consumeMemAck(const Message &msg);      // intake: true if msg was a K_MEM_WACK (popped by the caller)
+        std::vector<Message> m_local_fills;          // fills made here that the upper RX could not take yet (a network RX is bounded)
+        void pushLocalFill(Message &fill);
 
         // Structural admission gate. Returns false when a ready request must be
         // held back (e.g., the derived controller has no free MSHR/PWB entry for

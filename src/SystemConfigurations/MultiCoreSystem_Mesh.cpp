@@ -88,8 +88,21 @@ namespace octopus
                                                 cpu_interconnect->getInterfaceFor(cache_id), name);
         }
 
-        Bus *bus = new Bus(getSubMap(STRINGIFY(bus)), NULL, name);
-        bus->setMemBus();   // the LLC<->memory link: its crossings log as MEM_BUS (as in MultiCoreSystem)
+        // Memory on the network (spec s25): each LLC bank reaches memory through its memory port, a
+        // second endpoint; the memory controller is an endpoint too. Otherwise the banks share the
+        // point-to-point memory bus.
+        bool memory_on_network = parameters.count("memory_on_network") && std::get<int>(parameters.at("memory_on_network").value) != 0;
+        if (memory_on_network && interconnect_type != STRINGIFY(Network))
+        {
+            cerr << "MultiCoreSystem_Mesh: memory_on_network needs interconnect_type Network" << endl;
+            exit(2);
+        }
+        Bus *bus = nullptr;
+        if (!memory_on_network)
+        {
+            bus = new Bus(getSubMap(STRINGIFY(bus)), NULL, name);
+            bus->setMemBus();   // the LLC<->memory link: its crossings log as MEM_BUS (as in MultiCoreSystem)
+        }
         // LLC banks (spec s24): llc_banks(i) controllers, llc_controller[k] when banked, the plain
         // llc_controller map when there is one (every existing preset). Each bank is a complete LLC
         // controller with its own endpoint; the cores' home_ids map lines onto them.
@@ -98,7 +111,19 @@ namespace octopus
         {
             ParametersMap lmap = llc_banks == 1 ? getSubMap(STRINGIFY(llc_controller)) : getSubMap(STRINGIFY(llc_controller), k);
             int llc_id = std::get<int>(lmap.at("m_id").value);
-            BaseController *llc_controller = createController(cache_controller_type, lmap, bus->getInterfaceFor(llc_id), interfaceFor(llc_id), name);
+            CommunicationInterface *memory_side;
+            if (memory_on_network)
+            {
+                if (!lmap.count("mem_port_id") || std::get<int>(lmap.at("mem_port_id").value) < 0)
+                {
+                    cerr << "MultiCoreSystem_Mesh: memory_on_network: LLC " << llc_id << " has no mem_port_id" << endl;
+                    exit(2);
+                }
+                memory_side = interfaceFor(std::get<int>(lmap.at("mem_port_id").value));
+            }
+            else
+                memory_side = bus->getInterfaceFor(llc_id);
+            BaseController *llc_controller = createController(cache_controller_type, lmap, memory_side, interfaceFor(llc_id), name);
             // Without this the LLC's events carry no role: the LatencyReport's DRAM and LLC
             // stages read 0 on Mesh/NoC and the event-path validator reports thousands of rows
             // whose stages do not sum to Total. Mirrors MultiCoreSystem.
@@ -107,7 +132,8 @@ namespace octopus
 
         MainMemoryController *m_main_memory;
         int main_memory_id = std::get<int>(getSubMap(STRINGIFY(m_main_memory)).at("m_id").value);
-        m_main_memory = new MainMemoryController(getSubMap(STRINGIFY(MainMemoryController)), bus->getInterfaceFor(main_memory_id), name);
+        m_main_memory = new MainMemoryController(getSubMap(STRINGIFY(MainMemoryController)),
+                                                 memory_on_network ? interfaceFor(main_memory_id) : bus->getInterfaceFor(main_memory_id), name);
 
         if (interconnect_type == STRINGIFY(Network))
             m_network->checkProtocols(BaseController::controllers());      // spec s14.3: after every controller exists

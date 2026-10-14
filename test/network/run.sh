@@ -111,6 +111,7 @@ make_refs() {
   for t in $EEMBC; do sumdir "$OUT/reg-mesh/$t" > "$REF/legacy-mesh/$t.md5"; echo "$t $(cat "$REF/legacy-mesh/$t.md5") rows=$(wc -l < "$OUT/reg-mesh/$t/Summary.csv")"; done
   sim "$OUT/reg-tdm" -s MultiCoreSystem -c "$COMMITTED_CFG" -p "workload_path(s)=$(W a2time01-trace)/" -p "bus[0].interconnect_controller.arbiter_type(s)=TDMArbiter"
   sumdir "$OUT/reg-tdm" > "$REF/reg-tdm.md5"; echo "reg-tdm $(cat "$REF/reg-tdm.md5")"
+  mem_off_refs
 }
 
 # ---------------------------------------------------------------- unit tests by prefix
@@ -144,9 +145,9 @@ build
 case "$WHAT" in
   refs) make_refs; exit 0;;
   reg)  regression;;
-  all)  regression; for n in 0 1 2 3 4 5 6 7 8; do declare -f "step$n" > /dev/null && "step$n"; done;;
-  [0-8]) regression; "step$WHAT";;
-  *) echo "usage: run.sh [step|all|reg|refs]"; exit 2;;
+  all)  regression; for n in 0 1 2 3 4 5 6 7 8 M2; do declare -f "step$n" > /dev/null && "step$n"; done;;
+  [0-8]|M[2-7]) regression; "step$WHAT";;
+  *) echo "usage: run.sh [step (0-8, M2..M7)|all|reg|refs]"; exit 2;;
 esac
 echo "----"; echo "$FAILS failure(s); results in $RESULTS"
 [ "$FAILS" = 0 ]
