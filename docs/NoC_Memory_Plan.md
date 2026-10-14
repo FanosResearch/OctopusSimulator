@@ -120,7 +120,7 @@ Each step: implement, run its tests (`bash test/network/run.sh <id>`), ASan, a s
 
 | step | work | validation |
 |---|---|---|
-| **M0** | spec: lift the exclusion, add a "Memory on the network" section (§2 rule, §3 decisions); test plan: the ids below | review before code |
+| **M0** (done) | spec §25 "Memory controllers on the network", the exclusion lifted, a §22 row; test plan §12a (MEM-*), REG-HAZARD, a §25 traceability row | review before code |
 | **M1** (done) | H1, H2, H3 on the existing bus systems (the bug existed there) | hazard matrix 0 NET / 0 MC in every configuration, 70/70 complete; REG-HAZARD; full suite passes (it exposed a directory L1 gap, fixed in `MSI_directory_v3` / `MESI_directory_v2`) |
 | **M2** | one memory controller as a network endpoint: memory-port ids, `memory_on_network(b)` in `MultiCoreSystem_Mesh` (bus path untouched otherwise); memory controller admission instead of `exit(0)` (complete a read only with a response slot free; acknowledgements likewise) | Grid EEMBC 10/10, DRAM stage non-zero, hazard 0; existing presets byte-identical |
 | **M3** | classes (§3.2), memory controllers in `checkProtocols`, LLC memory actions annotated | checker passes; negative test (read in REQUEST refused); tiny inject/eject queues on cacheb01 with no deadlock; ASan clean |

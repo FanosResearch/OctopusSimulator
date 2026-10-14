@@ -50,8 +50,9 @@ The network replaces the single-switch `NoC` with a general packet-switched netw
 - **Unchanged endpoints**: cache controllers and protocols keep the `CommunicationInterface`
   contract and never learn that a network sits between them.
 
-Out of scope for this specification: snooping over the network (needs an ordered broadcast tree),
-memory controllers on the network, flit-level power. These are Phase 3 items in the plan.
+Out of scope for this specification: snooping over the network (needs an ordered broadcast tree)
+and flit-level power, Phase 3 items in the plan. Memory controllers on the network are specified in
+§25 (plan: `docs/NoC_Memory_Plan.md`).
 
 ## 2. Terms
 
@@ -818,6 +819,7 @@ up to 4 ticks, recorded as `NoC Wait = 4`, `NoC Ahead = 4`, with core 1 as the w
 | 17 | zero latencies undefined | `link_latency ≥ 1`, `router_latency ≥ 0` with stated meaning (§4.2, §13.2) |
 | — | review improvements | `class_link_latency` as a documented key; conservation checks first in the test list; the FSM action-to-class mapping scheduled in Phase 1 (§4.2, §20, §14.3) |
 | — | user decision 2026-10-09 | real-time arbitration deferred until the infrastructure is built; §12 reduced to the hooks |
+| — | user decision 2026-10-13 | memory controllers on the network brought into scope (§25); a read of a line observes every earlier write of it, by acknowledgement and forwarding rather than by network order (§25.2) |
 
 ## 24. LLC banking
 
@@ -860,6 +862,74 @@ The network (home ids were a set since §3.3), the classifier, the transmit-side
 fan-out is per bank), the FSMs, the Logger columns (the LLC role covers every bank, `comp` tells
 them apart; the visualizer gives the LLC array latency to every id from 10 up). Validation:
 P2-BANKING in the test plan.
+
+## 25. Memory controllers on the network
+
+### 25.1 Model
+
+A memory controller (`MainMemoryController`, or `MCsimInterface` in M6) is an endpoint with its own
+id, network interface and router in `node_map`, like a cache. An LLC bank reaches memory through a
+**second endpoint**, its memory port: the bank keeps its two interfaces (lower toward the L1s, upper
+toward memory) and the system hands it two network interfaces, the bank id for the lower and the
+memory-port id for the upper, attached to the same router or another. The controllers and protocols
+do not change: the bank addresses memory by `m_shared_memory_id` (or `memOf(addr)`, §25.4), the
+interface stamps `msg.from` with the memory-port id, and the memory controller answers `msg.from`.
+`memory_on_network(b) = 0`, the default, keeps the point-to-point memory bus of §24 and every existing
+preset byte-identical.
+
+### 25.2 Read after write
+
+A read of a line must observe every earlier write of that line; reads and writes of different lines
+may reorder. The guarantee does not rest on the network (different classes, adaptive routing and
+several memory controllers all reorder): the memory controller acknowledges a write when it accepts
+it (`K_MEM_WACK`), the bank keeps the line and its data until then and fills a read of it from that
+copy, and a memory controller fills a read from a write it holds and has not performed. Built in M1
+for the bus systems; on the network the acknowledgement is a header-only packet. REG-HAZARD and
+MEM-HAZARD check it.
+
+### 25.3 Classes and deadlock freedom
+
+| kind | class | consumed by | emits |
+|---|---|---|---|
+| `K_MEM_READ` | FORWARD | memory controller | `K_FILL` (RESPONSE) |
+| `K_MEM_WRITE` | RESPONSE | memory controller | `K_MEM_WACK` (RESPONSE) |
+| `K_FILL`, `K_MEM_WACK` | RESPONSE | LLC bank | nothing, or the bank's own responses |
+
+A bank emits a read while consuming a request (REQUEST → FORWARD) and a write while consuming a
+request or a response (it may write back while handling an L1's data), which is why the write is a
+RESPONSE: a read in REQUEST, or a write in FORWARD, fails the §14.3 check. RESPONSE stays drainable:
+the bank force-admits fills and acknowledgements (§14.2), and the memory controller always accepts
+a write, whose number is bounded by the banks' write-back buffers (an unacknowledged write holds its
+entry, §25.2). It accepts a read only with room in its queue and completes it only with a response
+slot free; its responses wait in an ordered output queue instead of being refused. The memory
+controllers join `checkProtocols` with this table.
+
+### 25.4 Several memory controllers
+
+`mem_ids(vi)` and `mem_interleave_shift(i)` on the LLC banks, mirroring `home_ids`:
+`memOf(addr) = mem_ids[((addr / block) >> mem_interleave_shift) mod M]`, replacing the single
+`m_shared_memory_id` at the four sites that address memory. With MCsim, the controller-select bits
+are removed from the address before DRAM decoding, so that each controller sees a dense address
+space. Same bits as the bank map give bank-to-controller affinity; different bits give all-to-all;
+presets choose explicitly.
+
+### 25.5 Accounting
+
+Memory packets log under `MEM_BUS` (ENTER at injection, EXIT at ejection), so the LatencyReport's
+L2-DRAM bus stages become the network time between the bank's memory port and the controller, and
+the event-path tiling still sums to Total. The NoC trackers (§15.3) keep counting coherence packets
+only, so they stay comparable with memory on the bus; the memory packets of a request (`K_MEM_READ`,
+`K_FILL`, which carry its id) accumulate into three further columns, **NoC Mem Hops**, **NoC Mem
+Wait** and **NoC Mem Ahead**, written only when `memory_on_network` is set. A write-back carries the
+eviction's own id and an acknowledgement id 0, so neither is charged to a request. The visualizer
+draws the memory routes and one DRAM lane per controller.
+
+### 25.6 Keys
+
+System: `memory_on_network(b)`, `interconnect.node_map[<memory id>]`,
+`interconnect.node_map[<memory-port id>]`, `llc_controller[k].mem_port_id(i)`, `main_memory_type(s)`
+(M6). LLC: `mem_ids(vi)` (absent or `-1` = `m_shared_memory_id`), `mem_interleave_shift(i)`
+(default 0). Validation: MEM-* in the test plan.
 
 ## 23. Open issues
 

@@ -55,6 +55,10 @@ Runs at every step; all must stay byte-identical to their references.
 | REG-ENV | shell | `scripts/check_environment.sh` reference run | 15364 requests, worst-case DRAM latency 377 cycles |
 | REG-MESH | sim | legacy `MultiCoreSystem_Mesh` (the single-switch `NoC`) on all ten EEMBC traces | checksums of `LatencyReport_C*.csv` and `Summary.csv` taken at step 0 and committed under `test/network/ref/legacy-mesh/`; the legacy files are not touched before step 6, so any drift is a build or arbiter regression |
 | REG-TDM | sim | shipped bus with `TDMArbiter` on `a2time01` | checksum taken at step 0; guards the arbiter files that step 3 edits |
+| REG-HAZARD | sim | `OCTOPUS_MEM_HAZARD=1` on `cacheb01`: the directory preset, `MultiCoreSystem_Grid2B`, and the shipped bus with MCsim MEDUSA (a write queue) | 0 reads delivered or completed ahead of an older write of their line, all cores complete (spec §25.2) |
+
+The REG-BUS, REG-MESH and REG-TDM references were regenerated once, at Memory M1 (`bcf87d6d`), which
+changes memory timing on purpose (write acknowledgements and read forwarding).
 
 ## 3. Step 0 — infrastructure
 
@@ -255,6 +259,28 @@ Recorded now so the XFAILs above have an owner:
 | P2-CHECKER | the two-class configuration with the directory protocol | DONE: refused at construction with status 2, 36 cells named; `MultiCoreSystem_NetNoC` runs it with `deadlock_check warn` |
 | P2-BANKING | `MultiCoreSystem_Grid2B`: two LLC banks on routers 0 and 3, lines interleaved (spec §24) | EEMBC 10/10; every request to a home in a2time01's raw trace went to the bank the map names, from every core (`test/network/homecheck.py`); cacheb01 with `inject_queue_depth 4`, `eject_queue_depth 2`, RR completes (admission per bank); the first core's finish cycle is reported for one LLC, banks on routers 0 and 3, and banks on routers 0 and 1 |
 
+## 12a. Memory on the network (spec §25, plan `docs/NoC_Memory_Plan.md`)
+
+Preset `MultiCoreSystem_Grid2BM`: `MultiCoreSystem_Grid2B` with `memory_on_network = 1`, banks 10 and
+11 on routers 0 and 3, their memory ports 110 and 111 on the same routers, memory controller 100 on
+router 1. `MultiCoreSystem_Grid2B2M` adds controller 101 on router 2 (M5).
+
+| id | step | assertion |
+|---|---|---|
+| MEM-OFF | M2 | with `memory_on_network = 0` every existing preset is byte-identical (REG-* and S5-EEMBC-2x2 unchanged) |
+| MEM-EEMBC | M2 | `Grid2BM`: EEMBC 10/10, every core's LatencyReport complete, DRAM stage non-zero on misses |
+| MEM-HAZARD | M2 | `Grid2BM` under `OCTOPUS_MEM_HAZARD=1`, FCFS and RR, all ten traces: 0 overtakes |
+| MEM-ADMISSION | M2 | `Grid2BM` with `inject_queue_depth 4`, `eject_queue_depth 2`, FCFS and RR: 20/20 complete, 0 refused pushes; the memory controller never exits on a full interface |
+| MEM-CLASS | M3 | every memory packet of a2time01's raw trace travels in the class of spec §25.3 |
+| MEM-CHECKER | M3 | `checkProtocols` covers the memory controllers and passes; negative: classifying `K_MEM_READ` as REQUEST is refused at construction with status 2 |
+| MEM-UNLOADED | M4 | one isolated miss: bank-to-controller and back equal the unloaded formula (spec §13.2) for the routers crossed |
+| MEM-TILING | M4 | `OCTOPUS_EVENT_DEBUG=1` on `Grid2BM`: event-path tiling 0 failures; the L2-DRAM bus stages equal the memory packets' network time |
+| MEM-COLUMNS | M4 | on `Grid2BM` the coherence NoC columns of every row equal those of the same run's coherence packets alone (raw trace), and NoC Mem Hops of a miss equals the read's plus the fill's hops; the Mem columns are absent with `memory_on_network = 0` |
+| MEM-VIEWER | M4 | `octoviz convert` on a `Grid2BM` run: no unmatched starts or ends, one DRAM lane per controller, memory routes listed |
+| MEM-MULTI | M5 | `Grid2B2M`: EEMBC 10/10; every memory request went to the controller `memOf` names (raw trace); per-controller counts match the interleave |
+| MEM-MCSIM | M6 | `Grid2BM` with `main_memory_type = MCsim`: deterministic (three runs, identical checksums); the DRAM access count equals the bus system's on the same trace and configuration |
+| MEM-DETERMINISM | M2-M6 | two runs of each memory preset are byte-identical |
+
 ## 13. Traceability
 
 | spec section | tests |
@@ -274,3 +300,4 @@ Recorded now so the XFAILs above have an owner:
 | §16 errors and determinism | S4-FATAL-*, S4-DETERMINISM, S5-DETERMINISM, S5-XPLAT |
 | §17 degenerate configuration | S6-* |
 | §18 generators | S4-SAT-DEF, S4-HOTSPOT, S4-TRANSPOSE |
+| §25 memory on the network | REG-HAZARD, MEM-* |
