@@ -12,7 +12,7 @@ bus.interconnect_controller.candidates_id(vi),0,1,2,3,10,#Candidates are the l1 
 ,,,,,,
 cache_controller[*].m_shared_memory_id(i),10,,,,,
 cache_controller[*].protocol_type(s),DIRECTORY_MSI,,,,,
-cache_controller[*].fsm_filename(s),MSI_directory,,,,,
+cache_controller[*].fsm_filename(s),MSI_directory_v3,,,,,
 cache_controller[*].processing_queue_size(i),16,,#L1 processing-queue depth (bounds demand admission). -1 = unbounded,,,
 cache_controller[0].m_id(i),0,,,,,
 cache_controller[1].m_id(i),1,,,,,

@@ -36,6 +36,8 @@ namespace octopus
         {
             if(find(msg.to.begin(), msg.to.end(), m_id) == msg.to.end()) //check if this message is destined to this controller
                 m_upper_interface->popFrontMessage();
+            else if (consumeMemAck(msg))     // memory acknowledged a write: not a protocol event
+                m_upper_interface->popFrontMessage();
             else
             {
                 msg.source = Message::Source::UPPER_INTERCONNECT;

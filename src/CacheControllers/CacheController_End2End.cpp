@@ -46,6 +46,9 @@ namespace octopus
         {
             if(returned_msg.data != NULL)
             {
+                // the write never reaches memory, so it will never be acknowledged
+                if (returned_msg.kind == Message::K_MEM_WRITE)
+                    memWriteDone(returned_msg.addr);
                 msg->copy(returned_msg.data);
                 msg->kind = Message::K_FILL_ROLLBACK;
                 m_upper_interface->pushMessage2RX(*msg, MessageType::DATA_RESPONSE);
@@ -93,6 +96,7 @@ namespace octopus
 
         if (!m_upper_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::DATA_RESPONSE))
             pushRefused("upper interface, response queue", *msg);
+        noteMemWrite(*msg);
 
         delete msg;
     }

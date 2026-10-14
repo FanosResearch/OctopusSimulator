@@ -15,6 +15,7 @@
 #include "CommunicationInterface.h"
 #include "MCoreSimProjectXml.h"
 #include "FRFCFS_Buffer.h"
+#include <deque>
 
 namespace octopus
 {
@@ -40,6 +41,9 @@ namespace octopus
         DebugPrint* dprint;
 
         FRFCFS_Buffer<Message, MainMemoryController> *m_processing_queue;
+        // responses waiting for room in the lower interface (fills and write acknowledgements, in order)
+        std::deque<Message> m_out;
+        void flushOut();
 
         virtual void cycleProcess();
         virtual void processLogic();

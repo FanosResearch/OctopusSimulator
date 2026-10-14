@@ -51,7 +51,10 @@ public:
                           K_WB_DATA, K_WB_INV, K_SUPPLY, K_SUPPLY_DEFERRED, K_RESP, K_FILL, K_FILL_ROLLBACK, K_MEM_WRITE,
                           // directory protocols (docs/Trace.md): a sharer's PutS, the home's forward
                           // (FwdGetS/FwdGetM) and the acknowledgements (InvAck, PutAck)
-                          K_PUTS, K_FWD, K_ACK };
+                          K_PUTS, K_FWD, K_ACK,
+                          // memory's acknowledgement of a K_MEM_WRITE it has accepted (no data,
+                          // msg_id 0: not part of any request's latency)
+                          K_MEM_WACK };
     uint8_t kind = K_UNKNOWN;
 
     Message(uint64_t msg_id = 0, uint64_t addr = 0, uint64_t cycle = 0, uint64_t complementary_value = 0, uint16_t owner = 0)

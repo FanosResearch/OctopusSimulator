@@ -181,7 +181,7 @@ function lanesFor(list) {
   out.push(["RESP_BUS", 0, isNet ? "response packets (inject→eject)" : "response bus", "respbus"]);
   return out;
 }
-const KIND_TXT = { DEMAND:"CPU request", GETS:"GetS", GETM:"GetM", PUTM:"PutM", INV:"back-invalidation", EVICT:"L1 replacement", WB_DATA:"eviction write-back", WB_INV:"INV-forced write-back", SUPPLY:"cache-to-cache supply", SUPPLY_DEFERRED:"deferred supply (parked request)", RESP:"LLC/L1 data response", FILL:"DRAM fill", FILL_ROLLBACK:"fill (rollback)", MEM_READ:"memory read", MEM_WRITE:"LLC eviction to memory", PUTS:"PutS", FWD:"forward (FwdGetS/FwdGetM)", ACK:"acknowledgement (InvAck/PutAck)", UNKNOWN:"untagged" };
+const KIND_TXT = { DEMAND:"CPU request", GETS:"GetS", GETM:"GetM", PUTM:"PutM", INV:"back-invalidation", EVICT:"L1 replacement", WB_DATA:"eviction write-back", WB_INV:"INV-forced write-back", SUPPLY:"cache-to-cache supply", SUPPLY_DEFERRED:"deferred supply (parked request)", RESP:"LLC/L1 data response", FILL:"DRAM fill", FILL_ROLLBACK:"fill (rollback)", MEM_READ:"memory read", MEM_WRITE:"LLC eviction to memory", PUTS:"PutS", FWD:"forward (FwdGetS/FwdGetM)", ACK:"acknowledgement (InvAck/PutAck)", MEM_WACK:"memory write acknowledgement", UNKNOWN:"untagged" };
 let nocHeat = null;
 let runs = [], run = null, view = { t0: 0, t1: 0 }, data = null, ctxData = null, occData = null, mini = null, hover = null, timer = null, selected = null, laneHover = null;
 /* ---- views: hide/show here, or pop one out into its own window.

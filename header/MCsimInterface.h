@@ -16,6 +16,7 @@
 
 #include "ClockManager.h"
 #include "CommunicationInterface.h"
+#include <map>
 #include "FRFCFS_Buffer.h"
 #include "MCsim/MCsim.h" // the public facade (header/MCsim/), NOT the library-internal src/MCsim/src/MCsim.h
 
@@ -36,7 +37,11 @@ namespace octopus
         uint64_t m_write_count;
 
         std::vector<Message> m_pending_requests;
-        std::vector<Message> m_output_buffer;
+        std::vector<Message> m_output_buffer;   // fills and write acknowledgements, in order
+        // writes handed to MCsim and not yet performed (write_callback), per line: a read of such a
+        // line is answered from the write instead of DRAM (docs/NoC_Memory_Plan.md s2.3, H2)
+        std::map<uint64_t, int> m_unperformed;
+        uint64_t lineOf(uint64_t addr) const { return addr & ~uint64_t(m_llc_line_size - 1); }
 
         CommunicationInterface *m_lower_interface; // toward the LLC (bus to DRAM)
 

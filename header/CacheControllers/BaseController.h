@@ -103,6 +103,17 @@ namespace octopus
         [[noreturn]] void pushRefused(const char *where, const Message &msg);
         virtual void dumpState();
 
+        // Read-after-write to memory (docs/NoC_Memory_Plan.md s2): a line written to memory is
+        // kept, with its data, from the write until memory acknowledges it (K_MEM_WACK), and a
+        // memory read of that line is filled from here instead of being sent. Holds for any
+        // interconnect; the entries count against the write-back buffer.
+        struct MemWrite { int count = 0; std::vector<uint8_t> data; };
+        std::map<uint64_t, MemWrite> m_mem_writes;   // line address -> outstanding writes
+        void noteMemWrite(const Message &msg);       // a K_MEM_WRITE was pushed toward memory
+        void memWriteDone(uint64_t addr);            // acknowledged, or cancelled by a rollback
+        bool forwardFromMemWrite(Message *msg);      // a K_MEM_READ of a written line: fill it here
+        bool consumeMemAck(const Message &msg);      // intake: true if msg was a K_MEM_WACK (popped by the caller)
+
         // Structural admission gate. Returns false when a ready request must be
         // held back (e.g., the derived controller has no free MSHR/PWB entry for
         // a new miss). Default: always admit. Overridden by CacheController.

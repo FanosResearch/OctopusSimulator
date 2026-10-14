@@ -941,3 +941,36 @@ holds", no unannotated name), P2-CHECKER (two-class grid: exit 2, cells named); 
 server lists four router lanes and both bank lanes, a heat cell for every router and the router intervals.
 The drawing was checked by eye on that run: request 7507 of core 0 shows its GetS through routers 0, 1 and
 3, and the two copies of its data response each on their own path. S7-VIEWER stays the manual check.
+
+## Memory M1 — read-after-write to memory (`docs/NoC_Memory_Plan.md` §2)
+
+**Built.** A read of a line now always observes the earlier writes of that line.
+
+- The memory controllers acknowledge a `MEM_WRITE` when they accept it (`MEM_WACK`, id 0, no data).
+  Acknowledging only when DRAM performs the write would let an MCsim write queue that drains at its high
+  watermark hold the acknowledgements back while demand waits on the write-back buffer.
+- The acknowledgement travels on a sideband of the point-to-point memory bus (delivered as emitted, no data
+  slot), as a separate write-response channel does in AXI or CHI. Carried in the data slot, 24 000
+  acknowledgements on `cacheb01` queued the fills behind them and inflated the DRAM stage.
+- `BaseController` keeps every line it writes to memory, with its data, until the acknowledgement
+  (`m_mem_writes`); a `MEM_READ` of such a line is filled from it (`FILL_ROLLBACK`) instead of being sent.
+  The entries count against `pwb_size`. End2End's TX rollback, which cancels a write still in its TX
+  buffer, clears the entry. `MCsimInterface` answers a read of a line whose write MCsim has not yet
+  performed from that write.
+- Neither memory controller exits on a full lower interface any more: responses wait in an ordered queue.
+- A request that arrives after its line was chosen as victim keeps waiting behind the eviction and refetches
+  (now from the pending write); serving it from the write-back buffer was considered and not adopted.
+- Forwarding costs zero cycles, as End2End's rollback always did; a configurable latency is issue #13.
+
+**Found on the way.** The new timing exposed a directory L1 gap: the home records a GetM's owner when it
+grants it and may evict the line (`M` + Replacement → `SendInv/N_d`) before the owner's data arrives; the
+back-invalidation then reached the L1 in `IM_a`, a `Fault` cell (RR, `basefp01`, inject depth 4, eject depth
+2). `MSI_directory_v3.csv` and `MESI_directory_v2.csv` stall it there (`IM_a` + Inv → `Stall/`), as
+`MOESI_directory.csv` already did; the directory presets and `sweep_protocols.sh` use them.
+
+**Tests.** `OCTOPUS_MEM_HAZARD=1` (`header/MemHazard.h`, `=fatal` exits at the first hazard) counts reads
+delivered to memory ahead of an older write of the line (NET) or completed ahead of it (MC). Before the fix:
+directory 884, Grid2B 548, MEDUSA 3 196 on EEMBC, snoop 0 (End2End's rollback). After: 0 in all seven
+configurations, 70/70 runs complete. REG-HAZARD (directory, Grid2B, MEDUSA on `cacheb01`) joins the
+regression. Finish cycles move within ±2.1% except `cacheb01` under MEDUSA (−11%); REG-BUS (the tutorial's
+`expected/Summary.csv`), REG-MESH and REG-TDM references were regenerated.

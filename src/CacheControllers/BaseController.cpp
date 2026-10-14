@@ -8,6 +8,8 @@
 
 #include "../../header/CacheControllers/BaseController.h"
 #include "../../header/HangDump.h"
+#include "../../header/CacheDataHandler_COTS.h"
+#include "../../header/MemHazard.h"
 #include <cstdio>
 #include <cstdlib>
 #include "../../header/ExternalCPU.h"
@@ -195,10 +197,15 @@ namespace octopus
 
         if (m_upper_interface->peekMessage(&msg))
         {
-            msg.source = Message::Source::UPPER_INTERCONNECT;
-            traceMsg("intake-upper", msg);
-            if (buf.pushFrontOrdered(msg))
+            if (consumeMemAck(msg))
                 m_upper_interface->popFrontMessage();
+            else
+            {
+                msg.source = Message::Source::UPPER_INTERCONNECT;
+                traceMsg("intake-upper", msg);
+                if (buf.pushFrontOrdered(msg))
+                    m_upper_interface->popFrontMessage();
+            }
         }
 
         if (m_lower_interface->peekMessage(&msg))
@@ -290,6 +297,60 @@ namespace octopus
     uint64_t BaseController::getAddressKey(uint64_t addr)
     {
         return (addr & ~uint64_t(m_data_handler->getBlockSize() - 1));
+    }
+
+    void BaseController::noteMemWrite(const Message &msg)
+    {
+        if (msg.kind != Message::K_MEM_WRITE)
+            return;
+        MemWrite &w = m_mem_writes[getAddressKey(msg.addr)];
+        w.count++;
+        if (msg.data != NULL)
+            w.data.assign(msg.data, msg.data + m_data_handler->getBlockSize());   // the latest write wins
+        if (auto *cots = dynamic_cast<CacheDataHandler_COTS *>(m_data_handler))
+            cots->addAwaitingAck(1);
+    }
+
+    void BaseController::memWriteDone(uint64_t addr)
+    {
+        auto it = m_mem_writes.find(getAddressKey(addr));
+        if (it == m_mem_writes.end())
+        {
+            fprintf(stderr, "Controller %d: memory acknowledged a write to line 0x%llx that is not outstanding\n",
+                    m_id, (unsigned long long)getAddressKey(addr));
+            exit(2);
+        }
+        if (--it->second.count == 0)
+            m_mem_writes.erase(it);
+        if (auto *cots = dynamic_cast<CacheDataHandler_COTS *>(m_data_handler))
+            cots->addAwaitingAck(-1);
+    }
+
+    bool BaseController::forwardFromMemWrite(Message *msg)
+    {
+        if (msg->kind != Message::K_MEM_READ)
+            return false;
+        auto it = m_mem_writes.find(getAddressKey(msg->addr));
+        if (it == m_mem_writes.end())
+            return false;
+        // The fill arrives on this controller's own upper receive path, as a memory response
+        // would (the same K_FILL_ROLLBACK path as CacheController_End2End's TX rollback).
+        Message fill(msg->msg_id, msg->addr, this->m_cache_cycle, 0, msg->owner);
+        fill.to.push_back((uint16_t)this->m_id);
+        fill.kind = Message::K_FILL_ROLLBACK;
+        std::vector<uint8_t> zeros(m_data_handler->getBlockSize(), 0);
+        fill.copy(it->second.data.empty() ? zeros.data() : it->second.data.data());
+        m_upper_interface->pushMessage2RX(fill, MessageType::DATA_RESPONSE);
+        MemHazard::llcForwarded();
+        return true;
+    }
+
+    bool BaseController::consumeMemAck(const Message &msg)
+    {
+        if (msg.kind != Message::K_MEM_WACK)
+            return false;
+        memWriteDone(msg.addr);
+        return true;
     }
 
     void BaseController::addtoPendingRequests(void *data_ptr)
@@ -428,6 +489,12 @@ namespace octopus
             return;
         }
 
+        if (forwardFromMemWrite(msg))
+        {
+            delete msg;
+            return;
+        }
+
         if (!m_upper_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::REQUEST))
             pushRefused("upper interface, request queue", *msg);
 
@@ -473,6 +540,7 @@ namespace octopus
 
         if (!m_upper_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::DATA_RESPONSE))
             pushRefused("upper interface, response queue", *msg);
+        noteMemWrite(*msg);
 
         delete msg;
     }

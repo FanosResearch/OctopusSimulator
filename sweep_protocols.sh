@@ -43,8 +43,8 @@ CONFIGS=(
   "snoop|PMESI|MultiCoreSystem_Snoop.csv|SNOOP_PMESI|PMESI|SNOOP_LLC_PMESI|PMESI_LLC"
   "snoop|PMSIx|MultiCoreSystem_Snoop.csv|SNOOP_PMSI_ASTERISK|PMSI_asterisk|SNOOP_LLC_PMSI_ASTERISK|PMSI_asterisk_LLC"
   "snoop|PMESIx|MultiCoreSystem_Snoop.csv|SNOOP_PMESI_ASTERISK|PMESI_asterisk|SNOOP_LLC_PMESI_ASTERISK|PMESI_asterisk_LLC"
-  "directory|MSI|MultiCoreSystem_Directory.csv|DIRECTORY_MSI|MSI_directory|DIRECTORY_LLC_MSI|MSI_LLC_directory"
-  "directory|MESI|MultiCoreSystem_Directory.csv|DIRECTORY_MESI|MESI_directory|DIRECTORY_LLC_MESI|MESI_LLC_directory"
+  "directory|MSI|MultiCoreSystem_Directory.csv|DIRECTORY_MSI|MSI_directory_v3|DIRECTORY_LLC_MSI|MSI_LLC_directory"
+  "directory|MESI|MultiCoreSystem_Directory.csv|DIRECTORY_MESI|MESI_directory_v2|DIRECTORY_LLC_MESI|MESI_LLC_directory"
   "directory|MOESI|MultiCoreSystem_Directory.csv|DIRECTORY_MOESI|MOESI_directory|DIRECTORY_LLC_MOESI|MOESI_LLC_directory"
 )
 

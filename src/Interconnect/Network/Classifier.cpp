@@ -34,7 +34,7 @@ namespace octopus { namespace net
             case Message::K_RESP: case Message::K_SUPPLY: case Message::K_SUPPLY_DEFERRED:
             case Message::K_FILL: case Message::K_FILL_ROLLBACK:
             case Message::K_WB_DATA: case Message::K_MEM_READ: case Message::K_MEM_WRITE:
-            case Message::K_EVICT:
+            case Message::K_EVICT: case Message::K_MEM_WACK:
                 return CLASS_RESPONSE;
             default: break;
         }

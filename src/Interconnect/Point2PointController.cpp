@@ -105,6 +105,12 @@ namespace octopus
 
     void Point2PointController::upperBusStep(uint64_t cycle_number)
     {
+        // Write acknowledgements travel on a control sideband, not in a data slot (a write completion
+        // is a header-only response; docs/NoC_Memory_Plan.md s2.3): delivered as they are emitted.
+        for (auto *b : buffers_upper)
+            for (size_t i = 0; i < b->size(); )
+                if ((*b)[i].kind == Message::K_MEM_WACK) { Message ack = (*b)[i]; b->erase(b->begin() + i); send(ack); }
+                else i++;
         if (clk_in_slot_upper == 0)
         {
             for(int i = 0; i < (int) buffers_upper.size(); i++)

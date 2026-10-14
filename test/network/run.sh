@@ -88,7 +88,22 @@ reg_tdm() {
   if [ "$got" = "$want" ]; then pass REG-TDM identical identical "$(elapsed "$t0")"
   else fail REG-TDM "$got" "$want" "$(elapsed "$t0")"; fi
 }
-regression() { reg_bus; reg_env; reg_mesh; reg_tdm; }
+reg_hazard() { # read-after-write to memory (docs/NoC_Memory_Plan.md s2): no read of a line may reach memory ahead of an older write of it
+  local t0; t0=$(now); local ok=1 detail=""
+  local -a cfgs=("dir|-s MultiCoreSystem -c MultiCoreSystem_Directory" "grid2b|-s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid2B"
+                 "medusa|-s MultiCoreSystem -c $COMMITTED_CFG -p main_memory_type(s)=MCsim -p mcsim_scheduler(s)=MEDUSA")
+  local c; for c in "${cfgs[@]}"; do
+    ( OCTOPUS_MEM_HAZARD=1 sim "$OUT/reg-hazard/${c%%|*}" ${c#*|} -p "workload_path(s)=$(W cacheb01-trace)/" ) &
+  done; wait
+  for c in "${cfgs[@]}"; do
+    local d="$OUT/reg-hazard/${c%%|*}" s
+    s=$(grep -o 'NET overtakes [0-9]*, MC overtakes [0-9]*' "$d/.stderr" 2>/dev/null)
+    { [ "$s" = "NET overtakes 0, MC overtakes 0" ] && [ "$(grep -l 'Average Latency' "$d"/LatencyReport_C*.csv 2>/dev/null | wc -l)" = 4 ]; } || { ok=0; detail="$detail ${c%%|*}:${s:-no summary}"; }
+  done
+  if [ $ok = 1 ]; then pass REG-HAZARD "0 overtakes, 3/3 complete" "0 overtakes" "$(elapsed "$t0")"
+  else fail REG-HAZARD "$detail" "0 NET / 0 MC overtakes, complete" "$(elapsed "$t0")"; fi
+}
+regression() { reg_bus; reg_env; reg_mesh; reg_tdm; reg_hazard; }
 
 make_refs() {
   mkdir -p "$REF/legacy-mesh"

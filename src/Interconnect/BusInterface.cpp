@@ -7,6 +7,7 @@
  */
 
 #include "../../header/Interconnect/BusInterface.h"
+#include "../../header/MemHazard.h"
 
 namespace octopus
 {
@@ -64,11 +65,13 @@ namespace octopus
         if (type == MessageType::REQUEST && (int)m_tx_request_buffer.size() < m_buffer_max_size)
         {
             m_tx_request_buffer.push_back(msg);
+            if (msg.kind == Message::K_MEM_READ) MemHazard::readSent(msg.msg_id, msg.addr, msg.cycle);
             return true;
         }
         else if (type == MessageType::DATA_RESPONSE && (int)m_tx_response_buffer.size() < m_buffer_max_size)
         {
             m_tx_response_buffer.push_back(msg);
+            if (msg.kind == Message::K_MEM_WRITE) MemHazard::writeSent(msg.addr, msg.msg_id, msg.cycle);
             return true;
         }
 
@@ -77,6 +80,8 @@ namespace octopus
 
     bool BusInterface::pushMessage2RX(Message &msg, MessageType type)
     {
+        if (msg.kind == Message::K_MEM_WRITE) MemHazard::writeDelivered(msg.addr);
+        else if (msg.kind == Message::K_MEM_READ) MemHazard::readDelivered(msg.msg_id, msg.addr);
         // The RX cap back-pressures ONLY demand requests (GetS/GetM). Service
         // traffic -- writebacks (PutM), data responses -- is ALWAYS accepted
         // (bounded upstream by MSHR/PWB); rejecting it would starve the queues it
@@ -144,6 +149,7 @@ namespace octopus
             {
                 *out_msg = m_tx_response_buffer[i];
                 m_tx_response_buffer.erase(m_tx_response_buffer.begin() + i);
+                if (out_msg->kind == Message::K_MEM_WRITE) MemHazard::writeForwarded(out_msg->addr);
                 return true;
             }
         }

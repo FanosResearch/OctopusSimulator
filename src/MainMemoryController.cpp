@@ -8,6 +8,7 @@
 
 #include "../header/MainMemoryController.h"
 #include "../header/Logger.h"
+#include "../header/MemHazard.h"
 
 namespace octopus
 {
@@ -55,8 +56,15 @@ namespace octopus
     {
     }
 
+    void MainMemoryController::flushOut()
+    {
+        while (!m_out.empty() && m_lower_interface->pushMessage(m_out.front(), m_clk_cycle, MessageType::DATA_RESPONSE))
+            m_out.pop_front();
+    }
+
     void MainMemoryController::processLogic()
     {
+        flushOut();
         addRequests2ProcessingQueue(*m_processing_queue);
 
         Message ready_msg;
@@ -66,6 +74,7 @@ namespace octopus
         if (ready_msg.data == NULL) //Read message
         {
             m_read_count++;
+            MemHazard::readCompleted(ready_msg.msg_id, ready_msg.addr, m_clk_cycle);
             // Design B: DRAM finished servicing this read -> data leaves DRAM.
             Logger::getLogger()->event(ready_msg.msg_id, Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::EXIT);
             Logger::getLogger()->trace(ready_msg, Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::EXIT);
@@ -80,15 +89,13 @@ namespace octopus
             msg.kind = Message::K_FILL;
             msg.copy(return_data);
                     
-            if (!m_lower_interface->pushMessage(msg, m_clk_cycle, MessageType::DATA_RESPONSE))
-            {
-                cout << "MainMemoryController(id = " << this->m_id << "): Cannot insert the Msg into the lower interface FIFO, FIFO is Full" << endl;
-                exit(0);
-            }
+            m_out.push_back(msg);
+            flushOut();
         }
         else 
         {
             m_write_count++;
+            MemHazard::writePerformed(ready_msg.addr);
             // cout << "MainMemoryController: write msg id = " << ready_msg.msg_id;
             // cout << ", count is " << m_write_count;
             // cout << " and clk is " << m_clk_cycle << endl;
@@ -106,6 +113,19 @@ namespace octopus
             if (buf.pushBack(msg, FRFCFS_State::NonReady))
             {
                 m_lower_interface->popFrontMessage();
+                if (msg.data == NULL) MemHazard::readArrived(msg.msg_id, msg.addr, m_clk_cycle);
+                else                  MemHazard::writeArrived(msg.addr);
+                if (msg.kind == Message::K_MEM_WRITE)
+                {
+                    // accepted: this queue is now the point of order for the line, so the LLC may
+                    // release it (docs/NoC_Memory_Plan.md s2.3). Reads behind it in this queue are
+                    // served in arrival order, after it.
+                    Message ack(0, msg.addr, m_clk_cycle, 0, (uint16_t)m_id);
+                    ack.to.push_back(msg.from ? msg.from : (uint16_t)m_llc_id);
+                    ack.kind = Message::K_MEM_WACK;
+                    m_out.push_back(ack);
+                    flushOut();
+                }
                 // Design B: request has arrived at DRAM (crossed the mem bus in).
                 Logger::getLogger()->event(msg.msg_id, Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::ENTER);
                 Logger::getLogger()->trace(msg, Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::ENTER);

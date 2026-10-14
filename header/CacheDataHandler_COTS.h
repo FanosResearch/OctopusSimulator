@@ -27,6 +27,7 @@ namespace octopus
         std::map<uint64_t, GenericCacheLine> m_pending_write_back_regs; //PWB
 
         int m_pwb_size; //max pending write-backs; -1 = unbounded
+        int m_awaiting_ack = 0; //lines written to memory and not yet acknowledged
 
         // Addresses evicted into the PWB whose write-back request has not yet
         // been issued. A queue (not a single flag) so that multiple evictions
@@ -88,12 +89,16 @@ namespace octopus
         int pwbPendingIssueCount() const { return (int)m_pwb_pending_issue.size(); }
         int pwbSize() const { return m_pwb_size; }
 
-        // Headroom in the write-back buffer for one more evicted line.
+        // Headroom in the write-back buffer for one more evicted line. A line written to memory
+        // stays in the buffer until memory acknowledges it (BaseController's m_mem_writes), so
+        // those entries count too.
         inline bool pwbHasSpace()
         {
             return m_pwb_size < 0 ||
-                   (int)m_pending_write_back_regs.size() < m_pwb_size;
+                   (int)m_pending_write_back_regs.size() + m_awaiting_ack < m_pwb_size;
         }
+        void addAwaitingAck(int delta) { m_awaiting_ack += delta; }
+        int awaitingAck() const { return m_awaiting_ack; }
 
         // True iff installing a returning fill for `address` would evict a
         // victim into an already-full write-back buffer. This mirrors the

@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include "../header/MCsimInterface.h"
 #include "../header/Logger.h"
+#include "../header/MemHazard.h"
 
 using namespace std;
 
@@ -91,13 +92,28 @@ namespace octopus
             if (mcsimTraced(ready_msg.addr))
                 cout << "[mcsim] cyc " << m_clk_cycle << " request addr 0x" << std::hex << ready_msg.addr << std::dec << " msg " << ready_msg.msg_id
                      << " owner " << ready_msg.owner << (ready_msg.data == NULL ? " READ" : " WRITE") << " pending " << m_pending_requests.size() << endl;
-            if (m_mcsim->addRequest(ready_msg.owner, ready_msg.addr, ready_msg.data == NULL, m_llc_line_size)) // 1 -> Read, 0 -> Write
+            if (ready_msg.data == NULL && m_unperformed.count(lineOf(ready_msg.addr)))
+            {
+                // read forwarding: an older write to this line is still inside MCsim
+                Logger::getLogger()->event(ready_msg.msg_id, Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::ENTER);
+                Logger::getLogger()->trace(ready_msg, Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::ENTER);
+                MemHazard::readForwarded(ready_msg.msg_id, ready_msg.addr);
+                uint64_t data = m_read_count++;
+                Message fill(ready_msg.msg_id, ready_msg.addr, m_clk_cycle, 0, ready_msg.owner);
+                fill.to.push_back(ready_msg.from ? ready_msg.from : (uint16_t)m_llc_id);
+                fill.kind = Message::K_FILL;
+                fill.copy((uint8_t *)&data);
+                m_output_buffer.push_back(fill);
+            }
+            else if (m_mcsim->addRequest(ready_msg.owner, ready_msg.addr, ready_msg.data == NULL, m_llc_line_size)) // 1 -> Read, 0 -> Write
             {
                 // Design B: request has entered DRAM (mirrors MainMemoryController's stamp).
                 Logger::getLogger()->event(ready_msg.msg_id, Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::ENTER);
                 Logger::getLogger()->trace(ready_msg, Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::ENTER);
                 if (ready_msg.data == NULL) // Add read requests only (writes are fire-and-forget)
                     m_pending_requests.push_back(ready_msg);
+                else
+                    m_unperformed[lineOf(ready_msg.addr)]++;
             }
             else
             {
@@ -106,15 +122,14 @@ namespace octopus
             }
         }
 
-        if (!m_output_buffer.empty())
+        // one response per cycle; a full lower interface holds it (and everything behind it) for a later cycle
+        if (!m_output_buffer.empty() && m_lower_interface->pushMessage(m_output_buffer[0], m_clk_cycle, MessageType::DATA_RESPONSE))
         {
-            // Design B: DRAM finished servicing this read -> data leaves DRAM.
-            Logger::getLogger()->event(m_output_buffer[0].msg_id, Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::EXIT);
-            Logger::getLogger()->trace(m_output_buffer[0], Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::EXIT);
-            if (!m_lower_interface->pushMessage(m_output_buffer[0], m_clk_cycle, MessageType::DATA_RESPONSE))
+            if (m_output_buffer[0].kind != Message::K_MEM_WACK)
             {
-                cout << "MCsimInterface(id = " << this->m_id << "): Cannot insert the Msg into the lower interface FIFO, FIFO is Full" << endl;
-                exit(0);
+                // Design B: DRAM finished servicing this read -> data leaves DRAM.
+                Logger::getLogger()->event(m_output_buffer[0].msg_id, Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::EXIT);
+                Logger::getLogger()->trace(m_output_buffer[0], Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::EXIT);
             }
             m_output_buffer.erase(m_output_buffer.begin());
         }
@@ -129,7 +144,22 @@ namespace octopus
             msg.source = Message::Source::LOWER_INTERCONNECT;
             msg.cycle = m_clk_cycle;
             if (buf.pushBack(msg, FRFCFS_State::Ready))
+            {
                 m_lower_interface->popFrontMessage();
+                if (msg.data == NULL) MemHazard::readArrived(msg.msg_id, msg.addr, m_clk_cycle);
+                else                  MemHazard::writeArrived(msg.addr);
+                if (msg.kind == Message::K_MEM_WRITE)
+                {
+                    // accepted: from here this controller orders the line (reads of it are forwarded
+                    // while MCsim holds the write), so the LLC may release it
+                    Message ack(0, msg.addr, m_clk_cycle, 0, (uint16_t)m_id);
+                    ack.to.push_back(msg.from ? msg.from : (uint16_t)m_llc_id);
+                    ack.kind = Message::K_MEM_WACK;
+                    // a header-only control response: not serialized behind the data responses
+                    if (!m_lower_interface->pushMessage(ack, m_clk_cycle, MessageType::DATA_RESPONSE))
+                        m_output_buffer.push_back(ack);
+                }
+            }
         }
     }
 
@@ -147,6 +177,7 @@ namespace octopus
         {
             if (m_pending_requests[i].addr == address)
             {
+                MemHazard::readCompleted(m_pending_requests[i].msg_id, m_pending_requests[i].addr, m_clk_cycle);
                 uint64_t data = m_read_count;
                 m_read_count++;
 
@@ -176,5 +207,9 @@ namespace octopus
     void MCsimInterface::write_callback(unsigned id, uint64_t address, uint64_t clock_cycle)
     {
         m_write_count++;
+        MemHazard::writePerformed(address);
+        auto it = m_unperformed.find(lineOf(address));
+        if (it != m_unperformed.end() && --it->second == 0)
+            m_unperformed.erase(it);
     }
 }

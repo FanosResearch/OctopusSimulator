@@ -56,11 +56,12 @@ Because the fields above cannot be read back into a kind, the phase‑3 trace ta
 | `SUPPLY` | L1 `Data2Req/Data2Both` triggered by `Other_GetS`/`Other_GetM` |
 | `SUPPLY_DEFERRED` | L1 `Data2Req/Data2Both` triggered by `OwnData`/`OwnData_Execlusive` with a parked request; the message takes the **parked** request's id and owner (and a copy goes to the LLC if the parked request was a GetS) |
 | `RESP` | LLC `SendData` / `SendExeclusiveData` |
-| `FILL`, `FILL_ROLLBACK` | MainMemory / MCsim / perfect loopback; End2End rollback |
+| `FILL`, `FILL_ROLLBACK` | MainMemory / MCsim / perfect loopback; `FILL_ROLLBACK`: a memory read of a line the LLC wrote and memory has not acknowledged, filled from that write (End2End TX rollback, `BaseController::forwardFromMemWrite`) |
 | `MEM_WRITE` | LLC `WriteBack` (snoop and directory home) |
 | `PUTS` | directory L1 `PutS` |
 | `FWD` | directory home `FwdGetS` / `FwdGetM` (sent on the service lane, or point-to-point on a mesh) |
 | `ACK` | directory L1 `InvAck2Req` / `InvAck_Data`, directory home `PutAck` |
+| `MEM_WACK` | MainMemoryController / MCsimInterface when they accept a `MEM_WRITE`; id 0 (no request's latency), no data; carried on the acknowledgement sideband of the memory bus |
 | `0` (unknown) | anything else |
 
 Under the directory protocols the shared kinds keep their meaning: an L1's `GetS`/`GetM` and `PutM_Data` are `GETS`/`GETM`/`PUTM`, the home's `GetData` is `MEM_READ`, its `SendInv` is `INV`, its `SendData` is `RESP`, and an owner answering a forward (`Data2Req`/`Data2Both`) is a `SUPPLY`.
