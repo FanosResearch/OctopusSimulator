@@ -1106,3 +1106,15 @@ LLC's copy).
 on two controllers byte-identical. Equality with the bus system's DRAM count, planned first, does not hold
 (the network moves the LLC's hits and misses) and was replaced by the conservation check. `run.sh all`:
 116 pass, 0 failures.
+
+## Memory M7 — user documentation and the regression test
+
+**Done.** `SUPPORTED_CONFIGURATIONS.md` describes the multi-hop network (topologies, routing, virtual
+networks, timing, allocation, endpoint queues, deadlock checks, LLC banking, memory on the network,
+observability) and its presets; `README.md` introduces it with two commands, both run as written.
+REG-MEMNET joins the regression: `MultiCoreSystem_Grid2BM` on a2time01 stays byte-identical to
+`test/network/ref/reg-memnet.md5`; `run.sh reg` runs six tests.
+
+**Not done here.** The LaTeX manual (`docs/manual`, chapters 6, 8 and 9 and appendix B) still describes the
+network as out of scope for memory and names `MSI_directory` / `MESI_directory`; this machine has no TeX, so
+the chapters and the PDF are left for a machine that can build them.

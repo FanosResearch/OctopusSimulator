@@ -127,7 +127,7 @@ Each step: implement, run its tests (`bash test/network/run.sh <id>`), ASan, a s
 | **M4** (done) | accounting: memory packets log as `MEM_BUS` out and back, so the Mem-Bus stages are network time; hop and NoC-wait columns include memory hops; visualizer memory routes and one DRAM lane per controller | event-path tiling 0 failures; `octoviz convert` checks clean; unloaded LLC-to-memory latency equals the hop formula |
 | **M5** (done) | several memory controllers: `memOf`, one controller per id, preset with 2 banks and 2 controllers on edge routers | per-controller request counts match the interleave formula; EEMBC 10/10; SPLASH subset completes; hazard 0 |
 | **M6** (done) | MCsim on the grid: `main_memory_type` in `MultiCoreSystem_Mesh`, one `MCsimInterface` per controller, address-bit removal | deterministic (md5 over 3 runs); one controller on the grid vs the bus system: same DRAM access count, latency difference explained by the network |
-| **M7** | docs: SUPPORTED_CONFIGURATIONS, NoC docs, manual ch. 8/9; regression test with memory on the network | `run.sh reg` 5/5 |
+| **M7** (done, except the manual: no TeX on the build machine) | docs: SUPPORTED_CONFIGURATIONS, NoC docs, manual ch. 8/9; regression test with memory on the network | `run.sh reg` 5/5 |
 
 M1 stands on its own: it fixes the bus systems whether or not the rest is done.
 

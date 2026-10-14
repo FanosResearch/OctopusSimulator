@@ -65,6 +65,21 @@ An interconnect is an `InterconnectTopology` (message-holding *interfaces* plus 
 on shared links. Swapping the topology/controller yields point-to-point, unified bus,
 split bus, mesh, or NoC.
 
+The multi-hop network (`interconnect_type Network` in `MultiCoreSystem_Mesh`) is a flit-level
+wormhole network with virtual networks per message class, pluggable topologies and routing, LLC banks,
+and memory controllers as network endpoints (fixed latency or MCsim). For example:
+
+```bash
+# directory MSI on a 2x2 grid with two LLC banks and the memory controller on the network
+./build/Octopus_Simulator -s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid2BM -o results/grid2bm
+# the same with two memory controllers, each simulated by MCsim
+./build/Octopus_Simulator -s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid2B2M -o results/grid2b2m \
+  -p "main_memory_type(s)=MCsim"
+```
+
+See [`SUPPORTED_CONFIGURATIONS.md`](SUPPORTED_CONFIGURATIONS.md) for the options and
+[`docs/NoC_Architecture_Spec.md`](docs/NoC_Architecture_Spec.md) for the specification.
+
 ### Coherence as an editable CSV finite-state machine
 
 ![Coherence FSM CSV example](docs/imgs/fsm_example.png)

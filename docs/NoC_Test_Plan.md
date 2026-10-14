@@ -55,6 +55,7 @@ Runs at every step; all must stay byte-identical to their references.
 | REG-ENV | shell | `scripts/check_environment.sh` reference run | 15364 requests, worst-case DRAM latency 377 cycles |
 | REG-MESH | sim | legacy `MultiCoreSystem_Mesh` (the single-switch `NoC`) on all ten EEMBC traces | checksums of `LatencyReport_C*.csv` and `Summary.csv` taken at step 0 and committed under `test/network/ref/legacy-mesh/`; the legacy files are not touched before step 6, so any drift is a build or arbiter regression |
 | REG-TDM | sim | shipped bus with `TDMArbiter` on `a2time01` | checksum taken at step 0; guards the arbiter files that step 3 edits |
+| REG-MEMNET | sim | `MultiCoreSystem_Grid2BM` (memory on the network) on `a2time01` | checksum taken at Memory M7 (`test/network/ref/reg-memnet.md5`) |
 | REG-HAZARD | sim | `OCTOPUS_MEM_HAZARD=1` on `cacheb01`: the directory preset, `MultiCoreSystem_Grid2B`, and the shipped bus with MCsim MEDUSA (a write queue) | 0 reads delivered or completed ahead of an older write of their line, all cores complete (spec §25.2) |
 
 The REG-BUS, REG-MESH and REG-TDM references were regenerated once, at Memory M1 (`bcf87d6d`), which

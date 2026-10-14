@@ -16,7 +16,7 @@ below can be selected, swept, or combined without touching C++.
 | Axis | Ships with |
 |---|---|
 | Coherence protocols | Snoop & directory MSI / MESI / MOESI (CSV FSMs, stable + transient states); extensible incl. time-based coherence |
-| Interconnect topology | Point-to-point, unified bus, split bus, triple bus, mesh, NoC |
+| Interconnect topology | Point-to-point, unified bus, split bus, triple bus, mesh, NoC, multi-hop flit-level network (grid, torus, ring, star, custom) |
 | Arbitration | FCFS, FR-FCFS, RR, Weighted-RR, Harmonic-RR, TDM, GRROF |
 | Cache hierarchy | Arbitrary depth, private/shared, multi-bank, non-blocking (MSHRs, WB/refill buffers) |
 | Replacement | LRU, FIFO, Random |
@@ -49,6 +49,32 @@ below can be selected, swept, or combined without touching C++.
 - Network-on-Chip (NoC)
 - Configurable interconnect controllers and topology (connection) maps for custom
   topologies
+- Multi-hop network (below)
+
+### Multi-hop network (`interconnect_type Network`, system `MultiCoreSystem_Mesh`)
+
+A flit-level wormhole network with credit-based flow control. Specification:
+[`docs/NoC_Architecture_Spec.md`](docs/NoC_Architecture_Spec.md); keys and defaults:
+`configuration/Interconnect/Network.csv`.
+
+| Aspect | Options |
+|---|---|
+| Topology | `grid2d`, `torus2d`, `ring`, `star`, `custom` (explicit routers and links); endpoints attach to routers through `node_map` |
+| Routing | `XY`, `Table` (shortest paths), `WestFirst`, `AdaptiveMinimal` (with an escape VC); `auto` = XY on grids, Table otherwise |
+| Virtual networks | `num_classes 3` (request / forward / response) or 2 (legacy request / data), `vcs_per_class`, `vc_depth` |
+| Timing | `router_latency`, `link_latency`, per-class link latency, `flit_bytes`, `header_bytes`, pipelined or serial links |
+| Allocation | FCFS or RR for VC and switch allocation |
+| Endpoint queues | `inject_queue_depth`, `eject_queue_depth`; controllers reserve transmit slots before a transition, so a push is never refused |
+| Deadlock freedom | routing-level check and a protocol-and-network check of the FSM tables at construction (`deadlock_check refuse \| warn`) |
+| LLC banking | `llc_banks`, `home_ids`, `home_interleave_shift`: several LLC banks as directory homes, lines interleaved |
+| Memory on the network | `memory_on_network 1`: memory controllers are endpoints; each LLC bank reaches memory through its memory port (`mem_port_id`); several controllers with `mem_ids` / `mem_interleave_shift`; fixed-latency memory or MCsim (one instance per controller) |
+| Observability | per-request NoC Hops / Wait / Transfer / Ahead columns (and NoC Mem columns with memory on the network), `NetworkStats.csv`, router lanes and request routes in the visualizer |
+
+Presets: `MultiCoreSystem_Grid` (2×2 grid, one LLC), `MultiCoreSystem_Grid2B` (two LLC banks),
+`MultiCoreSystem_Grid2BM` (two banks, memory controller on the network), `MultiCoreSystem_Grid2B2M`
+(two banks, two memory controllers), `MultiCoreSystem_NetNoC` (the legacy single-switch NoC on the
+network engine). The multi-hop network runs the directory protocols; snooping over it is not supported.
+Real-time arbitration on the network (TDM slots, priority VCs) is not yet available.
 
 ## Bus / interconnect arbitration
 

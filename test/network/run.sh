@@ -103,7 +103,14 @@ reg_hazard() { # read-after-write to memory (docs/NoC_Memory_Plan.md s2): no rea
   if [ $ok = 1 ]; then pass REG-HAZARD "0 overtakes, 3/3 complete" "0 overtakes" "$(elapsed "$t0")"
   else fail REG-HAZARD "$detail" "0 NET / 0 MC overtakes, complete" "$(elapsed "$t0")"; fi
 }
-regression() { reg_bus; reg_env; reg_mesh; reg_tdm; reg_hazard; }
+reg_memnet() { # memory on the network (spec s25): Grid2BM on a2time01 stays byte-identical to its reference
+  local t0; t0=$(now)
+  sim "$OUT/reg-memnet" -s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid2BM -p "workload_path(s)=$(W a2time01-trace)/"
+  local got; got=$(sumdir "$OUT/reg-memnet"); local want; want=$(cat "$REF/reg-memnet.md5" 2>/dev/null || echo missing)
+  if [ "$got" = "$want" ]; then pass REG-MEMNET identical identical "$(elapsed "$t0")"
+  else fail REG-MEMNET "$got" "$want" "$(elapsed "$t0")"; fi
+}
+regression() { reg_bus; reg_env; reg_mesh; reg_tdm; reg_hazard; reg_memnet; }
 
 make_refs() {
   mkdir -p "$REF/legacy-mesh"
@@ -112,6 +119,8 @@ make_refs() {
   sim "$OUT/reg-tdm" -s MultiCoreSystem -c "$COMMITTED_CFG" -p "workload_path(s)=$(W a2time01-trace)/" -p "bus[0].interconnect_controller.arbiter_type(s)=TDMArbiter"
   sumdir "$OUT/reg-tdm" > "$REF/reg-tdm.md5"; echo "reg-tdm $(cat "$REF/reg-tdm.md5")"
   mem_off_refs
+  sim "$OUT/reg-memnet" -s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid2BM -p "workload_path(s)=$(W a2time01-trace)/"
+  sumdir "$OUT/reg-memnet" > "$REF/reg-memnet.md5"; echo "reg-memnet $(cat "$REF/reg-memnet.md5")"
 }
 
 # ---------------------------------------------------------------- unit tests by prefix
