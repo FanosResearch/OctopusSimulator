@@ -16,18 +16,26 @@
 
 namespace octopus { namespace net
 {
-    void Network::checkProtocols(const std::vector<BaseController *> &controllers)
+    void Network::checkProtocols(const std::vector<BaseController *> &controllers, bool memory_on_network)
     {
         static const char *cname[] = {"REQUEST", "FORWARD", "RESPONSE"};
         auto className = [&](int c) { return m_cfg.num_classes == 2 ? (c == 0 ? "REQUEST" : "DATA") : cname[c]; };
         int home = m_home_ids.empty() ? -1 : m_home_ids[0];
+        int memory = -1;                     // any endpoint that is neither a cache nor a home: the class rules of memory kinds ignore it
         int core = -1; for (int id : m_component_ids) if (!m_classifier->isHome(id)) { core = id; break; }
+        // the network's class of a message, without the fatal path (an unclassifiable annotation is skipped)
+        auto netClass = [&](const Message &m, int dst) {
+            if (m_debug == "memread-request" && m.kind == Message::K_MEM_READ) return (int)CLASS_REQUEST;
+            return m_classifier->classify(m, dst);
+        };
         // a message of the annotated shape, classified as the network would
         auto classOf = [&](const CoherenceProtocolHandler::MsgClass &mc) {
             Message m(1, 0, 0, 0, (uint16_t)(mc.from_home ? home : core));
             m.kind = (uint8_t)mc.kind; m.from = (uint16_t)(mc.from_home ? home : core);
             uint8_t buf[64] = {0}; if (mc.data) m.copy(buf, 64);
-            return m_classifier->classify(m, mc.from_home ? core : home);
+            if (mc.kind == Message::K_MEM_READ || mc.kind == Message::K_MEM_WRITE || mc.kind == Message::K_FILL || mc.kind == Message::K_MEM_WACK)
+                return netClass(m, mc.from_home ? memory : home);
+            return netClass(m, mc.from_home ? core : home);
         };
         int top = m_cfg.num_classes - 1;
         std::set<std::string> seen; std::vector<std::string> violations, unannotated; int cells = 0, emitting = 0;
@@ -48,14 +56,14 @@ namespace octopus { namespace net
                     CoherenceProtocolHandler::MsgClass in;
                     std::string ev = f->getEventName(e);
                     if (!p->consumedBy(ev, in)) { unannotated.push_back(key + " event " + ev); continue; }
-                    int cin = in.kind < 0 ? -1 : classOf(in);
+                    int cin = (in.kind < 0 || (in.memory && !memory_on_network)) ? -1 : classOf(in);
                     for (int a : actions)
                     {
                         std::string an = f->getActionName(a); std::vector<CoherenceProtocolHandler::MsgClass> outs;
                         if (!p->emittedBy(an, outs)) { unannotated.push_back(key + " action " + an); continue; }
                         for (auto &o : outs)
                         {
-                            if (o.kind < 0) continue;
+                            if (o.kind < 0 || (o.memory && !memory_on_network)) continue;
                             int cout_ = classOf(o); if (cout_ < 0) continue;
                             emitting++;
                             if (cin < 0) continue;                                     // consumed from the CPU or the memory: no network class to order against
@@ -66,6 +74,25 @@ namespace octopus { namespace net
                         }
                     }
                 }
+        }
+        // the memory controller (spec s25.3): a read is answered with a fill, a write with an acknowledgement
+        if (memory_on_network)
+        {
+            auto memClass = [&](int kind, bool data) {
+                Message m(1, 0, 0, 0, (uint16_t)home); m.kind = (uint8_t)kind; m.from = (uint16_t)home;
+                uint8_t buf[64] = {0}; if (data) m.copy(buf, 64);
+                return netClass(m, memory);
+            };
+            const struct { int in_kind; bool in_data; int out_kind; bool out_data; const char *name; } mc[] = {
+                {Message::K_MEM_READ, false, Message::K_FILL, true, "memory controller (read) emits a fill"},
+                {Message::K_MEM_WRITE, true, Message::K_MEM_WACK, false, "memory controller (write) emits an acknowledgement"}};
+            for (auto &c : mc)
+            {
+                int cin = memClass(c.in_kind, c.in_data), cout_ = memClass(c.out_kind, c.out_data);
+                cells++; emitting++; edges.insert({cin, cout_});
+                if (cout_ < cin || (cout_ == cin && cin != top))
+                    violations.push_back(std::string(c.name) + ": consumes " + className(cin) + " and emits " + className(cout_));
+            }
         }
         std::ostringstream o;
         o << "Protocol-network check (" << m_cfg.num_classes << " classes): " << cells << " cells, " << emitting << " network emissions; edges";

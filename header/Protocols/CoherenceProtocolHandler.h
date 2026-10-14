@@ -59,7 +59,8 @@ namespace octopus
         // named FSM event consumes and the messages a named action emits onto the interconnect.
         // kind -1 = not an interconnect message (the CPU, the memory, the controller itself).
         // Returning false = the name is unknown to this protocol (the check reports it).
-        struct MsgClass { int kind = -1; bool data = false; bool from_home = false; };
+        // memory: travels between the home and a memory controller; on the network only with memory_on_network (spec s25.3)
+        struct MsgClass { int kind = -1; bool data = false; bool from_home = false; bool memory = false; };
         virtual bool consumedBy(const std::string &event, MsgClass &out) const { (void)event; (void)out; return false; }
         virtual bool emittedBy(const std::string &action, std::vector<MsgClass> &out) const { (void)action; (void)out; return false; }
         virtual bool hasClassAnnotation() const { return false; }

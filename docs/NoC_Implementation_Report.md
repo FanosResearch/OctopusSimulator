@@ -1013,3 +1013,24 @@ each, byte-identical to references taken with the M0 build (`test/network/ref/me
 with the DRAM stage present. MEM-HAZARD: FCFS and RR, 20/20 complete, 0 overtakes. MEM-ADMISSION:
 `inject_queue_depth 4`, `eject_queue_depth 2`, FCFS and RR, 20/20 complete, 0 refused pushes. MEM-DETERMINISM.
 S1-CLS-3 updated for the new class of `K_MEM_READ`. `run.sh all`: 0 failures.
+
+## Memory M3 — the memory path in the protocol-and-network check (spec §25.3)
+
+**Built.**
+
+- The directory LLC's class annotations name its memory messages: `GetData` emits `K_MEM_READ`, `WriteBack`
+  `K_MEM_WRITE` (data), `Data_fromUpperInterface` consumes `K_FILL` (data), each flagged as memory traffic
+  (`MsgClass::memory`). `checkProtocols(controllers, memory_on_network)` includes them only when memory is on
+  the network, so the verdict for bus-memory presets is unchanged (Grid2B: 273 cells, 60 emissions, as before).
+- With memory on the network the check adds the memory controller's two cells: a read is answered with a
+  fill (FORWARD → RESPONSE) and a write with an acknowledgement (RESPONSE → RESPONSE, the drained top class).
+  Grid2BM: 275 cells, 69 emissions, edges REQUEST→FORWARD, REQUEST→RESPONSE, FORWARD→RESPONSE,
+  RESPONSE→RESPONSE; the consumption order holds.
+- `OCTOPUS_NET_DEBUG=memread-request` classifies memory reads as REQUEST (the negative test): refused with
+  status 2, naming the LLC cells `(N, GetS)` and `(N, GetM)` that would emit a request while consuming one.
+- `NetworkStats.csv` gains `epclass,<endpoint>,<class>,,<packets>` rows (packets received per class).
+
+**Tests** (`bash test/network/run.sh M3`). MEM-CLASS on a2time01: the memory controller received 4 042
+FORWARD packets (= the reads) and 3 798 RESPONSE packets (= the writes), none in REQUEST; the memory ports
+received only RESPONSE, 7 840 = fills + acknowledgements. MEM-CHECKER: the verdict holds with two more cells
+than the bus-memory preset, and the negative case exits 2. `run.sh all`: 110 pass, 0 failures.

@@ -71,3 +71,31 @@ stepM2() {
   done
   if [ $ok = 1 ]; then pass MEM-DETERMINISM "identical" "identical"; else fail MEM-DETERMINISM "differs:$detail" "identical"; fi
 }
+
+stepM3() {
+  local O="$OUT/mem3" t0; mkdir -p "$O"
+  # ---------------- MEM-CLASS: memory packets travel in the classes of spec s25.3 (per-endpoint class counts)
+  t0=$(now)
+  mem_run "$O/cls" -p "workload_path(s)=$(W a2time01-trace)/"
+  local st="$O/cls/NetworkStats.csv" reads writes
+  reads=$(grep -o 'reads [0-9]*' "$O/cls/.stderr" | cut -d' ' -f2); writes=$(grep -o 'writes [0-9]*' "$O/cls/.stderr" | cut -d' ' -f2)
+  epc() { awk -F, -v e="$1" -v c="$2" '$1=="epclass" && $2==e && $3==c {print $5}' "$st"; }
+  local m0 m1 m2 p0 p1 p2 q0 q1 q2
+  m0=$(epc 100 0); m1=$(epc 100 1); m2=$(epc 100 2)
+  p0=$(epc 110 0)$(epc 111 0); p1=$(epc 110 1)$(epc 111 1); p2=$(( $(epc 110 2) + $(epc 111 2) ))
+  if [ -z "$m0" ] && [ "$m1" = "$reads" ] && [ "$m2" = "$writes" ] && [ -z "$p0$p1" ] && [ "$p2" = $((reads + writes)) ]; then
+    pass MEM-CLASS "memory: forward $m1 = reads, response $m2 = writes; ports: response $p2 = fills + acks" "reads FORWARD, writes/fills/acks RESPONSE" "$(elapsed "$t0")"
+  else fail MEM-CLASS "memory req=${m0:-0} fwd=$m1 resp=$m2 (reads $reads writes $writes); ports req/fwd=${p0}${p1} resp=$p2" "reads FORWARD, writes/fills/acks RESPONSE" "$(elapsed "$t0")"; fi
+
+  # ---------------- MEM-CHECKER: the memory controllers are checked; a memory read in REQUEST is refused
+  t0=$(now)
+  local v; v=$(grep 'Protocol-network check' "$O/cls/.stdout")
+  local vb; sim "$O/bus" -s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid2B -p "workload_path(s)=$(W empty-trace)/" > /dev/null 2>&1
+  vb=$(grep 'Protocol-network check' "$O/bus/.stdout")
+  local cm cb; cm=$(echo "$v" | grep -o '[0-9]* cells' | cut -d' ' -f1); cb=$(echo "$vb" | grep -o '[0-9]* cells' | cut -d' ' -f1)
+  rm -rf "$O/neg"; mkdir -p "$O/neg"
+  ( OCTOPUS_NET_DEBUG=memread-request timeout 300 "$BIN" $MEMNET -p "workload_path(s)=$(W a2time01-trace)/" -o "$(wpath "$O/neg")" > "$O/neg/.stdout" 2> "$O/neg/.stderr" ); local nrc=$?
+  if echo "$v" | grep -q "consumption order holds" && [ -n "$cm" ] && [ "$cm" = $((cb + 2)) ] && [ $nrc = 2 ] && grep -q "emits GetData in REQUEST" "$O/neg/.stderr"; then
+    pass MEM-CHECKER "holds with $cm cells (bus memory: $cb, + 2 memory-controller cells); read in REQUEST refused (exit 2)" "holds; negative refused" "$(elapsed "$t0")"
+  else fail MEM-CHECKER "verdict '$v' cells $cm/$cb negative rc=$nrc" "holds; negative refused with exit 2" "$(elapsed "$t0")"; fi
+}

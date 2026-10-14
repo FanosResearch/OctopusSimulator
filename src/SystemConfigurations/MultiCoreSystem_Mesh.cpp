@@ -136,7 +136,7 @@ namespace octopus
                                                  memory_on_network ? interfaceFor(main_memory_id) : bus->getInterfaceFor(main_memory_id), name);
 
         if (interconnect_type == STRINGIFY(Network))
-            m_network->checkProtocols(BaseController::controllers());      // spec s14.3: after every controller exists
+            m_network->checkProtocols(BaseController::controllers(), memory_on_network);      // spec s14.3, s25.3: after every controller exists
 
         Logger::getLogger()->registerReportPath(workload_path + string("/newLogger"));
     }

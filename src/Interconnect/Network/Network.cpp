@@ -543,7 +543,7 @@ namespace octopus { namespace net
         cs.packets++; cs.sum_latency += total; cs.max_latency = std::max(cs.max_latency, total); cs.max_wait = std::max(cs.max_wait, pk.wait_ticks); cs.last_eject = m_tick;
         EndpointStats &es = m_ep_stats[pk.dst_endpoint];
         if (es.packets == 0) { es.first_owner = pk.msg.owner; es.first_seq = pk.seq; }
-        es.packets++; es.sum_latency += total; es.max_latency = std::max(es.max_latency, total);
+        es.packets++; es.by_class[pk.cls]++; es.sum_latency += total; es.max_latency = std::max(es.max_latency, total);
         int winner = -1; uint32_t wins = 0;
         for (auto &kv : pk.ahead_by) if (kv.second > wins) { wins = kv.second; winner = kv.first; }
         if (pk.ahead > es.max_ahead) { es.max_ahead = pk.ahead; es.max_ahead_winner = winner; }
@@ -644,6 +644,8 @@ namespace octopus { namespace net
             f << "endpoint," << kv.first << ",,," << kv.second->rxDelivered() << "," << kv.second->rxPopped() << "," << kv.second->pushRefused() << "," << es.packets << "\n";
             f << "received," << kv.first << ",,," << es.packets << "," << (es.packets ? (double)es.sum_latency / es.packets : 0.0) << "," << es.max_latency << "," << es.first_owner << "\n";
             f << "ahead," << kv.first << ",,," << es.max_ahead << "," << es.max_ahead_winner << ",,\n";
+            for (auto &bc : es.by_class)
+                f << "epclass," << kv.first << "," << bc.first << ",," << bc.second << ",,,\n";
         }
         for (auto g : m_gens)
             f << "generator," << g->id() << ",,," << g->sent() << "," << g->received() << "," << g->retries() << "," << g->outOfOrder() << "\n";
