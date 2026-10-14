@@ -99,3 +99,59 @@ stepM3() {
     pass MEM-CHECKER "holds with $cm cells (bus memory: $cb, + 2 memory-controller cells); read in REQUEST refused (exit 2)" "holds; negative refused" "$(elapsed "$t0")"
   else fail MEM-CHECKER "verdict '$v' cells $cm/$cb negative rc=$nrc" "holds; negative refused with exit 2" "$(elapsed "$t0")"; fi
 }
+
+# unloaded latency of a packet of f flits through R routers (spec s13.2): R*rl + (R-1)*L + (f-1); Network.csv: rl 2, L 1
+mem_unl() { echo $(( $1 * 2 + ($1 - 1) * 1 + $2 - 1 )); }
+
+stepM4() {
+  local O="$OUT/mem4" t0 ok detail; mkdir -p "$O"
+  if ! $PY -c "import numpy" 2>/dev/null; then
+    xfail MEM-UNLOADED "python lacks numpy"; xfail MEM-COLUMNS "python lacks numpy"; xfail MEM-VIEWER "python lacks numpy/duckdb"
+  else
+    # ---------------- MEM-UNLOADED: the fastest read (1 flit) and fill (5 flits) per bank equal the formula, two placements
+    t0=$(now); ok=1; detail=""
+    local mc
+    for mc in 1 3; do
+      local run="$O/unl$mc"; rm -rf "$run"; mkdir -p "$run"
+      OCTOPUS_TRACE="$(wpath "$run/trace.bin")" timeout 1800 "$BIN" $MEMNET -p "workload_path(s)=$(W a2time01-trace)/" -p "interconnect.node_map[100](i)=$mc" -o "$(wpath "$run")" > "$run/.stdout" 2> "$run/.stderr"
+      $PY "$HERE/memunloaded.py" "$run" 10 11 > "$run/.unl" 2>&1
+      # routers crossed from bank 10's port (router 0) and bank 11's port (router 3) to the memory controller
+      local r10 r11; if [ $mc = 1 ]; then r10=2; r11=2; else r10=3; r11=1; fi
+      local want="FILL 10 $(mem_unl $r10 5)|FILL 11 $(mem_unl $r11 5)|MEM_READ 10 $(mem_unl $r10 1)|MEM_READ 11 $(mem_unl $r11 1)"
+      local got; got=$(cut -d' ' -f1-3 "$run/.unl" | paste -sd'|')
+      [ "$got" = "$want" ] || { ok=0; detail="$detail mc@$mc: got '$got' want '$want'"; }
+    done
+    if [ $ok = 1 ]; then pass MEM-UNLOADED "read 5/8/2, fill 9/12/6 as R*rl+(R-1)L+(f-1)" "formula" "$(elapsed "$t0")"; else fail MEM-UNLOADED "$detail" "formula"; fi
+    # ---------------- MEM-COLUMNS: NoC Mem Hops = the trace's memory hops per request; coherence trackers unchanged; absent with memory on the bus
+    t0=$(now)
+    local mcol; mcol=$($PY "$HERE/memcolumns.py" "$O/unl1" 2>&1 | tail -1)
+    local tsum; tsum=$($PY "$HERE/s7check.py" "$O/unl1" sum 2>&1 | tail -1)
+    local busrun="$O/bus"; sim "$busrun" -s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid2B -p "workload_path(s)=$(W empty-trace)/"
+    if [ "${mcol#* }" = 0 ] && [ "${tsum#* }" = 0 ] && ! head -1 "$busrun/LatencyReport_C0.csv" | grep -q "NoC Mem"; then
+      pass MEM-COLUMNS "Mem Hops $mcol rows/mismatches; coherence trackers $tsum; absent on the bus" "0 mismatches" "$(elapsed "$t0")"
+    else fail MEM-COLUMNS "memcolumns '$mcol' trackers '$tsum'" "0 mismatches, absent on the bus" "$(elapsed "$t0")"; fi
+    # ---------------- MEM-VIEWER: the converter's checks are clean and draws one MEM_BUS interval per memory packet
+    t0=$(now)
+    if $PY -c "import duckdb" 2>/dev/null; then
+      ( cd "$ROOT" && KEEP_TRACE=1 PY=$PY bash octoviz.sh convert "$O/unl1" > "$O/unl1/.convert" 2>&1 ); local crc=$?
+      local mm; mm=$(grep -o "mismatches=[0-9]*" "$O/unl1/.convert" | grep -vc "mismatches=0")
+      local memiv; memiv=$(awk '$1=="MEM_BUS" {print $2}' "$O/unl1/.convert" | head -1)
+      local st="$O/unl1/NetworkStats.csv" pk
+      pk=$(awk -F, '$1=="received" && ($2==100 || $2==110 || $2==111) {s+=$5} END{print s+0}' "$st")
+      if [ $crc = 0 ] && [ "$mm" = 0 ] && ! grep -q "ends without a start" "$O/unl1/.convert" && [ "$memiv" = "$pk" ]; then
+        pass MEM-VIEWER "converted, 0 mismatches, $memiv MEM_BUS intervals = memory packets" "clean" "$(elapsed "$t0")"
+      else fail MEM-VIEWER "rc=$crc nonzero-mismatch lines=$mm MEM_BUS intervals=$memiv packets=$pk" "clean, one interval per packet" "$(elapsed "$t0")"; fi
+    else xfail MEM-VIEWER "python lacks duckdb"; fi
+  fi
+  # ---------------- MEM-TILING: the event path tiles on every row of the ten traces
+  t0=$(now); ok=1; detail=""
+  local t; for t in $EEMBC; do
+    ( rm -rf "$O/tile/$t"; mkdir -p "$O/tile/$t"; OCTOPUS_EVENT_DEBUG=1 timeout 1800 "$BIN" $MEMNET -p "workload_path(s)=$(W $t)/" -o "$(wpath "$O/tile/$t")" > "$O/tile/$t/.stdout" 2> "$O/tile/$t/.stderr" ) &
+  done; wait
+  for t in $EEMBC; do
+    local tl; tl=$(tiling "$O/tile/$t")
+    echo "$tl" | grep -q "fail=0 " || { ok=0; detail="$detail $t:'$tl'"; }
+    [ "$t" = mi_pingpong ] || [ "$(awk -F, 'NR>1 && $7+0>m{m=$7+0} END{print m+0}' "$O/tile/$t/Summary.csv")" -gt 0 ] || { ok=0; detail="$detail $t(no L2-DRAM bus stage)"; }
+  done
+  if [ $ok = 1 ]; then pass MEM-TILING "10/10 tile, L2-DRAM bus stage present" "fail=0" "$(elapsed "$t0")"; else fail MEM-TILING "$detail" "fail=0 on every trace"; fi
+}

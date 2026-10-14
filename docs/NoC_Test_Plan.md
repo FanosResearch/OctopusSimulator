@@ -273,10 +273,10 @@ router 1. `MultiCoreSystem_Grid2B2M` adds controller 101 on router 2 (M5).
 | MEM-ADMISSION | M2 | `Grid2BM` with `inject_queue_depth 4`, `eject_queue_depth 2`, FCFS and RR: 20/20 complete, 0 refused pushes; the memory controller never exits on a full interface |
 | MEM-CLASS | M3 | every memory packet of a2time01's raw trace travels in the class of spec §25.3 |
 | MEM-CHECKER | M3 | `checkProtocols` covers the memory controllers and passes; negative: classifying `K_MEM_READ` as REQUEST is refused at construction with status 2 |
-| MEM-UNLOADED | M4 | one isolated miss: bank-to-controller and back equal the unloaded formula (spec §13.2) for the routers crossed |
-| MEM-TILING | M4 | `OCTOPUS_EVENT_DEBUG=1` on `Grid2BM`: event-path tiling 0 failures; the L2-DRAM bus stages equal the memory packets' network time |
-| MEM-COLUMNS | M4 | on `Grid2BM` the coherence NoC columns of every row equal those of the same run's coherence packets alone (raw trace), and NoC Mem Hops of a miss equals the read's plus the fill's hops; the Mem columns are absent with `memory_on_network = 0` |
-| MEM-VIEWER | M4 | `octoviz convert` on a `Grid2BM` run: no unmatched starts or ends, one DRAM lane per controller, memory routes listed |
+| MEM-UNLOADED | M4 | the fastest memory read (1 flit) and fill (5 flits) per bank in a2time01's raw trace (`test/network/memunloaded.py`) equal the unloaded formula (spec §13.2) for the routers crossed, with the memory controller on router 1 and on router 3 |
+| MEM-TILING | M4 | `OCTOPUS_EVENT_DEBUG=1` on `Grid2BM`, ten traces: event-path tiling 0 failures; the L2-DRAM bus stage is present |
+| MEM-COLUMNS | M4 | on `Grid2BM` the coherence NoC trackers of every row equal the trace's coherence packets (`s7check.py sum`), NoC Mem Hops of every row equals the router hops of the request's memory packets (`test/network/memcolumns.py`); the Mem columns are absent with `memory_on_network = 0` |
+| MEM-VIEWER | M4 | `octoviz convert` on a `Grid2BM` run: every check 0 mismatches, no end without a start, one `MEM_BUS` interval per memory packet (= packets received by the memory controller and the memory ports) |
 | MEM-MULTI | M5 | `Grid2B2M`: EEMBC 10/10; every memory request went to the controller `memOf` names (raw trace); per-controller counts match the interleave |
 | MEM-MCSIM | M6 | `Grid2BM` with `main_memory_type = MCsim`: deterministic (three runs, identical checksums); the DRAM access count equals the bus system's on the same trace and configuration |
 | MEM-DETERMINISM | M2-M6 | two runs of each memory preset are byte-identical |

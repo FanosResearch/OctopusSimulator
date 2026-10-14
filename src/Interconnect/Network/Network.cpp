@@ -558,6 +558,12 @@ namespace octopus { namespace net
             lg->accumulate(pk.msg.msg_id, Logger::Annot::NOC_AHEAD, (int64_t)pk.ahead);
             lg->accumulateWinner(pk.msg.msg_id, winner, wins);
         }
+        else                                    // memory packets: their own columns (a write-back's id and an acknowledgement's 0 are untracked)
+        {
+            lg->accumulate(pk.msg.msg_id, Logger::Annot::NOC_MEM_HOPS, pk.hops);
+            lg->accumulate(pk.msg.msg_id, Logger::Annot::NOC_MEM_WAIT, (int64_t)pk.wait_ticks);
+            lg->accumulate(pk.msg.msg_id, Logger::Annot::NOC_MEM_AHEAD, (int64_t)pk.ahead);
+        }
         // the report's response-bus stamp is the copy that reaches the requester (a supply also goes
         // to the home; on a mesh the two cross different links and the home's copy may eject first);
         // memory packets stamp MEM_BUS both ways, as the point-to-point memory bus does

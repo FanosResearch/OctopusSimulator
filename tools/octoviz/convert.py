@@ -48,8 +48,11 @@ def main():
             "llc_state,llc_gate,resp_ahead,resp_ahead_ref,array_ahead,array_ahead_w,llc_stall")
     # runs on the multi-hop Network carry five more columns (docs/Logger.md, NoC Hops .. NoC Ahead Winner)
     with open(files[0], encoding="utf-8", errors="replace") as fh:
-        noc_cols = "NoC Hops" in fh.readline()
+        hdr = fh.readline()
+    noc_cols = "NoC Hops" in hdr
+    mem_cols = "NoC Mem Hops" in hdr          # memory on the network: three more (docs/NoC_Architecture_Spec.md s25.5)
     if noc_cols: cols += ",noc_hops,noc_wait,noc_transfer,noc_ahead,noc_winner"
+    if mem_cols: cols += ",noc_mem_hops,noc_mem_wait,noc_mem_ahead"
     names = cols.split(",")
     con.execute("CREATE TABLE raw AS SELECT * FROM (SELECT 1) WHERE 0")  # placeholder, replaced below
     parts = []
@@ -65,6 +68,8 @@ def main():
     # cast + derive absolute intervals
     noc_sel = (", CAST(noc_hops AS INTEGER) noc_hops, CAST(noc_wait AS INTEGER) noc_wait, CAST(noc_transfer AS INTEGER) noc_transfer,"
                " CAST(noc_ahead AS INTEGER) noc_ahead, CAST(noc_winner AS INTEGER) noc_winner") if noc_cols else ""
+    if mem_cols:
+        noc_sel += ", CAST(noc_mem_hops AS INTEGER) noc_mem_hops, CAST(noc_mem_wait AS INTEGER) noc_mem_wait, CAST(noc_mem_ahead AS INTEGER) noc_mem_ahead"
     con.execute(f"""
       CREATE TABLE req AS
       SELECT core, CAST(id AS BIGINT) AS id, CAST(addr AS VARCHAR) AS addr_hex,

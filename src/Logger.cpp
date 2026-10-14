@@ -141,7 +141,8 @@ namespace octopus
             this->report_files[core_id] << "Response Bus Latency,L2-DRAM Bus Latency,DRAM latency,";
             this->report_files[core_id] << "L1 Access Latency,Total Latency,Effective Latency,Oldest Latency,"
                                         "LLC Arrival State,LLC Gate,Resp Ahead,Resp Ahead Refills,Array Ahead,Array Ahead Writes,LLC Stall State"
-                                        << (m_noc_columns ? ",NoC Hops,NoC Wait,NoC Transfer,NoC Ahead,NoC Ahead Winner" : "") << endl;
+                                        << (m_noc_columns ? ",NoC Hops,NoC Wait,NoC Transfer,NoC Ahead,NoC Ahead Winner" : "")
+                                        << (m_noc_columns && m_noc_mem_columns ? ",NoC Mem Hops,NoC Mem Wait,NoC Mem Ahead" : "") << endl;
         }
     }
 
@@ -312,6 +313,9 @@ namespace octopus
             case Annot::NOC_WAIT:     it->second.noc_wait += (uint32_t)delta; break;
             case Annot::NOC_TRANSFER: it->second.noc_transfer += (uint32_t)delta; break;
             case Annot::NOC_AHEAD:    it->second.noc_ahead += (uint32_t)delta; break;
+            case Annot::NOC_MEM_HOPS:  it->second.noc_mem_hops += (uint32_t)delta; break;
+            case Annot::NOC_MEM_WAIT:  it->second.noc_mem_wait += (uint32_t)delta; break;
+            case Annot::NOC_MEM_AHEAD: it->second.noc_mem_ahead += (uint32_t)delta; break;
             default: break;
         }
     }
@@ -550,6 +554,8 @@ namespace octopus
             f << "," << mit->second.noc_hops << "," << mit->second.noc_wait << "," << mit->second.noc_transfer << "," << mit->second.noc_ahead << "," << mit->second.noc_winner;
             if (mit->second.noc_wait > worst_case_noc_wait[core_id]) worst_case_noc_wait[core_id] = mit->second.noc_wait;
             if (mit->second.noc_ahead > worst_case_noc_ahead[core_id]) worst_case_noc_ahead[core_id] = mit->second.noc_ahead;
+            if (m_noc_mem_columns)
+                f << "," << mit->second.noc_mem_hops << "," << mit->second.noc_mem_wait << "," << mit->second.noc_mem_ahead;
         }
         f << std::endl;
 

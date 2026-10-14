@@ -1034,3 +1034,24 @@ S1-CLS-3 updated for the new class of `K_MEM_READ`. `run.sh all`: 0 failures.
 FORWARD packets (= the reads) and 3 798 RESPONSE packets (= the writes), none in REQUEST; the memory ports
 received only RESPONSE, 7 840 = fills + acknowledgements. MEM-CHECKER: the verdict holds with two more cells
 than the bus-memory preset, and the negative case exits 2. `run.sh all`: 110 pass, 0 failures.
+
+## Memory M4 — accounting and the viewer (spec §25.5)
+
+**Built.**
+
+- Logger: three columns, **NoC Mem Hops**, **NoC Mem Wait**, **NoC Mem Ahead**, after NoC Ahead Winner,
+  written only with `memory_on_network` (`Logger::enableNocMemColumns`). The network accumulates a request's
+  memory packets (`K_MEM_READ`, `K_FILL`) into them; the five coherence trackers keep counting coherence
+  packets only, so they compare directly with the bus-memory presets. On a2time01 every miss shows 4 memory
+  hops (two routers each way) and no hit shows any.
+- `tools/octoviz/convert.py` recognises the three columns and carries them into `octoviz.parquet`.
+- `NetworkStats.csv`'s `epclass` rows (M3) and `MEM_BUS` records with comp 1 give the viewer its memory lane.
+
+**Tests** (`bash test/network/run.sh M4`, numpy and duckdb needed for the first three).
+MEM-UNLOADED: the fastest read and fill per bank in the raw trace equal `R·rl + (R−1)·L + (f−1)`: 5 and 9
+cycles with the memory controller on router 1 (both banks one link away); 8 and 12 for bank 10 (two links)
+and 2 and 6 for bank 11 (same router) with it on router 3. MEM-COLUMNS: NoC Mem Hops matches the trace on
+all 275 304 rows (`test/network/memcolumns.py`), the coherence trackers match (`s7check.py sum`), and the
+bus-memory preset has no Mem columns. MEM-VIEWER: the conversion's checks are clean and the `MEM_BUS` lane
+holds 15 680 intervals, one per memory packet. MEM-TILING: ten traces, 0 tiling failures, L2-DRAM bus stage
+present. `run.sh all`: 114 pass, 0 failures.

@@ -97,6 +97,8 @@ namespace octopus
             cerr << "MultiCoreSystem_Mesh: memory_on_network needs interconnect_type Network" << endl;
             exit(2);
         }
+        if (memory_on_network)
+            Logger::getLogger()->enableNocMemColumns();
         Bus *bus = nullptr;
         if (!memory_on_network)
         {

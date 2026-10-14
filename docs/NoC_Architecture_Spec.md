@@ -916,8 +916,8 @@ presets choose explicitly.
 ### 25.5 Accounting
 
 Memory packets log under `MEM_BUS` (ENTER at injection, EXIT at ejection), so the LatencyReport's
-L2-DRAM bus stages become the network time between the bank's memory port and the controller, and
-the event-path tiling still sums to Total. The NoC trackers (§15.3) keep counting coherence packets
+L2-DRAM bus stages include the network time between the bank's memory port and the controller (as on
+the bus they include the bus transfer), and the event-path tiling still sums to Total. The NoC trackers (§15.3) keep counting coherence packets
 only, so they stay comparable with memory on the bus; the memory packets of a request (`K_MEM_READ`,
 `K_FILL`, which carry its id) accumulate into three further columns, **NoC Mem Hops**, **NoC Mem
 Wait** and **NoC Mem Ahead**, written only when `memory_on_network` is set. A write-back carries the

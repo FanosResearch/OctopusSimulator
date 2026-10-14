@@ -55,7 +55,8 @@ namespace octopus
                            int llc_stall_state = -2;   // line state at the FIRST NonReady verdict at the LLC (-2 = never stalled by the FSM)
                            uint32_t array_ahead = 0; uint32_t array_ahead_writes = 0;
                            // network trackers (spec s15.3), accumulated over the request's packets
-                           uint32_t noc_hops = 0, noc_wait = 0, noc_transfer = 0, noc_ahead = 0, noc_winner_count = 0; int noc_winner = -1; };
+                           uint32_t noc_hops = 0, noc_wait = 0, noc_transfer = 0, noc_ahead = 0, noc_winner_count = 0; int noc_winner = -1;
+                           uint32_t noc_mem_hops = 0, noc_mem_wait = 0, noc_mem_ahead = 0; };
         // Response-bus grant history per core (issue, emit, grant, miss) to count, for a
         // request X, the younger own-core responses granted between X's emit and X's grant.
         struct GrantRec { uint64_t issue, emit, grant; bool miss; };
@@ -64,6 +65,7 @@ namespace octopus
         std::map<uint64_t, uint64_t> event_core;
         std::map<uint64_t, EventMeta> event_meta;
         bool m_noc_columns = false;
+        bool m_noc_mem_columns = false;   // NoC Mem Hops/Wait/Ahead: memory packets on the network (spec s25.5)
         std::map<uint64_t, uint32_t> worst_case_noc_wait, worst_case_noc_ahead;   // per core
 
         //core_id is the key, and the value is the latency
@@ -120,7 +122,7 @@ namespace octopus
         // Design B: append a self-describing event to a tracked message's timeline.
         void event(uint64_t msg_id, Role role, uint32_t comp_id, Phase phase);
         enum class Annot : uint8_t { LLC_STATE, LLC_GATE, ARRAY_AHEAD, ARRAY_AHEAD_WRITES, LLC_STALL_STATE,
-                                     NOC_HOPS, NOC_WAIT, NOC_TRANSFER, NOC_AHEAD };
+                                     NOC_HOPS, NOC_WAIT, NOC_TRANSFER, NOC_AHEAD, NOC_MEM_HOPS, NOC_MEM_WAIT, NOC_MEM_AHEAD };
         void annotate(uint64_t msg_id, Annot key, int64_t value);
         // network trackers: added to the request's running totals (spec s15.3); the winner is the
         // endpoint that beat this request's flits most often, kept with its count
@@ -128,6 +130,7 @@ namespace octopus
         void accumulateWinner(uint64_t msg_id, int owner, uint32_t count);
         // a Network is present: the reports carry the NoC columns (legacy runs are unchanged)
         void enableNocColumns() { m_noc_columns = true; }
+        void enableNocMemColumns() { m_noc_mem_columns = true; }
         bool nocColumns() const { return m_noc_columns; }
 
         // ---- Phase-3 raw event trace (OCTOPUS_TRACE=<file>): every resource event of EVERY
