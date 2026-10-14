@@ -42,6 +42,9 @@ namespace octopus
         // line is answered from the write instead of DRAM (docs/NoC_Memory_Plan.md s2.3, H2)
         std::map<uint64_t, int> m_unperformed;
         uint64_t lineOf(uint64_t addr) const { return addr & ~uint64_t(m_llc_line_size - 1); }
+        int m_ilv_bits = 0, m_ilv_shift = 0;
+        uint64_t mcAddr(uint64_t addr) const;                      // the address MCsim sees
+        std::map<uint64_t, std::vector<uint64_t>> m_write_orig;   // MCsim line -> original addresses of its pending writes
 
         CommunicationInterface *m_lower_interface; // toward the LLC (bus to DRAM)
 
@@ -64,9 +67,12 @@ namespace octopus
         // clock-domain crosser (DDR 1.2 GHz vs. core 2.4 GHz) assumes one tick == one core
         // cycle. A smaller period over-clocks DRAM relative to the cores (period 1 with
         // 100-tick cores made a 40-DRAM-cycle access complete within one core cycle).
+        // interleave_ways / interleave_shift: with several memory controllers the line index bits
+        // [shift, shift + log2(ways)) select the controller; they are removed before MCsim sees the address,
+        // so each controller decodes a dense address space (spec s25.4). ways must be a power of two; 1 = none.
         MCsimInterface(CommunicationInterface *lower_interface, int dram_id, int llc_id,
                        int num_cores, int block_size, uint64_t clk_period,
-                       const std::string &mem_system = "FRFCFS");
+                       const std::string &mem_system = "FRFCFS", int interleave_ways = 1, int interleave_shift = 0);
         ~MCsimInterface();
 
         virtual void init();

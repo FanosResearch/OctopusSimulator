@@ -83,7 +83,7 @@ namespace octopus
                                                              0,                // Cycle
                                                              (uint16_t)action, // Complementary_value
                                                              msg.owner);       // Owner
-                ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+                ((Message *)controller_action.data)->to.push_back((uint16_t)this->homeOf(msg.addr));   // the memory controller of the line (spec s25.4)
                 ((Message *)controller_action.data)->kind = Message::K_MEM_READ;
                 break;
             case ActionId::SendData: // remove request from pending and respond to request

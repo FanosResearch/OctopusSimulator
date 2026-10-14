@@ -33,6 +33,17 @@ namespace octopus
         if (m_home_ids.empty() || m_home_ids[0] < 0) m_home_ids = {m_shared_memory_id};
         if (parameters.find(STRINGIFY(home_interleave_shift)) != parameters.end())
             m_home_shift = std::get<int>(parameters.at(STRINGIFY(home_interleave_shift)).value);
+        // an LLC bank's home is memory: mem_ids(vi) / mem_interleave_shift(i) map its lines onto several memory
+        // controllers (spec s25.4) through the same homeOf the bank already uses for its write-backs
+        if (parameters.find(STRINGIFY(mem_ids)) != parameters.end())
+        {
+            std::vector<int> mem = std::get<vector<int>>(parameters.at(STRINGIFY(mem_ids)).value);
+            if (!mem.empty() && mem[0] >= 0)
+            {
+                m_home_ids = mem;
+                m_home_shift = parameters.count(STRINGIFY(mem_interleave_shift)) ? std::get<int>(parameters.at(STRINGIFY(mem_interleave_shift)).value) : 0;
+            }
+        }
         if (parameters.find(STRINGIFY(mem_port_id)) != parameters.end())
             m_mem_port_id = std::get<int>(parameters.at(STRINGIFY(mem_port_id)).value);
 

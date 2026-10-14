@@ -155,3 +155,64 @@ stepM4() {
   done
   if [ $ok = 1 ]; then pass MEM-TILING "10/10 tile, L2-DRAM bus stage present" "fail=0" "$(elapsed "$t0")"; else fail MEM-TILING "$detail" "fail=0 on every trace"; fi
 }
+
+stepM5() {
+  local O="$OUT/mem5" t0 ok detail; mkdir -p "$O"
+  local MEM2="-s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid2B2M"
+  # ---------------- MEM-MULTI: two memory controllers, 4 KiB pages interleaved (spec s25.4)
+  t0=$(now); ok=1; detail=""
+  local arb mode t
+  for arb in FCFSArbiter RRArbiter; do for mode in plain stress; do
+    local X=""; [ $mode = stress ] && X="-p interconnect.inject_queue_depth(i)=4 -p interconnect.eject_queue_depth(i)=2"
+    for t in $EEMBC; do
+      ( o="$O/$mode-$arb/$t"; rm -rf "$o"; mkdir -p "$o"
+        OCTOPUS_HANG_DUMP=200000 OCTOPUS_MEM_HAZARD=1 timeout 1800 "$BIN" $MEM2 -p "workload_path(s)=$(W $t)/" -p "interconnect.arbiter_type(s)=$arb" $X -o "$(wpath "$o")" > "$o/.stdout" 2> "$o/.stderr"; echo $? > "$o/.rc" ) &
+    done
+  done; done; wait
+  for arb in FCFSArbiter RRArbiter; do for mode in plain stress; do for t in $EEMBC; do
+    local d="$O/$mode-$arb/$t" r; r=$(mem_refused "$d")
+    { [ "$(cat "$d/.rc")" = 0 ] && completed "$d" "$ROOT/BMs/eembc-traces/$t" && mem_hazard_ok "$d" && [ "$r" = 0 ] && ! grep -q Fault "$d/.stdout"; } || { ok=0; detail="$detail $mode-$arb:$t(rc=$(cat "$d/.rc"),refused=$r)"; }
+  done; done; done
+  # the map: every memory request of a2time01 went to the controller mem_ids names
+  local mm=""
+  if $PY -c "import numpy" 2>/dev/null; then
+    local run="$O/map"; rm -rf "$run"; mkdir -p "$run"
+    OCTOPUS_TRACE="$(wpath "$run/trace.bin")" timeout 1800 "$BIN" $MEM2 -p "workload_path(s)=$(W a2time01-trace)/" -o "$(wpath "$run")" > "$run/.stdout" 2> "$run/.stderr"
+    mm=$($PY "$HERE/memmulti.py" "$run" 6 100 101 2>&1)
+    local first; first=$(echo "$mm" | head -1)
+    [ "${first#* }" = "0 0" ] || { ok=0; detail="$detail map:'$first'"; }
+    local n100 n101; n100=$(echo "$mm" | awk '$1==100 {print $2}'); n101=$(echo "$mm" | awk '$1==101 {print $2}')
+    { [ "${n100:-0}" -gt 0 ] && [ "${n101:-0}" -gt 0 ]; } || { ok=0; detail="$detail map: a controller saw no traffic"; }
+  else detail="$detail (map check skipped: python lacks numpy)"; fi
+  if [ $ok = 1 ]; then pass MEM-MULTI "40/40 complete, 0 overtakes, 0 refused; map $(echo "$mm" | head -1 | cut -d' ' -f1) packets 0 misrouted (100: $n100, 101: $n101)" "complete, routed by the map" "$(elapsed "$t0")"
+  else fail MEM-MULTI "$detail" "40/40 complete, 0 misrouted" "$(elapsed "$t0")"; fi
+}
+
+stepM6() {
+  local O="$OUT/mem6" t0 ok detail; mkdir -p "$O"
+  local MC="-p main_memory_type(s)=MCsim -p mcsim_scheduler(s)=FRFCFS"
+  # ---------------- MEM-MCSIM: MCsim behind one and two network memory controllers (spec s25.4)
+  t0=$(now); ok=1; detail=""
+  local p t
+  for p in Grid2BM Grid2B2M; do for t in $EEMBC; do
+    ( o="$O/$p/$t"; rm -rf "$o"; mkdir -p "$o"
+      OCTOPUS_HANG_DUMP=200000 OCTOPUS_MEM_HAZARD=1 OCTOPUS_EVENT_DEBUG=1 timeout 1800 "$BIN" -s MultiCoreSystem_Mesh -c MultiCoreSystem_$p $MC -p "workload_path(s)=$(W $t)/" -o "$(wpath "$o")" > "$o/.stdout" 2> "$o/.stderr"; echo $? > "$o/.rc" ) &
+  done; done; wait
+  for p in Grid2BM Grid2B2M; do for t in $EEMBC; do
+    local d="$O/$p/$t"
+    { [ "$(cat "$d/.rc")" = 0 ] && completed "$d" "$ROOT/BMs/eembc-traces/$t" && mem_hazard_ok "$d" && tiling "$d" | grep -q "fail=0 "; } || { ok=0; detail="$detail $p:$t(rc=$(cat "$d/.rc"))"; continue; }
+    # conservation: every read the memory controllers received was answered with one fill
+    local st="$d/NetworkStats.csv" rd fl
+    rd=$(awk -F, '$1=="epclass" && ($2==100 || $2==101) && $3==1 {s+=$5} END{print s+0}' "$st")
+    fl=$(grep -o 'reads [0-9]*' "$d/.stderr" | cut -d' ' -f2)
+    [ "$rd" = "$fl" ] || { ok=0; detail="$detail $p:$t(reads received $rd sent $fl)"; }
+  done; done
+  # determinism: three runs of a2time01 on two controllers are byte-identical
+  local s1; s1=$(sumdir "$O/Grid2B2M/a2time01-trace")
+  local i; for i in 2 3; do
+    sim "$O/det$i" -s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid2B2M $MC -p "workload_path(s)=$(W a2time01-trace)/"
+    [ "$(sumdir "$O/det$i")" = "$s1" ] || { ok=0; detail="$detail determinism:run$i"; }
+  done
+  if [ $ok = 1 ]; then pass MEM-MCSIM "20/20 complete with MCsim on one and two controllers, 0 overtakes, 0 tiling failures, reads conserved, deterministic" "complete, deterministic" "$(elapsed "$t0")"
+  else fail MEM-MCSIM "$detail" "complete, deterministic" "$(elapsed "$t0")"; fi
+}

@@ -17,7 +17,7 @@ namespace octopus
 {
     MCsimInterface::MCsimInterface(CommunicationInterface *lower_interface, int dram_id, int llc_id,
                                    int num_cores, int block_size, uint64_t clk_period,
-                                   const std::string &mem_system)
+                                   const std::string &mem_system, int interleave_ways, int interleave_shift)
         : ClockedObj(clk_period) // == LLC period: one tick per core cycle (see header). Must be
                                  // non-zero: ClockManager reschedules at current_time+period, so
                                  // period 0 self-reschedules at the same timestamp forever.
@@ -36,6 +36,13 @@ namespace octopus
 
         m_lower_interface = lower_interface;
         m_processing_queue = new FRFCFS_Buffer<Message, MCsimInterface>(&MCsimInterface::getRequestState, this);
+        while ((1 << m_ilv_bits) < interleave_ways) m_ilv_bits++;
+        if ((1 << m_ilv_bits) != interleave_ways)
+        {
+            cout << "MCsimInterface: the number of memory controllers must be a power of two, got " << interleave_ways << endl;
+            exit(2);
+        }
+        m_ilv_shift = interleave_shift;
 
         /******************** Initialization of MCsim (DDR4-2400U, 8Gb x8, 1 channel/1 rank) ********************/
         std::string sys_init_file = std::string(MCSIM_PATH) + "system/" + mem_system + "/" + mem_system + ".ini";
@@ -71,6 +78,15 @@ namespace octopus
     {
     }
 
+    uint64_t MCsimInterface::mcAddr(uint64_t addr) const
+    {
+        if (m_ilv_bits == 0) return addr;
+        uint64_t off = addr & uint64_t(m_llc_line_size - 1), line = addr / m_llc_line_size;
+        uint64_t low = line & ((uint64_t(1) << m_ilv_shift) - 1);
+        uint64_t high = line >> (m_ilv_shift + m_ilv_bits);
+        return (((high << m_ilv_shift) | low) * m_llc_line_size) | off;
+    }
+
     static uint64_t mcsimTraceAddr()
     {
         static uint64_t v = [](){ const char *t = getenv("OCTOPUS_TRACE_ADDR"); return t ? strtoull(t, NULL, 0) : 0ULL; }();
@@ -92,7 +108,7 @@ namespace octopus
             if (mcsimTraced(ready_msg.addr))
                 cout << "[mcsim] cyc " << m_clk_cycle << " request addr 0x" << std::hex << ready_msg.addr << std::dec << " msg " << ready_msg.msg_id
                      << " owner " << ready_msg.owner << (ready_msg.data == NULL ? " READ" : " WRITE") << " pending " << m_pending_requests.size() << endl;
-            if (ready_msg.data == NULL && m_unperformed.count(lineOf(ready_msg.addr)))
+            if (ready_msg.data == NULL && m_unperformed.count(lineOf(mcAddr(ready_msg.addr))))
             {
                 // read forwarding: an older write to this line is still inside MCsim
                 Logger::getLogger()->event(ready_msg.msg_id, Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::ENTER);
@@ -105,7 +121,7 @@ namespace octopus
                 fill.copy((uint8_t *)&data);
                 m_output_buffer.push_back(fill);
             }
-            else if (m_mcsim->addRequest(ready_msg.owner, ready_msg.addr, ready_msg.data == NULL, m_llc_line_size)) // 1 -> Read, 0 -> Write
+            else if (m_mcsim->addRequest(ready_msg.owner, mcAddr(ready_msg.addr), ready_msg.data == NULL, m_llc_line_size)) // 1 -> Read, 0 -> Write
             {
                 // Design B: request has entered DRAM (mirrors MainMemoryController's stamp).
                 Logger::getLogger()->event(ready_msg.msg_id, Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::ENTER);
@@ -113,17 +129,18 @@ namespace octopus
                 if (ready_msg.data == NULL) // Add read requests only (writes are fire-and-forget)
                     m_pending_requests.push_back(ready_msg);
                 else
-                    m_unperformed[lineOf(ready_msg.addr)]++;
+                {
+                    m_unperformed[lineOf(mcAddr(ready_msg.addr))]++;
+                    m_write_orig[lineOf(mcAddr(ready_msg.addr))].push_back(ready_msg.addr);
+                }
             }
             else
-            {
-                cout << "MCsimInterface: Error failed to add request to MCsim" << endl;
-                exit(0);
-            }
+                m_processing_queue->pushFront(ready_msg);   // MCsim's queue is full: retry the same request next cycle
         }
 
         // one response per cycle; a full lower interface holds it (and everything behind it) for a later cycle
-        if (!m_output_buffer.empty() && m_lower_interface->pushMessage(m_output_buffer[0], m_clk_cycle, MessageType::DATA_RESPONSE))
+        if (!m_output_buffer.empty() && m_lower_interface->txFreeSlots(MessageType::DATA_RESPONSE) > 0 &&
+            m_lower_interface->pushMessage(m_output_buffer[0], m_clk_cycle, MessageType::DATA_RESPONSE))
         {
             if (m_output_buffer[0].kind != Message::K_MEM_WACK)
             {
@@ -156,7 +173,8 @@ namespace octopus
                     ack.to.push_back(msg.from ? msg.from : (uint16_t)m_llc_id);
                     ack.kind = Message::K_MEM_WACK;
                     // a header-only control response: not serialized behind the data responses
-                    if (!m_lower_interface->pushMessage(ack, m_clk_cycle, MessageType::DATA_RESPONSE))
+                    if (m_lower_interface->txFreeSlots(MessageType::DATA_RESPONSE) <= 0 ||
+                        !m_lower_interface->pushMessage(ack, m_clk_cycle, MessageType::DATA_RESPONSE))
                         m_output_buffer.push_back(ack);
                 }
             }
@@ -175,7 +193,7 @@ namespace octopus
             cout << "[mcsim] cyc " << m_clk_cycle << " read_callback addr 0x" << std::hex << address << std::dec << " id " << id << " pending " << m_pending_requests.size() << endl;
         for (int i = 0; i < (int)m_pending_requests.size(); i++)
         {
-            if (m_pending_requests[i].addr == address)
+            if (mcAddr(m_pending_requests[i].addr) == address)
             {
                 MemHazard::readCompleted(m_pending_requests[i].msg_id, m_pending_requests[i].addr, m_clk_cycle);
                 uint64_t data = m_read_count;
@@ -207,7 +225,13 @@ namespace octopus
     void MCsimInterface::write_callback(unsigned id, uint64_t address, uint64_t clock_cycle)
     {
         m_write_count++;
-        MemHazard::writePerformed(address);
+        auto wo = m_write_orig.find(lineOf(address));
+        if (wo != m_write_orig.end() && !wo->second.empty())
+        {
+            MemHazard::writePerformed(wo->second.front());
+            wo->second.erase(wo->second.begin());
+            if (wo->second.empty()) m_write_orig.erase(wo);
+        }
         auto it = m_unperformed.find(lineOf(address));
         if (it != m_unperformed.end() && --it->second == 0)
             m_unperformed.erase(it);

@@ -25,6 +25,7 @@ namespace octopus
         string interconnect_type = std::get<string>(parameters.at(STRINGIFY(interconnect_type)).value);
 
         //Constructor
+        uint64_t m_llc_period = 0;   // MCsim ticks once per core cycle: the LLC's period (as in MultiCoreSystem)
         std::function<CommunicationInterface *(int)> interfaceFor;
         net::Network *m_network = nullptr;
         if(interconnect_type == STRINGIFY(Mesh))
@@ -130,12 +131,51 @@ namespace octopus
             // stages read 0 on Mesh/NoC and the event-path validator reports thousands of rows
             // whose stages do not sum to Total. Mirrors MultiCoreSystem.
             llc_controller->setLogRole(Logger::Role::LLC);
+            m_llc_period = llc_controller->getClkPeriod();
         }
 
-        MainMemoryController *m_main_memory;
+        // the memory controllers: m_main_memory.m_id, or the union of the banks' mem_ids (spec s25.4)
         int main_memory_id = std::get<int>(getSubMap(STRINGIFY(m_main_memory)).at("m_id").value);
-        m_main_memory = new MainMemoryController(getSubMap(STRINGIFY(MainMemoryController)),
-                                                 memory_on_network ? interfaceFor(main_memory_id) : bus->getInterfaceFor(main_memory_id), name);
+        std::vector<int> memory_ids;
+        for (int k = 0; k < llc_banks; k++)
+        {
+            ParametersMap lmap = llc_banks == 1 ? getSubMap(STRINGIFY(llc_controller)) : getSubMap(STRINGIFY(llc_controller), k);
+            if (lmap.count("mem_ids"))
+                for (int id : std::get<vector<int>>(lmap.at("mem_ids").value))
+                    if (id >= 0 && std::find(memory_ids.begin(), memory_ids.end(), id) == memory_ids.end()) memory_ids.push_back(id);
+        }
+        if (memory_ids.empty()) memory_ids.push_back(main_memory_id);
+        if (memory_ids.size() > 1 && !memory_on_network)
+        {
+            cerr << "MultiCoreSystem_Mesh: several memory controllers (mem_ids) need memory_on_network" << endl;
+            exit(2);
+        }
+        // the basic MainMemoryController by default, or MCsim (main_memory_type MCsim, mcsim_scheduler), one
+        // instance per controller; with several, each sees the line addresses with the controller-select bits
+        // removed (spec s25.4)
+        string main_memory_type = STRINGIFY(MainMemoryController);
+        if (parameters.count(STRINGIFY(main_memory_type)))
+            main_memory_type = std::get<string>(parameters.at(STRINGIFY(main_memory_type)).value);
+        string mem_system = "FRFCFS";
+        if (parameters.count(STRINGIFY(mcsim_scheduler)))
+            mem_system = std::get<string>(parameters.at(STRINGIFY(mcsim_scheduler)).value);
+        ParametersMap bank0 = llc_banks == 1 ? getSubMap(STRINGIFY(llc_controller)) : getSubMap(STRINGIFY(llc_controller), 0);
+        int mem_shift = bank0.count("mem_interleave_shift") ? std::get<int>(bank0.at("mem_interleave_shift").value) : 0;
+        int first_llc = std::get<int>(bank0.at("m_id").value);
+        for (int mem_id : memory_ids)
+        {
+            CommunicationInterface *mem_iface = memory_on_network ? interfaceFor(mem_id) : bus->getInterfaceFor(mem_id);
+            if (main_memory_type == "MCsim")
+                new MCsimInterface(mem_iface, mem_id, first_llc, num_cores, /*block_size=*/64, m_llc_period, mem_system,
+                                   (int)memory_ids.size(), mem_shift);
+            else
+            {
+                ParametersMap mmap = getSubMap(STRINGIFY(MainMemoryController));
+                mmap.erase("m_id");
+                mmap.insert({"m_id", Parameter("m_id", Parameter::Integer, mem_id)});
+                new MainMemoryController(mmap, mem_iface, name);
+            }
+        }
 
         if (interconnect_type == STRINGIFY(Network))
             m_network->checkProtocols(BaseController::controllers(), memory_on_network);      // spec s14.3, s25.3: after every controller exists

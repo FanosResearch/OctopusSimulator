@@ -911,7 +911,11 @@ controllers join `checkProtocols` with this table.
 `m_shared_memory_id` at the four sites that address memory. With MCsim, the controller-select bits
 are removed from the address before DRAM decoding, so that each controller sees a dense address
 space. Same bits as the bank map give bank-to-controller affinity; different bits give all-to-all;
-presets choose explicitly.
+presets choose explicitly. A bank's home is memory, so `mem_ids` / `mem_interleave_shift` become the
+bank's home map and the existing `homeOf(addr)` picks the controller for its reads (`GetData`) and its
+write-backs alike. The system builds one memory controller per id in the union of the banks' `mem_ids`;
+several controllers need `memory_on_network`. Shipped: `MultiCoreSystem_Grid2B2M`, controllers 100 and 101
+on routers 1 and 2, 4 KiB pages interleaved (`mem_interleave_shift 6`), so every bank talks to both.
 
 ### 25.5 Accounting
 

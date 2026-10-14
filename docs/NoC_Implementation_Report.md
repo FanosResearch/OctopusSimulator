@@ -1055,3 +1055,54 @@ all 275 304 rows (`test/network/memcolumns.py`), the coherence trackers match (`
 bus-memory preset has no Mem columns. MEM-VIEWER: the conversion's checks are clean and the `MEM_BUS` lane
 holds 15 680 intervals, one per memory packet. MEM-TILING: ten traces, 0 tiling failures, L2-DRAM bus stage
 present. `run.sh all`: 114 pass, 0 failures.
+
+## Memory M5 — several memory controllers (spec §25.4)
+
+**Built.**
+
+- `mem_ids(vi)` / `mem_interleave_shift(i)` on an LLC bank become its home map: a bank's home is memory, so
+  the `homeOf(addr)` it already used for write-backs now also addresses its reads (`GetData` in
+  `LLCMSIDirectory`, previously the single `m_shared_memory_id`). Without the keys nothing changes.
+- `MultiCoreSystem_Mesh` builds one memory controller per id in the union of the banks' `mem_ids` (each
+  with its own `m_id`); several controllers need `memory_on_network`.
+- Preset `MultiCoreSystem_Grid2B2M`: controllers 100 and 101 on routers 1 and 2, 4 KiB pages interleaved
+  (`mem_interleave_shift 6`), so each bank talks to both.
+
+On a2time01 the two controllers receive 3 074 and 4 769 packets (together the 4 045 reads and 3 798 writes),
+tiling holds on all 275 304 rows, and there is no hazard.
+
+**Noted, not changed.** `MESIDirectory.cpp:51` sends an L1's `PutE` to `m_shared_memory_id` instead of
+`homeOf(addr)`: with LLC banks a MESI-directory L1 would send every `PutE` to the first bank. Not a memory
+issue (MSI is the banked protocol in the presets); recorded for the banking work.
+
+**Tests** (`bash test/network/run.sh M5`). MEM-MULTI: EEMBC on `Grid2B2M` under FCFS and RR, with and without
+`inject_queue_depth 4` / `eject_queue_depth 2`, 40/40 complete, 0 overtakes, 0 refused pushes; in a2time01's
+raw trace all 7 843 memory reads and writes went to the controller the map names and each controller's
+receive count equals the trace's (`test/network/memmulti.py`; applying the wrong map, shift 0, flags 3 952 of
+them, so the check is not vacuous). SPLASH on `Grid2B2M` (hazard detector on): water_nsquared and ocean
+complete on all cores in about three minutes each, 0 overtakes.
+water_spatial completes too (all three in 3 to 5 minutes, all cores, 0 overtakes, no fault).
+
+## Memory M6 — MCsim on the grid (spec §25.4)
+
+**Built.**
+
+- `MultiCoreSystem_Mesh` reads `main_memory_type(s)` and `mcsim_scheduler(s)` as `MultiCoreSystem` does and
+  builds one `MCsimInterface` per memory controller (period = the LLC's), on the bus or on the network.
+- With several controllers each MCsim instance sees the line address with the controller-select bits
+  `[shift, shift + log2 M)` removed (`MCsimInterface::mcAddr`), so it decodes a dense address space; M must be
+  a power of two. The read callback matches pending reads, the write-forwarding table keys its lines, and the
+  hazard detector gets back the original address of each performed write.
+- A request MCsim refuses goes back to the front of the queue instead of `exit(0)`; responses and write
+  acknowledgements go only into a free slot of the interface.
+
+On a2time01 with MCsim FR-FCFS: bus (Grid2B), one controller on the network (Grid2BM) and two (Grid2B2M)
+all complete with 0 tiling failures and 0 overtakes; about 45% of the directory LLC's reads are answered by
+memory-side forwarding (the line's write is still inside MCsim after its acknowledgement has released the
+LLC's copy).
+
+**Tests** (`bash test/network/run.sh M6`). MEM-MCSIM: Grid2BM and Grid2B2M with MCsim, EEMBC 20/20 complete,
+0 overtakes, 0 tiling failures, the reads the controllers received equal the reads the banks sent, three runs
+on two controllers byte-identical. Equality with the bus system's DRAM count, planned first, does not hold
+(the network moves the LLC's hits and misses) and was replaced by the conservation check. `run.sh all`:
+116 pass, 0 failures.

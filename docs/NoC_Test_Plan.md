@@ -277,8 +277,8 @@ router 1. `MultiCoreSystem_Grid2B2M` adds controller 101 on router 2 (M5).
 | MEM-TILING | M4 | `OCTOPUS_EVENT_DEBUG=1` on `Grid2BM`, ten traces: event-path tiling 0 failures; the L2-DRAM bus stage is present |
 | MEM-COLUMNS | M4 | on `Grid2BM` the coherence NoC trackers of every row equal the trace's coherence packets (`s7check.py sum`), NoC Mem Hops of every row equals the router hops of the request's memory packets (`test/network/memcolumns.py`); the Mem columns are absent with `memory_on_network = 0` |
 | MEM-VIEWER | M4 | `octoviz convert` on a `Grid2BM` run: every check 0 mismatches, no end without a start, one `MEM_BUS` interval per memory packet (= packets received by the memory controller and the memory ports) |
-| MEM-MULTI | M5 | `Grid2B2M`: EEMBC 10/10; every memory request went to the controller `memOf` names (raw trace); per-controller counts match the interleave |
-| MEM-MCSIM | M6 | `Grid2BM` with `main_memory_type = MCsim`: deterministic (three runs, identical checksums); the DRAM access count equals the bus system's on the same trace and configuration |
+| MEM-MULTI | M5 | `Grid2B2M`: EEMBC under FCFS and RR, with and without `inject_queue_depth 4` / `eject_queue_depth 2`, 40/40 complete, 0 overtakes, 0 refused pushes; every memory read and write of a2time01's raw trace went to the controller the map names, both controllers carry traffic, and each controller's receive count equals the trace's (`test/network/memmulti.py`); a SPLASH subset completes |
+| MEM-MCSIM | M6 | `Grid2BM` and `Grid2B2M` with `main_memory_type = MCsim` (one instance per controller, controller-select bits removed): EEMBC 20/20 complete, 0 overtakes, 0 tiling failures; every read the controllers received equals the reads the banks sent (conservation); three runs on two controllers byte-identical. (Equality with the bus system's DRAM count, first planned, does not hold: the network changes timing and with it the LLC's hits and misses.) |
 | MEM-DETERMINISM | M2-M6 | two runs of each memory preset are byte-identical |
 
 ## 13. Traceability
