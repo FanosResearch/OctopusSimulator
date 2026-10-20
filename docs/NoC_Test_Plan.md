@@ -282,6 +282,17 @@ router 1. `MultiCoreSystem_Grid2B2M` adds controller 101 on router 2 (M5).
 | MEM-MCSIM | M6 | `Grid2BM` and `Grid2B2M` with `main_memory_type = MCsim` (one instance per controller, controller-select bits removed): EEMBC 20/20 complete, 0 overtakes, 0 tiling failures; every read the controllers received equals the reads the banks sent (conservation); three runs on two controllers byte-identical. (Equality with the bus system's DRAM count, first planned, does not hold: the network changes timing and with it the LLC's hits and misses.) |
 | MEM-DETERMINISM | M2-M6 | two runs of each memory preset are byte-identical |
 
+## 12b. Directory MESI and MOESI (`bash test/network/run.sh D`)
+
+| id | assertion |
+|---|---|
+| DIR-MESI | `DIRECTORY_MESI` / `MESI_directory_v2` with `DIRECTORY_LLC_MESI` / `MESI_LLC_directory_v2` on the bus directory preset and on Grid, Grid2B, Grid2BM and Grid2B2M under FCFS and RR, with normal and small endpoint queues: all ten traces complete, no fault, no read-after-write overtake, no refused push |
+| DIR-MOESI-BUS | `DIRECTORY_MOESI` / `MOESI_directory_v2` with `MOESI_LLC_directory_v2` on the bus directory preset: ten traces complete, no fault |
+
+The MEM-OFF references for Grid and Grid2B and the REG-MEMNET reference were regenerated after the admission
+fixes of this work (message order kept on refusal, reservations held across the data array); the bus
+references did not change.
+
 ## 13. Traceability
 
 | spec section | tests |

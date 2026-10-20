@@ -105,7 +105,7 @@ namespace octopus
         }
         else if (msg.source == Message::Source::UPPER_INTERCONNECT && msg.data != NULL)
         {
-            if(msg.from != m_shared_memory_id && msg.complementary_value != 0) //Check if data is from owner with a non-zero ack (complementary_value) 
+            if(!isHome(msg.from) && msg.complementary_value != 0) //Check if data is from owner (not a home bank) with a non-zero ack (complementary_value)
             {
                 uint64_t addr_key = msg.addr & ~uint64_t(m_data_handler->getBlockSize() -1);
                 if((ack_counters->find(addr_key) == ack_counters->end()) ||        //Check if no ack counter is created, then event is DataFromOwner_nonZeroAck

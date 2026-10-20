@@ -59,7 +59,11 @@ namespace octopus
             uint64_t op_id = 0;                     // unique; the arbiter elects a message copy carrying it
             bool admitted = false;                  // pipelined: inside the array, completes at ready_cycle
             uint64_t ready_cycle = 0;
+            Message req; bool has_req = false;      // ACTIONS: the request whose transition parked them (its transmit
+                                                    // reservation is held until they have run, spec s14.2)
         };
+        Message m_cur_req; bool m_cur_valid = false;   // the request whose transition is running now
+        void beginTransition(const Message &msg) override { m_cur_req = msg; m_cur_valid = true; }
         // Level 2: every access that needs the data array, in arrival order,
         // whole deferred messages and parked single actions alike. Level 1
         // (the processing queue's hold) releases at most one access per line,

@@ -450,7 +450,7 @@ namespace octopus
             int caches = std::max(1, (int)m_arbiter_candidates.size());
             n.up_iface = m_upper_interface;
             if (msg.isDemandRequest()) { n.fwd = caches - 1; n.resp = 1; n.up_fwd = 1; }   // a miss reads memory
-            else if (msg.kind == Message::K_PUTS || msg.kind == Message::K_PUTM) n.fwd = 1;
+            else if (msg.kind == Message::K_PUTS || msg.kind == Message::K_PUTM || msg.kind == Message::K_PUTE) n.fwd = 1;   // answered with a PutAck
             else if (msg.kind == Message::K_EVICT) { n.fwd = caches; n.up_resp = 1; }        // a victim may be written back
             if (msg.data != NULL && msg.source == Message::Source::LOWER_INTERCONNECT) n.up_resp = 1;   // an L1's data may be written back (N_d)
             // a fill from memory answers the requests parked on the line, and each of those kept its
@@ -486,8 +486,12 @@ namespace octopus
     void CacheController::txRelease(const Message &msg)
     {
         // a parked action list of this message still has to run: release when it has
+        // the transition parked actions on the data array: hold the reservation until they have run
+        // (matched by the request that parked them; a parked action's own message is the response it builds)
         for (auto &op : m_array_ops)
-            if (op.kind == DataArrayOp::ACTIONS && op.msg.msg_id == msg.msg_id && op.msg.kind == msg.kind) return;
+            if (op.kind == DataArrayOp::ACTIONS &&
+                (op.has_req ? (op.req.msg_id == msg.msg_id && op.req.kind == msg.kind && op.req.source == msg.source)
+                            : (op.msg.msg_id == msg.msg_id && op.msg.kind == msg.kind))) return;
         for (auto it = m_tx_holds.begin(); it != m_tx_holds.end(); ++it)
             if (!it->parked && it->msg_id == msg.msg_id && it->kind == msg.kind && it->source == (int)msg.source)
             {
@@ -622,6 +626,7 @@ namespace octopus
         DataArrayOp op;
         op.kind = DataArrayOp::ACTIONS;
         op.msg = msg;
+        if (m_cur_valid) { op.req = m_cur_req; op.has_req = true; }
         op.actions.push_back(ControllerAction{.type = type, .data = data_ptr});
         arrayEnqueue(std::move(op));
         return false;
@@ -816,6 +821,7 @@ namespace octopus
                 Logger::getLogger()->trace(op.msg, m_log_role, (uint32_t)m_id, Logger::Phase::ENTER);
             }
             vector<ControllerAction> actions = m_protocol->processRequest(op.msg, dprint);
+            beginTransition(op.msg);
             for (ControllerAction action : actions)
                 action_functions[action.type](action.data);
             txRelease(op.msg);
@@ -823,9 +829,10 @@ namespace octopus
         else
         {
             traceMsg("fire-actions", op.msg);
+            if (op.has_req) beginTransition(op.req);
             for (ControllerAction action : op.actions)
                 action_functions[action.type](action.data);
-            txRelease(op.msg);
+            txRelease(op.has_req ? op.req : op.msg);
         }
 
         m_pipe_firing = was_firing;

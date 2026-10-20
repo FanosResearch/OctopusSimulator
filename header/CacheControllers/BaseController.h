@@ -123,6 +123,7 @@ namespace octopus
         virtual bool canAdmitRequest(Message &msg) { return true; }
         // transmit-side reservations (spec s14.2): released when the message's transition has run
         virtual void txRelease(const Message &msg) { (void)msg; }
+        virtual void beginTransition(const Message &msg) { (void)msg; }   // the request whose actions run next (CacheController)
         virtual void txAnswered(const Message &msg) { (void)msg; }   // a parked request has been answered from a fill
         // Pipelined data array: lets the derived controller take a ready
         // message off the FSM path and apply its event only once the array

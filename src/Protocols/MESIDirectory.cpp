@@ -48,7 +48,8 @@ namespace octopus
                                                          0,                               // Cycle
                                                          MESIDirectory::REQUEST_TYPE_PUTE,// Complementary_value
                                                          (uint16_t)this->m_id);           // Owner
-            ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+            ((Message *)controller_action.data)->to.push_back((uint16_t)this->homeOf(msg.addr));   // the line's home bank (spec s24)
+            ((Message *)controller_action.data)->kind = Message::K_PUTE;
             controller_actions.push_back(controller_action);
         }
 

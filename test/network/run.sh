@@ -154,9 +154,9 @@ build
 case "$WHAT" in
   refs) make_refs; exit 0;;
   reg)  regression;;
-  all)  regression; for n in 0 1 2 3 4 5 6 7 8 M2 M3 M4 M5 M6; do declare -f "step$n" > /dev/null && "step$n"; done;;
-  [0-8]|M[2-7]) regression; "step$WHAT";;
-  *) echo "usage: run.sh [step (0-8, M2..M7)|all|reg|refs]"; exit 2;;
+  all)  regression; for n in 0 1 2 3 4 5 6 7 8 M2 M3 M4 M5 M6 D; do declare -f "step$n" > /dev/null && "step$n"; done;;
+  [0-8]|M[2-7]|D) regression; "step$WHAT";;
+  *) echo "usage: run.sh [step (0-8, M2..M7, D)|all|reg|refs]"; exit 2;;
 esac
 echo "----"; echo "$FAILS failure(s); results in $RESULTS"
 [ "$FAILS" = 0 ]

@@ -1118,3 +1118,44 @@ REG-MEMNET joins the regression: `MultiCoreSystem_Grid2BM` on a2time01 stays byt
 **Not done here.** The LaTeX manual (`docs/manual`, chapters 6, 8 and 9 and appendix B) still describes the
 network as out of scope for memory and names `MSI_directory` / `MESI_directory`; this machine has no TeX, so
 the chapters and the PDF are left for a machine that can build them.
+
+## Directory MESI and MOESI on the network presets
+
+**Why.** With LLC banks, a directory MESI L1 sent its `PutE` to `m_shared_memory_id`, the first bank, instead
+of the line's home (`MESIDirectory.cpp`), and the MOESI L1 told home data from owner data by comparing the
+sender with that single id (`MOESIDirectory.cpp`). Exercising directory MESI and MOESI on the network presets
+for the first time found more.
+
+**Fixed.**
+
+1. `PutE` goes to `homeOf(addr)` and carries its own kind, `K_PUTE` (REQUEST class); the LLC reserves the
+   `PutAck` slot for it as for `PutS` / `PutM` (a `PutAck` refused for lack of a slot was the symptom). The
+   MOESI L1 uses `isHome(msg.from)`.
+2. `MESI_LLC_directory_v2.csv`, `MOESI_LLC_directory_v2.csv`: a stale `PutS` / `last_PutS` in `N`, `NE_d`,
+   `NM_d`, `N_d` and a stale `PutM_Data_fromNonOwner` in `N`, `NE_d`, `NM_d`, `N_a` are acknowledged
+   (`PutAck/`) instead of faulting, as `MSI_LLC_directory.csv` does; MOESI also `N_d` + `PutO_Data_fromOwner`
+   → `ClearOwner/DecSharers/PutAck/WriteBack/N` (the evicting home receives the owner's data).
+3. `MOESI_directory_v2.csv`: `EI_a` + Fwd_GetS → `Data2Req/OI_a` (was `SI_a`). The home answers `E` + GetS by
+   keeping the L1 as owner (`O`), so the evicting L1 must stay an evicting owner, as `E` + Fwd_GetS → `O` and
+   `MI_a` + Fwd_GetS → `OI_a` already say; the home's `O` + `PutE_fromOwner` completes it.
+4. A message refused by transmit admission is put back where it was (`FRFCFS_Buffer::restoreLast`) instead of
+   at the back of the queue, for non-demand messages: a home's forward and its later `PutAck` to the same cache
+   arrive in order, and re-queuing the refused forward at the back let the `PutAck` overtake it (the L1 then
+   faulted in `I`). Demand requests keep going to the back, as before.
+5. Transmit reservations of a transition whose actions wait for the data array are held until those actions
+   have run. The release matched a parked action by its own message, which is the response it builds (kind
+   `RESP`), never the request (kind `GETS`/`GETM`), so the reservation was dropped at once and a later push
+   could be refused. Each parked action now records the request that parked it (`DataArrayOp::req`).
+
+Items 4 and 5 change timing only where a network interface refuses or reserves, so the bus systems are
+byte-identical (REG-BUS, REG-TDM, the bus directory preset of MEM-OFF); the network presets Grid and Grid2B
+(MEM-OFF) and Grid2BM (REG-MEMNET) got new references, all runs complete, deterministic.
+
+**Not done.** Directory MOESI on the network: the protocol-and-network check refuses it at construction (the
+LLC cell `(I, last_InvAck)` consumes a response and emits a `PutAck`, which travels in the forward class), and
+with `deadlock_check warn` it faults, since several MOESI messages (`PutO_Data`, the ack-count message) carry
+no kind and are classified by the fallback rules. That is a port of its own.
+
+**Tests** (`bash test/network/run.sh D`). DIR-MESI: the bus directory preset and Grid, Grid2B, Grid2BM, Grid2B2M
+under FCFS and RR with normal and small (`inject_queue_depth 4`, `eject_queue_depth 2`) queues, 17
+configurations × 10 traces, all complete, 0 faults, 0 overtakes, 0 refused pushes. DIR-MOESI-BUS: 10/10.

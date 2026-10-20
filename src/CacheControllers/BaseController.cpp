@@ -158,7 +158,13 @@ namespace octopus
                 // and retry next cycle. It was admitted already, so it must not meet the demand
                 // cap again: force-admitted traffic can hold the queue above the cap, and a
                 // refused re-queue would silently drop the request.
-                m_processing_queue->pushBack(ready_msg, FRFCFS_State::NonReady, /*force=*/true);
+                // A non-demand message (forward, invalidation, acknowledgement, data) goes back to its own
+                // place: the protocol relies on the order in which a home's messages arrive. A demand
+                // request goes to the back as before (bus systems refuse demand when MSHRs are full).
+                if (ready_msg.isDemandRequest())
+                    m_processing_queue->pushBack(ready_msg, FRFCFS_State::NonReady, /*force=*/true);
+                else
+                    m_processing_queue->restoreLast(ready_msg, FRFCFS_State::NonReady);
                 return;
             }
 
@@ -179,6 +185,7 @@ namespace octopus
 
             vector<ControllerAction> actions = m_protocol->processRequest(ready_msg, dprint);
 
+            beginTransition(ready_msg);
             for (ControllerAction action : actions)
                 action_functions[action.type](action.data);
             txRelease(ready_msg);

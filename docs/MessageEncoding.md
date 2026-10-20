@@ -59,6 +59,7 @@ Because the fields above cannot be read back into a kind, the phase‑3 trace ta
 | `FILL`, `FILL_ROLLBACK` | MainMemory / MCsim / perfect loopback; `FILL_ROLLBACK`: a memory read of a line the LLC wrote and memory has not acknowledged, filled from that write (End2End TX rollback, `BaseController::forwardFromMemWrite`) |
 | `MEM_WRITE` | LLC `WriteBack` (snoop and directory home) |
 | `PUTS` | directory L1 `PutS` |
+| `PUTE` | directory MESI / MOESI L1 `PutE` (a clean exclusive copy dropped; the home answers with a `PutAck`) |
 | `FWD` | directory home `FwdGetS` / `FwdGetM` (sent on the service lane, or point-to-point on a mesh) |
 | `ACK` | directory L1 `InvAck2Req` / `InvAck_Data`, directory home `PutAck` |
 | `MEM_WACK` | MainMemoryController / MCsimInterface when they accept a `MEM_WRITE`; id 0 (no request's latency), no data; carried on the acknowledgement sideband of the memory bus |

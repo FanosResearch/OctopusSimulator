@@ -73,7 +73,10 @@ A flit-level wormhole network with credit-based flow control. Specification:
 Presets: `MultiCoreSystem_Grid` (2×2 grid, one LLC), `MultiCoreSystem_Grid2B` (two LLC banks),
 `MultiCoreSystem_Grid2BM` (two banks, memory controller on the network), `MultiCoreSystem_Grid2B2M`
 (two banks, two memory controllers), `MultiCoreSystem_NetNoC` (the legacy single-switch NoC on the
-network engine). The multi-hop network runs the directory protocols; snooping over it is not supported.
+network engine). The multi-hop network runs directory MSI (the presets) and directory MESI
+(`DIRECTORY_MESI` / `MESI_directory_v2`, `DIRECTORY_LLC_MESI` / `MESI_LLC_directory_v2`), including LLC
+banks and memory on the network; directory MOESI runs on the bus (`MultiCoreSystem_Directory`) but not
+yet on the network, and snooping over the network is not supported.
 Real-time arbitration on the network (TDM slots, priority VCs) is not yet available.
 
 ## Bus / interconnect arbitration

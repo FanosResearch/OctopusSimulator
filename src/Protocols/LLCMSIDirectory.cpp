@@ -362,6 +362,7 @@ namespace octopus
         if (e == "GetS") { o.kind = Message::K_GETS; return true; }
         if (e == "GetM") { o.kind = Message::K_GETM; return true; }
         if (e == "PutS" || e == "last_PutS") { o.kind = Message::K_PUTS; return true; }
+        if (e == "PutE_fromOwner" || e == "PutE_fromNonOwner") { o.kind = Message::K_PUTE; return true; }   // directory MESI / MOESI
         if (e == "InvAck" || e == "last_InvAck") { o.kind = Message::K_ACK; return true; }
         if (e == "PutM_Data_fromOwner" || e == "PutM_Data_fromNonOwner") { o.kind = Message::K_PUTM; o.data = true; return true; }
         if (e == "Data_fromLowerInterface") { o.kind = Message::K_SUPPLY; o.data = true; return true; }

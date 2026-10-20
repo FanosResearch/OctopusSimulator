@@ -81,6 +81,7 @@ namespace octopus
         // items ripen as m_clk_cycle passes) -- they would stall forever.
         bool m_readiness_state_only;
         bool m_dirty;
+        size_t m_last_pop_index = 0;   // where getFirstReady took its last Ready item (restoreLast)
 
     public:
         FRFCFS_Buffer(Callback_t check_state_callback, TCallback *callback_owner, int max_size = -1,
@@ -208,6 +209,7 @@ namespace octopus
                 {
                     *out_item = m_buffer[i].item;
                     m_buffer.erase(m_buffer.begin() + i);
+                    m_last_pop_index = i;
                     return true;
                 }
                 else if (state == FRFCFS_State::NeedsAction)
@@ -223,6 +225,16 @@ namespace octopus
             // mutates state, a re-scan cannot find anything new.
             m_dirty = false;
             return false;
+        }
+
+        /* Put the item getFirstReady just returned back where it was, so that it keeps its age:
+         * a message refused by admission must not let a younger one to the same line overtake it
+         * (a home's forward and its later PutAck to the same cache are processed in arrival order). */
+        void restoreLast(const TItem &item, FRFCFS_State state = FRFCFS_State::NonReady)
+        {
+            size_t at = std::min(m_last_pop_index, m_buffer.size());
+            m_buffer.insert(m_buffer.begin() + at, Element{item, state});
+            m_dirty = true;
         }
 
         void setCheckStateCallback(Callback_t callback)
