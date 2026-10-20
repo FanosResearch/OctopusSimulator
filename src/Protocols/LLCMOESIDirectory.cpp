@@ -152,6 +152,15 @@ namespace octopus
     {
         if(msg.source == Message::Source::LOWER_INTERCONNECT)
         {
+            if (msg.data == NULL && msg.complementary_value == MESIDirectory::REQUEST_TYPE_PUTE && msg.owner == cache_line.owner_id)
+            {
+                uint64_t key = msg.addr & ~uint64_t(m_data_handler->getBlockSize() -1);
+                if ((protocol_counters->find(key) != protocol_counters->end()) && ((protocol_counters->at(key).size() - 1) == 0))
+                {
+                    *out_id = (LLCMSIDirectory::EventId)EventId::last_PutE_fromOwner;   // no other sharer left
+                    return;
+                }
+            }
             if (msg.data != NULL)
             {
                 uint64_t addr_key = msg.addr & ~uint64_t(m_data_handler->getBlockSize() -1);
@@ -167,6 +176,14 @@ namespace octopus
                     }
                     else
                         *out_id = (LLCMSIDirectory::EventId)EventId::PutO_Data_fromNonOwner;
+                    return;
+                }
+                else if(msg.complementary_value == MSIDirectory::REQUEST_TYPE_PUTM && msg.owner == cache_line.owner_id &&
+                        (protocol_counters->find(addr_key) != protocol_counters->end()) && ((protocol_counters->at(addr_key).size() - 1) == 0))
+                {
+                    // the owner's PutM with no other sharer left: the home finishes (an eviction in N_ad writes back)
+                    // instead of waiting for acks that will not come; otherwise PutM_Data_fromOwner, as in MSI
+                    *out_id = (LLCMSIDirectory::EventId)EventId::last_PutM_fromOwner;
                     return;
                 }
                 else if(msg.complementary_value == MOESIDirectory::REQUEST_TYPE_INV_ACK)
@@ -194,6 +211,8 @@ namespace octopus
     {
         o = MsgClass();
         if (e == "GetM_fromOwner") { o.kind = Message::K_GETM; return true; }
+        if (e == "last_PutM_fromOwner") { o.kind = Message::K_PUTM; o.data = true; return true; }
+        if (e == "last_PutE_fromOwner") { o.kind = Message::K_PUTE; return true; }
         if (e == "PutO_Data_fromOwner" || e == "PutO_Data_fromNonOwner" || e == "last_PutO_fromOwner") { o.kind = Message::K_PUTO; o.data = true; return true; }
         if (e == "Data_fromLowerInterface_lastAck") { o.kind = Message::K_SUPPLY; o.data = true; return true; }
         return LLCMESIDirectory::consumedBy(e, o);

@@ -37,6 +37,8 @@ namespace octopus
             PutO_Data_fromNonOwner,
             last_PutO_fromOwner,
             Data_fromLowerInterface_lastAck,
+            last_PutM_fromOwner,             // the owner's PutM when no other sharer is left (as last_PutO_fromOwner)
+            last_PutE_fromOwner,             // the same for the owner's PutE
         };
 
         enum class ActionId

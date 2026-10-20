@@ -1183,12 +1183,15 @@ configurations × 10 traces, all complete, 0 faults, 0 overtakes, 0 refused push
   `PutM_Data_fromNonOwner` already was; `O` + Replacement → `SendInv/SendInvM/N_ad` (the owner gets an InvM,
   which an owner still waiting for its data stalls, instead of a plain Inv it took for a sharer's).
 
-**Open: a design decision.** `N_ad` + `PutM_Data_fromOwner`: the owner, still in `M` (the home's forward that
-would make it `O` not yet processed), evicts with a PutM while the home evicts from `O`. The home must wait for
-the remaining acks (`N_a`) or, when the owner's was the last, write back and finish (`N`). The FSM separates the
-two for `PutO` (`PutO_Data_fromOwner`, `last_PutO_fromOwner`) but has no `last_PutM` event: either add one, or
-map an owner's PutM in `N_ad` onto the PutO events by sharer count in the handler. The cell stays `Fault/`.
+**The owner's put meeting the home's eviction (decided: new events).** The owner, still in `M` or `E` (the
+home's forward that makes it `O` not yet processed), evicts with a PutM or a PutE while the home evicts from
+`O` (`N_ad`). The home must wait for the remaining acks (`N_a`) or, when the owner's was the last, write back
+and finish (`N`); the FSM separated the two only for `PutO`. `MOESI_LLC_directory_v2` gains two event columns,
+`last_PutM_fromOwner` (18) and `last_PutE_fromOwner` (19), chosen by the handler as `last_PutO_fromOwner` is
+(the owner is the only sharer left). Their cells copy `PutM_Data_fromOwner` / `PutE_fromOwner` except in `O`
+(→ `I`) and `N_ad` (→ `ClearOwner/DecSharers/PutAck/WriteBack/N`); `N_ad` + `PutM_Data_fromOwner` → `ClearOwner/
+DecSharers/PutAck/SaveData/N_a` (as `PutO_Data_fromOwner`) and `N_ad` + `PutE_fromOwner` → `ClearOwner/
+DecSharers/PutAck/N_a` (a PutE comes from a clean copy: the home's data is valid).
 
 **Tests** (`bash test/network/run.sh D`). DIR-MOESI-NET: directory MOESI on Grid, Grid2B, Grid2BM, Grid2B2M,
-FCFS and RR, normal and small queues: 159/160 complete; the remaining run is the open case (XFAIL while only
-it fails). DIR-MESI and DIR-MOESI-BUS pass; `run.sh all`: 119 pass, 0 failures.
+FCFS and RR, normal and small queues: 160/160 complete. DIR-MESI and DIR-MOESI-BUS pass.

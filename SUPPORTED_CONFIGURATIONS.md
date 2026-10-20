@@ -75,9 +75,8 @@ Presets: `MultiCoreSystem_Grid` (2×2 grid, one LLC), `MultiCoreSystem_Grid2B` (
 (two banks, two memory controllers), `MultiCoreSystem_NetNoC` (the legacy single-switch NoC on the
 network engine). The multi-hop network runs directory MSI (the presets) and directory MESI
 (`DIRECTORY_MESI` / `MESI_directory_v2`, `DIRECTORY_LLC_MESI` / `MESI_LLC_directory_v2`), including LLC
-banks and memory on the network; directory MOESI (`MOESI_directory_v2`, `MOESI_LLC_directory_v2`) runs
-on the bus and on the network with one open race (an M owner's PutM meeting the home's eviction), and
-snooping over the network is not supported.
+banks and memory on the network, and directory MOESI (`MOESI_directory_v2`, `MOESI_LLC_directory_v2`) on
+the bus and on the network; snooping over the network is not supported.
 Real-time arbitration on the network (TDM slots, priority VCs) is not yet available.
 
 ## Bus / interconnect arbitration
