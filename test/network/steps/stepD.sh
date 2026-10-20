@@ -42,4 +42,32 @@ stepD() {
   for t in $EEMBC; do dir_run "$O/moesi/Dir/$t" -s MultiCoreSystem -c MultiCoreSystem_Directory $(dir_proto_args MOESI single) -p "workload_path(s)=$(W $t)/" & done; wait
   for t in $EEMBC; do dir_ok "$O/moesi/Dir/$t" $t || { ok=0; detail="$detail $t"; }; done
   if [ $ok = 1 ]; then pass DIR-MOESI-BUS "10/10 complete, 0 faults" "complete" "$(elapsed "$t0")"; else fail DIR-MOESI-BUS "$detail" "10/10 complete"; fi
+  stepD_moesi_net
+}
+
+# DIR-MOESI-NET: directory MOESI on the network presets (Grid, Grid2B, Grid2BM, Grid2B2M; FCFS/RR; normal/small queues).
+# Known open case: N_ad + PutM_Data_fromOwner (an M owner evicting while the home evicts from O) needs a design decision
+# (docs/NoC_Implementation_Report.md); a run that faults there is reported as XFAIL, anything else fails.
+stepD_moesi_net() {
+  local O="$OUT/dir/moesi-net" t0 ok=1 detail="" known="" c arb mode t n=0; mkdir -p "$O"; t0=$(now)
+  local -a cells=()
+  for c in Grid Grid2B Grid2BM Grid2B2M; do
+    local kind=banked; [ $c = Grid ] && kind=single
+    for arb in FCFSArbiter RRArbiter; do for mode in plain stress; do
+      local X=""; [ $mode = stress ] && X="-p interconnect.inject_queue_depth(i)=4 -p interconnect.eject_queue_depth(i)=2"
+      cells+=("$c-$mode-${arb%Arbiter}|-s MultiCoreSystem_Mesh -c MultiCoreSystem_$c $(dir_proto_args MOESI $kind) -p interconnect.arbiter_type(s)=$arb $X")
+    done; done
+  done
+  local cell
+  for cell in "${cells[@]}"; do for t in $EEMBC; do dir_run "$O/${cell%%|*}/$t" ${cell#*|} -p "workload_path(s)=$(W $t)/" & n=$((n+1)); [ $((n % 20)) = 0 ] && wait; done; done; wait
+  local total=0 good=0
+  for cell in "${cells[@]}"; do for t in $EEMBC; do
+    local d="$O/${cell%%|*}/$t"; total=$((total+1))
+    if dir_ok "$d" $t; then good=$((good+1))
+    elif grep -q 'line state 9, addr [^,]*, msg [0-9]*, source 0, owner [0-9]*, from [0-9]*, type 3, kind 4, data 1' "$d/.stdout"; then known="$known ${cell%%|*}:$t"
+    else ok=0; detail="$detail ${cell%%|*}:$t"; fi
+  done; done
+  if [ $ok = 0 ]; then fail DIR-MOESI-NET "$detail" "$good/$total complete; only the known N_ad+PutM case may fail" "$(elapsed "$t0")"
+  elif [ -n "$known" ]; then xfail DIR-MOESI-NET "$good/$total complete; known N_ad + PutM_Data_fromOwner case:$known"
+  else pass DIR-MOESI-NET "$good/$total complete" "complete" "$(elapsed "$t0")"; fi
 }

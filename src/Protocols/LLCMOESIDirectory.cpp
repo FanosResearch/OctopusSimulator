@@ -97,6 +97,8 @@ namespace octopus
                     continue;
                 if(id == old_owner && msg.owner != m_id) //skip invalidation of a previous owner as it will be invalidated by a fwd message
                     continue;
+                if(id == old_owner && flags[ActionId::SendInvM]) //the owner gets the InvM of the same transition instead
+                    continue;
                 ((Message *)controller_action.data)->to.push_back((uint16_t)id);
             }
             

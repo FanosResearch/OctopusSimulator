@@ -1159,3 +1159,36 @@ no kind and are classified by the fallback rules. That is a port of its own.
 **Tests** (`bash test/network/run.sh D`). DIR-MESI: the bus directory preset and Grid, Grid2B, Grid2BM, Grid2B2M
 under FCFS and RR with normal and small (`inject_queue_depth 4`, `eject_queue_depth 2`) queues, 17
 configurations × 10 traces, all complete, 0 faults, 0 overtakes, 0 refused pushes. DIR-MOESI-BUS: 10/10.
+
+## Directory MOESI on the network
+
+**Built** (on top of the MESI work above).
+
+- Every message the MESI / MOESI handlers build carries a kind: `K_PUTO` (new, REQUEST) for an O owner's
+  `PutO_Data`, `K_INV` for the MOESI `SendInv` / `InvM`, `K_FWD` for its `FwdGetM`, `K_SUPPLY` for the MOESI
+  L1's `Data2Req`, and `K_ACK` for the home's ack count to an upgrading owner. The ack count is an
+  acknowledgement from a home and travels with its forwards (FORWARD class): in the RESPONSE class a later
+  `FwdGetM` to the same cache overtook it.
+- The protocol-and-network check covers every MESI and MOESI cell (class annotations in the four handlers:
+  381 and 525 cells, consumption order holds). `MOESI_LLC_directory_v2`: `I` + `last_InvAck` absorbs the stale
+  ack (empty, as MSI) instead of emitting a `PutAck`, the one violation the check found.
+- `demandForwards()`: a MOESI home emits up to `caches` forwards for one demand (an owner's GetM: the ack count
+  plus invalidations); MSI and MESI keep `caches − 1`.
+- `REQUEST_TYPE_INVM` is 11, not 10: `Message::isInvalidation()` reads 10 as the snooping INV, so the per-line
+  ordering gate held a directory InvM behind the cache's own newer demand, which let a `PutAck` overtake it.
+- An ack count that the acks received earlier already complete decodes as `AckCount_zero` (as `Data_zeroAck`);
+  the `Hit` action's counter settlement applies only to data, since the MOESI row's own `SetAck` settles the
+  ack count (applying both left a stale counter of 1, read later as `lastInvAck`).
+- `MOESI_LLC_directory_v2`: a put from a non-owner (`PutE`, `PutO_Data`) is acknowledged in every state, as
+  `PutM_Data_fromNonOwner` already was; `O` + Replacement → `SendInv/SendInvM/N_ad` (the owner gets an InvM,
+  which an owner still waiting for its data stalls, instead of a plain Inv it took for a sharer's).
+
+**Open: a design decision.** `N_ad` + `PutM_Data_fromOwner`: the owner, still in `M` (the home's forward that
+would make it `O` not yet processed), evicts with a PutM while the home evicts from `O`. The home must wait for
+the remaining acks (`N_a`) or, when the owner's was the last, write back and finish (`N`). The FSM separates the
+two for `PutO` (`PutO_Data_fromOwner`, `last_PutO_fromOwner`) but has no `last_PutM` event: either add one, or
+map an owner's PutM in `N_ad` onto the PutO events by sharer count in the handler. The cell stays `Fault/`.
+
+**Tests** (`bash test/network/run.sh D`). DIR-MOESI-NET: directory MOESI on Grid, Grid2B, Grid2BM, Grid2B2M,
+FCFS and RR, normal and small queues: 159/160 complete; the remaining run is the open case (XFAIL while only
+it fails). DIR-MESI and DIR-MOESI-BUS pass; `run.sh all`: 119 pass, 0 failures.

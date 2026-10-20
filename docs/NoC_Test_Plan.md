@@ -288,6 +288,7 @@ router 1. `MultiCoreSystem_Grid2B2M` adds controller 101 on router 2 (M5).
 |---|---|
 | DIR-MESI | `DIRECTORY_MESI` / `MESI_directory_v2` with `DIRECTORY_LLC_MESI` / `MESI_LLC_directory_v2` on the bus directory preset and on Grid, Grid2B, Grid2BM and Grid2B2M under FCFS and RR, with normal and small endpoint queues: all ten traces complete, no fault, no read-after-write overtake, no refused push |
 | DIR-MOESI-BUS | `DIRECTORY_MOESI` / `MOESI_directory_v2` with `MOESI_LLC_directory_v2` on the bus directory preset: ten traces complete, no fault |
+| DIR-MOESI-NET | the same on Grid, Grid2B, Grid2BM and Grid2B2M under FCFS and RR with normal and small queues: all complete; XFAIL while only the open `N_ad` + `PutM_Data_fromOwner` case fails |
 
 The MEM-OFF references for Grid and Grid2B and the REG-MEMNET reference were regenerated after the admission
 fixes of this work (message order kept on refusal, reservations held across the data array); the bus

@@ -107,7 +107,9 @@ namespace octopus
                 controller_actions.push_back(controller_action);
 
                 uint64_t addr_key = msg.addr & ~uint64_t(m_data_handler->getBlockSize() -1);
-                if((msg.source == Message::Source::UPPER_INTERCONNECT) &&
+                // data that carries the ack count and completes it with acks that came first (Data_zeroAck):
+                // settle the counter here. A message without data (MOESI's ack count) has its own SetAck in the row.
+                if((msg.source == Message::Source::UPPER_INTERCONNECT) && (msg.data != NULL) &&
                    (ack_counters->find(addr_key) != ack_counters->end()) &&
                    ((ack_counters->at(addr_key) + msg.complementary_value) == 0))
                 {
