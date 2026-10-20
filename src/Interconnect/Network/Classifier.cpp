@@ -20,7 +20,7 @@ namespace octopus { namespace net
             return m.data == NULL ? 0 : 1;
         switch (m.kind)
         {
-            case Message::K_GETS: case Message::K_GETM: case Message::K_PUTS: case Message::K_PUTM: case Message::K_PUTE:
+            case Message::K_GETS: case Message::K_GETM: case Message::K_PUTS: case Message::K_PUTM: case Message::K_PUTE: case Message::K_PUTO:
             case Message::K_DEMAND:
                 return CLASS_REQUEST;
             case Message::K_FWD: case Message::K_INV:

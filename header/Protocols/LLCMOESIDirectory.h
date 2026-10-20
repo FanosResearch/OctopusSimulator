@@ -68,6 +68,10 @@ namespace octopus
     public:
         LLCMOESIDirectory(CacheDataHandler *cache, const std::string &fsm_path, int id, int sharedMemId);
         ~LLCMOESIDirectory();
+        int demandForwards(int caches) const override { return caches; }   // an owner's GetM: the ack count + invalidations
+        bool consumedBy(const std::string &event, MsgClass &out) const override;
+        bool emittedBy(const std::string &action, std::vector<MsgClass> &out) const override;
+
     };
 }
 

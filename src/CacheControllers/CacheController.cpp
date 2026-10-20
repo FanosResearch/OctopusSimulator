@@ -449,8 +449,8 @@ namespace octopus
             n.iface = m_lower_interface;
             int caches = std::max(1, (int)m_arbiter_candidates.size());
             n.up_iface = m_upper_interface;
-            if (msg.isDemandRequest()) { n.fwd = caches - 1; n.resp = 1; n.up_fwd = 1; }   // a miss reads memory
-            else if (msg.kind == Message::K_PUTS || msg.kind == Message::K_PUTM || msg.kind == Message::K_PUTE) n.fwd = 1;   // answered with a PutAck
+            if (msg.isDemandRequest()) { n.fwd = m_protocol->demandForwards(caches); n.resp = 1; n.up_fwd = 1; }   // a miss reads memory
+            else if (msg.kind == Message::K_PUTS || msg.kind == Message::K_PUTM || msg.kind == Message::K_PUTE || msg.kind == Message::K_PUTO) n.fwd = 1;   // answered with a PutAck
             else if (msg.kind == Message::K_EVICT) { n.fwd = caches; n.up_resp = 1; }        // a victim may be written back
             if (msg.data != NULL && msg.source == Message::Source::LOWER_INTERCONNECT) n.up_resp = 1;   // an L1's data may be written back (N_d)
             // a fill from memory answers the requests parked on the line, and each of those kept its

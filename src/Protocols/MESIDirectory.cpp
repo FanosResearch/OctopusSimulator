@@ -69,4 +69,18 @@ namespace octopus
 
         MSIDirectory::readEvent(msg, out_id);
     }
+
+    // class annotations of the events and actions this protocol adds (docs/NoC_Architecture_Spec.md s14.3)
+    bool MESIDirectory::consumedBy(const std::string &e, MsgClass &o) const
+    {
+        o = MsgClass();
+        if (e == "Data_execlusive") { o.kind = Message::K_RESP; o.data = true; o.from_home = true; return true; }
+        return MSIDirectory::consumedBy(e, o);
+    }
+    bool MESIDirectory::emittedBy(const std::string &a, std::vector<MsgClass> &o) const
+    {
+        o.clear(); MsgClass m;
+        if (a == "PutE") { m.kind = Message::K_PUTE; o.push_back(m); return true; }
+        return MSIDirectory::emittedBy(a, o);
+    }
 }

@@ -64,6 +64,9 @@ namespace octopus
         virtual bool consumedBy(const std::string &event, MsgClass &out) const { (void)event; (void)out; return false; }
         virtual bool emittedBy(const std::string &action, std::vector<MsgClass> &out) const { (void)action; (void)out; return false; }
         virtual bool hasClassAnnotation() const { return false; }
+        // transmit admission (spec s14.2): the most forward-class messages a home emits for one demand request
+        // with `caches` caches -- a forward plus invalidations of the others (MOESI adds an ack count)
+        virtual int demandForwards(int caches) const { return caches - 1; }
         FSMReader *fsm() const { return m_fsm; }
     };
 }

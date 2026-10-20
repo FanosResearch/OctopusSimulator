@@ -56,7 +56,9 @@ public:
                           // msg_id 0: not part of any request's latency)
                           K_MEM_WACK,
                           // directory MESI/MOESI: an L1's PutE (clean exclusive copy dropped, no data)
-                          K_PUTE };
+                          K_PUTE,
+                          // directory MOESI: an O owner's PutO with its data
+                          K_PUTO };
     uint8_t kind = K_UNKNOWN;
 
     Message(uint64_t msg_id = 0, uint64_t addr = 0, uint64_t cycle = 0, uint64_t complementary_value = 0, uint16_t owner = 0)

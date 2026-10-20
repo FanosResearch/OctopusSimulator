@@ -74,4 +74,18 @@ namespace octopus
         
         LLCMSIDirectory::readEvent(msg, cache_line, out_id);
     }
+
+    // class annotations of the events and actions this protocol adds (docs/NoC_Architecture_Spec.md s14.3)
+    bool LLCMESIDirectory::consumedBy(const std::string &e, MsgClass &o) const
+    {
+        o = MsgClass();
+        (void)0;
+        return LLCMSIDirectory::consumedBy(e, o);
+    }
+    bool LLCMESIDirectory::emittedBy(const std::string &a, std::vector<MsgClass> &o) const
+    {
+        o.clear(); MsgClass m;
+        if (a == "SendEData") { m.kind = Message::K_RESP; m.data = true; m.from_home = true; o.push_back(m); return true; }
+        return LLCMSIDirectory::emittedBy(a, o);
+    }
 }

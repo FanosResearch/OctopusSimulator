@@ -55,7 +55,7 @@ State,stable,isDataValid,GetS,GetM,Replacement,PutS,last_PutS,InvAck,last_InvAck
 N,1,0,SetOwner/GetData/NE_d,SetOwner/GetData/NM_d,Fault/,PutAck/,PutAck/,Fault/,Fault/,Fault/,PutAck/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/
 NE_d,0,1,Stall/,Stall/,Stall/,PutAck/,PutAck/,Fault/,Fault/,Fault/,PutAck/,Fault/,SendEData/E,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/
 NM_d,0,1,Stall/,Stall/,Stall/,PutAck/,PutAck/,Fault/,Fault/,Fault/,PutAck/,Fault/,SendData/M,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/,Fault/
-I,1,1,SetOwner/SendEData/E,SetOwner/SendData/M,WriteBack/N,PutAck/,PutAck/,Fault/,PutAck/,Fault/,PutAck/,Fault/,Fault/,Fault/,PutAck/,Fault/,Fault/,PutAck/,Fault/,Fault/
+I,1,1,SetOwner/SendEData/E,SetOwner/SendData/M,WriteBack/N,PutAck/,PutAck/,Fault/,,Fault/,PutAck/,Fault/,Fault/,Fault/,PutAck/,Fault/,Fault/,PutAck/,Fault/,Fault/
 S,1,1,SendData/IncSharers/,SetOwner/SendData/SendInv/M,SendInv/WriteBack/N_a,PutAck/DecSharers/,PutAck/DecSharers/I,Fault/,Fault/,Fault/,PutAck/DecSharers/,Fault/,Fault/,Fault/,PutAck/DecSharers/,Fault/,Fault/,PutAck/DecSharers/,Fault/,Fault/
 E,1,1,FwdGetS/IncSharers/O,SetOwner/FwdGetM/,SendInvM/N_d,PutAck/,PutAck/,DecSharers/,DecSharers/,ClearOwner/DecSharers/PutAck/SaveData/I,PutAck/,Fault/,Fault/,ClearOwner/DecSharers/PutAck/I,PutAck/,Fault/,Fault/,PutAck/,Fault/,Fault/
 M,1,1,FwdGetS/IncSharers/O,SetOwner/FwdGetM/,SendInvM/N_d,PutAck/,PutAck/,DecSharers/,DecSharers/,ClearOwner/DecSharers/PutAck/SaveData/I,PutAck/,Fault/,Fault/,Fault/,PutAck/,Fault/,Fault/,PutAck/,Fault/,Fault/

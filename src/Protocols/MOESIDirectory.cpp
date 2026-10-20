@@ -65,6 +65,7 @@ namespace octopus
                                                  (uint16_t)this->m_id);               // Owner
             
             ((Message *)controller_action.data)->to.clear();                
+            ((Message *)controller_action.data)->kind = Message::K_PUTO;
             controller_actions.insert(controller_actions.begin(), controller_action);
         }
         if(set_ack_found)
@@ -85,6 +86,7 @@ namespace octopus
             controller_action.data = (void *)new Message(msg);
             
             ((Message *)controller_action.data)->complementary_value = msg.complementary_value2; //copy ack count (if presents) to complementary_value
+            ((Message *)controller_action.data)->kind = Message::K_SUPPLY;   // the owner answers a forwarded request (as MSI's Data2Req)
             ((Message *)controller_action.data)->to.clear();
             
             controller_actions.insert(controller_actions.begin(), controller_action);
@@ -123,5 +125,22 @@ namespace octopus
         }
 
         MESIDirectory::readEvent(msg, out_id);
+    }
+
+    // class annotations of the events and actions this protocol adds (docs/NoC_Architecture_Spec.md s14.3)
+    bool MOESIDirectory::consumedBy(const std::string &e, MsgClass &o) const
+    {
+        o = MsgClass();
+        if (e == "DataFromOwner_nonZeroAck") { o.kind = Message::K_SUPPLY; o.data = true; return true; }
+        if (e == "AckCount" || e == "AckCount_zero") { o.kind = Message::K_ACK; o.from_home = true; return true; }
+        if (e == "InvM") { o.kind = Message::K_INV; o.from_home = true; return true; }
+        return MESIDirectory::consumedBy(e, o);
+    }
+    bool MOESIDirectory::emittedBy(const std::string &a, std::vector<MsgClass> &o) const
+    {
+        o.clear(); MsgClass m;
+        if (a == "PutO_Data") { m.kind = Message::K_PUTO; m.data = true; o.push_back(m); return true; }
+        if (a == "SetAck") return true;                                    // local: the ack counter
+        return MESIDirectory::emittedBy(a, o);
     }
 }

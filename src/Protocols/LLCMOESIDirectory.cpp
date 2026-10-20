@@ -63,6 +63,9 @@ namespace octopus
                                                          (uint16_t)this->m_id);  // Owner
             ((Message *)controller_action.data)->to.push_back((uint16_t)msg.owner);
             ((Message *)controller_action.data)->complementary_value2 = MOESIDirectory::RESPONSE_TYPE_ACKCOUNT;
+            // the home's answer to an owner's GetM, without data: an acknowledgement from a home travels with its
+            // forwards (FORWARD class), so a later FwdGetM to the same cache cannot overtake it
+            ((Message *)controller_action.data)->kind = Message::K_ACK;
             
             uint64_t addr_key = msg.addr & ~uint64_t(m_data_handler->getBlockSize() -1);
             if(protocol_counters->find(addr_key) != protocol_counters->end())
@@ -85,6 +88,7 @@ namespace octopus
             controller_action.data = (void *)new Message(msg);
 
             ((Message *)controller_action.data)->complementary_value = (uint16_t)MSIDirectory::REQUEST_TYPE_INV;
+            ((Message *)controller_action.data)->kind = Message::K_INV;   // as the MSI SendInv it overrides
             ((Message *)controller_action.data)->to.clear();
 
             for(uint64_t id : protocol_counters->at(msg.addr & ~uint64_t(m_data_handler->getBlockSize() -1)))
@@ -108,6 +112,7 @@ namespace octopus
             
             ((Message *)controller_action.data)->complementary_value = (uint16_t)MSIDirectory::REQUEST_TYPE_GETM;
 
+            ((Message *)controller_action.data)->kind = Message::K_FWD;   // as the MSI FwdGetM it overrides
             ((Message *)controller_action.data)->to.clear();
             ((Message *)controller_action.data)->to.push_back(old_owner);
             ((Message *)controller_action.data)->complementary_value2 = 0;
@@ -131,6 +136,7 @@ namespace octopus
             controller_action.data = (void *)new Message(msg);
 
             ((Message *)controller_action.data)->complementary_value = (uint16_t)MOESIDirectory::REQUEST_TYPE_INVM;
+            ((Message *)controller_action.data)->kind = Message::K_INV;
             ((Message *)controller_action.data)->to.clear();
             ((Message *)controller_action.data)->to.push_back((uint16_t)old_owner);
             
@@ -179,5 +185,23 @@ namespace octopus
         }
         
         LLCMESIDirectory::readEvent(msg, cache_line, out_id);
+    }
+
+    // class annotations of the events and actions this protocol adds (docs/NoC_Architecture_Spec.md s14.3)
+    bool LLCMOESIDirectory::consumedBy(const std::string &e, MsgClass &o) const
+    {
+        o = MsgClass();
+        if (e == "GetM_fromOwner") { o.kind = Message::K_GETM; return true; }
+        if (e == "PutO_Data_fromOwner" || e == "PutO_Data_fromNonOwner" || e == "last_PutO_fromOwner") { o.kind = Message::K_PUTO; o.data = true; return true; }
+        if (e == "Data_fromLowerInterface_lastAck") { o.kind = Message::K_SUPPLY; o.data = true; return true; }
+        return LLCMESIDirectory::consumedBy(e, o);
+    }
+    bool LLCMOESIDirectory::emittedBy(const std::string &a, std::vector<MsgClass> &o) const
+    {
+        o.clear(); MsgClass m;
+        m.from_home = true;
+        if (a == "sendAckC") { m.kind = Message::K_ACK; o.push_back(m); return true; }
+        if (a == "SendInvM") { m.kind = Message::K_INV; o.push_back(m); return true; }
+        return LLCMESIDirectory::emittedBy(a, o);
     }
 }

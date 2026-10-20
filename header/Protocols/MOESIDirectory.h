@@ -71,6 +71,9 @@ namespace octopus
     public:
         MOESIDirectory(CacheDataHandler *cache, const std::string &fsm_path, int id, int sharedMemId);
         ~MOESIDirectory();
+        bool consumedBy(const std::string &event, MsgClass &out) const override;
+        bool emittedBy(const std::string &action, std::vector<MsgClass> &out) const override;
+
     };
 }
 
