@@ -155,6 +155,8 @@ Permissions are None, Branch (read-only, above the tip), Trunk (on the path to t
 | §9.5.9 | HintAck on C routed by c_source | C responses route by address (Table 14) |
 | Figure 7 text | "6 messages", then 5 | 5 |
 | §9.1 | "Tip (with Branches) … has read and write permissions" | Table 29: Get only; the plan follows Table 29 |
+| Figure 10, third transaction | a_opcode 1 (PutPartialData) answered by d_opcode 1 (AccessAckData), which Table 12 forbids | the text calls it a one-beat atomic: ArithmeticData, size 3 (golden `fig10.txt`) |
+| Figure 18 | data drawn as 0xab / 0x0 / 0xf / 0x3 while the caption says 0xabcd / 0x0000 / 0xffff / 0x00ff, and the last Get cannot return 0x3 after PutPartialData(mask 0x3, data 0xf) on a zeroed word | the golden compares the A data as drawn and the last D data as a memory returns it (0xf) |
 
 ## 2. Scope
 

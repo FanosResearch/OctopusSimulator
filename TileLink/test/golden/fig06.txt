@@ -1,0 +1,50 @@
+# TileLink Spec 1.9.3, Figure 6 (p. 20): "Ready-Valid signalling for 6 messages in a 64-bit Channel A"
+# Spec §4.1. Transcribed from the PDF waveform 2026-10-21.
+#
+# Link implied: w=8 (64-bit), level TL-UH (bursts; size 6 appears), z>=3, o>=3 (five requests stay
+# outstanding in the window: no D channel is drawn). Name used below: L0.
+# Cycle 0 is the first drawn clock period; a cycle is the interval between two rising edges; a
+# signal's value in cycle k is what the figure draws between edge k and edge k+1.
+#
+# Messages (name: opcode size -> beats on w=8; accepted beats and cycles):
+#   F  PutFullData size 5 (32 B) 4 beats : F-0 rejected c1, accepted c2; F-1 rejected c4 (valid LOW c5),
+#                                           accepted c6; F-2 c7; F-3 c8
+#   G  PutFullData size 0 (1 B)  1 beat  : G-0 c9
+#   H  PutFullData size 6 (64 B) 8 beats : H-0 rejected c11 and retracted (never sent)
+#   I  PutFullData size 2 (4 B)  1 beat  : I-0 c12
+#   J  Get         size 4 (16 B) 1 beat  : J-0 c14 (its 2-beat AccessAckData is not drawn)
+#   K  PutFullData size 1 (2 B)  1 beat  : K-0 c15
+# Fields not drawn (source, address, mask, data, corrupt, denied) are `-` in the transcript; param of a
+# Put/Get is reserved and must be 0, written 0.
+# compare: expected
+
+[waveform]
+# cycle a_ready a_valid a_opcode a_size label  note
+0       0       0       -        -      -
+1       0       1       0        5      F-0    rejected
+2       1       1       0        5      F-0    accepted, F in progress
+3       1       0       -        -      -
+4       0       1       0        5      F-1    rejected (in-progress beat)
+5       1       0       -        -      -      valid lowered during the burst (legal)
+6       1       1       0        5      F-1    accepted
+7       1       1       0        5      F-2    accepted
+8       1       1       0        5      F-3    accepted, F complete
+9       1       1       0        0      G-0    accepted
+10      1       0       -        -      -
+11      0       1       0        6      H-0    rejected; H retracted next cycle (legal: not in progress)
+12      1       1       0        2      I-0    accepted
+13      1       0       -        -      -
+14      1       1       4        4      J-0    accepted
+15      1       1       0        1      K-0    accepted
+16      1       0       -        -      -
+
+[expected]
+# cycle link ch opcode      param size source sink address beat mask data corrupt denied
+2       L0   A  PutFullData 0     5    -      -    -       0    -    -    -       -
+6       L0   A  PutFullData 0     5    -      -    -       1    -    -    -       -
+7       L0   A  PutFullData 0     5    -      -    -       2    -    -    -       -
+8       L0   A  PutFullData 0     5    -      -    -       3    -    -    -       -
+9       L0   A  PutFullData 0     0    -      -    -       0    -    -    -       -
+12      L0   A  PutFullData 0     2    -      -    -       0    -    -    -       -
+14      L0   A  Get         0     4    -      -    -       0    -    -    -       -
+15      L0   A  PutFullData 0     1    -      -    -       0    -    -    -       -

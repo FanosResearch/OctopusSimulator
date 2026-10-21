@@ -1,0 +1,45 @@
+# TileLink Spec 1.9.3, Figure 11 (p. 27): "An example of the addresses of data carried in byte lanes on a
+# 16-byte data bus". Spec §4.5. Transcribed 2026-10-21.
+#
+# Link implied: w=16, level TL-UH (a 2-beat burst), z>=3, a>=8. Name: L0. a_ready is HIGH from c1 on.
+# Cycle convention as in fig06.txt. Six PutFullData messages, every beat accepted:
+#   c1,c2  size 5 (32 B) address 0x40: beat 0 lanes 0..15 = bytes 0x40..0x4f, beat 1 = 0x50..0x5f
+#   c4     size 4 (16 B) address 0x10: lanes 0..15 = 0x10..0x1f
+#   c6     size 3 (8 B)  address 0x58: lanes 8..15 = 0x58..0x5f (inactive lanes 0..7 crossed out)
+#   c8     size 2 (4 B)  address 0x24: lanes 4..7 = 0x24..0x27
+#   c10    size 1 (2 B)  address 0x76: lanes 6, 7 = 0x76, 0x77
+#   c12    size 0 (1 B)  address 0xc1: lane 1 = 0xc1
+# The byte in a lane equals the low byte of that lane's address, which is the figure's device.
+# Data notation in this file: the w lanes in order, lane 0 first, two hex digits per lane, `..` for an
+# inactive lane. mask is NOT drawn; it is derived by §4.5 (PutFullData: all active lanes HIGH) and the
+# comparator may check it (the monitor enforces it anyway, M-MASK-1/2).
+# The address column is the wire address, constant across the burst; beat 1 of the first message carries
+# the bytes at 0x50 = 0x40 + 1*16 (plan §1.4 effective address, not a wire field).
+# compare: expected
+
+[waveform]
+# cycle a_ready a_valid a_opcode a_size a_address data(lanes 0..15)                mask(derived)
+0       0       0       -        -      -         -                                -
+1       1       1       0        5      0x40      404142434445464748494a4b4c4d4e4f 0xffff
+2       1       1       0        5      0x40      505152535455565758595a5b5c5d5e5f 0xffff
+3       1       0       -        -      -         -                                -
+4       1       1       0        4      0x10      101112131415161718191a1b1c1d1e1f 0xffff
+5       1       0       -        -      -         -                                -
+6       1       1       0        3      0x58      ................58595a5b5c5d5e5f 0xff00
+7       1       0       -        -      -         -                                -
+8       1       1       0        2      0x24      ........24252627................ 0x00f0
+9       1       0       -        -      -         -                                -
+10      1       1       0        1      0x76      ............7677................ 0x00c0
+11      1       0       -        -      -         -                                -
+12      1       1       0        0      0xc1      ..c1............................ 0x0002
+13      1       0       -        -      -         -                                -
+
+[expected]
+# cycle link ch opcode      param size source sink address beat mask   data                             corrupt denied
+1       L0   A  PutFullData 0     5    -      -    0x40    0    0xffff 404142434445464748494a4b4c4d4e4f -       -
+2       L0   A  PutFullData 0     5    -      -    0x40    1    0xffff 505152535455565758595a5b5c5d5e5f -       -
+4       L0   A  PutFullData 0     4    -      -    0x10    0    0xffff 101112131415161718191a1b1c1d1e1f -       -
+6       L0   A  PutFullData 0     3    -      -    0x58    0    0xff00 ................58595a5b5c5d5e5f -       -
+8       L0   A  PutFullData 0     2    -      -    0x24    0    0x00f0 ........24252627................ -       -
+10      L0   A  PutFullData 0     1    -      -    0x76    0    0x00c0 ............7677................ -       -
+12      L0   A  PutFullData 0     0    -      -    0xc1    0    0x0002 ..c1............................ -       -

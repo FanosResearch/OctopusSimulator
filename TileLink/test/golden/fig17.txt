@@ -1,0 +1,36 @@
+# TileLink Spec 1.9.3, Figure 17 (p. 45): "Operations do not necessarily receive responses in order".
+# Spec §6.5. Transcribed 2026-10-21.
+#
+# Link implied: level TL-UH (an Intent is sent), o>=2 (sources 1, 2, 3 outstanding together), every
+# message single-beat (w and sizes not drawn; the scenario uses w=8, size 3). Name: L0.
+# The "//" break lies in the drawn cycle 5; counted as one cycle. Cycle convention as in fig06.txt.
+# a_ready and d_ready HIGH from c1 on; every beat accepted.
+# Messages:
+#   c1  PutFullData source 1   -> AccessAck     source 1 at c7
+#   c2  Get         source 2   -> AccessAckData source 2 at c8
+#   c3  Intent      source 3   -> HintAck       source 3 at c6 (answered first)
+# The three responses arrive in the order 3, 1, 2: out of order, matched by d_source (M-RESP-2).
+# Intent's param (prefetch kind) is not drawn: `-`.
+# compare: expected
+
+[waveform]
+# cycle a_ready a_valid a_opcode a_source d_ready d_valid d_opcode d_source note
+0       0       0       -        -        0       0       -        -
+1       1       1       0        1        1       0       -        -        PutFullData src 1
+2       1       1       4        2        1       0       -        -        Get src 2
+3       1       1       5        3        1       0       -        -        Intent src 3
+4       1       0       -        -        1       0       -        -
+5       1       0       -        -        1       0       -        -        "//" break (counted as 1 cycle)
+6       1       0       -        -        1       1       2        3        HintAck src 3
+7       1       0       -        -        1       1       0        1        AccessAck src 1
+8       1       0       -        -        1       1       1        2        AccessAckData src 2
+9       1       0       -        -        1       0       -        -
+
+[expected]
+# cycle link ch opcode        param size source sink address beat mask data corrupt denied
+1       L0   A  PutFullData   0     -    1      -    -       0    -    -    -       -
+2       L0   A  Get           0     -    2      -    -       0    -    -    -       -
+3       L0   A  Intent        -     -    3      -    -       0    -    -    -       -
+6       L0   D  HintAck       0     -    3      -    -       0    -    -    -       -
+7       L0   D  AccessAck     0     -    1      -    -       0    -    -    -       -
+8       L0   D  AccessAckData 0     -    2      -    -       0    -    -    -       -

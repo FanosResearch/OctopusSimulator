@@ -1,0 +1,60 @@
+# TileLink Spec 1.9.3, Figure 18 (p. 47): "Waveform containing Get and Put operations".
+# Spec §7.1 (TL-UL). Transcribed 2026-10-21.
+#
+# Link implied: w=4 (a_mask has 4 bits: 0xf, 0x3), level TL-UL, every message single-beat; sizes not
+# drawn (the scenario uses size 2 = 4 bytes so that mask 0xf is the full beat). Name: L0.
+# Four "//" breaks, in the drawn cycles 4, 8, 12, 16; each counted as one cycle. a_ready, d_ready HIGH
+# from c1 on; every beat accepted. Every response is drawn ONE cycle after its request, which is
+# exactly the simulator's minimum latency: no +1 variant is needed.
+# Cycle convention as in fig06.txt.
+# Messages (caption: PutFullData writes 0xabcd; Get reads 0xabcd; PutFullData writes 0x0000;
+# PutPartialData writes part of 0xffff; Get reads 0x00ff):
+#   c1  PutFullData    address 0x0 mask 0xf data 0xab  -> c2  AccessAck
+#   c5  Get            address 0x0 mask 0xf            -> c6  AccessAckData data 0xab
+#   c9  PutFullData    address 0x0 mask 0xf data 0x0   -> c10 AccessAck
+#   c13 PutPartialData address 0x0 mask 0x3 data 0xf   -> c14 AccessAck
+#   c17 Get            address 0x0 mask 0xf            -> c18 AccessAckData data 0x3
+# DATA NOTE (flagged): the drawn data values are schematic. They do not agree with the caption (0xab vs
+# 0xabcd, 0x3 vs 0x00ff) and no byte interpretation makes the last Get return 0x3 after a
+# PutPartialData of 0xf under mask 0x3 on a zeroed word (a real memory returns 0xf). The waveform table
+# keeps the drawn values; the expected transcript carries the A-channel data as driven by the scripted
+# master (the drawn values) and, for the last Get, the value a real memory returns (0xf) with the drawn
+# 0x3 noted. Data values are the little-endian word of the active lanes.
+# compare: expected
+
+[waveform]
+# cycle a_ready a_valid a_address a_opcode a_mask a_data d_ready d_valid d_opcode d_data note
+0       0       0       -         -        -      -      0       0       -        -
+1       1       1       0x0       0        0xf    0xab   1       0       -        -      PutFullData
+2       1       0       -         -        -      -      1       1       0        -      AccessAck
+3       1       0       -         -        -      -      1       0       -        -
+4       1       0       -         -        -      -      1       0       -        -      "//" break
+5       1       1       0x0       4        0xf    -      1       0       -        -      Get
+6       1       0       -         -        -      -      1       1       1        0xab   AccessAckData
+7       1       0       -         -        -      -      1       0       -        -
+8       1       0       -         -        -      -      1       0       -        -      "//" break
+9       1       1       0x0       0        0xf    0x0    1       0       -        -      PutFullData
+10      1       0       -         -        -      -      1       1       0        -      AccessAck
+11      1       0       -         -        -      -      1       0       -        -
+12      1       0       -         -        -      -      1       0       -        -      "//" break
+13      1       1       0x0       1        0x3    0xf    1       0       -        -      PutPartialData
+14      1       0       -         -        -      -      1       1       0        -      AccessAck
+15      1       0       -         -        -      -      1       0       -        -
+16      1       0       -         -        -      -      1       0       -        -      "//" break
+17      1       1       0x0       4        0xf    -      1       0       -        -      Get
+18      1       0       -         -        -      -      1       1       1        0x3    AccessAckData (drawn 0x3; see DATA NOTE)
+19      1       0       -         -        -      -      1       0       -        -
+
+[expected]
+# cycle link ch opcode         param size source sink address beat mask data corrupt denied
+1       L0   A  PutFullData    0     -    -      -    0x0     0    0xf  0xab -       -
+2       L0   D  AccessAck      0     -    -      -    -       0    -    -    -       -
+5       L0   A  Get            0     -    -      -    0x0     0    0xf  -    -       -
+6       L0   D  AccessAckData  0     -    -      -    -       0    -    0xab -       -
+9       L0   A  PutFullData    0     -    -      -    0x0     0    0xf  0x0  -       -
+10      L0   D  AccessAck      0     -    -      -    -       0    -    -    -       -
+13      L0   A  PutPartialData 0     -    -      -    0x0     0    0x3  0xf  -       -
+14      L0   D  AccessAck      0     -    -      -    -       0    -    -    -       -
+17      L0   A  Get            0     -    -      -    0x0     0    0xf  -    -       -
+18      L0   D  AccessAckData  0     -    -      -    -       0    -    0xf  -       -
+# c18 data: drawn 0x3, a real memory returns 0xf (DATA NOTE); the comparator takes 0xf.

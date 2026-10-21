@@ -1,0 +1,63 @@
+# TileLink Spec 1.9.3, Figure 8 (p. 23): "The max and min delay between a Get (4) and an AccessAckData (1)
+# on an 8-byte bus". Spec §4.2.1. Transcribed 2026-10-21.
+#
+# Link implied: w=8, level TL-UH (4-beat responses), z>=3. Name: L0.
+# The figure's "//" break (between the drawn cycles 3 and 4) stands for an arbitrary delay; the
+# transcript counts it as exactly one cycle, and the scenario's slave latency reproduces that.
+# Cycle convention as in fig06.txt.
+#
+# Messages:
+#   Get#1  Get size 5 (32 B), 1 beat, accepted c1; AccessAckData#1 size 5, 4 beats, c4..c7 ("max delay")
+#   Get#2  Get size 5, offered c9 and rejected (a_ready LOW), accepted c10;
+#          AccessAckData#2 size 5, 4 beats, c10..c13: the first beat in the SAME cycle as the request's
+#          acceptance ("min delay", the earliest the rules allow); d_valid was LOW at c9 because the
+#          request was rejected there (§4.2 "not before").
+# The simulator never answers in the request's own cycle (plan §3.2, §8 decision 2), so a second
+# transcript shifts the second response by +1 cycle (c11..c14). The test compares against
+# expected_plus1; expected_as_drawn documents the figure.
+# compare: expected_plus1
+
+[waveform]
+# cycle a_ready a_valid a_opcode a_size d_ready d_valid d_opcode d_size note
+0       0       0       -        -      0       0       -        -
+1       1       1       4        5      1       0       -        -      Get#1 accepted
+2       1       0       -        -      1       0       -        -
+3       1       0       -        -      1       0       -        -      "//" break (arbitrary delay, counted as 1 cycle)
+4       1       0       -        -      1       1       1        5      AccessAckData#1 beat 0
+5       1       0       -        -      1       1       1        5      beat 1
+6       1       0       -        -      1       1       1        5      beat 2
+7       1       0       -        -      1       1       1        5      beat 3
+8       1       0       -        -      1       0       -        -
+9       0       1       4        5      1       0       -        -      Get#2 rejected (a_ready LOW)
+10      1       1       4        5      1       1       1        5      Get#2 accepted; AccessAckData#2 beat 0 same cycle
+11      1       0       -        -      1       1       1        5      beat 1
+12      1       0       -        -      1       1       1        5      beat 2
+13      1       0       -        -      1       1       1        5      beat 3
+14      1       0       -        -      1       0       -        -
+
+[expected_as_drawn]
+# cycle link ch opcode        param size source sink address beat mask data corrupt denied
+1       L0   A  Get           0     5    -      -    -       0    -    -    -       -
+4       L0   D  AccessAckData 0     5    -      -    -       0    -    -    -       -
+5       L0   D  AccessAckData 0     5    -      -    -       1    -    -    -       -
+6       L0   D  AccessAckData 0     5    -      -    -       2    -    -    -       -
+7       L0   D  AccessAckData 0     5    -      -    -       3    -    -    -       -
+10      L0   A  Get           0     5    -      -    -       0    -    -    -       -
+10      L0   D  AccessAckData 0     5    -      -    -       0    -    -    -       -
+11      L0   D  AccessAckData 0     5    -      -    -       1    -    -    -       -
+12      L0   D  AccessAckData 0     5    -      -    -       2    -    -    -       -
+13      L0   D  AccessAckData 0     5    -      -    -       3    -    -    -       -
+
+[expected_plus1]
+# second response shifted +1 (simulator minimum latency); the first transaction is unchanged
+# cycle link ch opcode        param size source sink address beat mask data corrupt denied
+1       L0   A  Get           0     5    -      -    -       0    -    -    -       -
+4       L0   D  AccessAckData 0     5    -      -    -       0    -    -    -       -
+5       L0   D  AccessAckData 0     5    -      -    -       1    -    -    -       -
+6       L0   D  AccessAckData 0     5    -      -    -       2    -    -    -       -
+7       L0   D  AccessAckData 0     5    -      -    -       3    -    -    -       -
+10      L0   A  Get           0     5    -      -    -       0    -    -    -       -
+11      L0   D  AccessAckData 0     5    -      -    -       0    -    -    -       -
+12      L0   D  AccessAckData 0     5    -      -    -       1    -    -    -       -
+13      L0   D  AccessAckData 0     5    -      -    -       2    -    -    -       -
+14      L0   D  AccessAckData 0     5    -      -    -       3    -    -    -       -

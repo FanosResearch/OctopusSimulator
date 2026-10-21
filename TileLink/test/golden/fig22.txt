@@ -1,0 +1,55 @@
+# TileLink Spec 1.9.3, Figure 22 (p. 55): "Waveform containing Atomic and Hint operations".
+# Spec §8.1 (TL-UH). Transcribed 2026-10-21.
+#
+# Link implied: level TL-UH, every message single-beat; w, sizes and masks not drawn (the scenario
+# uses w=8, size 3, mask 0xff). Name: L0.
+# Four "//" breaks, in the drawn cycles 4, 8, 12, 16; each counted as one cycle. a_ready, d_ready HIGH
+# from c1 on; every beat accepted. Every response is drawn ONE cycle after its request: the
+# simulator's minimum latency, no +1 variant. Cycle convention as in fig06.txt.
+# a_param of the PutFullData and the Get is drawn as don't-care; it is reserved (0) and written 0.
+# Messages (caption: Prefetch with intent to write; Put storing 0x1; Atomic add of 0x1 returning 0x1;
+# Atomic swap of 0x3 returning 0x2; Get loading 0x3), all at address 0x0:
+#   c1  Intent         param 1 (PrefetchWrite)        -> c2  HintAck
+#   c5  PutFullData    data 0x1                       -> c6  AccessAck
+#   c9  ArithmeticData param 4 (ADD)  data 0x1        -> c10 AccessAckData data 0x1 (old value; memory 0x2)
+#   c13 LogicalData    param 3 (SWAP) data 0x3        -> c14 AccessAckData data 0x2 (old value; memory 0x3)
+#   c17 Get                                           -> c18 AccessAckData data 0x3
+# The data story is consistent with a real memory (unlike Figure 18), so the whole data column is
+# compared. Data values are the little-endian word of the active lanes.
+# compare: expected
+
+[waveform]
+# cycle a_ready a_valid a_address a_opcode a_param a_data d_ready d_valid d_opcode d_data note
+0       0       0       -         -        -       -      0       0       -        -
+1       1       1       0x0       5        1       -      1       0       -        -      Intent PrefetchWrite
+2       1       0       -         -        -       -      1       1       2        -      HintAck
+3       1       0       -         -        -       -      1       0       -        -
+4       1       0       -         -        -       -      1       0       -        -      "//" break
+5       1       1       0x0       0        -       0x1    1       0       -        -      PutFullData 0x1
+6       1       0       -         -        -       -      1       1       0        -      AccessAck
+7       1       0       -         -        -       -      1       0       -        -
+8       1       0       -         -        -       -      1       0       -        -      "//" break
+9       1       1       0x0       2        4       0x1    1       0       -        -      ArithmeticData ADD 0x1
+10      1       0       -         -        -       -      1       1       1        0x1    AccessAckData 0x1
+11      1       0       -         -        -       -      1       0       -        -
+12      1       0       -         -        -       -      1       0       -        -      "//" break
+13      1       1       0x0       3        3       0x3    1       0       -        -      LogicalData SWAP 0x3
+14      1       0       -         -        -       -      1       1       1        0x2    AccessAckData 0x2
+15      1       0       -         -        -       -      1       0       -        -
+16      1       0       -         -        -       -      1       0       -        -      "//" break
+17      1       1       0x0       4        -       -      1       0       -        -      Get
+18      1       0       -         -        -       -      1       1       1        0x3    AccessAckData 0x3
+19      1       0       -         -        -       -      1       0       -        -
+
+[expected]
+# cycle link ch opcode         param size source sink address beat mask data corrupt denied
+1       L0   A  Intent         1     -    -      -    0x0     0    -    -    -       -
+2       L0   D  HintAck        0     -    -      -    -       0    -    -    -       -
+5       L0   A  PutFullData    0     -    -      -    0x0     0    -    0x1  -       -
+6       L0   D  AccessAck      0     -    -      -    -       0    -    -    -       -
+9       L0   A  ArithmeticData 4     -    -      -    0x0     0    -    0x1  -       -
+10      L0   D  AccessAckData  0     -    -      -    -       0    -    0x1  -       -
+13      L0   A  LogicalData    3     -    -      -    0x0     0    -    0x3  -       -
+14      L0   D  AccessAckData  0     -    -      -    -       0    -    0x2  -       -
+17      L0   A  Get            0     -    -      -    0x0     0    -    -    -       -
+18      L0   D  AccessAckData  0     -    -      -    -       0    -    0x3  -       -

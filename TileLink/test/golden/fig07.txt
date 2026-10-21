@@ -1,0 +1,54 @@
+# TileLink Spec 1.9.3, Figure 7 (p. 21): "Ready-Valid signalling for 6 messages in a 64-bit Channel D"
+# Spec §4.1 (the text says 6 messages, then lists 5: L, M, N, O, P; plan §1.5). Transcribed 2026-10-21.
+#
+# Link implied: w=8, level TL-UH (bursts), z>=3. Name used below: L0. Channel D only; the requests
+# that these messages answer are not drawn (the scenario issues them before the window: Get size 5 -> L,
+# Get size 0 -> M, Get size 4 -> N, PutFullData size 0 -> O, PutFullData size 4 -> P).
+# Cycle convention as in fig06.txt.
+#
+# Messages (opcode size -> beats on w=8; accepted beats and cycles):
+#   L  AccessAckData size 5 (32 B) 4 beats : L-0 rejected c1, accepted c2; L-1 rejected c4 (valid LOW c5),
+#                                             accepted c6; L-2 c7; L-3 c8
+#   M  AccessAckData size 0        1 beat  : M-0 c9
+#   N  AccessAckData size 4 (16 B) 2 beats : N-0 rejected c11 and retracted (replaced by O); re-offered and
+#                                             accepted c15; second beat c16
+#   O  AccessAck     size 0        1 beat  : O-0 c12
+#   P  AccessAck     size 4        1 beat  : P-0 c14
+# AMBIGUITY (flagged): the figure labels both c15 and c16 "N-0" while d_ready and d_valid are HIGH in
+# both cycles. N has size 4 = 2 beats on w=8, and two accepted cycles of one message are two beats, so
+# the transcript records beat 0 at c15 and beat 1 at c16 (a beat cannot be accepted twice, §4.1).
+# Retracting N at c12 is legal; N must be re-offered (M-BURST-5), and the figure does so at c15.
+# compare: expected
+
+[waveform]
+# cycle d_ready d_valid d_opcode d_size label  note
+0       0       0       -        -      -
+1       0       1       1        5      L-0    rejected
+2       1       1       1        5      L-0    accepted, L in progress
+3       1       0       -        -      -
+4       0       1       1        5      L-1    rejected (in-progress beat)
+5       1       0       -        -      -      valid lowered during the burst (legal)
+6       1       1       1        5      L-1    accepted
+7       1       1       1        5      L-2    accepted
+8       1       1       1        5      L-3    accepted, L complete
+9       1       1       1        0      M-0    accepted
+10      1       0       -        -      -
+11      0       1       1        4      N-0    rejected; N retracted next cycle (legal, must be re-offered)
+12      1       1       0        0      O-0    accepted
+13      1       0       -        -      -
+14      1       1       0        4      P-0    accepted
+15      1       1       1        4      N-0    accepted
+16      1       1       1        4      N-0    drawn "N-0"; is beat 1 of N (see AMBIGUITY above)
+17      1       0       -        -      -
+
+[expected]
+# cycle link ch opcode        param size source sink address beat mask data corrupt denied
+2       L0   D  AccessAckData 0     5    -      -    -       0    -    -    -       -
+6       L0   D  AccessAckData 0     5    -      -    -       1    -    -    -       -
+7       L0   D  AccessAckData 0     5    -      -    -       2    -    -    -       -
+8       L0   D  AccessAckData 0     5    -      -    -       3    -    -    -       -
+9       L0   D  AccessAckData 0     0    -      -    -       0    -    -    -       -
+12      L0   D  AccessAck     0     0    -      -    -       0    -    -    -       -
+14      L0   D  AccessAck     0     4    -      -    -       0    -    -    -       -
+15      L0   D  AccessAckData 0     4    -      -    -       0    -    -    -       -
+16      L0   D  AccessAckData 0     4    -      -    -       1    -    -    -       -
