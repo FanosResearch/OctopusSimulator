@@ -6,6 +6,7 @@
 #include "tilelink/Kernel.h"
 #include "tilelink/GraphCheck.h"
 #include "tilelink/Watchdog.h"
+#include "tilelink/CoherenceCheck.h"
 #include <iostream>
 
 namespace octopus { namespace tl
@@ -131,6 +132,11 @@ namespace octopus { namespace tl
                 wo.info = &std::cout;
                 addObserver(std::unique_ptr<Observer>(new Watchdog(wo)));
             }
+            // coherence_check(i) (default 1): SWMR and the data-value invariant on every TL-C link
+            // whose master is a leaf (plan §3.6); block_bytes(i) its block size. A system with no
+            // TL-C link attaches nothing.
+            if (cfg.get<int>("coherence_check", 1) != 0)
+                addObserver(std::unique_ptr<Observer>(new CoherenceCheck(unsigned(cfg.get<int>("block_bytes", 64)))));
         }
         catch (ConfigError &e) { fatal(e.what()); }
     }

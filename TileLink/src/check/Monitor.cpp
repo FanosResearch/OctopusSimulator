@@ -552,7 +552,10 @@ namespace octopus { namespace tl
                             report("M-PERM-1", "§9.1.4, §9.3.1, §9.3.2", ch, &m, 0, cycle, std::string("Acquire ") + (m.param <= 2 ? grow[m.param] : "?") +
                                    " from tracked permission " + P + " on block " + hex(blk));
                     }
-                    if (acquire) p.acq[m.source] = uint8_t(op); else p.acc[m.source] = uint8_t(op);
+                    // pend.acc holds the accesses §9.2 names ("a pending ... AccessAck, or AccessAckData"):
+                    // Get, Put, Atomics. An Intent (a prefetch hint or a CMO) is answered by a HintAck, which
+                    // no §9.2 sentence lists, so it blocks neither an Acquire (M-CONC-2) nor a Release (M-CONC-4).
+                    if (acquire) p.acq[m.source] = uint8_t(op); else if (access) p.acc[m.source] = uint8_t(op);
                 }
             }
         }
@@ -713,10 +716,10 @@ namespace octopus { namespace tl
         {
             // M-PARAM-11, §9.3.7, §9.3.8 "may exceed those requested"; plan §8 decision 7: a successful Grant meets or exceeds the Acquire
             static const char *grow[3] = {"NtoB", "NtoT", "BtoT"};
-            static const char *cap[2] = {"toT", "toB"};
+            static const char *cap[3] = {"toT", "toB", "toN"};
             bool ok = req->param == unsigned(Grow::NtoB) ? (m.param <= 1) : (m.param == unsigned(Cap::toT));
             if (!ok)
-                report("M-PARAM-11", "§9.3.7, §9.3.8, plan §8.7", ch, &m, 0, cycle, std::string("Grant cap ") + (m.param <= 1 ? cap[m.param] : "?") +
+                report("M-PARAM-11", "§9.3.7, §9.3.8, plan §8.7", ch, &m, 0, cycle, std::string("Grant cap ") + (m.param <= 2 ? cap[m.param] : "?") +
                        " below Acquire " + (req->param <= 2 ? grow[req->param] : "?") + " (src " + std::to_string(m.source) + ")");
         }
         if (ch == Channel::C && (op == 4 || op == 5))

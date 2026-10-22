@@ -135,3 +135,23 @@ Every agent declares `hints()` for the watchdog's default bound. The Throttle's 
 `ValueCheck` (`ValueCheck.h`, plan §3.6) is the admissible-set checker. `attach(link)` chains it onto the A and D `onAccept` hooks; it only observes. One checker may watch several links that share one memory. It works in data modes `full` and `stamp` (the stamp is the byte value). Reports go to `onViolation(ValueViolation)` (rule `V-READ` or `V-ATOMIC`, cycle, link, byte address, value, admissible set); the default is `fatal`. `counters()` gives writes, reads, atomics, bytes checked or skipped, denied and violations.
 
 The tests are in `test/topology` (TL-TOPO), with their own scripted `Endpoint` and `MemSlave` (`TopoTest.h`). They include TL-ADAPT-ERR (`test_fragmenter`, `test_widthwidget`), the topology part of TL-ID (`test_shrinker`), and a 4 x 2 TL-FUZZ-U-style system over 10 seeds, with a mutant slave that ValueCheck must catch (`test_system`).
+
+## CoherenceCheck
+
+`include/tilelink/CoherenceCheck.h`, `src/check/CoherenceCheck.cpp` (plan §3.6, §6 TL-FUZZ-C, TL-UNCACHED). The TL-C system checker: a `Kernel::Observer` that watches the masters' TL-C links and three rules.
+
+| rule | what it checks | when |
+|---|---|---|
+| `C-SWMR` | at most one master holds T on a block, and then no other master holds B (§9.1 Table 29) | a Grant[Data] with denied LOW is accepted by its master (first beat) |
+| `C-GRANT` | the manager's view (§9.2 "should not issue a Grant ... if there is a pending ProbeAck"): a Grant toT is offered only while every other master is at N, a Grant toB only while no other master is at T, as last reported | every offer of a Grant[Data] with denied LOW (one report per message) |
+| `C-VALUE` | a load returns, per byte, the value of the latest store reported before it (§6.5; plan §8 decision 8) | `loadPerformed` |
+
+Permissions are learned from accepted beats only. A Grant[Data] sets the master's permission to its cap; its block is the block of the Acquire it answers, matched by source on the link. A ProbeAck[Data] or Release[Data] lowers the permission to its param's target (first beat accepted); it never raises it. A denied Grant changes nothing (§9.3.7). The data-value invariant comes from the agents: a `CacheMaster` reports at the hit, the manager when it executes an uncached Put/Atomic or answers an uncached Get, through `if (auto *c = CoherenceCheck::of(kernel())) c->loadPerformed(agent, addr, bytes, n, cycle)` (and `storePerformed`). The order is report order. A byte never stored admits any value, unless `setInitial(addr, bytes, n)` gave the initial memory image.
+
+Where it attaches: on the masters' own links, upstream of any Xbar. A link whose master is also a slave somewhere (an Xbar, a Buffer) can carry several masters, and the checker could not attribute a Grant or a ProbeAck to one of them. `attach(link)` therefore refuses such a link with a `ConfigError`, and it refuses a link below TL-C. `attachAll(kernel)` attaches every TL-C link whose master is a leaf. When the checker is registered as an observer and nothing was attached by hand, `onElaborate` does the same (`auto_attach`, default true); it also checks the leaf rule again on the complete system. It chains onto the A, C and D `onAccept` hooks and the D `onOffer` hook, so attach it after the Monitor and the ValueCheck of the same link: all of them keep reporting. A block is identified by its base address; `permission(link, address)` accepts any byte of the block and returns `N`, `B` or `T`.
+
+Reports go to `onViolation(CoherenceViolation)` (rule, cycle, block, address, detail). The default is `fatal`: `TileLink: coherence C-SWMR: cycle=<n> block=<hex> addr=<hex>: <detail>`, exit 2. `counters()` gives grants, ProbeAcks, Releases, loads, stores, bytes checked and violations.
+
+What it cannot show: it sees permissions as the links carry them, so a master that keeps using a copy after its ProbeAck, or writes under B, shows only through `C-VALUE`, and only for the accesses the agents report. Behind an Xbar it sees a Grant when the Xbar forwards it, after the manager issued it: a conservative view of the manager's decision, which cannot flag a legal Grant.
+
+Tests: `test/coherence` (TL-COH: the C-SWMR, C-GRANT, denied-Grant and C-VALUE cases, report and fatal modes, the attach rules, and chaining with a Monitor and a ValueCheck on one link) and `test/negc` (TL-NEG-C: the 31 TL-C mutants of `docs/TileLink_Negative_Tests.md` §4 with the doc's controls, in report and fatal modes, and the Release-vs-GrantAck cases of `docs/TileLink_TLC_Tables.md` §11 item 5).
