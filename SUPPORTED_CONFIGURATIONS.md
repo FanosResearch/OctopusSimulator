@@ -15,8 +15,8 @@ below can be selected, swept, or combined without touching C++.
 
 | Axis | Ships with |
 |---|---|
-| Coherence protocols | Snoop & directory MSI / MESI / MOESI (CSV FSMs, stable + transient states); extensible incl. time-based coherence |
-| Interconnect topology | Point-to-point, unified bus, split bus, triple bus, mesh, NoC, multi-hop flit-level network (grid, torus, ring, star, custom) |
+| Coherence protocols | Snoop & directory MSI / MESI / MOESI, TileLink TL-C MSI / MESI (CSV FSMs, stable + transient states); extensible incl. time-based coherence |
+| Interconnect topology | Point-to-point, unified bus, split bus, triple bus, mesh, NoC, multi-hop flit-level network (grid, torus, ring, star, custom), TileLink 1.9.3 crossbar |
 | Arbitration | FCFS, FR-FCFS, RR, Weighted-RR, Harmonic-RR, TDM, GRROF |
 | Cache hierarchy | Arbitrary depth, private/shared, multi-bank, non-blocking (MSHRs, WB/refill buffers) |
 | Replacement | LRU, FIFO, Random |
@@ -31,6 +31,7 @@ below can be selected, swept, or combined without touching C++.
 
 - **Snooping-based:** MSI, MESI, MOESI
 - **Directory-based:** MSI, MESI, MOESI
+- **TileLink TL-C:** MSI, MESI (protocol types `TLC_L1` / `TLC_LLC`, tables `TileLink/tables/TLC_MESI_L1.csv`, `TLC_MESI_LLC.csv`, `TLC_MSI_LLC.csv`; MOESI has no TL-C counterpart among sibling L1s)
 - FSM-based protocol handlers with **stable and transient states**, authored as
   **CSV tables** and interpreted at startup (no recompilation to add or modify a
   protocol)
@@ -50,6 +51,7 @@ below can be selected, swept, or combined without touching C++.
 - Configurable interconnect controllers and topology (connection) maps for custom
   topologies
 - Multi-hop network (below)
+- TileLink crossbar (below)
 
 ### Multi-hop network (`interconnect_type Network`, system `MultiCoreSystem_Mesh`)
 
@@ -78,6 +80,27 @@ network engine). The multi-hop network runs directory MSI (the presets) and dire
 banks and memory on the network, and directory MOESI (`MOESI_directory_v2`, `MOESI_LLC_directory_v2`) on
 the bus and on the network; snooping over the network is not supported.
 Real-time arbitration on the network (TDM slots, priority VCs) is not yet available.
+
+### TileLink (`interconnect_type TileLink`, system `MultiCoreSystem_Mesh`)
+
+The L1s and LLC banks speak TileLink 1.9.3 (TL-C on the inner link, TL-UH to memory) over the crossbar of
+the standalone TileLink component in [`TileLink/`](TileLink/README.md). Design and validation:
+[`docs/TileLink_Plan.md`](docs/TileLink_Plan.md), [`docs/TileLink_Implementation_Report.md`](docs/TileLink_Implementation_Report.md);
+keys and defaults: `configuration/Interconnect/TileLink.csv`.
+
+| Aspect | Options |
+|---|---|
+| Protocols | TL-C MSI and MESI (`TLC_L1` / `TLC_LLC`), four-hop: a probed owner answers the manager, the requester gets one Grant, then GrantAck |
+| Crossbar | arbitration `rr`, `fixed`, `tdm`; per-channel port queues (`rx_depth_*`, `tx_depth_*`); link parameters `w`, `a`, `z`, `o`, `i` |
+| LLC banking | `llc_banks` with the cores' `home_interleave_shift`: interleaved crossbar routes |
+| Memory | the point-to-point memory bus (default), or memory over TileLink (`memory_on_network 1`: a second, TL-UH crossbar; several controllers with `mem_ids`; fixed-latency memory or MCsim) |
+| Checking | a conformance monitor on every link (`tl_monitor`), the agent-graph check, SWMR and the permission check of every cache hit (`tl_coherence_check`), the read-after-write hazard detector |
+| Observability | `TLStats.csv`, beat transcript (`transcript`), the Probe and Completion latency columns |
+
+Presets: `MultiCoreSystem_TileLink` (one LLC), `MultiCoreSystem_TileLink2B` (two banks),
+`MultiCoreSystem_TileLinkM` (memory over TileLink), `MultiCoreSystem_TileLink2B2M` (two banks, two memory
+controllers). The component also runs on its own: `tlsim` with TL-UL / TL-UH / TL-C agents, crossbar and
+adapters, and its checkers (`TileLink/README.md`).
 
 ## Bus / interconnect arbitration
 

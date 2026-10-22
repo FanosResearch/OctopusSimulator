@@ -141,7 +141,8 @@ existing convention: `(i)` int, `(s)` string, `(vi)` int list, `(vs)` string lis
 |---|---|---|---|---|
 | `flit_bytes` | i | 16 | link width; `0` means one flit per packet (§6.2) | ≥ 0 |
 | `header_bytes` | i | 8 | bytes charged for a packet's header | ≥ 0 |
-| `num_classes` | i | 3 | virtual networks (§6.3); `2` selects the legacy request/data split | 2 or 3 |
+| `num_classes` | i | 3 | virtual networks (§6.3); `2` selects the legacy request/data split; `5` and `7` carry TileLink | 2, 3, 5 or 7 |
+| `memory_ids` | vi | (none) | the memory-side endpoints (banks' memory ports, memory controllers) of a 7-class TileLink network (§6.3); also set by `Network::setMemoryEndpoints` | endpoints; 7 classes only |
 | `vcs_per_class` | i | 1 | VCs per class per input port | ≥ 1 |
 | `vc_depth` | i | 4 | flits per VC | ≥ 1 |
 | `router_latency` | i | 2 | ticks from a head's arrival at an input VC to its earliest switch traversal | ≥ 0 |
@@ -271,6 +272,21 @@ ignoring `kind`, so that the degenerate configuration (§17) classifies as the o
 classifier shall log, once per run, the count of packets classified by the fallback rules, so
 that an untagged protocol is visible. A message that matches no rule shall abort with its fields
 printed (§16).
+
+`num_classes = 5` and `num_classes = 7` carry TileLink (docs/TileLink_Plan.md §5.3 I-C): a class is a
+channel. A message is a TileLink message iff `Message::tl.channel != 0` (1..5 = A..E), and its class is
+decided by the channel alone; `kind` is ignored. With 5 classes (memory not on the network) the classes
+are A < B < C < D < E (indices 0..4). With 7 classes (memory on the network) the LLC's inner and outer
+links get disjoint classes, A_in < B < C < A_out < D_out < D_in < E (indices 0..6), so that every
+consume-then-emit edge goes up. A message is on the outer link iff its source endpoint (the injecting NI)
+and its destination are both memory-side, i.e. listed in `memory_ids` (the banks' memory ports and the
+memory controllers; key `memory_ids(vi)` or `Network::setMemoryEndpoints`, 7 classes only). The outer
+link is TL-UH and has A (A_out) and D (D_out) only. Fatal, with the message printed: a TileLink message on
+2 or 3 classes, a message without a channel on 5 or 7, a message between a memory-side and an inner
+endpoint, B/C/E on the outer link, a channel outside 1..5. On a TileLink network the endpoint's
+admission is per channel (`txFreeSlotsCh` / `txReserveCh` / `txReleaseCh`, the class of the channel on
+the endpoint's own side) and the MessageType calls are fatal; RX serving with `priority` serves the
+highest class first, as for 3 classes.
 
 ## 7. Network interface
 
@@ -599,6 +615,17 @@ the watchdog reports.
   REQUEST → FORWARD, REQUEST → RESPONSE, FORWARD → RESPONSE, RESPONSE → RESPONSE and hold; with
   two classes 36 cells violate (every Inv answered by an InvAck in the same class, every PutS by
   a PutAck, the GetS forwarded in its own class).
+  On a TileLink network the annotation names channels (`MsgClass::tl_channel`, with `memory` for the
+  outer link), the check builds messages with the TileLink header and the same strictly-higher rule
+  applies to the class order of §6.3 (the top class, E, may emit itself); with memory on the network the
+  memory controller's rules are A_out → D_out (Get → AccessAckData, PutFullData → AccessAck). A TileLink
+  annotation on a 2- or 3-class network, an Octopus one on a 5- or 7-class network, memory on the
+  network with 5 classes, or 7 classes without the memory-side endpoints are configuration errors.
+  Cells of an event the controller raises itself (`selfRaised(event)`, by default `Replacement`)
+  consume no network class, so their emissions are ordered against nothing; the check lists every such
+  cell that emits, on a second line after the verdict, `self-consumed emitters: <role> (<state>,
+  <event>) emits <class>, ...`, so that the fill-triggered write-back (TileLink_Plan §5.3 I-C, the one
+  edge the order does not cover and the resource argument does) is visible in the verdict.
 
 ## 15. Observability and statistics
 
@@ -643,7 +670,9 @@ At the end of a run the network writes `newLogger/NetworkStats.csv` with: per li
 and ticks busy; per router and output port, allocation attempts and losses (the contention count);
 per class, packets, mean and maximum injection-to-ejection latency and maximum `NoC Wait`; and the
 conservation totals of §9. The network-only harness (§18) reads this file to plot latency versus
-injection rate; the sweep harness can read it like any other report.
+injection rate; the sweep harness can read it like any other report. Per class it also records the
+reservations: `reserve,<class>,,<name>,<RX slots still reserved>,<TX slots still reserved>,<TX slots
+reserved in total>,<released in total>`; a drained run ends 0, 0, n, n.
 
 ### 15.5 Hang dump
 
@@ -716,6 +745,7 @@ For validation and for network studies without caches, a `TrafficGenerator` endp
 | `hotspot_id` | i | destination for `hotspot` |
 | `packets` | i | number to inject, `-1` = until the run's cycle limit |
 | `seed` | i | the generator's own deterministic PRNG seed |
+| `tl_mix` | vi | TileLink mode: weights of channels A..E; the class follows the channel, C and D carry `payload_bytes`, a memory-side generator draws A and D only and sends to memory-side endpoints only; absent = off |
 
 Generators consume what they receive immediately (they satisfy `ADMIT-RF` trivially) and record
 per-packet latency into `NetworkStats.csv`. A system preset `NetworkOnly.csv` instantiates
