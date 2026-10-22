@@ -84,6 +84,16 @@ namespace octopus
             if (l.performed < r->second) h.report("MC", msg_id, addr, cycle, r->second - l.performed, h.m_mc);
             h.m_reads.erase(r);
         }
+        // the counters (tests; docs/TileLink_Plan.md s5.3 I-B): all 0 while the detector is off
+        struct Counts { uint64_t reads, writes, net, mc, link, forwarded, mc_forwarded, llc_forwarded; };
+        static Counts counts()
+        {
+            if (!on()) return Counts{0, 0, 0, 0, 0, 0, 0, 0};
+            MemHazard &h = get();
+            uint64_t writes = 0;
+            for (auto &kv : h.m_lines) writes += kv.second.sent;
+            return Counts{h.m_reads_sent, writes, h.m_net, h.m_mc, h.m_bus, h.m_forwarded, h.m_mc_forwarded, h.m_llc_forwarded};
+        }
         ~MemHazard()
         {
             if (!on()) return;

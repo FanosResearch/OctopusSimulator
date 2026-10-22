@@ -18,4 +18,6 @@ target_sources(Octopus_core PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/LLCMESIDirectory.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/MOESIDirectory.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/LLCMOESIDirectory.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/TLC_L1.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/TLC_LLC.cpp
     )

@@ -305,6 +305,7 @@ namespace octopus { namespace tl
             }
             else if (mode == DataMode::Stamp)
                 for (uint64_t g = op.addr & ~uint64_t(7); g < op.addr + op.bytes; g += 8) l.data.set(g, v);
+            if (cc) cc->accessPerformed(*link(), op.addr, true, cycle);   // C-PERM (Table 29)
             if (cc && mode != DataMode::None)
             {
                 uint64_t a = l.data.checkBytes(op.addr, op.bytes, bytes);
@@ -319,6 +320,7 @@ namespace octopus { namespace tl
                 op.value.clear();
                 for (unsigned i = 0; i < op.bytes; i++) op.value.push_back(uint8_t(l.data.value(op.addr + i)));
             }
+            if (cc) cc->accessPerformed(*link(), op.addr, false, cycle);  // C-PERM (Table 29)
             if (cc && mode != DataMode::None)
             {
                 uint64_t a = l.data.checkBytes(op.addr, op.bytes, bytes);

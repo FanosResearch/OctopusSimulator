@@ -22,9 +22,13 @@
  *   slave_o(i), master_i(i)       -1 = derived: the slave links' o holds every master's sources,
  *                         the master links' i every slave's sinks (TileLink s6.4, the Xbar's rule)
  *   arbitration(s), tdm_slot(i), xbar_depth(i)    the Xbar's (agents/Xbar.h)
- *   routes(vs)            <slave id>:<base>:<size> entries (A/C address map); empty = one slave
- *                         takes everything. Octopus's line-interleaved banks cannot be written as
- *                         ranges, so a banked preset is refused at its first mismatching message
+ *   routes(vs)            <slave id>:<base>:<size> entries (A/C address map), or
+ *                         <slave id>:interleave:<shift>:<count>:<index> (line-interleaved banks,
+ *                         agents/Xbar.h); empty = one slave takes everything, or, with several
+ *                         slaves, Octopus's home map: slave_ids in home_ids order, interleaved by
+ *                         line with home_interleave_shift. A map that differs from the controllers'
+ *                         home map is refused at its first mismatching message (TLPort)
+ *   home_interleave_shift(i)  the cores' home_interleave_shift, for the derived bank map (default 0)
  *   rx_depth(i), tx_depth(i), rx_depth_A..E(i), tx_depth_A..E(i)   TLPort queues (-1 = the default)
  *   tl_monitor(i)         1: a Monitor on every link (plan s6: a run is valid only with 0 violations)
  *   tl_monitor_mode(s)    fatal | report; block_bytes(i) the TL-C block (the line size)

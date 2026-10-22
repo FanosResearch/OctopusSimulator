@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include "../../header/ExternalCPU.h"
+#include "tilelink/Types.h"   // tl::hasData (tlRespond)
 
 namespace octopus
 {
@@ -84,6 +85,7 @@ namespace octopus
         action_functions[ControllerAction::Type::NO_ACTION] = [&](void* ptr) {noAction(ptr);};
         action_functions[ControllerAction::Type::STALL] = [&](void* ptr) {stall(ptr);};
         action_functions[ControllerAction::Type::SEND_INV_MSG] = [&](void* ptr) {sendInvalidationMessage(ptr);};
+        action_functions[ControllerAction::Type::TL_RESPOND] = [&](void* ptr) {tlRespond(ptr);};
 
         // Address interlock. A message to a line that has a deferred data-array
         // access waiting or in flight stays in the processing queue, in place,
@@ -348,11 +350,49 @@ namespace octopus
     {
         Message *msg = (Message *)data_ptr;
         
-        if (!m_processing_queue->pushBack(*msg, FRFCFS_State::NonReady))
+        // A TileLink message back from a Stall cell (TLC_L1 / TLC_LLC: taken as ready, the line moved
+        // meanwhile) is a message already admitted, never new demand: it may not be refused by the
+        // demand cap (docs/TileLink_TLC_Tables.md s1.2 rule 2, a Stall parks the message)
+        if (!m_processing_queue->pushBack(*msg, FRFCFS_State::NonReady, /*force=*/msg->tl.channel != 0))
         {
             cout << "CacheController: error there is no free space to push request to processing queue" << endl;
             exit(0);
         }
+        delete msg;
+    }
+
+    void CacheController::tlRespond(void *data_ptr)
+    {
+        Message *msg = (Message *)data_ptr;
+        const bool has_data = msg->tl.channel >= 1 && msg->tl.channel <= 5 && tl::hasData(tl::Channel(msg->tl.channel - 1), msg->tl.opcode);
+        if (has_data && msg->data == NULL)
+        {
+            if (!checkReadinessOfCache(*msg, ControllerAction::Type::TL_RESPOND, data_ptr))
+                return;   // parked on the data array, re-run when it is free
+            GenericCacheLine cache_line;
+            if (m_data_handler->readCacheLine(msg->addr, &cache_line) && cache_line.m_data != NULL)
+                msg->copy(cache_line.m_data, (uint16_t)m_data_handler->getBlockSize());
+            else
+                dataArrayReadFailed("tlRespond", msg);
+        }
+        msg->cycle = this->m_cache_cycle;
+        // Design B: the home's array access (SERVICE) and the response's emission (EXIT)
+        Logger::getLogger()->event(msg->msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::SERVICE);
+        Logger::getLogger()->event(msg->msg_id, m_log_role, (uint32_t)m_id, Logger::Phase::EXIT);
+        Logger::getLogger()->trace(*msg, m_log_role, (uint32_t)m_id, Logger::Phase::EXIT);
+        auto pr = m_pending_requests.find(getAddressKey(msg->addr));
+        if (pr != m_pending_requests.end())
+            for (auto it = pr->second.begin(); it != pr->second.end(); ++it)
+                if (it->msg_id == msg->msg_id)
+                {
+                    Message answered = *it;
+                    pr->second.erase(it);
+                    if (pr->second.empty()) m_pending_requests.erase(pr);
+                    txAnswered(answered);
+                    break;
+                }
+        if (!m_lower_interface->pushMessage(*msg, this->m_cache_cycle, MessageType::DATA_RESPONSE))
+            pushRefused("lower interface, TileLink D", *msg);
         delete msg;
     }
 

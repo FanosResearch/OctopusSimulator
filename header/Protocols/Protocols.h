@@ -31,6 +31,8 @@
 #include "MSIDirectory.h"
 #include "MESIDirectory.h"
 #include "MOESIDirectory.h"
+#include "TLC_L1.h"
+#include "TLC_LLC.h"
 
 #include <string>
 
@@ -63,6 +65,8 @@ namespace octopus
             DIRECTORY_LLC_MESI,
             DIRECTORY_MOESI,
             DIRECTORY_LLC_MOESI,
+            // TileLink TL-C (docs/TileLink_Plan.md s5.3 I-A): protocol_type TLC_L1 / TLC_LLC, the names of
+            // their classes (make below)
         };
 
         // home_ids / home_shift: the LLC banks a cache addresses (docs/NoC_Architecture_Spec.md s24);
@@ -115,6 +119,10 @@ namespace octopus
                 return new MOESIDirectory(cache, fsm_path, cache_id, shared_mem_id);
             else if(type == STRINGIFY(DIRECTORY_LLC_MOESI))
                 return new LLCMOESIDirectory(cache, fsm_path, cache_id, shared_mem_id);
+            else if(type == "TLC_L1")
+                return new TLC_L1(cache, fsm_path, cache_id, shared_mem_id);
+            else if(type == "TLC_LLC")
+                return new TLC_LLC(cache, fsm_path, cache_id, shared_mem_id);
             else
             {
                 cout << "Error: Not recognized protocol type" << endl;

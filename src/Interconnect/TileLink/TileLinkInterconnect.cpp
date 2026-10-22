@@ -10,6 +10,7 @@
 #include "tilelink/agents/Xbar.h"
 #include "tilelink/GraphCheck.h"
 #include "tilelink/Watchdog.h"
+#include "tilelink/CoherenceCheck.h"
 #include <algorithm>
 #include <cstdlib>
 #include <fstream>
@@ -111,6 +112,12 @@ namespace octopus
             int r = geti("rx_depth_" + n, -1), t = geti("tx_depth_" + n, -1);
             d.rx[c] = r >= 0 ? r : rx; d.tx[c] = t >= 0 ? t : tx;
         }
+        // TLC_Tables s11.1 item 11: a manager's probe fan-out (an eviction of a block every cache holds)
+        // reserves one B slot per cache before it runs; a B queue shallower than that is never admitted.
+        if (base.level == tl::Level::C && d.tx[int(tl::Channel::B)] < (int)m_master_ids.size())
+            fatal("tx_depth_B " + std::to_string(d.tx[int(tl::Channel::B)]) + " is below the probe fan-out of " +
+                  std::to_string(m_master_ids.size()) + " caches (TLC_Tables s11.1 item 11): set tx_depth_B(i) >= " +
+                  std::to_string(m_master_ids.size()));
 
         tl::KernelOptions ko;
         ko.reset_cycles = 0;          // plan s3.2: no reset inside Octopus
@@ -125,11 +132,12 @@ namespace octopus
             xc.set("arbitration(s)=" + gets("arbitration", "rr"));
             xc.set("tdm_slot(i)=" + std::to_string(geti("tdm_slot", 1)));
             xc.set("depth(i)=" + std::to_string(geti("xbar_depth", 2)));
+            xc.set("block_bytes(i)=" + std::to_string(geti("block_bytes", 64)));   // the line of the interleave form
+            bool any = false;
             auto rit = parameters.find("routes");
             if (rit != parameters.end() && std::holds_alternative<std::vector<std::string>>(rit->second.value))
             {
                 std::string line = "routes(vs)=";
-                bool any = false;
                 for (const std::string &e : std::get<std::vector<std::string>>(rit->second.value))
                 {
                     if (e.empty() || e == "-1") continue;
@@ -142,6 +150,18 @@ namespace octopus
                     any = true;
                 }
                 if (any) xc.set(line);
+            }
+            // LLC banks (docs/TileLink_Plan.md s5.3 I-A): with several slaves and no routes, the
+            // crossbar's address map is Octopus's home map, the line-interleaved banks of
+            // BaseController::homeOf: slave_ids in home_ids order, ((addr / line) >> shift) % n
+            if (!any && m_slave_ids.size() > 1)
+            {
+                std::string line = "routes(vs)=";
+                int shift = geti("home_interleave_shift", 0);
+                for (size_t k = 0; k < m_slave_ids.size(); k++)
+                    line += (k ? "," : "") + std::string("S") + std::to_string(m_slave_ids[k]) + ":interleave:" + std::to_string(shift) + ":" +
+                            std::to_string(m_slave_ids.size()) + ":" + std::to_string(k);
+                xc.set(line);
             }
         }
         catch (tl::ConfigError &e) { fatal(e.what()); }
@@ -176,6 +196,11 @@ namespace octopus
             m_monitors = tl::Monitor::attachAll(*m_kernel, mo);
         }
         if (geti("tl_graph_check", 1) != 0) m_kernel->addObserver(std::unique_ptr<tl::Observer>(new tl::GraphCheck()));
+        // plan s3.6: SWMR and C-GRANT on every TL-C link whose master is a cache, and C-PERM at every
+        // performed access the TL-C handlers report (TLPort::accessPerformed). No data-value check:
+        // trace runs carry no memory data.
+        if (geti("tl_coherence_check", 1) != 0)
+            m_kernel->addObserver(std::unique_ptr<tl::Observer>(new tl::CoherenceCheck((unsigned)geti("block_bytes", 64))));
         if (geti("tl_watchdog", 0) != 0)
         {
             tl::WatchdogOptions wo;
@@ -326,6 +351,12 @@ namespace octopus
             uint64_t v = monitorViolations();
             std::cerr << "TileLink: " << m_monitors.size() << " link monitors, " << v << " violations, " << m_kernel->cycle() << " cycles" << std::endl;
             for (auto &m : m_monitors) if (m->violations()) std::cerr << "TileLink: " << m->summary() << std::endl;
+        }
+        if (tl::CoherenceCheck *c = tl::CoherenceCheck::of(*m_kernel))
+        {
+            const tl::CoherenceCheck::Counters &n = c->counters();
+            std::cerr << "TileLink: coherence check: " << n.grants << " grants, " << n.loads << " loads and " << n.stores
+                      << " stores served from a cache's copy checked (C-PERM), " << n.violations << " violations" << std::endl;
         }
         if (geti("tl_stats", 1) != 0 && m_elaborated)
         {

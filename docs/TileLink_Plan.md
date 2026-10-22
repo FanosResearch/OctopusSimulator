@@ -461,13 +461,21 @@ Consequences:
        one the prediction counts, so a table cannot emit on a channel it did not reserve.
     The three-queue interconnects keep `txNeed` as it is; they never see TileLink tables;
   - `TLPort` allocates sources from a 2^o pool per namespace (A, and C for Release/ReleaseData) and
-    restores them on the response; it keeps a sink per unanswered Grant from a 2^i pool.
+    restores them on the response; it keeps a sink per unanswered Grant from a 2^i pool. The ID pools
+    are part of the admission contract: `txFreeIdsCh`/`txReserveIdsCh`/`txReleaseIdsCh` on the
+    interface, and `CoherenceProtocolHandler::tlAllocatesId(MsgClass)` decides which emissions draw an
+    id (every A; a Release[Data] on C; a Grant[Data] on D). B is fanned out by the port over
+    `Message::to`, each copy with the target master's base source in the crossbar namespace; the
+    handlers never choose a B source.
 
 ### 5.3 Steps of integration
 
 1. **I-A, TileLink over a crossbar** (new `interconnect_type TileLink`):
    - L1s and LLC banks attach to a library `Xbar` driven from Octopus's clock (a `ClockedObj` that ticks
-     the kernel at the L1/LLC period, plan §3.2);
+     the kernel at the L1/LLC period, plan §3.2); several banks are routed by the Xbar's interleaved
+     route form `link:interleave:<shift>:<count>:<index>` (line address `(addr / block) >> shift`
+     modulo count, the same formula as the cores' `home_ids` / `home_interleave_shift`), built by
+     TileLinkInterconnect from the banks' ids;
    - protocol types `TLC_L1` and `TLC_LLC` wrap the policy engine and declare `consumedBy`/`emittedBy`
      with channels;
    - memory stays on the point-to-point memory bus with H1/H2;
@@ -596,6 +604,7 @@ plan §5.3 I-A and the TileLink bus events.
 | TL-DET | the same configuration run 3 times | identical md5 of stats and transcript |
 | TL-OCT-A | Octopus, TileLink crossbar, TLC MESI, EEMBC 10 benchmarks | 4/4 cores finish, 0 faults, 0 monitor violations, event-path tiling 0 failures (needs the I-A accounting); hazard detector 0/0 once I-B's hooks exist |
 | TL-OCT-CMP | same traces: TLC MESI vs directory MESI on the bus preset | per benchmark, L1 miss and DRAM access counts within 2% (the ±2.1% precedent of plan M1; they are not equal because the cores' interleaving, hence LRU, moves with latency), and the per-core instruction counts identical; the difference in mean request latency explained by the fourth hop (owner data goes to the manager, then to the requester) and, for contended lines, by the Completion column (the GrantAck round trip) |
+| (TL-OCT-CMP result, 2026-10-22) | EEMBC, 10 benchmarks, TLC MESI on the crossbar vs directory MESI v2 on the bus preset | per-core request counts identical 10/10; DRAM reads within 0.9% 10/10. L1 misses NOT within 2%: TileLink 9-18% lower (XFAIL in `test/tilelink/run.sh oct`). Cause, measured: ~72% of TileLink misses are coherence transfers, whose count follows the interleaving; a slower transfer (the fourth hop, the GrantAck window) lets the holder hit more per tenure. Changing only the directory LLC's array latency 10 -> 20 cycles moves its a2time01 misses 67253 -> 61286, TileLink's level (60567). Not a protocol defect: C-PERM checked every hit of every TL-OCT-A run (a2time01: 165250 loads, 49487 stores, 0 violations). cacheb01 DRAM writes -12.9% follow LLC thrashing (H1-table refills 6920 vs 5424). Decision pending: keep the 2% bound on DRAM reads and counts only, or compare at matched transfer latency |
 | TL-OCT-NET | TileLink over the Network: Grid, Grid2B, Grid2BM, Grid2B2M, FCFS and RR, tiny inject/eject queues | as TL-OCT-A; `checkProtocols` passes with the Replacement cell listed; TL-NET-7 and TL-OCT-EVICT on the memory presets; a negative test (class order broken) refused |
 | TL-REG | `run.sh reg` entries for TL-OCT-A and TL-OCT-NET | pass |
 

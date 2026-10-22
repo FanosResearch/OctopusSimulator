@@ -1604,3 +1604,21 @@ the manager's pool, released at the GrantAck.
    BtoT upgrade if that reader writes. A policy knob, not a correctness issue.
 8. **MSI preset.** Settled in T6: `TLC_MSI_LLC.csv`, two cells and one appended state (S3.1). The L1
    file is shared.
+
+### 11.1 Found in Octopus (T7, 2026-10-22)
+
+9. **L1 (I, Replacement) = Fault assumes the victim is still valid.** In Octopus a fill that needs a way
+   moves the victim to the write-back buffer and raises the Replacement as a separate, later event
+   (`CacheController::checkReplacements`); a ProbeBlock toN can take the line in between, and the
+   Replacement then finds it in I (seen on 2 banks, a2time01). The TLC_L1 handler treats a Replacement
+   whose line is no longer in the write-back buffer as a no-op, the same rule CacheMaster applies to an
+   Evict of an absent line. The cell is right for a synchronous replacement; the race belongs in S5.4.
+10. **Engine rule 3 (S1.2) and S7 disagree on the parked answer's reservation.** Rule 3 keeps the parking
+    cell's reservation until the answering cell; S7 lists the answer's inner D on the answering cell.
+    Octopus follows S7: holding a D slot across parking can deadlock, because a refused non-demand
+    message blocks the queue behind it for that cycle (a Release waiting for a D slot held by a parked
+    transaction whose last ProbeAck is queued behind that Release). With S7 every wait is on a queue or
+    an id pool that drains by itself. S7 is the rule.
+11. **The B transmit depth must be at least the largest probe fan-out** (the number of L1s, for an LLC
+    eviction of a block every L1 holds), or the probing message can never be admitted. The 4-core
+    defaults satisfy it; 8 cores need `tx_depth_B >= 8`. TileLinkInterconnect does not check it yet.

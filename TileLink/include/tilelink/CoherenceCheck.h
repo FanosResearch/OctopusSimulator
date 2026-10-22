@@ -69,6 +69,14 @@ namespace octopus { namespace tl
         // reporting agent's id, for the message only.
         void loadPerformed(unsigned agent, uint64_t addr, const uint8_t *bytes, unsigned n, uint64_t cycle);
         void storePerformed(unsigned agent, uint64_t addr, const uint8_t *bytes, unsigned n, uint64_t cycle);
+
+        // C-PERM, the permission invariant (Table 29): a cache serving an access from its copy must hold
+        // the permission for it on its link: a load at least B, a store T. The checker's permission is
+        // never below the master's own (it rises when the master accepts a Grant, falls only when the
+        // master's ProbeAck/Release reaches the link), so a report is never a false alarm. For masters
+        // whose data is not carried (Octopus's trace runs): it catches a hit without permission, which
+        // no link would show. `l` is the master's own link.
+        void accessPerformed(const Link &l, uint64_t addr, bool store, uint64_t cycle);
         // The initial memory image: those bytes are known from the start (as if stored before
         // cycle 0), so a load of them is checked before any store. Without it a byte never stored
         // admits any value.

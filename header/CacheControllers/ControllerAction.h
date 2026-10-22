@@ -40,6 +40,9 @@ namespace octopus
             CLEAR_SHARERS,
             SEND_FWD_MESSAGE,
             REMOVE_PENDING_NORESPONSE,
+            // TileLink (docs/TileLink_Plan.md s5.3 I-A): a home's D response to a request, fully built
+            // by the protocol (TLC_LLC's Grant[Data]); CacheController::tlRespond
+            TL_RESPOND,
 
             MAX_ACTIONS_NUM
         } type;

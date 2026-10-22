@@ -82,6 +82,14 @@ namespace octopus
         struct Depths { int rx[tl::NUM_CHANNELS] = {4, 4, 4, 4, 4}; int tx[tl::NUM_CHANNELS] = {4, 4, 4, 4, 4}; };
 
         TLPort(TileLinkInterconnect *owner, int id, const std::string &name, tl::Role role, const Depths &d, bool memory_side);
+        ~TLPort();
+
+        // The port of an Octopus endpoint id (nullptr if that endpoint is not on a TileLink kernel): the
+        // TL-C handlers report performed accesses through it.
+        static TLPort *forEndpoint(int id);
+        // C-PERM (TileLink CoherenceCheck, Table 29): the cache behind this master port served a load or a
+        // store from its copy; checked against the permission observed on this port's link.
+        void accessPerformed(uint64_t addr, bool store);
 
         // ---- CommunicationInterface: the Octopus endpoint's side
         bool peekMessage(Message *out_msg) override;

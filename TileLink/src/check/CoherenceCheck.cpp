@@ -158,6 +158,21 @@ namespace octopus { namespace tl
         return it->second;
     }
 
+    void CoherenceCheck::accessPerformed(const Link &l, uint64_t addr, bool store, uint64_t cycle)
+    {
+        // C-PERM, Table 29: Get needs Branch, Tip or Trunk; Put and Atomics need a Tip with no branches.
+        char p = permission(l.name(), addr);
+        store ? m_c.stores++ : m_c.loads++;
+        if (store ? p != 'T' : p == 'N')
+        {
+            CoherenceViolation v;
+            v.rule = "C-PERM"; v.cycle = cycle; v.block = blockOf(addr); v.address = addr;
+            v.detail = std::string(store ? "store" : "load") + " served from the copy on link " + l.name() + " with permission " + p +
+                       (store ? " (needs T)" : " (needs B or T)");
+            violate(v);
+        }
+    }
+
     char CoherenceCheck::permission(const std::string &link, uint64_t block) const
     {
         auto it = m_perm.find(blockOf(block));

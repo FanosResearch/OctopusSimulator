@@ -42,6 +42,10 @@ namespace octopus
                                          CommunicationInterface *upper_interface, 
                                          CommunicationInterface *lower_interface, 
                                          string pname = "");
+        std::vector<int> memoryIds(int llc_banks);
+        // memory over TileLink (docs/TileLink_Plan.md s5.3 I-B): the memory crossbar and its address map
+        TileLinkInterconnect *buildMemoryTileLink(int llc_banks, const string &pname);
+        std::vector<std::string> memoryRoutes(const std::vector<int> &memory_ids, int shift);
     public:
         MultiCoreSystem_Mesh(std::vector<std::string> cl_params,
             std::string config_path = std::string(CONFIGURATION_PATH) + SYSTEM_CONFIGURATIONS,

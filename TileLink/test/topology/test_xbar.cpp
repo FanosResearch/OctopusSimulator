@@ -328,4 +328,64 @@ TEST(build_from_config_through_registry)
     CHECK_EQ(m->messages(Channel::D).size(), size_t(2));
 }
 
+TEST(interleave_routes_line_banks)
+{
+    // Plan §5.3 I-A: Octopus's LLC banks are line-interleaved, (line >> shift) % count, which no
+    // set of ranges expresses. link:interleave:<shift>:<count>:<index>, block_bytes 64.
+    auto route = [](const std::vector<const char *> &keys, int slaves, std::vector<int> &out)
+    {
+        Kernel k(opts());
+        Endpoint *m = endpoint(k, "m");
+        Config c;
+        for (auto kk : keys) c.set(kk);
+        Xbar *x = addAgent(k, new Xbar("X", c));
+        k.connect("U", lp(8, Level::C, 2, 3), *m, *x);   // up to 3 slaves x 2 sinks
+        std::vector<Link *> d;
+        for (int j = 0; j < slaves; j++) d.push_back(&k.connect("D" + std::to_string(j), lp(8, Level::C, 2, 1), *x, *endpoint(k, "s" + std::to_string(j))));
+        x->validate();
+        out.clear();
+        for (uint64_t line = 0; line < 16; line++)
+        {
+            Link *l = x->routeOf(line * 64 + 8);   // any byte of the line
+            int j = -1;
+            for (int q = 0; q < slaves; q++) if (l == d[size_t(q)]) j = q;
+            out.push_back(j);
+        }
+    };
+    std::vector<int> r;
+    route({"routes(vs)=D0:interleave:0:2:0,D1:interleave:0:2:1"}, 2, r);         // consecutive lines alternate
+    for (int line = 0; line < 16; line++) CHECK_EQ(r[size_t(line)], line % 2);
+    route({"routes(vs)=D1:interleave:1:2:1,D0:interleave:1:2:0"}, 2, r);         // pairs of lines; order of entries free
+    for (int line = 0; line < 16; line++) CHECK_EQ(r[size_t(line)], (line >> 1) % 2);
+    route({"routes(vs)=D0:interleave:0:3:0,D1:interleave:0:3:1,D2:interleave:0:3:2"}, 3, r);
+    for (int line = 0; line < 16; line++) CHECK_EQ(r[size_t(line)], line % 3);
+    route({"routes(vs)=D0:interleave:0:2:0,D1:interleave:0:2:1", "block_bytes(i)=128"}, 2, r);   // 128-byte lines: two 64-byte steps per bank
+    for (int line = 0; line < 16; line++) CHECK_EQ(r[size_t(line)], (line >> 1) % 2);
+    route({"routes(vs)=D0:interleave:0:2:0"}, 2, r);                              // an index nobody takes: unmapped (no default)
+    for (int line = 0; line < 16; line++) CHECK_EQ(r[size_t(line)], line % 2 == 0 ? 0 : -1);
+    // §6.3, exactly one slave per address: refused at elaboration
+    CHECK(throwsConfig([&] { route({"routes(vs)=D0:interleave:0:2:0,D1:interleave:0:2:0"}, 2, r); }, "same index"));
+    CHECK(throwsConfig([&] { route({"routes(vs)=D0:interleave:0:2:0,D1:interleave:1:2:1"}, 2, r); }, "differ in shift or count"));
+    CHECK(throwsConfig([&] { route({"routes(vs)=D0:interleave:0:2:0,D1:0x0:0x1000"}, 2, r); }, "mixes"));
+    CHECK(throwsConfig([] { Xbar x("X", cfg({"routes(vs)=D0:interleave:0:2:2"})); }, "index < count"));
+    CHECK(throwsConfig([] { Xbar x("X", cfg({"routes(vs)=D0:interleave:0:2"})); }, "link:interleave"));
+    CHECK(throwsConfig([] { Xbar x("X", cfg({"block_bytes(i)=48"})); }, "power of two"));
+    // traffic: an A and a C to alternating lines reach the bank of their line, the D comes back by source
+    Kernel k(opts());
+    Endpoint *m = endpoint(k, "m");
+    Xbar *x = addAgent(k, new Xbar("X", cfg({"routes(vs)=D0:interleave:0:2:0,D1:interleave:0:2:1"})));
+    k.connect("U", lp(8, Level::UH, 2), *m, *x);
+    MemSlave *s0 = static_cast<MemSlave *>(&k.add(std::unique_ptr<Agent>(new MemSlave("s0"))));
+    MemSlave *s1 = static_cast<MemSlave *>(&k.add(std::unique_ptr<Agent>(new MemSlave("s1"))));
+    k.connect("D0", lp(8, Level::UH, 3), *x, *s0);
+    k.connect("D1", lp(8, Level::UH, 3), *x, *s1);
+    m->push(make(Channel::A, unsigned(OpA::Get), 3, 0x1000, 0, 8));   // line 0x40: bank 0
+    m->push(make(Channel::A, unsigned(OpA::Get), 3, 0x1040, 1, 8));   // line 0x41: bank 1
+    m->push(make(Channel::A, unsigned(OpA::Get), 3, 0x10c8, 2, 8));   // line 0x43: bank 1
+    CHECK(k.runUntilIdle(100) < 100);
+    CHECK_EQ(s0->requests.size(), size_t(1));
+    CHECK_EQ(s1->requests.size(), size_t(2));
+    CHECK_EQ(m->messages(Channel::D).size(), size_t(3));
+}
+
 TL_TEST_MAIN("test_xbar")

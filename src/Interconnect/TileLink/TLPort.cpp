@@ -7,6 +7,8 @@
 #include "../../../header/Interconnect/TileLink/TileLinkInterconnect.h"
 #include "../../../header/Logger.h"
 #include "tilelink/Kernel.h"
+#include "tilelink/CoherenceCheck.h"
+#include <map>
 #include "tilelink/agents/Pipe.h"
 #include <algorithm>
 #include <sstream>
@@ -55,12 +57,24 @@ namespace octopus
         return true;
     }
 
+    static std::map<int, TLPort *> &ports();
     TLPort::TLPort(TileLinkInterconnect *owner, int id, const std::string &name, tl::Role role, const Depths &d, bool memory_side)
         : CommunicationInterface(id), tl::Agent(name), m_owner(owner), m_role(role), m_memory_side(memory_side), m_depth(d)
     {
         for (int c = 0; c < tl::NUM_CHANNELS; c++)
             if (m_depth.rx[c] < 1 || m_depth.tx[c] < 1)
                 TileLinkInterconnect::fatal("port " + std::to_string(id) + ": rx and tx queue depths must be >= 1");
+        ports()[id] = this;
+    }
+
+    // the endpoint registry behind forEndpoint (one port per endpoint id across the kernels)
+    static std::map<int, TLPort *> &ports() { static std::map<int, TLPort *> p; return p; }
+    TLPort::~TLPort() { auto it = ports().find(m_interface_id); if (it != ports().end() && it->second == this) ports().erase(it); }
+    TLPort *TLPort::forEndpoint(int id) { auto it = ports().find(id); return it == ports().end() ? nullptr : it->second; }
+    void TLPort::accessPerformed(uint64_t addr, bool store)
+    {
+        if (m_role != tl::Role::Master || !kernel()) return;
+        if (tl::CoherenceCheck *c = tl::CoherenceCheck::of(*kernel())) c->accessPerformed(*link(), addr, store, kernel()->cycle());
     }
 
     void TLPort::fatal(const std::string &what) const

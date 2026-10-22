@@ -23,16 +23,40 @@ namespace octopus { namespace tl
         if (depth <= 0) throw ConfigError("Xbar " + name + ": depth must be >= 1");
         m_depth = unsigned(depth);
         m_default_name = cfg.get<std::string>("default", "");
+        int bb = cfg.get<int>("block_bytes", 64);
+        if (bb <= 0 || (bb & (bb - 1))) throw ConfigError("Xbar " + name + ": block_bytes must be a power of two, got " + std::to_string(bb));
+        m_lg_block = 0;
+        while ((1u << m_lg_block) < unsigned(bb)) m_lg_block++;
         for (auto &e : cfg.get<std::vector<std::string>>("routes", std::vector<std::string>()))
         {
-            // "link:base:size"
-            size_t c1 = e.find(':'), c2 = c1 == std::string::npos ? c1 : e.find(':', c1 + 1);
-            if (c1 == std::string::npos || c2 == std::string::npos)
-                throw ConfigError("Xbar " + name + ": routes entry '" + e + "' must be link:base:size");
+            // "link:base:size", or "link:interleave:<shift>:<count>:<index>"
+            std::vector<std::string> f;
+            for (size_t at = 0;;)
+            {
+                size_t c = e.find(':', at);
+                f.push_back(e.substr(at, c == std::string::npos ? std::string::npos : c - at));
+                if (c == std::string::npos) break;
+                at = c + 1;
+            }
             Route r;
-            r.link = e.substr(0, c1);
-            r.base = parseU64(e.substr(c1 + 1, c2 - c1 - 1), "Xbar " + name + " routes base");
-            r.size = parseU64(e.substr(c2 + 1), "Xbar " + name + " routes size");
+            r.link = f[0];
+            if (f.size() == 5 && f[1] == "interleave")
+            {
+                // Octopus's line-interleaved banks (plan §5.3 I-A): ((address / block) >> shift) % count == index
+                r.interleave = true;
+                uint64_t shift = parseU64(f[2], "Xbar " + name + " routes interleave shift");
+                uint64_t count = parseU64(f[3], "Xbar " + name + " routes interleave count");
+                uint64_t index = parseU64(f[4], "Xbar " + name + " routes interleave index");
+                if (shift >= 58 || count == 0 || count > 4096 || index >= count)
+                    throw ConfigError("Xbar " + name + ": routes entry '" + e + "' needs shift < 58, 1 <= count <= 4096 and index < count");
+                r.shift = unsigned(shift); r.count = unsigned(count); r.index = unsigned(index);
+                m_routes_cfg.push_back(r);
+                continue;
+            }
+            if (f.size() != 3)
+                throw ConfigError("Xbar " + name + ": routes entry '" + e + "' must be link:base:size or link:interleave:<shift>:<count>:<index>");
+            r.base = parseU64(f[1], "Xbar " + name + " routes base");
+            r.size = parseU64(f[2], "Xbar " + name + " routes size");
             if (r.size == 0) throw ConfigError("Xbar " + name + ": routes entry '" + e + "' has size 0");
             m_routes_cfg.push_back(r);
         }
@@ -67,7 +91,24 @@ namespace octopus { namespace tl
             r.out = downIndex(r.link);
             if (r.out < 0) throw ConfigError("Xbar " + m_name + ": routes names " + r.link + ", which is not a downstream link of this crossbar");
         }
-        for (size_t x = 0; x < m_routes.size(); x++)
+        // The interleave form: one (shift, count) for the whole map and one link per index, so
+        // that every address has exactly one slot; never mixed with ranges (an overlap between
+        // a range and a residue class could not be ruled out here).
+        unsigned inter = 0;
+        for (auto &r : m_routes) if (r.interleave) inter++;
+        if (inter > 0 && inter != m_routes.size())
+            throw ConfigError("Xbar " + m_name + ": routes mixes link:base:size and link:interleave entries (§6.3: every address routes to exactly one slave)");
+        for (size_t x = 0; inter > 0 && x < m_routes.size(); x++)
+            for (size_t y = x + 1; y < m_routes.size(); y++)
+            {
+                const Route &a = m_routes[x], &b = m_routes[y];
+                if (a.shift != b.shift || a.count != b.count)
+                    throw ConfigError("Xbar " + m_name + ": interleave routes " + a.link + " and " + b.link + " differ in shift or count");
+                if (a.index == b.index)
+                    throw ConfigError("Xbar " + m_name + ": interleave routes " + a.link + " and " + b.link + " take the same index " +
+                                      std::to_string(a.index) + " (§6.3: every address routes to exactly one slave)");
+            }
+        for (size_t x = 0; inter == 0 && x < m_routes.size(); x++)
             for (size_t y = x + 1; y < m_routes.size(); y++)
             {
                 const Route &a = m_routes[x], &b = m_routes[y];
@@ -123,11 +164,16 @@ namespace octopus { namespace tl
         for (size_t j = 0; j < m_down.size(); j++) if (m_down[j] == &down) return m_sink_base[j];
         fatal("Xbar " + m_name + ": " + down.name() + " is not a downstream link");
     }
+    int Xbar::routeIndex(uint64_t address) const
+    {
+        for (auto &r : m_routes) if (r.covers(address, m_lg_block)) return r.out;
+        return m_default;
+    }
     Link *Xbar::routeOf(uint64_t address) const
     {
         build();
-        for (auto &r : m_routes) if (address >= r.base && address - r.base < r.size) return m_down[size_t(r.out)];
-        return m_default >= 0 ? m_down[size_t(m_default)] : nullptr;
+        int j = routeIndex(address);
+        return j >= 0 ? m_down[size_t(j)] : nullptr;
     }
 
     void Xbar::reset(uint64_t)
@@ -157,8 +203,7 @@ namespace octopus { namespace tl
             case Channel::A: case Channel::C:
             {
                 // Table 14: A and C route by address (§6.3: exactly one slave per address).
-                for (auto &r : m_routes) if (m.address >= r.base && m.address - r.base < r.size) return r.out;
-                return m_default;
+                return routeIndex(m.address);
             }
             case Channel::B: case Channel::D:
             {

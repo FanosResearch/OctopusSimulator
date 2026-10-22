@@ -118,6 +118,13 @@ namespace octopus
         virtual void saveReqForWriteBack(void *);
         virtual void noAction(void *){}; // empty function
         virtual void stall(void *);
+        // TileLink (docs/TileLink_Plan.md s5.3 I-A): a home's D response answering a request, fully built
+        // by the protocol (Message::tl, to, kind, the request's msg_id). The line's bytes are attached
+        // when the opcode carries data and the message has none (through checkReadinessOfCache, as a
+        // hit); SERVICE and EXIT are logged for the request, as hitAction / removePendingAndRespond do;
+        // a request parked on the line under that msg_id leaves the pending list (txAnswered). Pushed to
+        // the lower interface (the LLC's inner TileLink port).
+        virtual void tlRespond(void *);
         // Snoop LLC eviction back-invalidation. Routed via MessageType::SERVICE_REQUEST
         // on the TripleBus service channel, which broadcasts it to every interface, so
         // all L1 sharers see the INV (Invalidation) and the LLC receives its own copy

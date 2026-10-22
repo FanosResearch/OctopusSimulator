@@ -15,7 +15,15 @@
  * Config keys (agent[k].*):
  *   routes(vs)       entries "link:base:size" (hex or decimal): A/C messages whose address is
  *                    in [base, base+size) go to that downstream link; a link may appear in
- *                    several entries; ranges must not overlap (§6.3: exactly one slave)
+ *                    several entries; ranges must not overlap (§6.3: exactly one slave).
+ *                    Or entries "link:interleave:<shift>:<count>:<index>": line-interleaved
+ *                    banks, the address goes to that link when
+ *                    ((address / block_bytes) >> shift) % count == index, Octopus's home map
+ *                    (BaseController::homeOf with home_ids / home_interleave_shift). Every
+ *                    interleave entry of one crossbar has the same shift and count and its own
+ *                    index; the two forms are not mixed (only then is "exactly one slave per
+ *                    address" checkable at elaboration)
+ *   block_bytes(i)   the line the interleave form counts in (default 64: (address >> 6 >> shift))
  *   default(s)       the downstream link for an unmapped address (optional; without it an
  *                    unmapped address is a fatal error at run time)
  *   arbitration(s)   rr (default) | fixed | tdm
@@ -52,7 +60,18 @@ namespace octopus { namespace tl
         Policy policy() const { return m_policy; }
 
     private:
-        struct Route { std::string link; uint64_t base = 0, size = 0; int out = -1; };
+        // A range [base, base+size), or an interleave slot (plan §5.3 I-A: Octopus's line-
+        // interleaved LLC banks).
+        struct Route
+        {
+            std::string link; uint64_t base = 0, size = 0; int out = -1;
+            bool interleave = false; unsigned shift = 0, count = 1, index = 0;
+            bool covers(uint64_t address, unsigned lg_block) const
+            {
+                if (interleave) return ((address >> lg_block) >> shift) % count == index;
+                return address >= base && address - base < size;
+            }
+        };
         // One output channel of one plane: its pipe stage and its arbitration state.
         struct Out
         {
@@ -78,6 +97,7 @@ namespace octopus { namespace tl
 
         void   build() const;                                       // resolves routes and bases once
         int    decode(const Plane &p, const Msg &m, int in) const;  // the output index, -1 if none
+        int    routeIndex(uint64_t address) const;                  // A/C: the output an address routes to, -1 if none
         MsgPtr remap(const Plane &p, const Msg &m, int in, int out) const;
         int    pick(const Plane &p, Out &o, int j, uint64_t cycle) const;
 
@@ -85,6 +105,7 @@ namespace octopus { namespace tl
         std::string           m_default_name;
         Policy                m_policy = Policy::RoundRobin;
         unsigned              m_slot = 1, m_depth = 2;
+        unsigned              m_lg_block = 6;                       // block_bytes(i), for the interleave form
 
         // Built by build() (validate is const, so these are mutable and built once).
         mutable bool                  m_built = false;

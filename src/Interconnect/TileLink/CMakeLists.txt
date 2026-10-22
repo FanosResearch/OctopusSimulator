@@ -3,6 +3,7 @@
 target_sources(Octopus_core PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/TLPort.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/TileLinkInterconnect.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/TLMemSlave.cpp
     )
 target_include_directories(Octopus_core PUBLIC ${PROJECT_SOURCE_DIR}/header/Interconnect/TileLink)
 # the tilelink library is linked in src/CMakeLists.txt (CMP0079: where Octopus_core is defined)
