@@ -3,13 +3,26 @@
  * The standalone driver (plan §4). Same flags as Octopus_Simulator:
  *   tlsim -c <config.csv> [-o <output-dir>] [--trace] [-p name(type)=value]...
  * Config keys: cycles(i) (default 1000; 0 = run until idle, bounded by max_cycles(i)),
- * reset_cycles(i), seed(i), data_mode(s), trace(i), agent[k].type(s)/name(s), link[k].master(s)/
- * slave(s)/w(i)/a(i)/z(i)/o(i)/i(i)/level(s)/name(s). Writes TLStats.csv and, with trace=1 or
- * --trace, transcript.txt into the output directory (default ".").
- * The agent registry holds only NullMaster/NullSlave until T2 adds real agents.
+ * reset_cycles(i), seed(i), data_mode(s), trace(i), agent[k].type(s)/name(s) and the agent's own
+ * keys, link[k].master(s)/slave(s)/w(i)/a(i)/z(i)/o(i)/i(i)/level(s)/name(s); the checkers:
+ *   monitor(i) 1                one conformance Monitor per link (plan §3.6)
+ *   monitor_mode(s) fatal       fatal: the first violation exits 2; report: count and go on
+ *   block_bytes(i) 64, allow_acquire_under_acquire(i) 0, c_ordered(i) 1   monitor parameters (TL-C)
+ *   standalone(i) 1             M-RESET-2: reset_cycles >= 100 standalone
+ *   graph_check(i), watchdog(i), progress_bound(i), watchdog_mode(s)   Kernel::build (T4)
+ *   value_check(vs)             links to watch with ONE shared ValueCheck (plan §3.6), e.g. the
+ *                               masters' links for an end-to-end check; needs data_mode full|stamp
+ * Outputs in the output directory (default "."): TLStats.csv, transcript.txt (trace=1 or --trace),
+ * monitor.txt (the per-link monitor summaries, also printed).
+ * Exit status: 0 clean; 1 usage; 2 a fatal error or fatal violation (monitor, watchdog, a refused
+ * configuration); 3 the monitor in report mode counted violations.
  */
 #include "tilelink/Kernel.h"
+#include "tilelink/Monitor.h"
+#include "tilelink/ValueCheck.h"
+#include "tilelink/agents/Registry.h"
 #include <cstring>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <sys/stat.h>
@@ -49,21 +62,83 @@ int main(int argc, char *argv[])
     if (!cfg.load(config_path, &err)) fatal(err);
     try { for (auto &o : overrides) cfg.set(o); }
     catch (ConfigError &e) { fatal(std::string("bad -p override: ") + e.what()); }
-    if (cfg.has("trace") && cfg.get<int>("trace") != 0) trace = true;
+
+    MonitorOptions mo;
+    bool monitor = true;
+    try
+    {
+        if (cfg.has("trace") && cfg.get<int>("trace") != 0) trace = true;
+        monitor = cfg.get<int>("monitor", 1) != 0;
+        std::string mode = cfg.get<std::string>("monitor_mode", "fatal");
+        if (!MonitorOptions::parseMode(mode, mo.mode)) throw ConfigError("monitor_mode must be fatal or report, got " + mode);
+        mo.block_bytes = unsigned(cfg.get<int>("block_bytes", 64));
+        mo.allow_acquire_under_acquire = cfg.get<int>("allow_acquire_under_acquire", 0) != 0;
+        mo.c_ordered = cfg.get<int>("c_ordered", 1) != 0;
+    }
+    catch (ConfigError &e) { fatal(e.what()); }
 
     mkdir(out_dir.c_str(), 0755);   // exists already: fine, the open below reports a real failure
 
     Kernel kernel;
-    kernel.build(cfg, AgentRegistry::withBuiltins());
+    kernel.build(cfg, withAllAgents());
     if (kernel.agents().empty()) fatal("the configuration declares no agent (agent[k].type)");
+
+    // M-RESET-2 (§3.2.2, plan §3.2): standalone, reset is asserted for at least 100 cycles; refused at
+    // elaboration (exit 2 before cycle 0). A system of only NullMaster/NullSlave agents can never drive
+    // valid and is exempt (T1's smoke configuration test/unit/null_system.csv uses reset_cycles 10).
+    if (monitor)
+    {
+        bool only_null = true;
+        for (auto &a : kernel.agents())
+            if (!dynamic_cast<NullMaster *>(a.get()) && !dynamic_cast<NullSlave *>(a.get())) only_null = false;
+        std::string r = Monitor::checkResetCycles(kernel.options().reset_cycles, cfg.get<int>("standalone", 1) != 0);
+        if (!r.empty() && !only_null) fatal(r);
+    }
+
     if (trace) kernel.enableTranscript(out_dir + "/transcript.txt");
+    std::vector<std::unique_ptr<Monitor>> monitors;
+    if (monitor) monitors = Monitor::attachAll(kernel, mo);
+    // after the monitors: ValueCheck chains onto the hooks they installed (both keep firing)
+    std::unique_ptr<ValueCheck> vcheck;
+    std::vector<std::string> vlinks = cfg.get<std::vector<std::string>>("value_check", {});
+    if (!vlinks.empty())
+    {
+        if (kernel.options().data_mode == DataMode::None) fatal("value_check needs data_mode full or stamp");
+        vcheck.reset(new ValueCheck());
+        for (auto &n : vlinks)
+        {
+            Link *l = kernel.link(n);
+            if (!l) fatal("value_check: no link named " + n);
+            vcheck->attach(*l);
+        }
+    }
 
     uint64_t cycles = uint64_t(cfg.get<int>("cycles", 1000));
     uint64_t ran;
     if (cycles == 0) ran = kernel.runUntilIdle(uint64_t(cfg.get<int>("max_cycles", 1000000)));
     else { kernel.run(cycles); ran = cycles; }
     kernel.writeStats(out_dir + "/TLStats.csv");
+    if (kernel.transcript()) kernel.transcript()->flush();
+
+    Monitor::finishAll(monitors, kernel.cycle());   // M-BURST-4, M-BURST-5, M-RESP-7
+    uint64_t violations = Monitor::totalViolations(monitors);
+    if (monitor)
+    {
+        std::ofstream f(out_dir + "/monitor.txt");
+        for (auto &m : monitors)
+        {
+            std::cout << m->summary() << std::endl;
+            if (f) f << m->summary() << "\n";
+        }
+    }
+    if (vcheck)
+    {
+        const ValueCheck::Counters &c = vcheck->counters();
+        std::cout << "value check: " << c.reads << " reads, " << c.writes << " writes, " << c.atomics << " atomics, "
+                  << c.bytes_checked << " bytes checked, " << c.violations << " violations" << std::endl;
+    }
     std::cout << "tlsim: " << kernel.agents().size() << " agents, " << kernel.links().size() << " links, "
               << ran << " cycles, outputs in " << out_dir << std::endl;
-    return 0;
+    monitors.clear();   // before the kernel that owns the links
+    return violations ? 3 : 0;
 }

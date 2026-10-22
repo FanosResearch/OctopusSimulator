@@ -123,7 +123,7 @@ exist; the simulator carries integers and the range checks above reject them too
 | M-ALIGN-4 | Table 4 (a), Tables 6 to 8 | address < 2^a on A, B and C (a = 0 means the address is always 0) | address, a | offer | `address <hex> does not fit a=<a> bits` | UL |
 | M-ALIGN-5 | §6.3 "burst operations must not under- or over-run the boundaries of the slave" | On A, [address, address + 2^size) lies within one region of the slave's address map (skipped when the link has no address map) | a_address, a_size, address map | offer | `operation [<lo>,<hi>) crosses slave region boundary <b>` | UL |
 | M-ALIGN-6 | Table 4 (o), §6.4 | source < 2^o on A, B, C and D | source, o | offer | `source <o> does not fit o=<o> bits` | UL |
-| M-ALIGN-7 | Table 4 (i), §6.4 | sink < 2^i on D and E | sink, i | offer | `sink <i> does not fit i=<i> bits` | C |
+| M-ALIGN-7 | Table 4 (i), §6.4 | sink < 2^i on Grant/GrantData and on E (a non-Grant `d_sink` is ignored, §7.2.4, so it is not checked) | sink, i | offer | `sink <i> does not fit i=<i> bits` | C |
 
 ## 5. M-MASK (§4.5, §7.2, §8.2, §9.3, §9.5)
 
@@ -204,7 +204,7 @@ Allowed response types (Tables 12, 13, 30):
 | M-RESP-4 | Tables 12, 13, 30 | The C response opcode is allowed for the matched B request (ProbeAckData never answers ProbePerm) | c_opcode, `outB` entry | first beat accept | `<c_opcode> is not a legal response to <b_opcode> (addr <hex>)` | C |
 | M-RESP-5 | §9.3.9 Table 40 "e_sink ... copied from d_sink"; §6.4 | An E GrantAck matches an unanswered Grant: `grants[e_sink]` exists | e_sink, `grants` | accept | `GrantAck sink <i> with no unanswered Grant` | C |
 | M-RESP-6 | §7.2.4, §7.2.5, §8.2.4 "d_size and a_size must always correspond"; §9.3.7, §9.3.8 "must be identical to the original a_size"; §9.3.12 "copied from c_size"; §9.3.5, §9.3.6 "copied from b_size"; §9.5.4, §9.5.5, §9.5.9 | The response's size equals the request's size: d_size == outA/outC size; c_size == outB size | size of response vs request entry | first beat accept | `<resp opcode> size <s> != request size <r>` | UL |
-| M-RESP-7 | §5 rule 3ii, §6.2 "receipt of request messages must result in the eventual receipt of a response message" | At end of run every accepted request has received every beat of its response (`outA`, `outB`, `outC`, `grants` empty), excluding requests whose response was offered and retracted (those are M-BURST-5). The time-bounded form is the watchdog's rule 3ii | `outA`, `outB`, `outC`, `grants` | end of run | `request <opcode> src <o> addr <hex> accepted at cycle <c> never answered` | UL |
+| M-RESP-7 | §5 rule 3ii, §6.2 "receipt of request messages must result in the eventual receipt of a response message" | At end of run every accepted request has received every beat of its response (`outA`, `outB`, `outC`, `grants` empty), excluding requests whose response was offered and retracted (those are M-BURST-5) and requests whose own burst is still in progress (those are M-BURST-4). The time-bounded form is the watchdog's rule 3ii | `outA`, `outB`, `outC`, `grants` | end of run | `request <opcode> src <o> addr <hex> accepted at cycle <c> never answered` | UL |
 
 The copied fields d_source, c_address and e_sink are the matching keys, so "the response copies the
 identifier" is M-RESP-2/3/5 rather than separate rules. "All beats of a response are sent" is the lock

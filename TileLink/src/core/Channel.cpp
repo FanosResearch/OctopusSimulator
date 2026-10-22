@@ -70,19 +70,25 @@ namespace octopus { namespace tl
         m_stats.beats++;
         m_accepted = m_offer;
         Msg &m = *m_offer.msg;
-        if (m_offer.index == 0)
+        // Only the burst's own beats move the lock. A beat accepted while another message's burst
+        // is in progress was already reported at offer time (§4.1, report mode carries on); it must
+        // neither start, advance nor end the lock, or every later beat of the real burst would be
+        // misreported.
+        bool in_burst = inProgress();
+        bool own = in_burst && m_offer.msg == m_lock.msg;
+        if (m_offer.index == 0 && m.t_first_accept == NEVER) m.t_first_accept = cycle;
+        if (!in_burst && m_offer.index == 0 && m.beats() > 1)
         {
-            if (m.t_first_accept == NEVER) m.t_first_accept = cycle;
-            if (m.beats() > 1) { m_lock = Beat{m_offer.msg, 1}; m_lock_header = m.header(); }   // in progress (§5.1)
+            m_lock = Beat{m_offer.msg, 1}; m_lock_header = m.header();   // in progress (§5.1)
         }
-        else
+        else if (own)
             m_lock.index = m_offer.index + 1;
         if (m_offer.last())
         {
             m.t_last_accept = cycle;                           // the latest link it completed on
             m_last_latency = cycle - (m_flight == m_offer.msg ? m_flight_offer : cycle);
-            m_flight = nullptr;
-            m_lock = Beat();                                   // the burst is complete
+            if (m_flight == m_offer.msg) m_flight = nullptr;
+            if (own) m_lock = Beat();                          // the burst is complete
         }
         if (onAccept) onAccept(*this, m_accepted, cycle);
         return true;

@@ -258,6 +258,44 @@ TEST(burst_lock_wrong_beat_and_changed_control)
     if (!v3.empty()) CHECK(v3[0].find("offered on A") != std::string::npos);
 }
 
+TEST(burst_lock_survives_interleaved_beat)
+{
+    // §4.1: an interleaved beat is a violation, reported when it is offered; in report mode the
+    // run carries on and the beat may be accepted. It must not start, advance or end the lock:
+    // the burst's own later beats are then legal and raise nothing. Schedule: F-0 F-1 G F-2 F-3,
+    // with G a single-beat message (its last beat once cleared the lock).
+    struct Sched : public Agent
+    {
+        explicit Sched(const std::string &n) : Agent(n) {}
+        Level capability(const Link &, Role) const override { return Level::C; }
+        std::vector<Beat> plan;
+        void offer(uint64_t t) override
+        {
+            if (t < plan.size()) m_links[0].link->chan(Channel::A).offer(plan[t].msg, plan[t].index);
+        }
+        void accept(uint64_t) override {}
+        void commit(uint64_t) override {}
+    };
+    Kernel k(KernelOptions{0, 1, DataMode::None});
+    Sched *m = static_cast<Sched *>(&k.add(std::unique_ptr<Agent>(new Sched("m"))));
+    PatternSlave *s = static_cast<PatternSlave *>(&k.add(std::unique_ptr<Agent>(new PatternSlave("s"))));
+    LinkParams p; p.w = 8; p.level = Level::UH;
+    Link &l = k.connect("L", p, *m, *s);
+    auto mk = [&](unsigned size, uint64_t addr, uint64_t src) {
+        MsgPtr x = Msg::make(Channel::A, unsigned(OpA::PutFullData), size, 8);
+        x->address = addr; x->source = src; x->deriveMask(); return x;
+    };
+    MsgPtr F = mk(5, 0x100, 0), G = mk(0, 0x200, 1);
+    m->plan = {Beat{F, 0}, Beat{F, 1}, Beat{G, 0}, Beat{F, 2}, Beat{F, 3}};
+    auto &viol = capture(l.chan(Channel::A));
+    k.run(5);
+    CHECK_EQ(viol.size(), size_t(1));                           // G only
+    if (!viol.empty()) CHECK(viol[0].find("another message was offered") != std::string::npos);
+    CHECK_EQ(s->got.size(), size_t(5));
+    CHECK(!l.chan(Channel::A).inProgress());                    // F completed at its own last beat
+    CHECK_EQ(F->t_last_accept, uint64_t(4));
+}
+
 TEST(one_cycle_minimum_relay)
 {
     // plan §3.2: a beat accepted at t is re-offered by its receiver at t+1 at the earliest.

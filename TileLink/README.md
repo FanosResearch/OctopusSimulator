@@ -56,3 +56,82 @@ The system-level checkers of plan §3.6. Both are `Kernel::Observer`s (`onElabor
 A cycle is refused at elaboration with its path, `A -> B -> A (links: L1, L2)` (exit 2). `GraphCheck::topologicalOrder()` and `dot()` export the graph. The watchdog prints its bound and the formula that produced it once, at elaboration. A trip names the rule, the link, the channel, the agent the rule binds, the message and the timer. The dump then lists every unanswered request, every offered beat and every burst in progress, so that a reader can apply rule 3's exemption ("unless a higher-priority message is in flight or unanswered").
 
 A trip means that a timer outlived the declared bound. It is not a conformance verdict: a finite timer cannot tell an illegal permanent stall from a legal long delay (§4.3), so a conforming system with a bound that is too small also trips (TL-PROGRESS shows this). "Presented" is operational. A beat counts from the first cycle it is offered with its current control and data, and lowering valid or changing the beat resets it, so an agent that alternates valid accumulates no rule 3i timer. Its burst trips rule 2 instead, or the request it owes trips rule 3ii. There is no global "no beat anywhere" timer: one starved request behind busy links would escape it. The watchdog never recovers.
+
+## Monitor
+
+`include/tilelink/Monitor.h`, `src/check/Monitor.cpp`. One `Monitor` per link (plan §3.6) implements the rules of `docs/TileLink_Monitor_Rules.md`, each cited in the code by its id and spec section. It attaches to the channel hooks of its link: `onOffer` (static field rules, M-BURST), `onAccept` (matching, IDs, concurrency, permissions) and `onViolation`, so the core's burst-lock and reset reports are counted by the monitor instead of exiting. It chains any hooks already installed (ValueCheck, for example) and restores them when it is destroyed. A monitor must be destroyed before the kernel that owns its link. The header lists every rule as implemented, tested in T2, or exercised only in T6 (TL-C: M-CONC, M-PERM and the B/C/E parts of the other groups, which run from the same per-block state).
+
+Every violation is one line:
+
+    <rule-id> <spec §> link=<name> cycle=<n> ch=<A..E> msg=<opcode>[param=<p> size=<s> src=<o> sink=<i> addr=<hex> beat=<k>]: <text>
+
+| key (tlsim) | default | meaning |
+|---|---|---|
+| `monitor(i)` | 1 | a monitor on every link |
+| `monitor_mode(s)` | `fatal` | `fatal` exits 2 on the first violation; `report` counts per rule id and continues |
+| `block_bytes(i)` | 64 | TL-C block size (M-CONC, M-PERM) |
+| `allow_acquire_under_acquire(i)` | 0 | M-CONC-1 relaxation |
+| `c_ordered(i)` | 1 | M-CONC-11 |
+| `standalone(i)` | 1 | M-RESET-2: refuse `reset_cycles` < 100 (a system of only NullMaster/NullSlave is exempt) |
+
+The slave's `max_size` (M-ALIGN-3) and address region (M-ALIGN-5) come from the slave itself when it implements `SlaveLimits` (`RamSlave` and `ErrorSlave` do), or from `MonitorOptions`. `Monitor::finish(cycle)` applies the end-of-run rules M-BURST-4, M-BURST-5 and M-RESP-7. A request whose own burst is still in progress is excluded from M-RESP-7 (M-BURST-4 reports it). `violations()`, `count(rule)`, `byRule()` and `log()` are for tests. `summary()` gives `monitor L0: 2 violations (M-ALIGN-1: 1, M-RESP-7: 1)`. The monitor also pairs each request with its response and feeds `Stats::recordOperation` (the `operation` section of TLStats.csv: request first beat offered to response last beat accepted). The test fixture reports M-LEVEL-4 (a beat on a channel that a TL-UL/UH link does not have) through `offerOnMissingChannel`.
+
+tlsim exit status: 0 clean, 1 usage, 2 a fatal error (a monitor violation in fatal mode, a watchdog trip, a refused configuration), 3 the monitor counted violations in report mode. The summaries are printed and written to `<out>/monitor.txt`.
+
+## Agents: RamSlave, ErrorSlave, FuzzMaster
+
+`withAllAgents()` (`include/tilelink/agents/Registry.h`) registers them by name, together with the builtins and, when present, the topology agents of `RegistryTopology.h`. Example systems: `configs/system1_ul.csv` (FuzzMaster to RamSlave, TL-UL) and `configs/system2_uh.csv` (the same at TL-UH, with bursts, atomics, Intent and refresh; the full system 2 adds Xbar, WidthWidget and Fragmenter, see the file).
+
+**RamSlave** (TL-UL/UH memory, plan §3.5) serves Get, PutFullData and PutPartialData. Atomics compute on the 2^size-byte little-endian integer: MIN, MAX, MINU, MAXU and ADD, plus XOR, OR, AND and SWAP per byte. Intent is answered with HintAck. Bursts work in both directions. A request executes when its last beat is accepted (§6.5). Its response is offered `latency` cycles later, at least 1. Data modes are `full` (sparse byte memory), `stamp` (one value per 8-byte group) and `none`. A corrupt write beat poisons its 8-byte groups, and a later read returns that beat corrupt.
+
+| key | default | meaning |
+|---|---|---|
+| `latency(i)`, `latency_jitter(i)` | 1, 0 | service latency, plus uniform jitter from the agent's rng |
+| `latencies(vi)` | none | per-request latency list, in request order |
+| `queue_depth(i)` | 8 | requests held; a_ready LOW when full |
+| `fifo(i)` | 0 | responses in request order (§6.3 FIFO domain) |
+| `max_size(i)` | 2^z - 1 | declared maximum (M-ALIGN-3) |
+| `addr_base(i)`, `addr_size(i)` | none | declared region (M-ALIGN-5); the FuzzMaster's default address set |
+| `deny(vi)` | none | base,size pairs: denied, no effect, data beats corrupt (§4.4) |
+| `refresh_period(i)`, `refresh_cycles(i)` | 0, 0 | a_ready and d_valid LOW for refresh_cycles of every refresh_period (§5.2 example 2) |
+| `level(s)` | UH | declared capability (UL or UH) |
+
+`hints()` returns latency = the slowest service time + jitter + refresh, and queue = queue_depth x the largest response burst, for the watchdog's default bound.
+
+**ErrorSlave** is a RamSlave that denies everything: each request gets its normal response type with `denied` HIGH and no effect, and every beat of a data response is corrupt.
+
+**FuzzMaster** generates random legal TL-UL/UH traffic, deterministic from its seeded rng. Every message is legal for the monitor: opcode at the level, legal param, aligned, within the slave's max_size and region, derived mask (PutPartialData a random subset of its lanes), a unique source from a pool of min(2^o, `sources`), one burst at a time. Before a message's first accept it may be retracted or replaced. Counters `issued()`, `answered()`, `deniedResponses()`, `deniedDataBeats()` and `deniedCorruptBeats()` are for tests. Each cycle it records its outstanding count into the outstanding-ID histogram of TLStats.csv.
+
+| key | default | meaning |
+|---|---|---|
+| `level(s)` | the link's | UL or UH |
+| `ops(i)` | 1000 | requests in total, then idle |
+| `w_get`, `w_put`, `w_putpartial`, `w_arith`, `w_logic`, `w_intent` (i) | 4, 3, 1, 1, 1, 1 | op mix (atomics and Intent only at UH) |
+| `addr_base(i)`, `addr_span(i)`, `align(i)` | slave region, 1 | address set |
+| `size_min(i)`, `size_max(i)`, `atomic_size_max(i)` | 0, (UL: log2 w; UH: min(2^z - 1, slave max, 6)), 3 | size range |
+| `sources(i)` | 2^o (max 1024) | source pool |
+| `rate(i)` | 70 | % chance per idle cycle of a new request |
+| `fence_every(i)` | 0 | wait for all responses every N requests |
+| `retract_pct(i)` | 0 | % chance per cycle of retracting/replacing a not-yet-accepted message |
+| `d_ready_pct(i)` | 100 | % chance per cycle of d_ready HIGH |
+
+Test fixtures (`test/fixtures/`, compiled into the tests, not the library): `ScriptedMaster` and `ScriptedSlave` offer scripted beats, explicit `(cycle, channel, message, beat)` entries or adaptive "send from cycle c until accepted" ones. They take per-cycle ready schedules, and the slave can answer requests by itself with a response that the test may tweak. TL-WAVE, TL-NEG, TL-DET, TL-DENY and TL-FUZZ-U-lite are under `test/wave`, `test/neg`, `test/det`, `test/deny` and `test/fuzzlite`.
+
+## Topology agents and ValueCheck
+
+Plan §3.5 adapters, each an `Agent` with links sorted by role (upstream: it is the slave; downstream: it is the master), registered by `registerTopologyAgents(reg)` (`agents/RegistryTopology.h`) under the type names below. Every path adds exactly one cycle when its stage is empty (plan §3.2), every channel has its own stage (a C/D/E ready never depends on A/B, §4.1), and a refused configuration throws `ConfigError` at elaboration. Integers accept `0x` hex.
+
+| type | keys (`agent[k].*`) | notes |
+|---|---|---|
+| `Xbar` | `routes(vs)` `link:base:size` entries (no overlap, §6.3), `default(s)` link, `arbitration(s)` `rr`/`fixed`/`tdm`, `tdm_slot(i)`=1, `depth(i)`=2 | N x M, one width and level. A/C by address, B/D by source, E by sink (Table 14). Sources packed per upstream link into one downstream namespace, sinks per downstream link into one upstream one (§6.4): downstream o and upstream i must hold the totals. The grant is held for a whole burst |
+| `Buffer` | `depth(i)`=2, `depth_A(i)`..`depth_E(i)` | depth 1 = one beat per two cycles; depth 0 refused (plan §3.2: connect directly) |
+| `WidthWidget` | `depth(i)`=2 | any w to any w, every level. Merge: mask concatenated, corrupt OR. Split: mask sliced, corrupt copied. A dataless message gets its mask re-derived; a sub-bus D is placed by its request's address, remembered by source |
+| `Fragmenter` | `max_size(i)` (required), `max_unsplit(i)` (default: upstream 2^z-1), `deny_corrupts_all(i)`=1, `depth(i)`=2 | splits Get/PutFull/PutPartial only. An unsplittable message (atomic, Intent, TL-C) above `max_size` is refused. The fragment index (last = 0) goes into the source bits above o, so downstream needs o+k. Reassembly in address order: denied = OR; a denied data response corrupt on every beat (§4.4), otherwise corrupt per beat as returned |
+| `SourceShrinker` | `pool(i)` (default 2^o downstream), `depth(i)`=2 | TL-UL/UH only; A ready LOW while the pool is empty |
+| `Throttle` | `p_ready(d)`=0.5, `p_valid(d)`=0, `depth(i)`=2, `depth_A(i)`.. | random withholding from the agent's seeded RNG. valid is withheld only on beat 0 of a message not yet accepted, never mid-burst |
+
+Every agent declares `hints()` for the watchdog's default bound. The Throttle's latency is the run length exceeded with probability below 1e-9.
+
+`ValueCheck` (`ValueCheck.h`, plan §3.6) is the admissible-set checker. `attach(link)` chains it onto the A and D `onAccept` hooks; it only observes. One checker may watch several links that share one memory. It works in data modes `full` and `stamp` (the stamp is the byte value). Reports go to `onViolation(ValueViolation)` (rule `V-READ` or `V-ATOMIC`, cycle, link, byte address, value, admissible set); the default is `fatal`. `counters()` gives writes, reads, atomics, bytes checked or skipped, denied and violations.
+
+The tests are in `test/topology` (TL-TOPO), with their own scripted `Endpoint` and `MemSlave` (`TopoTest.h`). They include TL-ADAPT-ERR (`test_fragmenter`, `test_widthwidget`), the topology part of TL-ID (`test_shrinker`), and a 4 x 2 TL-FUZZ-U-style system over 10 seeds, with a mutant slave that ValueCheck must catch (`test_system`).

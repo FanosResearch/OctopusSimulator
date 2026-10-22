@@ -53,9 +53,9 @@ Link level UL unless stated.
 | M-PARAM-1 | Get with a non-zero param | M offers Get(param=1, src=0, size=3, addr=0x100) at +0 | +0 | |
 | M-PARAM-5 | slave answers with a non-zero param | M PutFullData(src=0,size=3,addr=0x100) at +0; S offers AccessAck(param=1, src 0, size 3) at +1 | +1 | |
 | M-ALIGN-1 | misaligned address | M offers Get(src=0, size=3, addr=0x104) at +0 | +0 | |
-| M-ALIGN-2 | size does not fit z | M offers Get(src=0, size=8, addr=0x100) at +0, link `z=3` | +0 | the Msg field holds the integer 8 |
+| M-ALIGN-2 | size does not fit z | M offers Get(src=0, size=8, addr=0x100) at +0, on a TL-UH link `z=3` (at UL M-LEVEL-5 fires first) | +0 | the Msg field holds the integer 8; M-ALIGN-3 also holds (8 > max_size 6) |
 | M-ALIGN-3 | size above the slave's maximum | M offers Get(src=0, size=7, addr=0x0) at +0 (`max_size=6`), link level UH | +0 | M-LEVEL-5 would fire first on a UL link, so this one runs at UH |
-| M-ALIGN-4 | address does not fit a | M offers Get(src=0, size=3, addr=0x1_0000_0000) at +0, link `a=32` | +0 | |
+| M-ALIGN-4 | address does not fit a | M offers Get(src=0, size=3, addr=0x1_0000_0000) at +0, link `a=32` | +0 | M-ALIGN-5 also holds (outside the slave's region) |
 | M-ALIGN-5 | burst crosses the slave's region | link `z=4 max_size=12`, level UH, slave region [0x1000, 0x1800); M offers Get(src=0, size=12, addr=0x1000) at +0 | +0 | [0x1000, 0x2000) leaves the region at 0x1800 |
 | M-ALIGN-6 | source does not fit o | M offers Get(src=4, size=3, addr=0x100) at +0, link `o=2` | +0 | |
 | M-MASK-1 | mask HIGH on inactive lanes | M offers PutFullData(src=0, size=2, addr=0x104, mask=0xff) at +0 | +0 | active lanes 4..7; mask has lanes 0..3 HIGH |
@@ -83,7 +83,7 @@ Link level UH.
 | M-PARAM-3 | LogicalData param out of range | M offers LogicalData(param=4, src=0, size=3, addr=0x100) at +0 | +0 | |
 | M-PARAM-4 | Intent with an unassigned param | M offers Intent(param=2, src=0, size=3, addr=0x100) at +0 | +0 | the B-channel variant (Intent param 5 on B) is a TL-C mutant, §4 |
 | M-BURST-1 | beat index repeated after acceptance | M offers PutFullData(src=0, size=5, addr=0x100) beat 0 at +0, beat 1 at +1, beat 1 again at +2 (S accepts everything) | +2 | expected index 2 |
-| M-BURST-2 | address advanced per beat | M offers PutFullData(src=0, size=5, addr=0x100) beat 0 at +0; beat 1 at +1 with `address=0x108` | +1 | the classic error; the wire address is constant (plan §1.4) |
+| M-BURST-2 | address advanced per beat | M offers PutFullData(src=0, size=5, addr=0x100) beat 0 at +0; beat 1 at +1 with `address=0x120` (aligned, so only M-BURST-2 fires; 0x108 would fire M-ALIGN-1 first) | +1 | the classic error; the wire address is constant (plan §1.4) |
 | M-BURST-3 | another message interleaved in a burst | M offers PutFullData(src=0, size=5, addr=0x100) beats 0, 1 at +0, +1; Get(src=1, size=3, addr=0x200) at +2; beats 2, 3 at +3, +4 | +2 | the plan's example "after beat 1" |
 | M-BURST-4 | burst abandoned | M offers PutFullData(src=0, size=5, addr=0x100) beat 0 at +0 (accepted), then `a_valid` LOW forever; watchdog off; run ends at +50 | +50 (end of run) | with the watchdog on: rule 2 at +0 + `progress_bound` (TL-PROGRESS §6.2 is the two-link form) |
 
