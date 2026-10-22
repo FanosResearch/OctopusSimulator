@@ -19,7 +19,11 @@ namespace octopus { namespace net
     std::vector<int> NetConfig::classPriority() const
     {
         if (num_classes == 2) return {1, 0};
-        return {CLASS_RESPONSE, CLASS_FORWARD, CLASS_REQUEST};
+        if (num_classes == 3) return {CLASS_RESPONSE, CLASS_FORWARD, CLASS_REQUEST};
+        // TileLink (spec s6.3): the class order is the channel order (A < B < C < D < E, or
+        // A_in < B < C < A_out < D_out < D_in < E), so the highest class is served first, as today
+        std::vector<int> v; for (int c = num_classes - 1; c >= 0; c--) v.push_back(c);
+        return v;
     }
 
     // ------------------------------------------------------------------ construction
@@ -73,11 +77,13 @@ namespace octopus { namespace net
         c.rx_serving = gets("rx_serving"); c.routing = gets("routing"); c.escape_vc = geti("escape_vc"); c.arbiter_type = gets("arbiter_type");
         if (has("deadlock_check")) c.deadlock_check = gets("deadlock_check");
         m_home_ids = optvi("home_ids");
+        m_memory_cfg = optvi("memory_ids");           // TileLink, 7 classes: the memory-side endpoints (spec s6.3); optional key
 
         auto bad = [](const std::string &m) { throw ConfigError(m); };
         if (c.flit_bytes < 0) bad("flit_bytes must be >= 0");
         if (c.header_bytes < 0) bad("header_bytes must be >= 0");
-        if (c.num_classes != 2 && c.num_classes != 3) bad("num_classes must be 2 or 3");
+        if (c.num_classes != 2 && c.num_classes != 3 && c.num_classes != 5 && c.num_classes != 7)
+            bad("num_classes must be 2, 3, 5 or 7 (5 and 7: TileLink channels, spec s6.3), got " + std::to_string(c.num_classes));
         if (c.vcs_per_class < 1) bad("vcs_per_class must be >= 1");
         if (c.vc_depth < 1) bad("vc_depth must be >= 1");
         if (c.router_latency < 0) bad("router_latency must be >= 0");
@@ -153,6 +159,23 @@ namespace octopus { namespace net
         }
         std::set<int> homes(m_home_ids.begin(), m_home_ids.end());
         m_classifier = std::make_unique<Classifier>(m_cfg.num_classes, homes);
+        if (!m_memory_cfg.empty()) setMemoryIds(m_memory_cfg);
+    }
+
+    // the memory-side endpoints of a 7-class TileLink network (spec s6.3): the LLC banks' memory
+    // ports and the memory controllers; a message is on the outer link iff both its ends are
+    void Network::setMemoryIds(const std::vector<int> &ids)
+    {
+        if (m_cfg.num_classes != 7)
+            throw ConfigError("memory_ids (the memory-side endpoints) apply to num_classes 7 only (TileLink with memory on the network), not " + std::to_string(m_cfg.num_classes));
+        for (int id : ids)
+            if (!m_topo->isEndpoint(id)) throw ConfigError("memory_ids: " + std::to_string(id) + " is not an endpoint (component_ids)");
+        m_classifier->setMemory(std::set<int>(ids.begin(), ids.end()));
+    }
+    void Network::setMemoryEndpoints(const std::vector<int> &ids)
+    {
+        try { setMemoryIds(ids); }
+        catch (ConfigError &e) { fatal(e.what()); }
     }
 
     std::unique_ptr<Arbiter> Network::makeArbiter()
@@ -579,8 +602,12 @@ namespace octopus { namespace net
 
     // ------------------------------------------------------------------ observability
     // memory packets (spec s25.5) log as the memory bus does, comp 1; coherence packets as the L1-LLC bus
-    Logger::Role Network::busRole(const Message &m)
+    // TileLink (docs/TileLink_Plan.md s5.3 I-A accounting): A and B as the request bus, C, D and E as
+    // the response bus, the outer (memory-side) link as the memory bus
+    Logger::Role Network::busRole(const Message &m) const
     {
+        if (m.tl.channel != 0)
+            return m_classifier->isMemory(m.from) ? Logger::Role::MEM_BUS : (m.tl.channel <= 2 ? Logger::Role::REQ_BUS : Logger::Role::RESP_BUS);
         switch (m.kind)
         {
             case Message::K_MEM_READ: case Message::K_MEM_WRITE: case Message::K_FILL: case Message::K_MEM_WACK:
@@ -589,7 +616,7 @@ namespace octopus { namespace net
                 return m.data == NULL ? Logger::Role::REQ_BUS : Logger::Role::RESP_BUS;
         }
     }
-    uint32_t Network::busComp(const Message &m) { return busRole(m) == Logger::Role::MEM_BUS ? 1u : 0u; }
+    uint32_t Network::busComp(const Message &m) const { return busRole(m) == Logger::Role::MEM_BUS ? 1u : 0u; }
 
     std::string Network::flitName(const Flit &f) const
     {
@@ -643,6 +670,14 @@ namespace octopus { namespace net
             const ClassStats &s = m_class_stats[c];
             f << "class," << c << ",,," << s.packets << "," << (s.packets ? (double)s.sum_latency / s.packets : 0.0) << "," << s.max_latency << "," << s.max_wait << "\n";
             f << "classtime," << c << ",,," << s.first_inject << "," << s.last_eject << ",,\n";
+        }
+        // reservations per class over the endpoints (spec s8.4, s14.2): RX slots still reserved,
+        // TX slots still reserved, TX slots reserved and released in total; a drained run ends 0, 0, n, n
+        for (int c = 0; c < m_cfg.num_classes; c++)
+        {
+            uint64_t rx = 0, tx = 0, taken = 0, given = 0;
+            for (auto &kv : m_nis) { rx += kv.second->reserved(c); tx += kv.second->txReserved(c); taken += kv.second->txReservedTotal(c); given += kv.second->txReleasedTotal(c); }
+            f << "reserve," << c << ",," << m_classifier->className(c) << "," << rx << "," << tx << "," << taken << "," << given << "\n";
         }
         for (auto &kv : m_nis)
         {

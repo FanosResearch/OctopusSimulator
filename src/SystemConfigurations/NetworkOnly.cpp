@@ -16,7 +16,11 @@ namespace octopus
         std::sort(ids.begin(), ids.end());
         for (int id : ids)
         {
-            vector<int> others; for (int o : ids) if (o != id) others.push_back(o);
+            // a memory-side endpoint (memory_ids, 7-class TileLink) talks to the other memory-side ones,
+            // an inner endpoint to the other inner ones: no message crosses between the two links
+            // (spec s6.3). Without memory_ids every endpoint is inner, as before.
+            bool mem = m_net->isMemoryEndpoint(id);
+            vector<int> others; for (int o : ids) if (o != id && m_net->isMemoryEndpoint(o) == mem) others.push_back(o);
             // transpose: the endpoint at the router with swapped coordinates, if any
             int transpose = -1;
             int r = t.routerOf(id); auto c = t.coord(r);
@@ -27,6 +31,7 @@ namespace octopus
                     transpose = t.endpointsAt(tr)[0];
             }
             m_gens.push_back(new net::TrafficGenerator(getSubMap(STRINGIFY(generator), id), id, m_net->getInterfaceFor(id), others, transpose, name));
+            m_gens.back()->setMemorySide(mem);
         }
         m_net->standalone(m_gens);
         Logger::getLogger()->registerReportPath("newLogger");

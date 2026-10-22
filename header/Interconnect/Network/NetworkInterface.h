@@ -31,6 +31,13 @@ namespace octopus { namespace net
         void txReserve(MessageType type, int n) override;
         void txRelease(MessageType type, int n) override;
         int  txClass(MessageType type) const;
+        // TileLink (num_classes 5 or 7, spec s6.3): admission per channel, on the class of (channel,
+        // this endpoint's side: a memory-side endpoint sends on the outer link). The MessageType
+        // calls above are fatal on such a network, and these on a 2- or 3-class one.
+        int  txFreeSlotsCh(int tl_channel) override;
+        void txReserveCh(int tl_channel, int n) override;
+        void txReleaseCh(int tl_channel, int n) override;
+        int  txClassCh(int tl_channel) const;
         bool rollback(uint64_t address, uint64_t mask, Message *out_msg) override;
 
         // ---- the network's side
@@ -49,14 +56,22 @@ namespace octopus { namespace net
         uint64_t rxDelivered() const { return m_delivered; }
         uint64_t rxPopped() const { return m_popped; }
         uint64_t pushRefused() const { return m_refused; }
+        // TX reservations (spec s14.2): held now, and taken / released in total, per class
+        int  txReserved(int cls) const { return m_tx_reserved.empty() ? 0 : m_tx_reserved[cls]; }
+        uint64_t txReservedTotal(int cls) const { return m_tx_taken.empty() ? 0 : m_tx_taken[cls]; }
+        uint64_t txReleasedTotal(int cls) const { return m_tx_given.empty() ? 0 : m_tx_given[cls]; }
 
     private:
         int classOfType(MessageType t) const;
+        int rxClassOf(const Message &msg, MessageType t) const;   // pushMessage2RX's class
+        void reserveTx(int cls, int n);
+        void releaseTx(int cls, int n);
         Network *m_net;
         int m_num_classes, m_inject_depth, m_eject_depth;
         bool m_priority;                        // rx_serving: priority (true) or alternate
         std::vector<std::deque<uint64_t>> m_inject;   // packet seqs per class
         std::vector<int> m_tx_reserved;               // slots reserved by admitted transitions, per class
+        std::vector<uint64_t> m_tx_taken, m_tx_given; // slots reserved / released in total, per class (NetworkStats)
         std::vector<std::deque<Message>> m_rx;        // the endpoint's RX per class
         std::vector<int> m_reserved;
         int m_peeked = -1;                      // class peekMessage last returned

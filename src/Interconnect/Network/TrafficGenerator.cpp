@@ -25,6 +25,17 @@ namespace octopus { namespace net
         m_multicast = std::get<int>(parameters.at(STRINGIFY(multicast)).value);
         m_untagged = std::get<int>(parameters.at(STRINGIFY(untagged)).value);
         m_start = std::get<int>(parameters.at(STRINGIFY(start)).value);
+        // TileLink mode (docs/TileLink_Plan.md s6 TL-NET-7): optional, so every other mode is unchanged
+        if (parameters.count("tl_mix"))
+        {
+            m_tl_mix = std::get<std::vector<int>>(parameters.at("tl_mix").value);
+            if (!m_tl_mix.empty() && m_tl_mix[0] < 0) m_tl_mix.clear();
+            if (!m_tl_mix.empty())
+            {
+                int sum = 0; for (int w : m_tl_mix) { if (w < 0) throw ConfigError("generator tl_mix weights must be >= 0"); sum += w; }
+                if ((int)m_tl_mix.size() != 5 || sum == 0) throw ConfigError("generator tl_mix needs 5 weights (channels A..E), not all 0");
+            }
+        }
         if (m_multicast < 1) throw ConfigError("generator multicast must be >= 1");
         if (m_pattern != "uniform" && m_pattern != "hotspot" && m_pattern != "transpose" && m_pattern != "neighbour" && m_pattern != "none")
             throw ConfigError("generator " + std::to_string(id) + ": unknown pattern '" + m_pattern + "'");
@@ -46,6 +57,18 @@ namespace octopus { namespace net
         }
         return m_others[m_rng() % m_others.size()];
     }
+    // TileLink mode: a channel by the weights; a memory-side generator (the outer link, TL-UH) draws
+    // from A and D only. Fatal if its weights leave it nothing.
+    int TrafficGenerator::pickChannel()
+    {
+        std::vector<int> w = m_tl_mix;
+        if (m_memory_side) { w[1] = w[2] = w[4] = 0; }
+        int sum = 0; for (int x : w) sum += x;
+        if (sum == 0) fatal("generator " + std::to_string(m_id) + " is memory-side (the outer link carries A and D only) but its tl_mix gives A and D weight 0");
+        int r = (int)(m_rng() % (uint64_t)sum);
+        for (int c = 0; c < 5; c++) { if (r < w[c]) return c + 1; r -= w[c]; }
+        return 1;
+    }
     void TrafficGenerator::makeMessage(Message &m, int dst)
     {
         m.msg_id = (uint64_t)m_id * 1000000000ull + (++m_next_id);
@@ -57,6 +80,16 @@ namespace octopus { namespace net
         }
         m.kind = m_untagged ? Message::K_UNKNOWN : (m_cls == 0 ? Message::K_GETS : (m_cls == 1 ? Message::K_FWD : Message::K_RESP));
         m.complementary_value = 0;
+        m.tl = Message::TLHeader();
+        if (!m_tl_mix.empty())
+        {
+            // TileLink: the class comes from the channel alone; C and D carry the payload (ReleaseData,
+            // ProbeAckData, GrantData, AccessAckData), A, B and E the header only
+            m.kind = Message::K_UNKNOWN;
+            m.tl.channel = (uint8_t)pickChannel(); m.tl.source = (uint32_t)m_id; m.tl.size = 6;
+            if (m_payload > 0 && (m.tl.channel == 3 || m.tl.channel == 4)) { std::vector<uint8_t> buf(m_payload, 0xA5); m.copy(buf.data(), (uint16_t)m_payload); }
+            return;
+        }
         if (m_payload > 0) { std::vector<uint8_t> buf(m_payload, 0xA5); m.copy(buf.data(), (uint16_t)m_payload); }
     }
 
@@ -77,7 +110,11 @@ namespace octopus { namespace net
         // retry a refused message first
         if (m_pending)
         {
-            if (m_ni->pushMessage(m_pending_msg, m_cycle)) { m_pending = false; m_sent++; }
+            if (m_ni->pushMessage(m_pending_msg, m_cycle))
+            {
+                m_pending = false; m_sent++;
+                if (m_pending_ch) { m_ni->txReleaseCh(m_pending_ch, 1); m_pending_ch = 0; }
+            }
             else m_retries++;
         }
         else if ((long)m_cycle >= m_start && (m_packets < 0 || (int)m_sent < m_packets) && (m_cycles < 0 || (long)m_cycle <= m_cycles))
@@ -88,7 +125,15 @@ namespace octopus { namespace net
                 if (dst >= 0)
                 {
                     makeMessage(m_pending_msg, dst);
-                    if (m_ni->pushMessage(m_pending_msg, m_cycle)) m_sent++;
+                    // TileLink: the per-channel admission contract (spec s14.2) -- reserve a slot of the
+                    // message's class while it waits, release it once injected
+                    int ch = m_pending_msg.tl.channel;
+                    if (ch && m_ni->txFreeSlotsCh(ch) > 0) { m_ni->txReserveCh(ch, 1); m_pending_ch = ch; }
+                    if (m_ni->pushMessage(m_pending_msg, m_cycle))
+                    {
+                        m_sent++;
+                        if (m_pending_ch) { m_ni->txReleaseCh(m_pending_ch, 1); m_pending_ch = 0; }
+                    }
                     else { m_pending = true; m_retries++; }
                 }
             }

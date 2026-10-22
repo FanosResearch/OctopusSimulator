@@ -21,7 +21,7 @@
 #include <string>
 #include <vector>
 
-namespace octopus { class BaseController; }
+namespace octopus { class BaseController; class CoherenceProtocolHandler; }
 namespace octopus { namespace net
 {
     struct NetConfig
@@ -63,6 +63,24 @@ namespace octopus { namespace net
         // memory_on_network: the homes' memory messages travel on the network and the memory controllers
         // are checked too (spec s25.3)
         void checkProtocols(const std::vector<octopus::BaseController *> &controllers, bool memory_on_network = false);
+        // the check's analysis without printing or the fatal path (unit tests): one table per
+        // controller; throws ConfigError when the annotation and the network cannot be checked
+        // together (a TileLink annotation on a 2/3-class network, an Octopus one on a 5/7-class one)
+        struct ProtocolTable { bool llc; int id; octopus::CoherenceProtocolHandler *protocol; };
+        struct ProtocolVerdict
+        {
+            int cells = 0, emitting = 0;
+            std::set<std::pair<int, int>> edges;
+            std::vector<std::string> violations, unannotated, self_emitters;
+            std::string line, self_line;   // the verdict line; the self-consumed emitters line ("" = none)
+        };
+        ProtocolVerdict analyzeProtocols(const std::vector<ProtocolTable> &tables, bool memory_on_network) const;
+        // TileLink with memory on the network (num_classes 7, spec s6.3): the memory-side endpoints,
+        // i.e. the LLC banks' memory ports (mem_port_id) and the memory controllers. Also the
+        // optional key memory_ids(vi). Fatal on another class count or a non-endpoint. The system
+        // calls it before checkProtocols and before the first message.
+        void setMemoryEndpoints(const std::vector<int> &ids);
+        bool isMemoryEndpoint(int id) const { return m_classifier->isMemory(id); }
         // network-only mode: the network is the clock trigger and stops when every generator is
         // done and no packet is in flight
         void standalone(const std::vector<TrafficGenerator *> &gens);
@@ -146,11 +164,12 @@ namespace octopus { namespace net
         void returnCredit(int router, int in_port, int cls, int vc);
         int  classIndexOf(int cls) const { return cls; }
         std::string flitName(const Flit &f) const;
-        static Logger::Role busRole(const Message &m);   // MEM_BUS for memory packets (spec s25.5)
-        static uint32_t busComp(const Message &m);
+        Logger::Role busRole(const Message &m) const;    // MEM_BUS for memory packets (spec s25.5)
+        uint32_t busComp(const Message &m) const;
+        void setMemoryIds(const std::vector<int> &ids);  // throws ConfigError
 
         NetConfig m_cfg;
-        std::vector<int> m_component_ids, m_home_ids, m_lower_ids;
+        std::vector<int> m_component_ids, m_home_ids, m_lower_ids, m_memory_cfg;
         std::unique_ptr<Topology> m_topo;
         std::unique_ptr<RoutingAlgorithm> m_routing;
         std::unique_ptr<Classifier> m_classifier;
