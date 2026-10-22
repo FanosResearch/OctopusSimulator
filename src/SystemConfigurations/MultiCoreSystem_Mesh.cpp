@@ -28,6 +28,7 @@ namespace octopus
         uint64_t m_llc_period = 0;   // MCsim ticks once per core cycle: the LLC's period (as in MultiCoreSystem)
         std::function<CommunicationInterface *(int)> interfaceFor;
         net::Network *m_network = nullptr;
+        TileLinkInterconnect *m_tilelink = nullptr;
         if(interconnect_type == STRINGIFY(Mesh))
         {
             Mesh *mesh = new Mesh(getSubMap(STRINGIFY(interconnect)), name);
@@ -66,9 +67,43 @@ namespace octopus
                 net->requireOrdering(std::get<string>(parameters.at("requires_ordering").value));
             interfaceFor = [net](int id) { return net->getInterfaceFor(id); };
         }
+        else if(interconnect_type == STRINGIFY(TileLink))
+        {
+            // TileLink over the library's crossbar (docs/TileLink_Plan.md s5.3 I-A): the L1s are the
+            // masters and the LLC the slave unless the preset lists them (master_ids, slave_ids); memory
+            // stays on the point-to-point memory bus.
+            ParametersMap tl_map = getSubMap(STRINGIFY(interconnect));
+            auto unset = [&](const char *k) {
+                auto it = tl_map.find(k);
+                return it == tl_map.end() || std::get<vector<int>>(it->second.value).empty() || std::get<vector<int>>(it->second.value)[0] < 0;
+            };
+            int banks = parameters.count("llc_banks") ? std::get<int>(parameters.at("llc_banks").value) : 1;
+            if (banks != 1)
+            {
+                cerr << "MultiCoreSystem_Mesh: interconnect_type TileLink takes one LLC (llc_banks 1): the crossbar's address map is "
+                        "ranges and Octopus interleaves the banks by line (docs/TileLink_Plan.md s5.3 I-A)" << endl;
+                exit(2);
+            }
+            if (unset("master_ids"))
+            {
+                vector<int> ids;
+                for (int i = 0; i < num_cores; i++) ids.push_back(std::get<int>(getSubMap(STRINGIFY(cache_controller), i).at("m_id").value));
+                tl_map.erase("master_ids");
+                tl_map.insert({"master_ids", Parameter("master_ids", Parameter::Vector_Integer, ids)});
+            }
+            if (unset("slave_ids"))
+            {
+                vector<int> ids = {std::get<int>(getSubMap(STRINGIFY(llc_controller)).at("m_id").value)};
+                tl_map.erase("slave_ids");
+                tl_map.insert({"slave_ids", Parameter("slave_ids", Parameter::Vector_Integer, ids)});
+            }
+            TileLinkInterconnect *tl_ic = new TileLinkInterconnect(tl_map, name);
+            m_tilelink = tl_ic;
+            interfaceFor = [tl_ic](int id) { return tl_ic->getInterfaceFor(id); };
+        }
         else
         {
-            cerr << "MultiCoreSystem_Mesh: unknown interconnect_type '" << interconnect_type << "' (Mesh, NoC, Network)" << endl;
+            cerr << "MultiCoreSystem_Mesh: unknown interconnect_type '" << interconnect_type << "' (Mesh, NoC, Network, TileLink)" << endl;
             exit(2);
         }
 
@@ -179,6 +214,8 @@ namespace octopus
 
         if (interconnect_type == STRINGIFY(Network))
             m_network->checkProtocols(BaseController::controllers(), memory_on_network);      // spec s14.3, s25.3: after every controller exists
+        if (m_tilelink)
+            m_tilelink->elaborate(BaseController::controllers());   // one clock per kernel (plan s3.2), the kernel's elaboration
 
         Logger::getLogger()->registerReportPath(workload_path + string("/newLogger"));
     }

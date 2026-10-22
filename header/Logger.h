@@ -66,6 +66,17 @@ namespace octopus
         std::map<uint64_t, EventMeta> event_meta;
         bool m_noc_columns = false;
         bool m_noc_mem_columns = false;   // NoC Mem Hops/Wait/Ahead: memory packets on the network (spec s25.5)
+        // TileLink (docs/TileLink_Plan.md s5.3 I-A): the bus events of a TLPort carry comp_id =
+        // (opcode << 8) | channel (1..5 = A..E). With the TileLink columns on, Req-Bus is the A message,
+        // Resp-Bus the D message, and two columns follow: Probe (first B EXIT -> last C EXIT, inside the
+        // LLC service) and Completion (the Grant accepted at the L1 -> its GrantAck accepted at the
+        // manager). The GrantAck arrives after the CPU has its data, so a row whose Completion is not
+        // known yet waits, and the rows of a core keep their order (-1 = no GrantAck by the end).
+        bool m_tl_columns = false;
+        struct TLRow { uint64_t msg_id; std::string text; long long grant; bool waiting; long long completion; };
+        std::map<uint64_t, std::deque<TLRow>> m_tl_rows;   // per core, in finalization order
+        std::map<uint64_t, uint64_t> m_tl_wait;            // msg_id -> core: rows waiting for their GrantAck
+        void tlFlushRows(uint64_t core_id, bool all);
         std::map<uint64_t, uint32_t> worst_case_noc_wait, worst_case_noc_ahead;   // per core
 
         //core_id is the key, and the value is the latency
@@ -132,6 +143,9 @@ namespace octopus
         void enableNocColumns() { m_noc_columns = true; }
         void enableNocMemColumns() { m_noc_mem_columns = true; }
         bool nocColumns() const { return m_noc_columns; }
+        // a TileLink interconnect is present: the Probe and Completion columns (legacy runs are unchanged)
+        void enableTileLinkColumns() { m_tl_columns = true; }
+        bool tileLinkColumns() const { return m_tl_columns; }
 
         // ---- Phase-3 raw event trace (OCTOPUS_TRACE=<file>): every resource event of EVERY
         // message (requests and non-request traffic alike), independent of the per-request

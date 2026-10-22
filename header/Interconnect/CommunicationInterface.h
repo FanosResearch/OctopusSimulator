@@ -211,6 +211,13 @@ public:
     virtual int  txFreeSlotsCh(int tl_channel) { (void)tl_channel; return 1 << 30; }
     virtual void txReserveCh(int tl_channel, int n) { (void)tl_channel; (void)n; }
     virtual void txReleaseCh(int tl_channel, int n) { (void)tl_channel; (void)n; }
+    // The TileLink identifier pool a message on that channel draws from (docs/TileLink_Plan.md s5.2
+    // point 2): A, and C for Release/ReleaseData, a source; D for Grant/GrantData, a sink. Free ids
+    // less reservations; the interface allocates on the push and frees on the response, the
+    // controller only reserves. Default unbounded.
+    virtual int  txFreeIdsCh(int tl_channel) { (void)tl_channel; return 1 << 30; }
+    virtual void txReserveIdsCh(int tl_channel, int n) { (void)tl_channel; (void)n; }
+    virtual void txReleaseIdsCh(int tl_channel, int n) { (void)tl_channel; (void)n; }
 
     virtual bool rollback(uint64_t address, uint64_t mask, Message *out_msg) { return false; }
     

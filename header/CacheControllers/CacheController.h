@@ -135,13 +135,22 @@ namespace octopus
         // the transition has run (its actions may fire cycles later through the data array)
         // up_*: the LLC's memory side (a read travels in the forward class, a write in the response class)
         struct TxNeed { int req = 0, fwd = 0, resp = 0; CommunicationInterface *iface = nullptr;
-                        int up_fwd = 0, up_resp = 0; CommunicationInterface *up_iface = nullptr; };
+                        int up_fwd = 0, up_resp = 0; CommunicationInterface *up_iface = nullptr;
+                        // TileLink protocols (docs/TileLink_Plan.md s5.2): slots and identifiers per channel
+                        // (index 1..5 = A..E) on the inner port [0] (iface) and the LLC's outer port [1] (up_iface)
+                        bool tl = false; int ch[2][6] = {}; int ids[2][6] = {}; };
         struct TxHold { uint64_t msg_id; uint8_t kind; int source; TxNeed need; bool parked = false; };
         TxNeed txNeed(const Message &msg);
         bool txAdmit(const Message &msg);
         void txRelease(const Message &msg) override;
         void txAnswered(const Message &msg) override;
         std::vector<TxHold> m_tx_holds;
+        // the protocol predicts its emissions (CoherenceProtocolHandler::predictEmissions); cleared for
+        // good the first time it answers false, so the existing protocols keep the txNeed below
+        bool m_tl_predict = true;
+        bool txNeedTileLink(const Message &msg, TxNeed &n);
+        bool txAdmitTileLink(const Message &msg, TxNeed &n);
+        void txReleaseTileLink(TxNeed &n, bool keep_answer);
         // Adds the MSHR and write-back-buffer bounds to the queue bound.
         virtual bool demandAdmissionBlocked(int outstanding) const override;
 

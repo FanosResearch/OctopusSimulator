@@ -444,6 +444,8 @@ namespace octopus
         // acknowledgement that completes a saved forward) answers with up to two data messages.
         // The buses report unbounded room, so nothing changes for them.
         TxNeed n;
+        if (m_tl_predict && txNeedTileLink(msg, n))
+            return n;
         if (m_log_role == Logger::Role::LLC)
         {
             n.iface = m_lower_interface;
@@ -463,9 +465,79 @@ namespace octopus
         return n;
     }
 
+    // TileLink (docs/TileLink_Plan.md s5.2 point 1): the need is the cell's emissions, summed per
+    // channel on the port each travels (the inner L1<->LLC link, or the LLC's outer link for
+    // MsgClass::memory), with the identifiers they allocate. False = the protocol does not predict.
+    bool CacheController::txNeedTileLink(const Message &msg, TxNeed &n)
+    {
+        std::vector<CoherenceProtocolHandler::MsgClass> em;
+        GenericCacheLine line;
+        m_data_handler->readLineBits(msg.addr, &line);
+        if (!m_protocol->predictEmissions(msg, line, em)) { m_tl_predict = false; return false; }
+        bool llc = m_log_role == Logger::Role::LLC;
+        n.tl = true;
+        n.iface = llc ? m_lower_interface : m_upper_interface;
+        n.up_iface = llc ? m_upper_interface : nullptr;
+        for (const auto &c : em)
+        {
+            if (c.tl_channel < 1 || c.tl_channel > 5 || c.count < 0 || (c.memory && !n.up_iface))
+            {
+                fprintf(stderr, "CacheController %d: predictEmissions returned an emission with channel %d, count %d%s for msg %llu (kind %d): "
+                                "a TileLink protocol names a channel 1..5, resolves the holder count, and emits on the outer link only at the LLC\n",
+                        m_id, c.tl_channel, c.count, c.memory ? " on the outer link" : "", (unsigned long long)msg.msg_id, (int)msg.kind);
+                exit(2);
+            }
+            int p = c.memory ? 1 : 0;
+            n.ch[p][c.tl_channel] += c.count;
+            if (CoherenceProtocolHandler::tlAllocatesId(c)) n.ids[p][c.tl_channel] += c.count;
+        }
+        return true;
+    }
+
+    // s5.2 point 2: every slot and identifier, on both ports, is free and reserved together, or the
+    // message is not popped; a transition that emits nothing is popped unconditionally.
+    bool CacheController::txAdmitTileLink(const Message &msg, TxNeed &n)
+    {
+        CommunicationInterface *ifc[2] = {n.iface, n.up_iface};
+        bool any = false;
+        for (int p = 0; p < 2; p++)
+            for (int c = 1; c <= 5; c++)
+            {
+                if (!n.ch[p][c] && !n.ids[p][c]) continue;
+                any = true;
+                if (ifc[p]->txFreeSlotsCh(c) < n.ch[p][c] || ifc[p]->txFreeIdsCh(c) < n.ids[p][c]) return false;
+            }
+        if (!any) return true;
+        for (int p = 0; p < 2; p++)
+            for (int c = 1; c <= 5; c++)
+            {
+                if (n.ch[p][c]) ifc[p]->txReserveCh(c, n.ch[p][c]);
+                if (n.ids[p][c]) ifc[p]->txReserveIdsCh(c, n.ids[p][c]);
+            }
+        m_tx_holds.push_back({msg.msg_id, msg.kind, (int)msg.source, n});
+        return true;
+    }
+
+    // s5.2 point 3: released per channel when the transition and its parked data-array actions have
+    // run. keep_answer: a request parked as an outstanding miss keeps the inner D reservation (its
+    // Grant/AccessAck, sent from the fill) until txAnswered, as the three-queue path keeps `resp`.
+    void CacheController::txReleaseTileLink(TxNeed &n, bool keep_answer)
+    {
+        CommunicationInterface *ifc[2] = {n.iface, n.up_iface};
+        for (int p = 0; p < 2; p++)
+            for (int c = 1; c <= 5; c++)
+            {
+                if (keep_answer && p == 0 && c == 4) continue;
+                if (n.ch[p][c]) ifc[p]->txReleaseCh(c, n.ch[p][c]);
+                if (n.ids[p][c]) ifc[p]->txReleaseIdsCh(c, n.ids[p][c]);
+                n.ch[p][c] = n.ids[p][c] = 0;
+            }
+    }
+
     bool CacheController::txAdmit(const Message &msg)
     {
         TxNeed n = txNeed(msg);
+        if (n.tl) return txAdmitTileLink(msg, n);
         if (!n.up_iface) n.up_fwd = n.up_resp = 0;
         if (!n.iface || (n.req == 0 && n.fwd == 0 && n.resp == 0 && n.up_fwd == 0 && n.up_resp == 0)) return true;
         if (n.iface->txFreeSlots(MessageType::REQUEST) < n.req || n.iface->txFreeSlots(MessageType::SERVICE_REQUEST) < n.fwd ||
@@ -495,6 +567,19 @@ namespace octopus
         for (auto it = m_tx_holds.begin(); it != m_tx_holds.end(); ++it)
             if (!it->parked && it->msg_id == msg.msg_id && it->kind == msg.kind && it->source == (int)msg.source)
             {
+                if (it->need.tl)
+                {
+                    bool parked = false;
+                    if (it->need.ch[0][4] || it->need.ids[0][4])
+                    {
+                        auto pr = m_pending_requests.find(getAddressKey(msg.addr));
+                        if (pr != m_pending_requests.end())
+                            for (auto &pm : pr->second) if (pm.msg_id == msg.msg_id) { parked = true; break; }
+                    }
+                    txReleaseTileLink(it->need, parked);
+                    if (parked) it->parked = true; else m_tx_holds.erase(it);
+                    return;
+                }
                 if (it->need.req) it->need.iface->txRelease(MessageType::REQUEST, it->need.req);
                 if (it->need.fwd) it->need.iface->txRelease(MessageType::SERVICE_REQUEST, it->need.fwd);
                 if (it->need.up_fwd) it->need.up_iface->txRelease(MessageType::SERVICE_REQUEST, it->need.up_fwd);
@@ -521,6 +606,7 @@ namespace octopus
         for (auto it = m_tx_holds.begin(); it != m_tx_holds.end(); ++it)
             if (it->parked && it->msg_id == msg.msg_id)
             {
+                if (it->need.tl) { txReleaseTileLink(it->need, false); m_tx_holds.erase(it); return; }
                 if (it->need.resp) it->need.iface->txRelease(MessageType::DATA_RESPONSE, it->need.resp);
                 m_tx_holds.erase(it);
                 return;

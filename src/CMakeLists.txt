@@ -26,6 +26,8 @@ add_library(Octopus_core
     add_subdirectory(Arbiters)
     add_subdirectory(CacheControllers)
     add_subdirectory(Interconnect)
+    add_subdirectory(Interconnect/TileLink)   # TLPort, TileLinkInterconnect
+    target_link_libraries(Octopus_core tilelink)   # the TileLink library (TileLink/, docs/TileLink_Plan.md s3.1)
     add_subdirectory(Protocols)
     add_subdirectory(ReplacementPolicies)
     add_subdirectory(SystemConfigurations)

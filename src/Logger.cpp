@@ -100,6 +100,8 @@ namespace octopus
         issue_order.clear();
         oldest_start.clear();
         worst_case_oldest_latency.clear();
+        m_tl_rows.clear();
+        m_tl_wait.clear();
     }
 
     void Logger::registerReportPath(string file_path)
@@ -142,7 +144,8 @@ namespace octopus
             this->report_files[core_id] << "L1 Access Latency,Total Latency,Effective Latency,Oldest Latency,"
                                         "LLC Arrival State,LLC Gate,Resp Ahead,Resp Ahead Refills,Array Ahead,Array Ahead Writes,LLC Stall State"
                                         << (m_noc_columns ? ",NoC Hops,NoC Wait,NoC Transfer,NoC Ahead,NoC Ahead Winner" : "")
-                                        << (m_noc_columns && m_noc_mem_columns ? ",NoC Mem Hops,NoC Mem Wait,NoC Mem Ahead" : "") << endl;
+                                        << (m_noc_columns && m_noc_mem_columns ? ",NoC Mem Hops,NoC Mem Wait,NoC Mem Ahead" : "")
+                                        << (m_tl_columns ? ",Probe Latency,Completion Latency" : "") << endl;
         }
     }
 
@@ -184,6 +187,26 @@ namespace octopus
     {
         if (g_no_log)
             return;
+
+        // TileLink: the GrantAck of a request whose row is already written (Completion column)
+        if (m_tl_columns && role == Role::RESP_BUS && phase == Phase::EXIT && (comp_id & 0xff) == 5)
+        {
+            auto w = m_tl_wait.find(msg_id);
+            if (w != m_tl_wait.end())
+            {
+                uint64_t core = w->second;
+                for (auto &r : m_tl_rows[core])
+                    if (r.msg_id == msg_id && r.waiting)
+                    {
+                        long long c = (long long)core_clk_count[core] - r.grant;
+                        r.completion = c > 0 ? c : 0; r.waiting = false;
+                        break;
+                    }
+                m_tl_wait.erase(w);
+                tlFlushRows(core, false);
+                return;
+            }
+        }
 
         // event_core is bound in addRequest (at issue). Untracked traffic (service
         // messages, replacements) never had an addRequest, so it is skipped here.
@@ -355,6 +378,26 @@ namespace octopus
         long long llcs  = find(Role::LLC, Phase::SERVICE, false);
         long long llce  = find(Role::LLC, Phase::EXIT,  true);
         long long respb = find(Role::RESP_BUS, Phase::EXIT, true);
+        // TileLink (s5.3 I-A): Req-Bus is the A message and Resp-Bus the D message; the B/C probe legs
+        // and the E GrantAck carry the request's id too and are reported in their own columns
+        long long tl_probe = 0, tl_grant = -1, tl_gack = -1;
+        if (m_tl_columns)
+        {
+            auto findCh = [&](Role r, uint32_t ch, bool last) -> long long {
+                long long found = -1;
+                for (auto &e : ev)
+                    if (e.role == r && e.phase == Phase::EXIT && (e.comp_id & 0xff) == ch) { found = (long long)e.cycle; if (!last) break; }
+                return found;
+            };
+            reqb = findCh(Role::REQ_BUS, 1, false);
+            respb = findCh(Role::RESP_BUS, 4, true);
+            long long b0 = findCh(Role::REQ_BUS, 2, false), c1 = findCh(Role::RESP_BUS, 3, true);
+            tl_probe = (b0 >= 0 && c1 >= b0) ? c1 - b0 : 0;
+            for (auto &e : ev)
+                if (e.role == Role::RESP_BUS && e.phase == Phase::EXIT && (e.comp_id & 0xff) == 4 && ((e.comp_id >> 8) == 4 || (e.comp_id >> 8) == 5))
+                    tl_grant = (long long)e.cycle;                 // the last Grant[Data]
+            tl_gack = findCh(Role::RESP_BUS, 5, true);
+        }
 
         // Cache-to-cache supply: the line's owner (another core's L1) answered instead
         // of the LLC, so the responder's SERVICE/EXIT carry the L1 role and strictly
@@ -515,7 +558,8 @@ namespace octopus
         }
 
         prepareReportFile(core_id);
-        std::ofstream &f = report_files[core_id];
+        std::ostringstream tl_row;   // TileLink: the row is queued until its Completion is known
+        std::ostream &f = m_tl_columns ? static_cast<std::ostream &>(tl_row) : static_cast<std::ostream &>(report_files[core_id]);
         f << req_id << "," << std::hex << addr << std::dec << "," << trace << ",";
         f << cpu_lat << ",";
         f << l1s << ","; logMax(l1s, &worst_case_l1_stall[core_id]);
@@ -557,16 +601,41 @@ namespace octopus
             if (m_noc_mem_columns)
                 f << "," << mit->second.noc_mem_hops << "," << mit->second.noc_mem_wait << "," << mit->second.noc_mem_ahead;
         }
-        f << std::endl;
+        if (m_tl_columns)
+        {
+            f << "," << tl_probe;
+            bool waiting = tl_grant >= 0 && tl_gack < 0;
+            long long completion = (tl_grant >= 0 && tl_gack >= tl_grant) ? tl_gack - tl_grant : 0;
+            m_tl_rows[core_id].push_back(TLRow{msg_id, tl_row.str(), tl_grant, waiting, completion});
+            if (waiting) m_tl_wait[msg_id] = core_id;
+            tlFlushRows(core_id, false);
+        }
+        else
+            f << std::endl;
 
         average_latency[core_id] += eff;
         num_request[core_id]++;
         last_checkpoint[core_id] = (uint64_t)rx;
     }
 
+    // TileLink rows, in order: the front ones whose Completion is known (all of them at the end of
+    // the trace, -1 for a GrantAck that never came)
+    void Logger::tlFlushRows(uint64_t core_id, bool all)
+    {
+        auto &q = m_tl_rows[core_id];
+        while (!q.empty() && (all || !q.front().waiting))
+        {
+            TLRow &r = q.front();
+            report_files[core_id] << r.text << "," << (r.waiting ? -1 : r.completion) << std::endl;
+            if (r.waiting) m_tl_wait.erase(r.msg_id);
+            q.pop_front();
+        }
+    }
+
     void Logger::traceEnd(uint64_t core_id)
     {
         stringstream stream;     
+        if (m_tl_columns) tlFlushRows(core_id, true);
 
         stream << "Worst-case L1 Stall Latency,";
         stream << "Worst-case Requst Bus Latency,";

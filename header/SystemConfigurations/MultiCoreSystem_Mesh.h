@@ -19,6 +19,7 @@
 #include "Mesh.h"
 #include "NoC.h"
 #include "Network.h"
+#include "TileLinkInterconnect.h"
 #include <functional>
 
 #include "BaseController.h"
