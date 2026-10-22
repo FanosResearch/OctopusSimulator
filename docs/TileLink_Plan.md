@@ -571,6 +571,16 @@ Consequences:
      hold-ProbeAck-until-ReleaseAck rule exist for exactly that, the tables implement the hold, and they
      never emit ProbeAckData TtoT. The `K_ACK`-in-FORWARD special case of today's `Classifier` has no
      TileLink counterpart.
+   - **Built (2026-10-22).** The NI keeps what it already does at message level: whole-message
+     delivery, the sender's stamp, and the B fan-out as its all-or-none multicast. `TLNetPort`, a TLPort
+     subclass between each controller and its NI, holds the ID pools, the §6.4 namespace remap of the
+     crossbar and its routing checks; a B travels with source 0, each target's own value on its own
+     link. The library Monitor and CoherenceCheck (C-SWMR, C-GRANT, C-PERM) run on message-level links
+     (w = block, one beat per message) of a never-stepped boundary kernel, driven at NI push and NI
+     delivery, with the NoC modelled as an Xbar (and a second, TL-UH Xbar for the outer links with memory
+     on the network). An `inject_queue_depth` below the number of caches is refused, as `tx_depth_B` is
+     on the crossbar. The system calls `setMemoryEndpoints` before `checkProtocols`. Presets
+     `MultiCoreSystem_GridTL`, `_Grid2BTL` (5 classes), `_Grid2BMTL`, `_Grid2B2MTL` (7 classes).
 
 Unchanged: CPU, cache data arrays and replacement, the LLC data handler, the existing FSM tables and
 protocol handlers, the bus interconnects. The Network engine changes in four places, not one:
@@ -605,6 +615,7 @@ plan §5.3 I-A and the TileLink bus events.
 | TL-OCT-A | Octopus, TileLink crossbar, TLC MESI, EEMBC 10 benchmarks | 4/4 cores finish, 0 faults, 0 monitor violations, event-path tiling 0 failures (needs the I-A accounting); hazard detector 0/0 once I-B's hooks exist |
 | TL-OCT-CMP | same traces: TLC MESI vs directory MESI on the bus preset | per benchmark, L1 miss and DRAM access counts within 2% (the ±2.1% precedent of plan M1; they are not equal because the cores' interleaving, hence LRU, moves with latency), and the per-core instruction counts identical; the difference in mean request latency explained by the fourth hop (owner data goes to the manager, then to the requester) and, for contended lines, by the Completion column (the GrantAck round trip) |
 | (TL-OCT-CMP result, 2026-10-22) | EEMBC, 10 benchmarks, TLC MESI on the crossbar vs directory MESI v2 on the bus preset | per-core request counts identical 10/10; DRAM reads within 0.9% 10/10. L1 misses NOT within 2%: TileLink 9-18% lower (XFAIL in `test/tilelink/run.sh oct`). Cause, measured: ~72% of TileLink misses are coherence transfers, whose count follows the interleaving; a slower transfer (the fourth hop, the GrantAck window) lets the holder hit more per tenure. Changing only the directory LLC's array latency 10 -> 20 cycles moves its a2time01 misses 67253 -> 61286, TileLink's level (60567). Not a protocol defect: C-PERM checked every hit of every TL-OCT-A run (a2time01: 165250 loads, 49487 stores, 0 violations). cacheb01 DRAM writes -12.9% follow LLC thrashing (H1-table refills 6920 vs 5424). Decision pending: keep the 2% bound on DRAM reads and counts only, or compare at matched transfer latency |
+| (TL-OCT-NET result, 2026-10-22) | the four network presets x MESI/MSI x FCFS/RR arbiter x plain/stress (inject 4, eject 2), EEMBC 10 benchmarks | 32/32 batches 10/10: 4/4 cores, 0 faults, 0 refused packets, hazard 0/0, tiling 0 failures over 82 245 056 requests, monitor 0, coherence 0 (C-PERM: 47 012 279 load and 15 764 271 store hits), `consumption order holds` with the Replacement cells listed; TL-OCT-EVICT-NET 8/8 batches; TL-NET-7-OCT: all 7 classes carry traffic, reservations balance; the broken class order refused |
 | TL-OCT-NET | TileLink over the Network: Grid, Grid2B, Grid2BM, Grid2B2M, FCFS and RR, tiny inject/eject queues | as TL-OCT-A; `checkProtocols` passes with the Replacement cell listed; TL-NET-7 and TL-OCT-EVICT on the memory presets; a negative test (class order broken) refused |
 | TL-REG | `run.sh reg` entries for TL-OCT-A and TL-OCT-NET | pass |
 

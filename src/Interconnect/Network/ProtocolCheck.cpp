@@ -24,7 +24,8 @@ namespace octopus { namespace net
     {
         typedef CoherenceProtocolHandler::MsgClass MsgClass;
         const Classifier &cl = *m_classifier;
-        auto className = [&](int c) { return cl.className(c); };
+        // OCTOPUS_NET_DEBUG=tl-order (below): the classes keep their channel's name, so the verdict reads in channels
+        auto className = [&](int c) { return cl.className(m_debug == "tl-order" && cl.tileLink() && (c == 1 || c == 2) ? 3 - c : c); };
         bool tl_net = cl.tileLink();
         if (tl_net && memory_on_network && m_cfg.num_classes != 7)
             throw ConfigError("TileLink with memory on the network needs num_classes 7 (the outer link's own classes, spec s6.3), got " + std::to_string(m_cfg.num_classes));
@@ -34,7 +35,11 @@ namespace octopus { namespace net
         // the network's class of a message, without the fatal path (an unclassifiable annotation is skipped)
         auto netClass = [&](const Message &m, int dst) {
             if (m_debug == "memread-request" && m.kind == Message::K_MEM_READ) return (int)CLASS_REQUEST;
-            return cl.classify(m, dst);
+            int c = cl.classify(m, dst);
+            // OCTOPUS_NET_DEBUG=tl-order: a deliberately broken TileLink class order, C below B
+            // (A < C < B < ...), which the check must refuse (TL-OCT-NET's negative case)
+            if (m_debug == "tl-order" && m.tl.channel != 0 && (c == 1 || c == 2)) c = 3 - c;
+            return c;
         };
         // a memory-side endpoint, for the outer link's TileLink messages (both ends memory-side)
         auto memEndpoint = [&]() {

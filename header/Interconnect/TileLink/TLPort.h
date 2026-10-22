@@ -50,6 +50,8 @@
  *   range in the crossbar's namespace (one tl::Msg per destination). For A, C, D and E a non-empty
  *   Message::to must name the endpoint the wire routes to, else fatal: an Octopus home map that the
  *   crossbar's address map does not express is refused at the first message.
+ * On the Network (s5.3 I-C) TLNetPort derives from this class for the pools, the link view and the
+ *   C-PERM registry (forEndpoint); its queues are the network interface's (TLNetPort.h).
  * Accounting (s5.3 I-A): every message whose last beat is accepted logs a Logger event and an
  *   OCTOPUS_TRACE EXIT record at the receiving port, and beat 0 accepted at the sending port logs the
  *   ENTER record: A and B as REQ_BUS, C, D and E as RESP_BUS, a memory-side port as MEM_BUS. The
@@ -88,8 +90,9 @@ namespace octopus
         // TL-C handlers report performed accesses through it.
         static TLPort *forEndpoint(int id);
         // C-PERM (TileLink CoherenceCheck, Table 29): the cache behind this master port served a load or a
-        // store from its copy; checked against the permission observed on this port's link.
-        void accessPerformed(uint64_t addr, bool store);
+        // store from its copy; checked against the permission observed on this port's link. Virtual: the
+        // Network's TLNetPort reports the network's tick (its kernel is never stepped).
+        virtual void accessPerformed(uint64_t addr, bool store);
 
         // ---- CommunicationInterface: the Octopus endpoint's side
         bool peekMessage(Message *out_msg) override;
@@ -135,7 +138,9 @@ namespace octopus
         uint64_t refused() const { return m_refused; }
         std::string dump() const;
 
-    private:
+    protected:
+        // shared with TLNetPort (the same port on the Network, docs/TileLink_Plan.md s5.3 I-C): the
+        // identifier pools, the link and the role; the queues are the crossbar's only
         struct TxEntry { tl::MsgPtr msg; unsigned beat = 0; int dst = -1; };
         // One identifier pool: tag[k] = the handler's own value of the field for id k, -1 = free.
         struct IdPool

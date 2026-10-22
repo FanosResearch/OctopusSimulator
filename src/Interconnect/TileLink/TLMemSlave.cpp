@@ -34,8 +34,8 @@ namespace octopus
     }
 
     // ------------------------------------------------------------------ TLMemSlave
-    TLMemSlave::TLMemSlave(TLPort *port, unsigned block_bytes)
-        : CommunicationInterface(present(port, "TLMemSlave")->endpoint()), m_port(port), m_block(block_bytes)
+    TLMemSlave::TLMemSlave(TLPort *port, unsigned block_bytes, bool hazard_hooks)
+        : CommunicationInterface(present(port, "TLMemSlave")->endpoint()), m_port(port), m_block(block_bytes), m_hazard(hazard_hooks)
     {
         if (port->role() != tl::Role::Slave)
             TileLinkInterconnect::fatal("TLMemSlave " + std::to_string(port->endpoint()) + ": the memory controller's port must be a TileLink slave");
@@ -83,8 +83,8 @@ namespace octopus
         if (m.tl.size != size || m.tl.param != 0)
             fatal("a memory request moves one whole block (size " + std::to_string(size) + ", param 0): " + describe(m));
         m_pending.push_back(Pending{m.msg_id, lineOf(m.addr), m.tl.opcode, m.tl.size, m.tl.source});
-        if (m.kind == Message::K_MEM_WRITE) MemHazard::writeDelivered(m.addr);
-        else                                MemHazard::readDelivered(m.msg_id, m.addr);
+        if (m_hazard && m.kind == Message::K_MEM_WRITE) MemHazard::writeDelivered(m.addr);
+        else if (m_hazard)                  MemHazard::readDelivered(m.msg_id, m.addr);
         m_port->popFrontMessage();
     }
 
@@ -147,8 +147,8 @@ namespace octopus
     }
 
     // ------------------------------------------------------------------ TLMemMaster
-    TLMemMaster::TLMemMaster(TLPort *port, unsigned block_bytes)
-        : CommunicationInterface(present(port, "TLMemMaster")->endpoint()), m_port(port), m_block(block_bytes)
+    TLMemMaster::TLMemMaster(TLPort *port, unsigned block_bytes, bool hazard_hooks)
+        : CommunicationInterface(present(port, "TLMemMaster")->endpoint()), m_port(port), m_block(block_bytes), m_hazard(hazard_hooks)
     {
         if (port->role() != tl::Role::Master)
             TileLinkInterconnect::fatal("TLMemMaster " + std::to_string(port->endpoint()) + ": an LLC bank's memory port must be a TileLink master");
@@ -167,6 +167,7 @@ namespace octopus
             (msg.tl.channel != 1 || msg.tl.opcode != (uint8_t)tl::OpA::PutFullData || msg.tl.size != size || msg.tl.param != 0 || msg.data == NULL))
             refuse("a K_MEM_WRITE is a PutFullData on A, param 0, size of the block, with the block");
         if (!m_port->pushMessage(msg, cycle, type)) return false;
+        if (!m_hazard) return true;
         uint64_t at = cycle ? cycle : msg.cycle;
         if (msg.kind == Message::K_MEM_READ) MemHazard::readSent(msg.msg_id, msg.addr, at);
         else if (msg.kind == Message::K_MEM_WRITE) MemHazard::writeSent(msg.addr, msg.msg_id, at);

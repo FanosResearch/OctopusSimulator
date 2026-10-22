@@ -160,6 +160,8 @@ namespace octopus { namespace net
             fatal("endpoint " + std::to_string(m_interface_id) + ": RX of class " + std::to_string(cls) + " full at delivery despite the reservation");
         if (msg.kind == Message::K_MEM_WRITE) MemHazard::writeDelivered(msg.addr);
         else if (msg.kind == Message::K_MEM_READ) MemHazard::readDelivered(msg.msg_id, msg.addr);
-        m_rx[cls].push_back(msg); m_delivered++;
+        if (m_on_deliver) { Message m(msg); m_on_deliver(cls, m); m_rx[cls].push_back(m); }
+        else m_rx[cls].push_back(msg);
+        m_delivered++;
     }
 }}

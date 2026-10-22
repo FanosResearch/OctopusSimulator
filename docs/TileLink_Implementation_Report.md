@@ -183,9 +183,37 @@ class order does not order and the resource argument of plan §5.3 covers). Traf
 mode. **Measured.** Step TL (unit, TL-NET-5, TL-NET-7, TL-NET-7-TINY, TL-NET-DET, negatives); `run.sh all`
 140 PASS, 9 XFAIL, 0 FAIL (was 120/9/0). Commit `824a21d7`.
 
-**Not yet done.** TileLink over the Network presets (plan §5.3 I-C) with the TL-C handlers: on the Network
-the network interface stands where TLPort stands on the crossbar (source and sink ids, B fan-out, the
-sender's stamp), and the 7-class presets must call `setMemoryEndpoints` before `checkProtocols`.
+## T9b: the TL-C handlers over the Network
+
+The handlers and tables are unchanged; where each crossbar-port function lives on the Network:
+
+| function | on the Network | why |
+|---|---|---|
+| whole-message delivery | the NI, unchanged | it delivers at the tail flit |
+| sender stamp (`Message::from`) | the NI, unchanged | it stamps every push; the LLC's clients come from it |
+| B fan-out over `Message::to` | the NI's all-or-none multicast, unchanged | the fan-out the admission reserves for |
+| A / C source pools, Grant sink pool, `txFreeIdsCh` | `TLNetPort` (a TLPort subclass between controller and NI) | TileLink link semantics; the NI of every Octopus preset stays as it was |
+| the §6.4 namespace remap, routing checks | `TLNetPort` | the handlers see what they see on the crossbar |
+
+The NI gained one optional hook (`setDeliverHook`, unset on every Octopus network). The library Monitor
+and CoherenceCheck run at message level on a never-stepped boundary kernel (one link per endpoint, w =
+block; the NoC as an Xbar, plus a TL-UH Xbar for the outer links): every rule a one-beat message can
+break is checked; the ordering inside the NoC and beats are not. C-PERM runs on the L1 links: a
+permission rises when the Grant enters the L1's receive queue and falls when its ProbeAck or Release
+enters its inject queue, so a report is never a false alarm. `inject_queue_depth` below the number of
+caches is refused. With memory on the network the system calls `setMemoryEndpoints` (memory ports and
+controllers) before the controllers, `checkProtocols` and the first message.
+
+**Measured.** TL-OCT-NET 32/32 batches (4 presets x MESI/MSI x FCFS/RR x plain/stress, 320 EEMBC runs):
+every run 4/4 cores, 0 faults, 0 refused packets, hazard 0/0, tiling 0 failures (82 245 056 requests),
+monitor 0, coherence 0 (C-PERM 19 468 506 grants, 47 012 279 load and 15 764 271 store hits). TL-OCT-EVICT
+on the network presets 8/8 (replacements = write-backs = memory writes). TL-NET-7 on Grid2BMTL and
+Grid2B2MTL: every class carries traffic (e.g. Grid2BMTL A_in 59 916, B 59 438, C 66 571, A_out 7 824,
+D_out 7 824, D_in 67 049, E 59 915) and the reservations balance. checkProtocols: 5 classes, edges A->B
+A->D B->C C->D D->E; 7 classes, edges A_in->B A_in->A_out A_in->D_in B->C C->A_out C->D_in A_out->D_out
+D_out->D_in D_in->E; consumption order holds on both, with the Replacement cells listed as the
+self-consumed emitters. Negative: a broken class order, a too-shallow inject queue and untagged tables on a
+TileLink network are refused. `test/tilelink/run.sh net` 50/50.
 
 ## Spec text pending for `docs/NoC_Architecture_Spec.md`
 

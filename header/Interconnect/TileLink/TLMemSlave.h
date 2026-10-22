@@ -32,6 +32,10 @@
  *   that a push of a K_MEM_READ / K_MEM_WRITE is checked against the contract (fatal otherwise:
  *   the slave would answer it wrongly or never).
  *
+ * Over the Network (docs/TileLink_Plan.md s5.3 I-C, memory on the network with 7 classes) the port is a
+ * TLNetPort and hazard_hooks is false: the network interface runs the detector's hooks there (at its
+ * push and at its delivery, as for Octopus's memory on the network), so they run once.
+ *
  * Read-after-write detector (OCTOPUS_MEM_HAZARD, header/MemHazard.h; plan s5.3 I-B): the sender's
  * hooks (readSent / writeSent) are in TLMemMaster::pushMessage, when the port has taken the
  * message, as in BusInterface and NetworkInterface; the delivery hooks (readDelivered /
@@ -55,7 +59,7 @@ namespace octopus
     {
     public:
         // port: the memory controller's endpoint on the memory crossbar (a TL-UH slave link)
-        explicit TLMemSlave(TLPort *port, unsigned block_bytes = 64);
+        explicit TLMemSlave(TLPort *port, unsigned block_bytes = 64, bool hazard_hooks = true);
 
         bool peekMessage(Message *out_msg) override;
         void popFrontMessage() override;
@@ -89,6 +93,7 @@ namespace octopus
 
         TLPort *m_port;
         unsigned m_block;
+        bool m_hazard;
         std::deque<Pending> m_pending;      // outstanding requests, in acceptance order
         Message m_peeked;
         bool m_have_peek = false;
@@ -99,7 +104,7 @@ namespace octopus
     {
     public:
         // port: an LLC bank's memory port on the memory crossbar (a TL-UH master link)
-        explicit TLMemMaster(TLPort *port, unsigned block_bytes = 64);
+        explicit TLMemMaster(TLPort *port, unsigned block_bytes = 64, bool hazard_hooks = true);
 
         bool peekMessage(Message *out_msg) override { return m_port->peekMessage(out_msg); }
         void popFrontMessage() override { m_port->popFrontMessage(); }
@@ -123,6 +128,7 @@ namespace octopus
     private:
         TLPort *m_port;
         unsigned m_block;
+        bool m_hazard;
     };
 }
 

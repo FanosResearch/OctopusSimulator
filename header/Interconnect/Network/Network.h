@@ -188,7 +188,7 @@ namespace octopus { namespace net
         struct EndpointStats { uint64_t packets = 0, sum_latency = 0, max_latency = 0, first_owner = 0, first_seq = 0, max_ahead = 0; int max_ahead_winner = -1;
                                std::map<int, uint64_t> by_class; };   // packets received per class (MEM-CLASS)
         std::map<int, EndpointStats> m_ep_stats;
-        std::string m_debug;    // OCTOPUS_NET_DEBUG: credit | rx | mask (fatal-path tests) | nocheck (skip the deadlock check) | memread-request
+        std::string m_debug;    // OCTOPUS_NET_DEBUG: credit | rx | mask (fatal-path tests) | nocheck (skip the deadlock check) | memread-request | tl-order (the check sees B and C swapped)
         long m_hang_ticks = 0;  // OCTOPUS_HANG_DUMP: ticks without a flit moving (packets in flight) before the dump
         uint64_t m_last_move = 0;
         std::vector<ClassStats> m_class_stats;

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # TileLink adapter tests (docs/TileLink_Plan.md s5.2, s5.3 I-A, step T7 infrastructure; s5.3 I-B, step T8).
-#   bash test/tilelink/run.sh [unit|sys|mem|oct|all]
+#   bash test/tilelink/run.sh [unit|sys|mem|oct|net|all]
 #     unit : Octopus_tl_tests (TLPort through the crossbar with the echo stand-in, the admission
 #            contract in CacheController, the Logger's TileLink columns, memory over TileLink:
 #            TLMemSlave over MainMemoryController and MCsimInterface, TL-MEM-*) and the untagged-push fatal
@@ -17,6 +17,15 @@
 #            TL-OCT-CMP (against directory MESI on the bus directory preset), TL-OCT-EVICT (an LLC where
 #            nearly every fill evicts, receive queues 1, transmit queues 2, pwb_size 1). The two-bank runs
 #            print SKIP while MultiCoreSystem_Mesh still refuses llc_banks > 1 for TileLink
+#     net  : the TL-C handlers over the Network engine (plan s5.3 I-C, s6 TL-OCT-NET): EEMBC, TLC MESI and MSI on
+#            MultiCoreSystem_GridTL, _Grid2BTL (5 classes, memory on the bus), _Grid2BMTL, _Grid2B2MTL (7 classes,
+#            memory on the network), network arbiter FCFS and RR, plain and with tiny inject/eject queues (4 / 2):
+#            4/4 cores, 0 faults, 0 refused packets, hazard 0/0, tiling 0 failures, 0 monitor violations on the
+#            message-level links, 0 coherence violations (C-SWMR, C-GRANT, C-PERM), checkProtocols passing with
+#            the Replacement cells listed; TL-NET-7-OCT (every class of the memory presets carries traffic and
+#            its reservations balance); TL-OCT-EVICT-NET (small LLC, inject 4 / eject 1, pwb_size 1); the
+#            negatives (a broken class order, an inject queue below the probe fan-out) refused.
+#            TL_PAR (default 16) runs in parallel
 #     all  : unit and sys (default)
 # Prints one "PASS <id>" / "FAIL <id>: measured <x> expected <y>" line per test, writes
 # test/tilelink/out/results.csv, exits non-zero on any FAIL. No configuration file is edited: runs
@@ -236,6 +245,101 @@ oct() {
   done; done
 }
 
+# ---------------------------------------------------------------- TileLink over the Network (plan s5.3 I-C)
+NET_PRESETS="GridTL Grid2BTL Grid2BMTL Grid2B2MTL"
+net_jobs() { # net_jobs <lines "dir|args...">: every EEMBC benchmark of every line, TL_PAR at a time, every diagnostic on
+  local line t
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    for t in $EEMBC; do printf '%s|%s\n' "$t" "$line"; done
+  done | xargs -P "${TL_PAR:-16}" -d '\n' -I{} bash -c 'IFS="|" read -r t d args <<< "{}"; o="$d/$t"; rm -rf "$o"; mkdir -p "$o"; eval "set -- $args";
+      OCTOPUS_EVENT_DEBUG=1 OCTOPUS_HANG_DUMP=200000 OCTOPUS_MEM_HAZARD=1 timeout 1800 "'"$BIN"'" "$@" -p "workload_path(s)='"$ROOT"'/BMs/eembc-traces/$t/" -o "$o" > "$o/.stdout" 2> "$o/.stderr"; echo $? > "$o/.rc"'
+}
+net_verdict() { # net_verdict <run dir> <benchmark>: oct_verdict, then the network's and the checkers' criteria
+  local o="$1" t="$2" v ref
+  v=$(oct_verdict "$o" "$t"); [ "$v" = ok ] || { echo "$v"; return; }
+  grep -q "consumption order holds" "$o/.stdout" || { echo "checkProtocols"; return; }
+  grep -q "self-consumed emitters: .*Replacement" "$o/.stdout" || { echo "no Replacement in the self-consumed emitters"; return; }
+  grep -q "coherence check: .* 0 violations" "$o/.stderr" || { echo "coherence: $(grep -o 'coherence check: .*' "$o/.stderr" | tail -1)"; return; }
+  ref=$(awk -F, '$1=="endpoint"{s+=$7} END{print s+0}' "$o/NetworkStats.csv" 2>/dev/null)
+  [ "${ref:-x}" = 0 ] || { echo "refused ${ref:-?}"; return; }
+  echo ok
+}
+net_preset_args() { # net_preset_args <preset> <MESI|MSI>: the -p overrides (the LLC map is banked on the 2B presets)
+  local L=llc_controller; [ "$1" != GridTL ] && L="llc_controller[*]"
+  printf '%s' "-s MultiCoreSystem_Mesh -c MultiCoreSystem_$1"
+  [ "$2" = MSI ] && printf ' %s' "-p '$L.fsm_filename(s)=TLC_MSI_LLC'"
+}
+net() {
+  local O="$OUT/net" c P A M jobs="" ids=""
+  mkdir -p "$O"
+  # ---------------- TL-OCT-NET: the matrix
+  for c in $NET_PRESETS; do for P in MESI MSI; do for A in FCFS RR; do for M in plain stress; do
+    local x; x="$(net_preset_args $c $P) -p 'interconnect.arbiter_type(s)=${A}Arbiter'"
+    [ $M = stress ] && x="$x -p 'interconnect.inject_queue_depth(i)=4' -p 'interconnect.eject_queue_depth(i)=2'"
+    jobs="$jobs$O/oct/$c-$P-$A-$M|$x"$'\n'; ids="$ids $c-$P-$A-$M"
+  done; done; done; done
+  # ---------------- TL-OCT-EVICT-NET: nearly every fill evicts, inject 4 (a probe fan-out of four caches) / eject 1, pwb_size 1
+  for c in $NET_PRESETS; do for P in MESI MSI; do
+    local L=llc_controller size=4096; [ $c != GridTL ] && { L="llc_controller[*]"; size=2048; }
+    jobs="$jobs$O/evict/$c-$P|$(net_preset_args $c $P) -p 'interconnect.inject_queue_depth(i)=4' -p 'interconnect.eject_queue_depth(i)=1' -p 'cache_controller[*].m_data_handler.pwb_size(i)=1' -p '$L.m_data_handler.cache_size(i)=$size' -p '$L.m_data_handler.pwb_size(i)=1'"$'\n'
+  done; done
+  printf '%s' "$jobs" | net_jobs
+  local id t v n bad
+  for id in $ids; do
+    n=0; bad=""
+    for t in $EEMBC; do v=$(net_verdict "$O/oct/$id/$t" "$t"); if [ "$v" = ok ]; then n=$((n+1)); else bad="$bad $t($v)"; fi; done
+    local cp; cp=$(grep -h -o 'coherence check: [0-9]* grants, [0-9]* loads and [0-9]* stores' "$O/oct/$id"/*/.stderr 2>/dev/null | awk '{g+=$3; l+=$5; s+=$8} END{printf "%d grants, %d loads, %d stores", g, l, s}')
+    if [ -z "$bad" ]; then pass "TL-OCT-NET-$id" "10/10: 4/4 cores, 0 faults, 0 refused, hazard 0/0, tiling 0, 0 monitor / coherence violations ($cp checked)" "10/10"
+    else fail "TL-OCT-NET-$id" "$n/10:$bad" "10/10"; fi
+  done
+  for c in $NET_PRESETS; do for P in MESI MSI; do
+    local d="$O/evict/$c-$P" fills=0 repl=0; n=0; bad=""
+    for t in $EEMBC; do
+      v=$(net_verdict "$d/$t" "$t")
+      grep -q "unfound line" "$d/$t/.stdout" && v="a fill found no line"
+      local r w f mw; read -r r w f <<< "$(grep -h '^TLC_LLC' "$d/$t/.stderr" | tr -d ',' | awk '{r+=$14; w+=$16; f+=$12} END{print r+0, w+0, f+0}')"
+      mw=$(grep -o 'writes [0-9]*' "$d/$t/.stderr" | head -1 | cut -d' ' -f2)
+      { [ "$r" = "$w" ] && [ "$w" = "$mw" ]; } || v="replacements $r, write-backs $w, memory writes $mw"
+      fills=$((fills+f)); repl=$((repl+r))
+      [ "$v" = ok ] && n=$((n+1)) || bad="$bad $t($v)"
+    done
+    if [ -z "$bad" ]; then pass "TL-OCT-EVICT-NET-$c-$P" "10/10; $repl replacements for $fills fills, all written back" "10/10, every replacement written back"
+    else fail "TL-OCT-EVICT-NET-$c-$P" "$n/10:$bad" "10/10"; fi
+  done; done
+  # ---------------- the protocol-and-network check on each preset (its verdict lines, from the MESI FCFS runs)
+  for c in $NET_PRESETS; do
+    local f="$O/oct/$c-MESI-FCFS-plain/a2time01-trace/.stdout" want="LLC (B, Replacement) emits B"
+    case $c in *MTL) want="LLC (I, Replacement) emits A_out";; esac
+    if grep -q "consumption order holds" "$f" && grep -q "self-consumed emitters: .*$want" "$f"; then
+      pass "TL-NET-CHECK-$c" "$(grep -o 'Protocol-network check ([0-9]* classes): [0-9]* cells' "$f"), order holds, '$want' listed" "order holds, the Replacement cells listed"
+    else fail "TL-NET-CHECK-$c" "$(grep 'Protocol-network' "$f" | head -1)" "order holds, '$want' listed"; fi
+  done
+  # ---------------- TL-NET-7-OCT: on the memory presets every one of the 7 classes carries traffic, reservations balance
+  for c in Grid2BMTL Grid2B2MTL; do
+    local s="$O/oct/$c-MESI-FCFS-plain/a2time01-trace/NetworkStats.csv" m
+    m=$(awk -F, '$1=="class" {pk[$2]=$5} $1=="reserve" {if ($5 != 0 || $6 != 0 || $7 != $8) bad = bad " class " $4 " rx " $5 " tx " $6 " taken " $7 " released " $8}
+                 $1=="totals" && $2=="packets" {fl=$7}
+                 END {for (k = 0; k < 7; k++) if (pk[k] + 0 == 0) bad = bad " class " k " carried nothing"; if (bad != "") print "FAIL" bad; else printf "packets per class"; for (k = 0; k < 7; k++) printf " %d", pk[k]; printf "; %d in flight at the end\n", fl}' "$s" 2>/dev/null)
+    case "$m" in ""|FAIL*) fail "TL-NET-7-OCT-$c" "${m:-no NetworkStats}" "7/7 classes carry traffic, reservations 0 / 0 / taken = released";;
+                 *) pass "TL-NET-7-OCT-$c" "$m; reservations rx 0, tx 0, taken = released" "7/7 classes, balanced";; esac
+  done
+  # ---------------- negatives: each refused at construction, exit 2, named
+  net_fatal() { # net_fatal <id> <needle> <env> <args...>
+    local id="$1" needle="$2" env="$3"; shift 3
+    rm -rf "$O/neg/$id"; mkdir -p "$O/neg/$id"
+    env $env timeout 120 "$BIN" "$@" -p "workload_path(s)=$ROOT/BMs/eembc-traces/mi_pingpong/" -o "$O/neg/$id" > "$O/neg/$id/.stdout" 2> "$O/neg/$id/.stderr"; local rc=$?
+    if [ $rc = 2 ] && grep -q "$needle" "$O/neg/$id/.stderr"; then pass "$id" "exit 2: $(grep -m1 -o "$needle.\{0,60\}" "$O/neg/$id/.stderr")" "exit 2, '$needle'"
+    else fail "$id" "exit $rc: $(tail -1 "$O/neg/$id/.stderr")" "exit 2 with '$needle'"; fi
+  }
+  # OCTOPUS_NET_DEBUG=tl-order orders C below B in the check (A < C < B < ...): the L1 cells (_, ProbeBlock_*) then emit below what they consume
+  net_fatal TL-NEG-NET-ORDER-5 "consumes B and emits ProbeAck_NtoN in C" OCTOPUS_NET_DEBUG=tl-order -s MultiCoreSystem_Mesh -c MultiCoreSystem_GridTL
+  net_fatal TL-NEG-NET-ORDER-7 "consumes B and emits ProbeAck_NtoN in C" OCTOPUS_NET_DEBUG=tl-order -s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid2BMTL
+  net_fatal TL-NEG-NET-FANOUT "below the probe fan-out of 4 caches" OCTOPUS_NET_DEBUG= -s MultiCoreSystem_Mesh -c MultiCoreSystem_GridTL -p "interconnect.inject_queue_depth(i)=3"
+  # the directory tables on a TileLink network: their untagged messages are refused at the first push
+  net_fatal TL-NEG-NET-UNTAGGED "annotates Octopus message kinds" OCTOPUS_NET_DEBUG= -s MultiCoreSystem_Mesh -c MultiCoreSystem_GridTL "${DIR_TABLES[@]}"
+}
+
 echo "id,status,measured,expected" > "$RESULTS"
 build
 case "$WHAT" in
@@ -243,8 +347,9 @@ case "$WHAT" in
   sys)  sys;;
   mem)  mem;;
   oct)  oct;;
+  net)  net;;
   all)  unit; sys;;
-  *) echo "usage: run.sh [unit|sys|mem|oct|all]"; exit 2;;
+  *) echo "usage: run.sh [unit|sys|mem|oct|net|all]"; exit 2;;
 esac
 echo "----"; echo "$FAILS failure(s); results in $RESULTS"
 [ "$FAILS" = 0 ]

@@ -63,7 +63,7 @@ A flit-level wormhole network with credit-based flow control. Specification:
 |---|---|
 | Topology | `grid2d`, `torus2d`, `ring`, `star`, `custom` (explicit routers and links); endpoints attach to routers through `node_map` |
 | Routing | `XY`, `Table` (shortest paths), `WestFirst`, `AdaptiveMinimal` (with an escape VC); `auto` = XY on grids, Table otherwise |
-| Virtual networks | `num_classes 3` (request / forward / response) or 2 (legacy request / data), `vcs_per_class`, `vc_depth` |
+| Virtual networks | `num_classes 3` (request / forward / response), 2 (legacy request / data), or 5 / 7 (TileLink channels), `vcs_per_class`, `vc_depth` |
 | Timing | `router_latency`, `link_latency`, per-class link latency, `flit_bytes`, `header_bytes`, pipelined or serial links |
 | Allocation | FCFS or RR for VC and switch allocation |
 | Endpoint queues | `inject_queue_depth`, `eject_queue_depth`; controllers reserve transmit slots before a transition, so a push is never refused |
@@ -99,7 +99,9 @@ keys and defaults: `configuration/Interconnect/TileLink.csv`.
 
 Presets: `MultiCoreSystem_TileLink` (one LLC), `MultiCoreSystem_TileLink2B` (two banks),
 `MultiCoreSystem_TileLinkM` (memory over TileLink), `MultiCoreSystem_TileLink2B2M` (two banks, two memory
-controllers). The component also runs on its own: `tlsim` with TL-UL / TL-UH / TL-C agents, crossbar and
+controllers). TileLink also runs over the multi-hop network (`num_classes 5`, or 7 with memory on the
+network): presets `MultiCoreSystem_GridTL`, `_Grid2BTL`, `_Grid2BMTL`, `_Grid2B2MTL`, with the conformance
+monitor and the coherence checks at message level. The component also runs on its own: `tlsim` with TL-UL / TL-UH / TL-C agents, crossbar and
 adapters, and its checkers (`TileLink/README.md`).
 
 ## Bus / interconnect arbitration

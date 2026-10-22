@@ -8,6 +8,7 @@
 #include "CommunicationInterface.h"
 #include "NetTypes.h"
 #include <deque>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -49,6 +50,11 @@ namespace octopus { namespace net
         void reserve(int cls) { m_reserved[cls]++; }
         // the tail flit arrived: fill the reserved slot
         void deliver(int cls, const Message &msg);
+        // TileLink over the network (docs/TileLink_Plan.md s5.3 I-C): the boundary at this endpoint
+        // (TLNetPort) sees every delivery, with the message before it enters the RX queue: the
+        // message is accepted there in the TileLink sense, and the hook restores the identifiers the
+        // endpoint's pools gave out. Unset on every Octopus network (nothing changes there).
+        void setDeliverHook(std::function<void(int cls, Message &msg)> h) { m_on_deliver = std::move(h); }
         int  rxFree(int cls) const { return m_eject_depth - (int)m_rx[cls].size() - m_reserved[cls]; }
         int  rxSize(int cls) const { return (int)m_rx[cls].size(); }
         int  reserved(int cls) const { return m_reserved[cls]; }
@@ -77,6 +83,7 @@ namespace octopus { namespace net
         int m_peeked = -1;                      // class peekMessage last returned
         int m_last_served = -1;                 // for alternate
         uint64_t m_delivered = 0, m_popped = 0, m_refused = 0;
+        std::function<void(int, Message &)> m_on_deliver;
     };
 }}
 #endif /* _NET_NETWORK_INTERFACE_H */

@@ -324,7 +324,10 @@ A packet's RX slot is reserved when its head is admitted into the last router's 
 (§8.4), so when the tail flit reaches the local port the packet is complete and
 `pushMessage2RX(msg, type)` shall succeed. The message is delivered whole: the last router holds
 the `Message` from the head's arrival until the tail's ejection, which is the one store-and-forward
-step in the network and is inherent to delivering message objects.
+step in the network and is inherent to delivering message objects. An optional delivery hook
+(`NetworkInterface::setDeliverHook`) sees each message just before it enters the RX queue; it is unset on
+every Octopus network and used only by the TileLink boundary (docs/TileLink_Plan.md §5.3 I-C), which
+drives its message-level monitors from it.
 
 ### 7.4 RX serving order
 

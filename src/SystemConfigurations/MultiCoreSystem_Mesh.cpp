@@ -8,6 +8,7 @@
 
 #include "../../header/SystemConfigurations/MultiCoreSystem_Mesh.h"
 #include "../../header/Interconnect/TileLink/TLMemSlave.h"
+#include "../../header/Interconnect/TileLink/TLNetPort.h"
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
@@ -41,6 +42,7 @@ namespace octopus
         uint64_t m_llc_period = 0;   // MCsim ticks once per core cycle: the LLC's period (as in MultiCoreSystem)
         std::function<CommunicationInterface *(int)> interfaceFor;
         net::Network *m_network = nullptr;
+        TLNetBoundary *m_tlnet = nullptr;          // TileLink over the network (5 or 7 classes)
         TileLinkInterconnect *m_tilelink = nullptr;
         if(interconnect_type == STRINGIFY(Mesh))
         {
@@ -79,6 +81,38 @@ namespace octopus
             if (parameters.count("requires_ordering"))
                 net->requireOrdering(std::get<string>(parameters.at("requires_ordering").value));
             interfaceFor = [net](int id) { return net->getInterfaceFor(id); };
+            if (net->classifier().tileLink())
+            {
+                // TileLink over the network (docs/TileLink_Plan.md s5.3 I-C): num_classes 5 (memory on the
+                // memory bus) or 7 (memory on the network). The TL-C handlers talk to a TLNetPort at each
+                // endpoint (header/Interconnect/TileLink/TLNetPort.h); with memory on the network the banks'
+                // memory ports and the memory controllers are the outer link's memory-side endpoints, set
+                // before checkProtocols and the first message.
+                int banks = parameters.count("llc_banks") ? std::get<int>(parameters.at("llc_banks").value) : 1;
+                bool mem_net = parameters.count("memory_on_network") && std::get<int>(parameters.at("memory_on_network").value) != 0;
+                TLNetBoundary::Endpoints e;
+                for (int i = 0; i < num_cores; i++) e.l1s.push_back(std::get<int>(getSubMap(STRINGIFY(cache_controller), i).at("m_id").value));
+                for (int k = 0; k < banks; k++)
+                {
+                    ParametersMap lmap = banks == 1 ? getSubMap(STRINGIFY(llc_controller)) : getSubMap(STRINGIFY(llc_controller), k);
+                    e.banks.push_back(std::get<int>(lmap.at("m_id").value));
+                    if (mem_net && lmap.count("mem_port_id") && std::get<int>(lmap.at("mem_port_id").value) >= 0)
+                        e.mem_ports.push_back(std::get<int>(lmap.at("mem_port_id").value));
+                    if (k == 0 && lmap.count("mem_interleave_shift")) e.mem_shift = std::get<int>(lmap.at("mem_interleave_shift").value);
+                }
+                ParametersMap core0 = getSubMap(STRINGIFY(cache_controller), 0);
+                if (core0.count("home_interleave_shift")) e.bank_shift = std::get<int>(core0.at("home_interleave_shift").value);
+                if (mem_net)
+                {
+                    e.mems = memoryIds(banks);
+                    std::vector<int> memory_side = e.mem_ports;
+                    memory_side.insert(memory_side.end(), e.mems.begin(), e.mems.end());
+                    net->setMemoryEndpoints(memory_side);
+                }
+                TLNetBoundary *tlnet = new TLNetBoundary(net, net_map, e);
+                m_tlnet = tlnet;
+                interfaceFor = [tlnet](int id) { return tlnet->getInterfaceFor(id); };
+            }
         }
         else if(interconnect_type == STRINGIFY(TileLink))
         {
@@ -180,6 +214,8 @@ namespace octopus
                 }
                 if (memory_on_tilelink)   // the bank's memory side is a TL-UH master (plan s5.3 I-B)
                     memory_side = new TLMemMaster(mem_tilelink->port(std::get<int>(lmap.at("mem_port_id").value)));
+                else if (m_tlnet)         // the same over the network (plan s5.3 I-C); the NI runs the hazard hooks
+                    memory_side = new TLMemMaster(m_tlnet->port(std::get<int>(lmap.at("mem_port_id").value)), 64, /*hazard_hooks=*/false);
                 else
                     memory_side = interfaceFor(std::get<int>(lmap.at("mem_port_id").value));
             }
@@ -215,6 +251,7 @@ namespace octopus
         for (int mem_id : memory_ids)
         {
             CommunicationInterface *mem_iface = memory_on_tilelink ? new TLMemSlave(mem_tilelink->port(mem_id))   // plan s5.3 I-B
+                                              : (memory_on_network && m_tlnet) ? new TLMemSlave(m_tlnet->port(mem_id), 64, /*hazard_hooks=*/false)   // plan s5.3 I-C
                                               : memory_on_network ? interfaceFor(mem_id) : bus->getInterfaceFor(mem_id);
             if (main_memory_type == "MCsim")
                 new MCsimInterface(mem_iface, mem_id, first_llc, num_cores, /*block_size=*/64, m_llc_period, mem_system,

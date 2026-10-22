@@ -590,7 +590,11 @@ namespace octopus { namespace net
         // the report's response-bus stamp is the copy that reaches the requester (a supply also goes
         // to the home; on a mesh the two cross different links and the home's copy may eject first);
         // memory packets stamp MEM_BUS both ways, as the point-to-point memory bus does
-        if (role != Logger::Role::RESP_BUS || pk.dst_endpoint == (int)pk.msg.owner)
+        // TileLink (docs/TileLink_Plan.md s5.3 I-A, I-C): every copy, comp (opcode << 8) | channel as a
+        // TLPort logs it, so the Logger's TileLink columns read the A, B, C, D and E legs
+        if (pk.msg.tl.channel != 0)
+            Logger::getLogger()->event(pk.msg.msg_id, role, ((uint32_t)pk.msg.tl.opcode << 8) | pk.msg.tl.channel, Logger::Phase::EXIT);
+        else if (role != Logger::Role::RESP_BUS || pk.dst_endpoint == (int)pk.msg.owner)
             Logger::getLogger()->event(pk.msg.msg_id, role, busComp(pk.msg), Logger::Phase::EXIT);
         Logger::getLogger()->trace(pk.msg, role, busComp(pk.msg), Logger::Phase::EXIT, (uint16_t)pk.dst_endpoint);
         ni->deliver(pk.cls, pk.msg);
