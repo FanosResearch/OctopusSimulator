@@ -110,7 +110,24 @@ reg_memnet() { # memory on the network (spec s25): Grid2BM on a2time01 stays byt
   if [ "$got" = "$want" ]; then pass REG-MEMNET identical identical "$(elapsed "$t0")"
   else fail REG-MEMNET "$got" "$want" "$(elapsed "$t0")"; fi
 }
-regression() { reg_bus; reg_env; reg_mesh; reg_tdm; reg_hazard; reg_memnet; }
+reg_tilelink() { # TileLink (docs/TileLink_Plan.md s6 TL-REG): TLC MESI on the crossbar with memory over TileLink, and on
+  # the network with 7 classes, a2time01: byte-identical to the references, monitor and coherence checks 0
+  local t0; t0=$(now); local ok=1 detail=""
+  local -a cfgs=("xbar|MultiCoreSystem_TileLinkM" "net|MultiCoreSystem_Grid2BMTL")
+  local c; for c in "${cfgs[@]}"; do
+    sim "$OUT/reg-tilelink/${c%%|*}" -s MultiCoreSystem_Mesh -c "${c#*|}" -p "workload_path(s)=$(W a2time01-trace)/" &
+  done; wait
+  for c in "${cfgs[@]}"; do
+    local d="$OUT/reg-tilelink/${c%%|*}" got want
+    got=$(sumdir "$d"); want=$(cat "$REF/reg-tilelink-${c%%|*}.md5" 2>/dev/null || echo missing)
+    [ "$got" = "$want" ] || { ok=0; detail="$detail ${c%%|*}:md5"; }
+    grep -q "link monitors, 0 violations" "$d/.stderr" || { ok=0; detail="$detail ${c%%|*}:monitor"; }
+    grep -q "coherence check: .* 0 violations" "$d/.stderr" || { ok=0; detail="$detail ${c%%|*}:coherence"; }
+  done
+  if [ $ok = 1 ]; then pass REG-TILELINK "identical, checks 0" "identical, checks 0" "$(elapsed "$t0")"
+  else fail REG-TILELINK "$detail" "reg-tilelink-*.md5, monitor 0, coherence 0" "$(elapsed "$t0")"; fi
+}
+regression() { reg_bus; reg_env; reg_mesh; reg_tdm; reg_hazard; reg_memnet; reg_tilelink; }
 
 make_refs() {
   mkdir -p "$REF/legacy-mesh"
@@ -121,6 +138,13 @@ make_refs() {
   mem_off_refs
   sim "$OUT/reg-memnet" -s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid2BM -p "workload_path(s)=$(W a2time01-trace)/"
   sumdir "$OUT/reg-memnet" > "$REF/reg-memnet.md5"; echo "reg-memnet $(cat "$REF/reg-memnet.md5")"
+  tilelink_refs
+}
+tilelink_refs() { # the REG-TILELINK references (run alone with: run.sh tilelink-refs)
+  local c; for c in "xbar|MultiCoreSystem_TileLinkM" "net|MultiCoreSystem_Grid2BMTL"; do
+    sim "$OUT/reg-tilelink/${c%%|*}" -s MultiCoreSystem_Mesh -c "${c#*|}" -p "workload_path(s)=$(W a2time01-trace)/"
+    sumdir "$OUT/reg-tilelink/${c%%|*}" > "$REF/reg-tilelink-${c%%|*}.md5"; echo "reg-tilelink-${c%%|*} $(cat "$REF/reg-tilelink-${c%%|*}.md5")"
+  done
 }
 
 # ---------------------------------------------------------------- unit tests by prefix
@@ -153,10 +177,11 @@ for s in "$HERE"/steps/step*.sh; do [ -f "$s" ] && source "$s"; done
 build
 case "$WHAT" in
   refs) make_refs; exit 0;;
+  tilelink-refs) tilelink_refs; exit 0;;   # only the REG-TILELINK references (make_refs regenerates them all)
   reg)  regression;;
   all)  regression; for n in 0 1 2 3 4 5 6 7 8 M2 M3 M4 M5 M6 D TL; do declare -f "step$n" > /dev/null && "step$n"; done;;
   [0-8]|M[2-7]|D|TL) regression; "step$WHAT";;
-  *) echo "usage: run.sh [step (0-8, M2..M7, D, TL)|all|reg|refs]"; exit 2;;
+  *) echo "usage: run.sh [step (0-8, M2..M7, D, TL)|all|reg|refs|tilelink-refs]"; exit 2;;
 esac
 echo "----"; echo "$FAILS failure(s); results in $RESULTS"
 [ "$FAILS" = 0 ]

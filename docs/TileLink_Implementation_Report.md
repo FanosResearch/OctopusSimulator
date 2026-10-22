@@ -215,8 +215,14 @@ D_out->D_in D_in->E; consumption order holds on both, with the Replacement cells
 self-consumed emitters. Negative: a broken class order, a too-shallow inject queue and untagged tables on a
 TileLink network are refused. `test/tilelink/run.sh net` 50/50.
 
-## Spec text pending for `docs/NoC_Architecture_Spec.md`
+## T10: documentation and the regression
 
-T9 drafted the additions for §6.3 (5 and 7 classes), §14.3 (TileLink annotations, the self-consumed
-emitters line), §15.4 (the `reserve` rows), §18 (`tl_mix`) and §4 (`memory_ids`); they are applied in
-T10 together with the user documentation.
+`SUPPORTED_CONFIGURATIONS.md` (TL-C protocols, the TileLink crossbar and network presets, the standalone
+component), `docs/NoC_Architecture_Spec.md` (5 and 7 classes, `memory_ids`, the TileLink annotations in the
+protocol check, the self-consumed emitters line, the `reserve` rows, `tl_mix`, the NI delivery hook), this
+report. Regression: `REG-TILELINK` in `test/network/run.sh reg` runs a2time01 on `MultiCoreSystem_TileLinkM`
+(crossbar, memory over TileLink) and `MultiCoreSystem_Grid2BMTL` (network, 7 classes) and requires
+byte-identical Summary / LatencyReport against `test/network/ref/reg-tilelink-{xbar,net}.md5` plus 0 monitor
+and 0 coherence violations; references regenerated alone with `run.sh tilelink-refs` (two generations
+identical). `run.sh reg` 7/7. Not done: the LaTeX manual chapter (no TeX on the build machine).
+
