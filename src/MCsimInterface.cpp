@@ -6,7 +6,9 @@
  * Created On August 4, 2022
  */
 
+#include <algorithm>
 #include <cstdlib>
+#include <cstring>
 #include "../header/MCsimInterface.h"
 #include "../header/Logger.h"
 #include "../header/MemHazard.h"
@@ -87,6 +89,15 @@ namespace octopus
         return (((high << m_ilv_shift) | low) * m_llc_line_size) | off;
     }
 
+    // A fill's block: the read index in its first 8 bytes, zeros after. Message::copy reads a whole
+    // block, so copying from the 8-byte index alone read past it (stack garbage on the wire; ASan).
+    std::vector<uint8_t> MCsimInterface::fillBytes(uint64_t index) const
+    {
+        std::vector<uint8_t> b(std::max<size_t>((size_t)m_llc_line_size, 64), 0);   // Message::copy's default size is 64
+        memcpy(b.data(), &index, sizeof(index));
+        return b;
+    }
+
     static uint64_t mcsimTraceAddr()
     {
         static uint64_t v = [](){ const char *t = getenv("OCTOPUS_TRACE_ADDR"); return t ? strtoull(t, NULL, 0) : 0ULL; }();
@@ -118,7 +129,7 @@ namespace octopus
                 Message fill(ready_msg.msg_id, ready_msg.addr, m_clk_cycle, 0, ready_msg.owner);
                 fill.to.push_back(ready_msg.from ? ready_msg.from : (uint16_t)m_llc_id);
                 fill.kind = Message::K_FILL;
-                fill.copy((uint8_t *)&data);
+                fill.copy(fillBytes(data).data());
                 m_output_buffer.push_back(fill);
             }
             else if (m_mcsim->addRequest(ready_msg.owner, mcAddr(ready_msg.addr), ready_msg.data == NULL, m_llc_line_size)) // 1 -> Read, 0 -> Write
@@ -206,7 +217,7 @@ namespace octopus
                                       m_pending_requests[i].owner); // Owner
                 msg.to.push_back(m_pending_requests[i].from ? m_pending_requests[i].from : (uint16_t)m_llc_id);   // To: the bank that asked
                 msg.kind = Message::K_FILL;
-                msg.copy((uint8_t *)&data);
+                msg.copy(fillBytes(data).data());
                 m_output_buffer.push_back(msg);
 
                 m_pending_requests.erase(m_pending_requests.begin() + i);

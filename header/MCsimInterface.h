@@ -44,6 +44,7 @@ namespace octopus
         uint64_t lineOf(uint64_t addr) const { return addr & ~uint64_t(m_llc_line_size - 1); }
         int m_ilv_bits = 0, m_ilv_shift = 0;
         uint64_t mcAddr(uint64_t addr) const;                      // the address MCsim sees
+        std::vector<uint8_t> fillBytes(uint64_t index) const;      // a fill's block
         std::map<uint64_t, std::vector<uint64_t>> m_write_orig;   // MCsim line -> original addresses of its pending writes
 
         CommunicationInterface *m_lower_interface; // toward the LLC (bus to DRAM)
