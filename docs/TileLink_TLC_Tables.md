@@ -32,7 +32,12 @@ Wood, *A Primer on Memory Consistency and Cache Coherence*, chapter 8 (directory
 1. **Decode.** A received message and the line state give one event (the decode tables in S2.2 and
    S3.2). A message the decoder cannot map is a fault at decode time, as `LLCMSIDirectory::readEvent`
    exits on an "Invalid Transaction" today; the table cells marked `Fault/` are the ones that decode
-   to a legal event name but are impossible in that state.
+   to a legal event name but are impossible in that state. Exception (T6): while the block has Probes
+   outstanding, an Acquire whose param contradicts the directory (NtoB/NtoT from a listed holder, BtoT
+   from the listed Tip) is decoded by its param, not faulted. A and C are unordered, so a master's
+   Acquire can overtake its own ProbeAck; every probing state Stalls inner A, and the message is
+   re-decoded once the ProbeAck has removed the sender (S3.2's "decode fault from a listed holder"
+   holds only with no Probe outstanding).
 2. **Stall parks the message.** A cell with `Stall` leaves the message in the controller's queue (it is
    `FRFCFS_State::NonReady`, as in `MSIDirectory::getRequestState`) and re-decodes it when the line's
    state changes. A parked message never withholds `ready` on its channel: the receive queues of plan
@@ -332,10 +337,20 @@ sibling Branches: an L1 that is the Tip has no readers above it).
 | TN_f | no | Tip being probed | possibly stale | CBOFlush: ProbeBlock toN to the owner, then write outward |
 | N_w | no | none | current, write outstanding | CBOFlush: PutFullData out, waiting AccessAck, then drop and HintAck |
 
-MSI manager: the same file with `I + AcquireBlock_NtoB` = `AddSharer/GrantData_toB/B_g` instead of
-`SetOwner/GrantData_toT/T_g` (and the same change in `I + AcquireBlock_BtoT_nonholder`); nothing else
-differs, because E is invisible to the manager (a clean Tip answers Probes with ProbeAck, a dirty one
-with ProbeAckData, in both protocols). That MSI file is written when the MSI preset is.
+MSI manager (`TLC_MSI_LLC.csv`, written in T6): this file with two cells changed and one state appended.
+Everything else is identical, because E is invisible to the manager (a clean Tip answers Probes with
+ProbeAck, a dirty one with ProbeAckData, in both protocols).
+- `I + AcquireBlock_NtoB` = `AddSharer/GrantData_toB/B_g` instead of `SetOwner/GrantData_toT/T_g`: the
+  reader becomes a Branch, not an exclusive Tip. GrantData toB meets NtoB (D7).
+- `N + AcquireBlock_NtoB` = `Get_out/NB_d` instead of `Get_out/NT_d`: `NT_d` serves NtoB and NtoT alike
+  and always grants toT, so a cold read would still reach E. `NB_d` (StateNum 26, appended last, as
+  FSMReader's row order requires) is `NT_d` row for row except `NB_d + AccessAckData` =
+  `SaveData/AddSharer/GrantData_toB/B_g`.
+- NtoT, BtoT and `BtoT_nonholder` are unchanged: they must be granted toT (D7). An earlier draft of
+  this paragraph also changed `I + AcquireBlock_BtoT_nonholder` to toB; that was wrong (a toB Grant to
+  a BtoT violates D7, and `IM_a + GrantData_toB` is a Fault at the L1).
+TL-COH-ENGINE asserts that exactly these two cells and `NB_d` differ; under MSI no L1 ever enters E
+(TL-FUZZ-C).
 
 ### 3.2 Events and their decode
 
@@ -1201,7 +1216,7 @@ H: B{A,B} + AcquireBlock_BtoT(B) -> ProbeBlock_toN_all (to A only)/BT_pu
 A: SM_a + ProbeBlock_toN -> ProbeAck_BtoN/IM_a                  (A answers although its Grant is pending)
 H: BT_pu + last_ProbeAck_toN(A) -> RemoveHolder/DecCount/SetOwner/Grant_toT/T_g   (no data: B was never probed)
 B: SM_a + Grant_toT -> Hit/GrantAck/M
-H: T_g + AcquireBlock_BtoT(A) -> Stall;  T_g + GrantAck(B) -> T
+H: T_g + AcquireBlock_BtoT_nonholder(A) -> Stall;  T_g + GrantAck(B) -> T   (A was removed by its ProbeAck BtoN)
 H: T + AcquireBlock_BtoT_nonholder(A) -> ProbeBlock_toN_owner/TT_p    (A is not listed any more)
 B: M + ProbeBlock_toN -> ProbeAckData_TtoN/I
 H: TT_p + ProbeAckData_toN -> SaveData/RemoveHolder/DecCount/SetOwner/GrantData_toT/T_g   (data: step 8)
@@ -1587,5 +1602,5 @@ the manager's pool, released at the GrantAck.
    requester could be granted toT (no copy remains). The table grants toB so that the Grant type
    depends only on the request and the stable state the Acquire was decoded in; it costs one later
    BtoT upgrade if that reader writes. A policy knob, not a correctness issue.
-8. **MSI preset.** Two manager cells differ (S3.1); the plan says "MSI as a subset" of the files, which
-   is right for the L1 and needs a second manager file or a one-line override. Not written in T5.
+8. **MSI preset.** Settled in T6: `TLC_MSI_LLC.csv`, two cells and one appended state (S3.1). The L1
+   file is shared.

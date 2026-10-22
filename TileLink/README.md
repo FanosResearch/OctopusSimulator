@@ -155,3 +155,80 @@ Reports go to `onViolation(CoherenceViolation)` (rule, cycle, block, address, de
 What it cannot show: it sees permissions as the links carry them, so a master that keeps using a copy after its ProbeAck, or writes under B, shows only through `C-VALUE`, and only for the accesses the agents report. Behind an Xbar it sees a Grant when the Xbar forwards it, after the manager issued it: a conservative view of the manager's decision, which cannot flag a legal Grant.
 
 Tests: `test/coherence` (TL-COH: the C-SWMR, C-GRANT, denied-Grant and C-VALUE cases, report and fatal modes, the attach rules, and chaining with a Monitor and a ValueCheck on one link) and `test/negc` (TL-NEG-C: the 31 TL-C mutants of `docs/TileLink_Negative_Tests.md` §4 with the doc's controls, in report and fatal modes, and the Release-vs-GrantAck cases of `docs/TileLink_TLC_Tables.md` §11 item 5).
+
+## TL-C agents and the policy engine
+
+Plan §3.5 and §3.7 (step T6). The coherence policy is a pair of FSM tables in the Octopus CSV format, `tables/TLC_MESI_L1.csv` (the L1) and `tables/TLC_MESI_LLC.csv` (the inclusive manager), justified cell by cell in `docs/TileLink_TLC_Tables.md`. `tables/TLC_MSI_LLC.csv` is the MSI manager. The library reads the tables itself and executes them; no behaviour lives outside a table cell or an engine rule listed below.
+
+| file | class | role |
+|---|---|---|
+| `coh/Table.h` | `coh::Table` | the FSM CSV reader. It reads the format exactly as Octopus's `FSMReader` does: sections `EventNum`/`ActionNum`/`StateNum`, rows and columns by position, cells `a1/a2/next`, `a/` = stay, bare `next`. Where `FSMReader` would silently misread, it refuses the table with a `ConfigError` naming the line and the row: a row out of position, an unknown name, a trailing blank line, a header column out of `EventNum` order |
+| `coh/Policy.h` | `coh::L1Policy`, `coh::ManagerPolicy` | the policy engine, pure logic: the decoders (TLC_Tables §2.2, §3.2: message + line or directory state -> event, with the param-class collapsing and the probe counter's `last_` event), the action classification and the message builders (opcode, param per TLC_Tables §6, size = block, the copied fields of §7) |
+| `agents/CacheMaster.h` | `CacheMaster` | the L1: sets x ways, LRU, a TL-C master port, a CPU side (`CpuSource`: built-in random, an Octopus trace, or a script) |
+| `agents/CoherentManager.h` | `CoherentManager` | the inclusive manager: directory, LLC copy, inner TL-C slave ports (one per master, or one behind an Xbar), outer TL-UH master port; uncached accesses (plan §8 decision 8) and CMOs (plan §3.5) |
+| `agents/TraceMaster.h` | `TraceReader`, `TraceMaster` | Octopus traces (`trace_C<n>.trc.shared`, parsed as `src/CPU.cpp` does). Mode `uncached`: the agent, Get/PutFullData on its own TL-UL/UH link. Mode `cpu`: the CacheMaster's `trace(s)` key. The CacheMaster owns the reader because a CPU side is not a TileLink link |
+
+**MSI.** `TLC_MSI_LLC.csv` is the MESI manager with two cells changed and one state appended, so that no NtoB is ever granted toT. `I + AcquireBlock_NtoB` becomes `AddSharer/GrantData_toB/B_g`. `N + AcquireBlock_NtoB` becomes `Get_out/NB_d`. The new state `NB_d` (StateNum 26, last, as the row-order rule requires) is `NT_d` except that `AccessAckData` gives `SaveData/AddSharer/GrantData_toB/B_g`. The L1 table is shared by both protocols; under MSI it never enters E (TL-FUZZ-C checks this).
+
+**Engine rules** (TLC_Tables §1.2, plus what T6 had to decide):
+1. Each received channel has its own queue, always ready outside reset.
+   - Per cycle, the first message of each queue whose cell is not `Stall` runs: at the L1, D then B; at the manager, E, outer D, C, then A. A `Stall` leaves the message parked and it is re-decoded every cycle. A parked B never blocks D, and a parked C (a Release that overtook its own GrantAck) never blocks E.
+   - At the manager, inner A keeps per-block arrival order: once a message of a block stalls or waits for a resource, later messages of that block wait too.
+2. Decode-fault deferral. "NtoB/NtoT from a listed holder" and "BtoT from the listed Tip" are faults (§3.2), except while the block has Probes outstanding. The sender's ProbeAck (C) may still be on its way while its next Acquire (A) has arrived, because A and C are not ordered. Every probing state Stalls inner A, so the message is parked and re-decoded once the ProbeAck has removed the sender.
+3. Parking and answering. An inner-A cell that does not answer its request parks it on the block. An answering action (Grant*, AccessAckData_in, Execute, ForwardIn, HintAck*) answers the consumed inner-A message if the cell consumed one, otherwise the parked request. At the L1, a CPU access that leaves a stable state is parked on the line; Hit and Error serve the CPU access the cell consumed, otherwise the parked one.
+4. Resources are reserved before the cell runs.
+   - An Acquire is popped only with a free sink on its link (2^i), held until the GrantAck.
+   - Acquire and Release sources come from separate A and C pools (2^o each); a ProbeAck copies the Probe's source.
+   - Outer requests take a source from 2^o when they leave, in order.
+   - A cell that allocates a line (I -> IS_a/IM_a at the L1, N -> NT_d at the manager) runs only with a free way. Otherwise a `Replacement` is raised on the LRU line whose Replacement cell can run, at most one eviction per set at a time at the manager.
+5. Data.
+   - A GrantData that is not denied fills the L1 line before the cell's actions run.
+   - The LLC copy exists exactly in the states whose isDataValid is 1.
+   - A `PutFullData_out` whose cell ends in a stable state (the eviction rows) is a port transaction: its AccessAck is consumed by the port (rule 7). Until that AccessAck, later outer requests to the block are held (H1).
+6. Clients. Holders are identified by source range. A link whose master is an Xbar (through pass-through adapters such as Throttle and Buffer) has one client per Xbar upstream link, at `Xbar::sourceBase`. Any other link is one client. A Probe carries the client's base source.
+7. Reports. Every performed Load and Store (the L1 Hit), and every uncached access at the cell that answers it, goes to `CoherenceCheck::of(kernel)`. A forwarded access (`N_u`) is reported at its outer response.
+8. Stalls are reported once per parked message and state through `onTransition` (`Transition::stalled`), which the directed tests use.
+
+**CacheMaster keys**:
+
+| key | default | meaning |
+|---|---|---|
+| `table(s)` | `TLC_MESI_L1.csv` via `findTable` | the L1 table |
+| `block_bytes(i)`, `sets(i)`, `ways(i)` | 64, 64, 4 | geometry |
+| `cpu(s)` | `random`, or `trace` when `trace(s)` is given | `random`, `trace`, `script` (`pushOp`, tests) or `none` |
+| `outstanding(i)` | 4 | accesses in flight; per block they run in program order |
+| `ops(i)`, `addr_base(i)`, `addr_span(i)`, `store_pct(i)`, `evict_pct(i)`, `access_bytes(i)`, `rate(i)` | 1000, 0, 4096, 30, 0, 8, 100 | the random CPU |
+| `trace(s)`, `timing(s)`, `max_gap(i)`, `max_ops(i)` | -, `asap`, 1000, 0 | the trace CPU; `timing trace` keeps the trace's cycle gaps, capped |
+| `debug(i)` | 0 | print every executed cell |
+
+**CoherentManager keys**:
+
+| key | default | meaning |
+|---|---|---|
+| `protocol(s)` | `MESI` | `MESI` or `MSI` |
+| `table(s)` | from `protocol` | overrides `protocol` |
+| `block_bytes(i)`, `sets(i)`, `ways(i)` | 64, 1024, 8 | geometry |
+| `addr_base(i)`, `addr_size(i)` | none | the region declared to the monitor |
+| `debug(i)` | 0 | print every executed cell |
+
+The default tables are found by `findTable`, in this order: `$TILELINK_TABLES`, then `TL_DEFAULT_TABLE_DIR` if compiled in, then `tables/` next to the executable or up to two levels above it, then `./tables` and `./TileLink/tables`, then the source tree (from `__FILE__`).
+
+**Hints.**
+- CacheMaster: is_master. Its latency is 4 hops, each bounded by the slowest declared latency among the non-cache agents: a Probe answered after a ReleaseAck round trip, which the manager may hold until a GrantAck.
+- CoherentManager: latency of 8 such hops (one transaction, its eviction write included), queue 4 per client.
+
+**Systems.** `configs/system3_tlc.csv` is 4 CacheMasters (random), an Xbar, a CoherentManager (8 sets x 2 ways, so it evicts with holders inside) and a RamSlave. `configs/system4_trace.csv` extends it with the EEMBC a2time01 traces, one per core; the paths are relative to `TileLink/` and every link has `a(i)=48` for the traces' 47-bit addresses. Both run clean in `tlsim` with the Monitor on every link.
+
+**Tests.**
+
+| test | contents |
+|---|---|
+| `test/coh` (TL-COH-ENGINE) | the reader, including every cell of the three tables against the doc's cell list and the MSI diff; the decoders and builders |
+| `test/flows` (TL-FLOWS) | Figures 29 (both charts) and 30, and a Release overtaking its own GrantAck, as directed races. A `Gate` holds one channel of one link (`FlowTest.h`) and every chart line is asserted in order |
+| `test/uncached` (TL-UNCACHED) | an uncached FuzzMaster beside 2 and 4 CacheMasters; no holder is left when an uncached write is performed; the decision-8 directed cases |
+| `test/cmo` (TL-CMO) | the three CBOs x 1-3 holders x clean/dirty, racing Acquire and Release, denied outer write |
+| `test/fuzzc` (TL-FUZZ-C) | 2/4/8 masters, MESI and MSI, direct and through an Xbar, 10 seeds each |
+| `test/tlcsys` (TL-SYS-C) | systems 3 and 4 through `Kernel::build` |
+| `test/denyc` (TL-DENY-C) | an ErrorSlave behind the manager and behind an outer Xbar |
+
+`test/fixtures/TlcSystem.h` builds the fuzz systems: Throttles everywhere, a Monitor on every link, CoherenceCheck, ValueCheck on the outer link, GraphCheck, and the watchdog at its default bound.

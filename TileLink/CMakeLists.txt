@@ -18,6 +18,8 @@ option(TILELINK_BUILD_TESTS "Build the TileLink unit tests" ON)
 file(GLOB_RECURSE TL_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 add_library(tilelink STATIC ${TL_SOURCES})
 target_include_directories(tilelink PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+# the TL-C tables (CacheMaster, CoherentManager): found here first, then $TILELINK_TABLES, then near the executable
+target_compile_definitions(tilelink PRIVATE TL_DEFAULT_TABLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tables")
 target_compile_options(tilelink PRIVATE -Wall -Wextra)
 set_target_properties(tilelink PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
