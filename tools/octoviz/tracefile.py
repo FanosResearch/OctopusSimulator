@@ -23,7 +23,8 @@ KIND = ["UNKNOWN", "DEMAND", "GETS", "GETM", "PUTM", "INV", "MEM_READ", "EVICT",
         "PUTS", "FWD", "ACK",   # 16-18: directory protocols (PutS, FwdGetS/FwdGetM, InvAck/PutAck)
         "MEM_WACK",             # 19: memory's acknowledgement of an accepted write (msg_id 0)
         "PUTE",                 # 20: directory MESI/MOESI L1 PutE
-        "PUTO"]                 # 21: directory MOESI owner's PutO with data
+        "PUTO",                 # 21: directory MOESI owner's PutO with data
+        "GRANT_ACK"]            # 22: TileLink TL-C GrantAck (channel E)
 ACTION = {0: "REMOVE_PENDING", 1: "HIT_Action", 2: "ADD_PENDING", 3: "SEND_BUS_MSG", 4: "WRITE_BACK", 5: "UPDATE_CACHE_LINE",
           6: "WRITE_CACHE_LINE_DATA", 7: "MODIFY_DATA"}   # ControllerAction::Type ordinals used in ARRAY flags
 

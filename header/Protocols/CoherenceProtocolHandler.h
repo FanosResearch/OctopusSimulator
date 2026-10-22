@@ -60,7 +60,11 @@ namespace octopus
         // kind -1 = not an interconnect message (the CPU, the memory, the controller itself).
         // Returning false = the name is unknown to this protocol (the check reports it).
         // memory: travels between the home and a memory controller; on the network only with memory_on_network (spec s25.3)
-        struct MsgClass { int kind = -1; bool data = false; bool from_home = false; bool memory = false; };
+        // tl_channel: a TileLink protocol's channel, 1..5 = A..E (docs/TileLink_Plan.md s5.2); 0 = not TileLink.
+        // With memory set it is the LLC's outer (memory-side) link, otherwise the inner L1<->LLC link.
+        // count: messages of this shape one action emits; -1 = one per holder of the line (a probe fan-out)
+        struct MsgClass { int kind = -1; bool data = false; bool from_home = false; bool memory = false;
+                          int tl_channel = 0; int count = 1; };
         virtual bool consumedBy(const std::string &event, MsgClass &out) const { (void)event; (void)out; return false; }
         virtual bool emittedBy(const std::string &action, std::vector<MsgClass> &out) const { (void)action; (void)out; return false; }
         virtual bool hasClassAnnotation() const { return false; }

@@ -58,8 +58,21 @@ public:
                           // directory MESI/MOESI: an L1's PutE (clean exclusive copy dropped, no data)
                           K_PUTE,
                           // directory MOESI: an O owner's PutO with its data
-                          K_PUTO };
+                          K_PUTO,
+                          // TileLink TL-C: the requester's GrantAck on channel E (docs/TileLink_Plan.md s5.1)
+                          K_GRANT_ACK };
     uint8_t kind = K_UNKNOWN;
+
+    // TileLink header (docs/TileLink_Plan.md s5.2). Set only by the TileLink protocol handlers and
+    // interconnect; tl_channel 0 means "not a TileLink message" and every other field is then
+    // meaningless. No existing decoder reads it. Channels 1..5 are A..E (TileLink priority order).
+    struct TLHeader
+    {
+        uint8_t  channel = 0;      // 0 = none, 1 = A, 2 = B, 3 = C, 4 = D, 5 = E
+        uint8_t  opcode = 0, param = 0, size = 0;
+        bool     denied = false;
+        uint32_t source = 0, sink = 0;
+    } tl;
 
     Message(uint64_t msg_id = 0, uint64_t addr = 0, uint64_t cycle = 0, uint64_t complementary_value = 0, uint16_t owner = 0)
     {
@@ -99,6 +112,7 @@ public:
         to = M2.to;
         data_size = M2.data_size;
         kind = M2.kind;
+        tl = M2.tl;
 
         if (M2.data != NULL)
             this->copy(M2.data, M2.data_size);
@@ -190,6 +204,13 @@ public:
     // excludes reservations held by others. Unbounded interfaces ignore both.
     virtual void txReserve(MessageType type, int n) { (void)type; (void)n; }
     virtual void txRelease(MessageType type, int n) { (void)type; (void)n; }
+    // The same per TileLink channel (Message::tl.channel, 1..5 = A..E; docs/TileLink_Plan.md s5.2): the
+    // admission contract of the TileLink protocols counts slots per channel. Interfaces that carry
+    // TileLink (TLPort, the Network with 5/7 classes) override these; the default is unbounded, so the
+    // three-queue interconnects never see them.
+    virtual int  txFreeSlotsCh(int tl_channel) { (void)tl_channel; return 1 << 30; }
+    virtual void txReserveCh(int tl_channel, int n) { (void)tl_channel; (void)n; }
+    virtual void txReleaseCh(int tl_channel, int n) { (void)tl_channel; (void)n; }
 
     virtual bool rollback(uint64_t address, uint64_t mask, Message *out_msg) { return false; }
     
