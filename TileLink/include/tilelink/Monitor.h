@@ -133,7 +133,13 @@ namespace octopus { namespace tl
         static uint64_t totalViolations(const std::vector<std::unique_ptr<Monitor>> &ms);
 
         // Permission the monitor tracks for a block (TL-C, M-PERM): 'N', 'B' or 'T'.
-        char perm(uint64_t address) const;
+        char perm(uint64_t address) const;                     // the link's only client (a leaf master)
+        char perm(uint64_t address, uint64_t source) const;    // the client that owns `source`
+        // The client (caching master) a source on this link belongs to (§9.2's limits are per master):
+        // traced upstream through an Xbar by its source ranges (§6.4) and through single-upstream
+        // pass-through agents (Buffer, Throttle, WidthWidget) unchanged, down to a leaf master; its
+        // agent id. A link whose master is a leaf has one client.
+        uint64_t client(uint64_t source) const;
 
         // M-LEVEL-4 (§3.4-§3.7, Table 1): a beat driven on B, C or E of a TL-UL/UH link. The link
         // has no ChannelState for it, so no hook can see it; an agent that models that wire (the
@@ -157,7 +163,7 @@ namespace octopus { namespace tl
             uint64_t t_accept = 0, t_offer = 0;
             bool     resp_offered = false;   // a response beat 0 was offered (M-BURST-5 vs M-RESP-7)
         };
-        struct Pend                // per-block pending sets (TL-C, M-CONC)
+        struct Pend                // per-block pending sets (TL-C, M-CONC); master-side entries are filtered by client()
         {
             std::map<uint64_t, uint8_t> acq, acc, rel, probe;   // source -> opcode
             std::map<uint64_t, uint8_t> gack;                   // sink -> opcode
@@ -199,7 +205,9 @@ namespace octopus { namespace tl
         std::string msgText(const Msg *m, unsigned beat) const;
         std::vector<uint64_t> blockSet(uint64_t address, unsigned size) const;
         Pend &pend(uint64_t block) { return m_pend[block]; }
-        char &permOf(uint64_t block);
+        char &permOf(uint64_t block, uint64_t client);
+        // the first pending entry of `set` that belongs to `cl`, or end()
+        std::map<uint64_t, uint8_t>::const_iterator ofClient(const std::map<uint64_t, uint8_t> &set, uint64_t cl) const;
         static bool isResponseOpcode(Channel ch, unsigned op);
         // A message's identity for the per-message tables: Msg::id, or its address if unset.
         static uint64_t key(const Msg &m) { return m.id ? m.id : uint64_t(reinterpret_cast<uintptr_t>(&m)); }
@@ -218,7 +226,23 @@ namespace octopus { namespace tl
         std::map<uint64_t, std::deque<Out>> m_outB;                     // address -> entries (source inside)
         std::map<uint64_t, std::pair<Out, uint64_t>> m_retracted;       // msg key -> (what, cycle retracted)
         std::map<uint64_t, uint64_t> m_first_offer;                     // msg key -> cycle of beat 0 offer here
-        std::map<uint64_t, char> m_perm;                                // block -> N/B/T
+        std::map<std::pair<uint64_t, uint64_t>, char> m_perm;           // (block, client) -> N/B/T
+        mutable std::map<uint64_t, uint64_t> m_client;                  // source -> client (cache)
+        // (block, client) -> the target permission of a ProbeAck[Data]/Release[Data] whose beat 0 is
+        // offered and not yet accepted. The master holds that permission from the moment it offers
+        // (§5.1: it is presented and must eventually be accepted), and A is independent of C, so its
+        // next Acquire can reach the link first; M-PERM-1 checks against it. Committed into m_perm at
+        // the beat-0 accept (M-PERM-2 checks the committed value first).
+        std::map<std::pair<uint64_t, uint64_t>, char> m_prune;
+        static char pruneTarget(unsigned param) { return param == 0 || param == 4 ? 'B' : param == 3 ? 'T' : 'N'; }
+        char heldPerm(uint64_t block, uint64_t client);
+        unsigned lgBlock() const;   // log2(block_bytes)
+        // (block, client) -> the highest permission the master held since its last Grant or ReleaseAck
+        // on the block. Permissions only fall between those points, and §9.2 (one Acquire per block;
+        // no Acquire while a Release is pending) puts a pending Acquire's issue after them, so its
+        // `from` lies between the tracked permission and this one: an Acquire may be overtaken on any
+        // link downstream of the master by a later ProbeAck (Figure 29) or C burst (A, C independent).
+        std::map<std::pair<uint64_t, uint64_t>, char> m_since;
         std::map<uint64_t, Pend> m_pend;
         std::set<std::tuple<std::string, uint64_t, unsigned, int>> m_reported;   // (rule, msg key, beat, ch)
         // the hooks found on the channels at attach time (another observer's, e.g. ValueCheck):

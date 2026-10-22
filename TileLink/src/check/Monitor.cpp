@@ -4,6 +4,7 @@
  * catalogue id and spec section at the check. See Monitor.h for the rule table and the order.
  */
 #include "tilelink/Monitor.h"
+#include "tilelink/agents/Xbar.h"
 #include <algorithm>
 #include <cstdio>
 #include <sstream>
@@ -154,18 +155,70 @@ namespace octopus { namespace tl
         return v;
     }
 
-    char &Monitor::permOf(uint64_t block)
+    char &Monitor::permOf(uint64_t block, uint64_t cl)
     {
-        auto it = m_perm.find(block);
-        if (it == m_perm.end()) it = m_perm.emplace(block, 'N').first;   // N at reset (catalogue §12)
+        auto it = m_perm.find({block, cl});
+        if (it == m_perm.end()) it = m_perm.emplace(std::make_pair(block, cl), 'N').first;   // N at reset (catalogue §12)
         return it->second;
     }
-    char Monitor::perm(uint64_t address) const
+    unsigned Monitor::lgBlock() const
     {
         unsigned lg = 0;
         while ((1ull << lg) < m_o.block_bytes) lg++;
-        auto it = m_perm.find(address >> lg);
+        return lg;
+    }
+    char Monitor::heldPerm(uint64_t block, uint64_t cl)
+    {
+        auto it = m_prune.find({block, cl});
+        return it != m_prune.end() ? it->second : permOf(block, cl);
+    }
+    char Monitor::perm(uint64_t address) const { return perm(address, 0); }
+    char Monitor::perm(uint64_t address, uint64_t source) const
+    {
+        unsigned lg = 0;
+        while ((1ull << lg) < m_o.block_bytes) lg++;
+        auto it = m_perm.find({address >> lg, client(source)});
         return it == m_perm.end() ? 'N' : it->second;
+    }
+
+    uint64_t Monitor::client(uint64_t source) const
+    {
+        auto c = m_client.find(source);
+        if (c != m_client.end()) return c->second;
+        // §9.2's concurrency limits bind each master; a link behind an Xbar carries several. Trace the
+        // source upstream to the leaf master that owns it (the topology is fixed after elaboration).
+        const Link *l = &m_l;
+        uint64_t s = source, result = 0;
+        for (int depth = 0; depth < 64; depth++)
+        {
+            const Agent *m = l->master();
+            std::vector<const Link *> ups;
+            for (auto &lr : m->links()) if (lr.role == Role::Slave) ups.push_back(lr.link);
+            result = m->id();
+            if (ups.empty()) break;                                    // a leaf master
+            if (auto *x = dynamic_cast<const Xbar *>(m))
+            {
+                const Link *hit = nullptr; uint64_t base = 0;
+                for (const Link *u : ups)
+                {
+                    uint64_t b = x->sourceBase(*u), n = u->params().numSources();
+                    if (s >= b && s - b < n) { hit = u; base = b; break; }
+                }
+                if (!hit) break;                                       // outside every range: the Xbar itself
+                l = hit; s -= base;                                    // §6.4: the upstream link's own namespace
+                continue;
+            }
+            if (ups.size() == 1) { l = ups[0]; continue; }             // a pass-through adapter: same source
+            break;                                                     // an agent of another kind: one master
+        }
+        m_client[source] = result;
+        return result;
+    }
+
+    std::map<uint64_t, uint8_t>::const_iterator Monitor::ofClient(const std::map<uint64_t, uint8_t> &set, uint64_t cl) const
+    {
+        for (auto it = set.begin(); it != set.end(); ++it) if (client(it->first) == cl) return it;
+        return set.end();
     }
 
     bool Monitor::isResponseOpcode(Channel ch, unsigned op)
@@ -247,6 +300,10 @@ namespace octopus { namespace tl
         checkStatic(ch, m, b.index, cycle);
         checkBurstOffer(ch, m, b.index, cycle);
         trackRetraction(ch, b.msg, b.index, cycle);
+        // A ProbeAck[Data] (4, 5) or Release[Data] (6, 7) offered: the master already holds the pruned
+        // permission (see m_prune). A re-offer after a retraction overwrites it with the latest param.
+        if (b.index == 0 && ch == Channel::C && m_p.level == Level::C && m.opcode >= 4 && m.param <= 5)
+            for (uint64_t blk : blockSet(m.address, m.size)) m_prune[{blk, client(m.source)}] = pruneTarget(m.param);
         // M-BURST-5 / M-RESP-7 bookkeeping: a response beat 0 offered marks its request.
         if (b.index == 0 && isResponseOpcode(ch, m.opcode))
         {
@@ -517,38 +574,59 @@ namespace octopus { namespace tl
             {
                 const bool acquire = op == 6 || op == 7;
                 const bool access = op <= 4;   // Get, Put*, Atomics (Intent is not in the §9.2 list)
+                const uint64_t cl = client(m.source);   // §9.2 binds each master: this request's
                 for (uint64_t blk : blockSet(m.address, m.size))
                 {
                     Pend &p = pend(blk);
+                    auto acq = ofClient(p.acq, cl), acc = ofClient(p.acc, cl), rel = ofClient(p.rel, cl);
                     if (acquire)
                     {
                         // M-CONC-1, §9.2 Acquire "should not issue an Acquire if there is a pending Grant, GrantData"; plan §1.4 one Acquire per block
-                        if (!p.acq.empty() && !m_o.allow_acquire_under_acquire)
+                        if (acq != p.acq.end() && !m_o.allow_acquire_under_acquire)
                             report("M-CONC-1", "§9.2", ch, &m, 0, cycle, "Acquire on block " + hex(blk) + " while Acquire src " +
-                                   std::to_string(p.acq.begin()->first) + " pending (Grant outstanding)");
+                                   std::to_string(acq->first) + " pending (Grant outstanding)");
                         // M-CONC-2, §9.2 Acquire "... AccessAck, or AccessAckData on the block"
-                        if (!p.acc.empty())
+                        if (acc != p.acc.end())
                             report("M-CONC-2", "§9.2", ch, &m, 0, cycle, "Acquire on block " + hex(blk) + " while " +
-                                   opcodeName(Channel::A, p.acc.begin()->second) + " src " + std::to_string(p.acc.begin()->first) + " pending");
+                                   opcodeName(Channel::A, acc->second) + " src " + std::to_string(acc->first) + " pending");
                     }
                     else if (access)
                     {
                         // M-CONC-3, §9.2 Acquire "the master should not issue an Acquire, Get, Put, ArithmeticData, or LogicalData on that block until it receives a Grant"
-                        if (!p.acq.empty())
+                        if (acq != p.acq.end())
                             report("M-CONC-3", "§9.2", ch, &m, 0, cycle, opn + " on block " + hex(blk) + " while Acquire src " +
-                                   std::to_string(p.acq.begin()->first) + " pending");
+                                   std::to_string(acq->first) + " pending");
                     }
                     // M-CONC-6, §9.2 Release "... Acquire, Get, Put, ArithmeticData, LogicalData, or further Release on the block until it receives a ReleaseAck"
-                    if ((acquire || access) && !p.rel.empty())
+                    if ((acquire || access) && rel != p.rel.end())
                         report("M-CONC-6", "§9.2", ch, &m, 0, cycle, opn + " on block " + hex(blk) + " while Release src " +
-                               std::to_string(p.rel.begin()->first) + " pending");
+                               std::to_string(rel->first) + " pending");
                     if (acquire)
                     {
                         // M-PERM-1, §9.1.4 Grow "notes both the previous permissions and the new"; §9.3.1, §9.3.2
-                        char P = permOf(blk);
+                        char P = heldPerm(blk, cl);
                         char from = m.param == unsigned(Grow::BtoT) ? 'B' : 'N';
                         static const char *grow[3] = {"NtoB", "NtoT", "BtoT"};
-                        if (P != from)
+                        // A Probe to this master on this block still outstanding: the master may have
+                        // answered it internally (its permission at or below both P and the probe's cap)
+                        // while its ProbeAck is not yet on C. A and C are independent and §9.2 orders
+                        // no ProbeAck before a later Acquire, so such an Acquire is legal; its `from`
+                        // must still not exceed what the master could hold.
+                        auto rank = [](char x) { return x == 'T' ? 2 : x == 'B' ? 1 : 0; };
+                        bool probed_ok = false;
+                        auto ob = m_outB.find(blk << lgBlock());
+                        if (P != from && ob != m_outB.end())
+                            for (auto &o : ob->second)
+                                if ((o.opcode == 6 || o.opcode == 7) && o.param <= 2 && client(o.source) == cl)
+                                {
+                                    int cap = o.param == unsigned(Cap::toT) ? 2 : o.param == unsigned(Cap::toB) ? 1 : 0;
+                                    if (rank(from) <= std::min(rank(P), cap)) probed_ok = true;
+                                }
+                        // Overtaken (Figure 29): issued at a permission held since the last Grant/ReleaseAck.
+                        auto sc = m_since.find({blk, cl});
+                        char S = sc == m_since.end() ? P : sc->second;
+                        bool overtaken_ok = rank(from) >= rank(P) && rank(from) <= rank(S);
+                        if (P != from && !probed_ok && !overtaken_ok)
                             report("M-PERM-1", "§9.1.4, §9.3.1, §9.3.2", ch, &m, 0, cycle, std::string("Acquire ") + (m.param <= 2 ? grow[m.param] : "?") +
                                    " from tracked permission " + P + " on block " + hex(blk));
                     }
@@ -575,10 +653,12 @@ namespace octopus { namespace tl
                     if (!p.gack.empty())
                         report("M-CONC-8", "§9.2", ch, &m, 0, cycle, "Probe on block " + hex(blk) + " while Grant sink " +
                                std::to_string(p.gack.begin()->first) + " awaits GrantAck");
-                    // M-CONC-9, §9.2 Probe "should not issue further Probes on that block until it receives a ProbeAck or ProbeAckData"
-                    if (!p.probe.empty())
+                    // M-CONC-9, §9.2 Probe "should not issue further Probes on that block until it receives a ProbeAck or ProbeAckData":
+                    // per master (plan §1.4); probing several masters of one block at once is legal (§6.4 B relaxation)
+                    auto pr = ofClient(p.probe, client(m.source));
+                    if (pr != p.probe.end())
                         report("M-CONC-9", "§9.2", ch, &m, 0, cycle, "second Probe on block " + hex(blk) + " while Probe src " +
-                               std::to_string(p.probe.begin()->first) + " pending");
+                               std::to_string(pr->first) + " pending");
                     p.probe[m.source] = uint8_t(op);
                 }
             dq.push_back(e);
@@ -590,27 +670,30 @@ namespace octopus { namespace tl
             if (findC(m.source))
                 report("M-ID-2", "§6.4", ch, &m, 0, cycle, "C source " + std::to_string(m.source) + " reused while outstanding");
             m_outC[m.source].push_back(e);
+            const uint64_t cl = client(m.source);
             for (uint64_t blk : blockSet(m.address, m.size))
             {
                 Pend &p = pend(blk);
+                auto acq = ofClient(p.acq, cl), acc = ofClient(p.acc, cl), rel = ofClient(p.rel, cl);
                 // M-CONC-4, §9.2 Release "should not issue a Release if there is a pending Grant, GrantData, AccessAck, or AccessAckData on the block"
-                if (!p.acq.empty())
-                    report("M-CONC-4", "§9.2", ch, &m, 0, cycle, "Release on block " + hex(blk) + " while " + opcodeName(Channel::A, p.acq.begin()->second) +
-                           " src " + std::to_string(p.acq.begin()->first) + " pending");
-                else if (!p.acc.empty())
-                    report("M-CONC-4", "§9.2", ch, &m, 0, cycle, "Release on block " + hex(blk) + " while " + opcodeName(Channel::A, p.acc.begin()->second) +
-                           " src " + std::to_string(p.acc.begin()->first) + " pending");
+                if (acq != p.acq.end())
+                    report("M-CONC-4", "§9.2", ch, &m, 0, cycle, "Release on block " + hex(blk) + " while " + opcodeName(Channel::A, acq->second) +
+                           " src " + std::to_string(acq->first) + " pending");
+                else if (acc != p.acc.end())
+                    report("M-CONC-4", "§9.2", ch, &m, 0, cycle, "Release on block " + hex(blk) + " while " + opcodeName(Channel::A, acc->second) +
+                           " src " + std::to_string(acc->first) + " pending");
                 // M-CONC-6, §9.2 Release "... further Release on the block until it receives a ReleaseAck"
-                if (!p.rel.empty())
+                if (rel != p.rel.end())
                     report("M-CONC-6", "§9.2", ch, &m, 0, cycle, opn + " on block " + hex(blk) + " while Release src " +
-                           std::to_string(p.rel.begin()->first) + " pending");
+                           std::to_string(rel->first) + " pending");
                 // M-PERM-2, §9.1.4 Prune/Report "notes both the previous permissions and the new, lesser permissions"; §9.3.10, §9.3.11
-                char P = permOf(blk);
+                char P = permOf(blk, cl);
                 static const char *pr[6] = {"TtoB", "TtoN", "BtoN", "TtoT", "BtoB", "NtoN"};
                 char from = m.param <= 1 || m.param == 3 ? 'T' : m.param == 2 || m.param == 4 ? 'B' : 'N';
                 if (m.param <= 5 && P != from)
                     report("M-PERM-2", "§9.1.4, §9.3.10, §9.3.11", ch, &m, 0, cycle, opn + " " + pr[m.param] + " from tracked permission " + P +
                            " on block " + hex(blk));
+                if (m.param <= 5) { permOf(blk, cl) = pruneTarget(m.param); m_prune.erase({blk, cl}); }   // committed at beat 0
                 p.rel[m.source] = uint8_t(op);
             }
         }
@@ -671,11 +754,17 @@ namespace octopus { namespace tl
                 return;
             }
             table = 2;
-            for (auto &o : it->second)
-            {
-                for (auto &r : responseOf(Channel::B, o.opcode)) if (r.ch == Channel::C && r.opcode == op) { req = &o; break; }
-                if (req) break;
-            }
+            // §6.4: on B the pair (source, address) is unique and c_source "may be any b_source associated
+            // with the sender": with several masters behind an Xbar the answer belongs to the Probe of the
+            // same address sent to the same master (client). One client: the oldest at the address.
+            const uint64_t ccl = client(m.source);
+            for (int pass = 0; pass < 2 && !req; pass++)
+                for (auto &o : it->second)
+                {
+                    if (pass == 0 && client(o.source) != ccl) continue;
+                    for (auto &r : responseOf(Channel::B, o.opcode)) if (r.ch == Channel::C && r.opcode == op) { req = &o; break; }
+                    if (req) break;
+                }
             if (!req)
             {   // M-RESP-4, Tables 12, 13, 30: the C response opcode is allowed for the matched B request
                 req = &it->second.front();
@@ -726,13 +815,16 @@ namespace octopus { namespace tl
         {
             static const char *pr[6] = {"TtoB", "TtoN", "BtoN", "TtoT", "BtoB", "NtoN"};
             static const char *capn[3] = {"toT", "toB", "toN"};
+            // the answering master: the Probe's target (b_source routes it, Table 14); c_source "may be any of the sender's" (§6.4)
+            const uint64_t pcl = client(req->source);
             for (uint64_t blk : blockSet(m.address, m.size))
             {
                 Pend &p = pend(blk);
                 // M-CONC-5, §9.2 Release "the master should not issue a ProbeAck, ProbeAckData ... on the block until it receives a ReleaseAck"
-                if (!p.rel.empty())
+                auto rel = ofClient(p.rel, pcl);
+                if (rel != p.rel.end())
                     report("M-CONC-5", "§9.2", ch, &m, 0, cycle, "ProbeAck on block " + hex(blk) + " while Release src " +
-                           std::to_string(p.rel.begin()->first) + " pending (ReleaseAck outstanding)");
+                           std::to_string(rel->first) + " pending (ReleaseAck outstanding)");
             }
             // M-CONC-11, §9.2 "a master should only issue a ProbeAckData.TtoT if C channel messages are kept in order ... for a given cacheline address"
             if (op == 5 && m.param == unsigned(Report::TtoT) && !m_o.c_ordered)
@@ -740,11 +832,12 @@ namespace octopus { namespace tl
             for (uint64_t blk : blockSet(m.address, m.size))
             {
                 // M-PERM-2, §9.1.4, §9.3.5, §9.3.6: the ProbeAck param starts from the tracked permission
-                char P = permOf(blk);
+                char P = permOf(blk, pcl);
                 char from = m.param <= 1 || m.param == 3 ? 'T' : m.param == 2 || m.param == 4 ? 'B' : 'N';
                 if (m.param <= 5 && P != from)
                     report("M-PERM-2", "§9.1.4, §9.3.5, §9.3.6", ch, &m, 0, cycle, opn + " " + pr[m.param] + " from tracked permission " + P +
                            " on block " + hex(blk));
+                if (m.param <= 5) { permOf(blk, pcl) = pruneTarget(m.param); m_prune.erase({blk, client(m.source)}); }   // committed at beat 0
             }
             // M-PERM-3, §9.3.3, §9.3.4 Cap "what they should become"; §4.4: the answer satisfies the Probe's cap
             if (m.param <= 5 && req->param <= 2)
@@ -787,7 +880,11 @@ namespace octopus { namespace tl
                 {
                     Pend &p = pend(blk);
                     if (req.ch == Channel::A) { p.acq.erase(req.source); p.acc.erase(req.source); }
-                    else if (req.ch == Channel::C) p.rel.erase(req.source);
+                    else if (req.ch == Channel::C)
+                    {
+                        p.rel.erase(req.source);
+                        m_since[{blk, client(req.source)}] = permOf(blk, client(req.source));   // ReleaseAck: the window restarts
+                    }
                     else if (req.ch == Channel::B) p.probe.erase(req.source);
                     else if (req.ch == Channel::D) p.gack.erase(req.sink);
                     if (p.empty()) m_pend.erase(blk);
@@ -797,22 +894,18 @@ namespace octopus { namespace tl
                 {
                     // Grant/GrantData denied LOW: toB -> B, toT -> T. Denied HIGH: unchanged
                     // (M-ERR-3, §4.4 "no effect on the permissions"; §9.3.7, §9.3.8 "d_param should be ignored").
-                    if (!m.denied) for (uint64_t blk : blockSet(req.address, req.size)) permOf(blk) = m.param == unsigned(Cap::toT) ? 'T' : 'B';
+                    if (!m.denied) for (uint64_t blk : blockSet(req.address, req.size))
+                    {
+                        char g = m.param == unsigned(Cap::toT) ? 'T' : 'B';
+                        permOf(blk, client(req.source)) = g;
+                        m_since[{blk, client(req.source)}] = g;   // the window of plan-M-PERM-1 restarts here
+                    }
                 }
-                else if (ch == Channel::C && (op == 4 || op == 5))
-                {
-                    // ProbeAck/ProbeAckData XtoY -> Y
-                    if (m.param <= 5) for (uint64_t blk : blockSet(m.address, m.size))
-                        permOf(blk) = m.param == 0 || m.param == 4 ? 'B' : m.param == 3 ? 'T' : 'N';
-                }
+                // ProbeAck/ProbeAckData XtoY -> Y is committed at the first beat's accept (acceptResponseFirst)
             }
             cv.resp_active = false;
         }
-        if (m_p.level == Level::C && ch == Channel::C && (op == 6 || op == 7) && m.param <= 5)
-        {
-            // Release/ReleaseData XtoY -> Y (catalogue §12), at the last beat of the Release
-            for (uint64_t blk : blockSet(m.address, m.size)) permOf(blk) = m.param == 0 || m.param == 4 ? 'B' : m.param == 3 ? 'T' : 'N';
-        }
+        // Release/ReleaseData XtoY -> Y (catalogue §12) is committed at the first beat's accept (acceptRequestFirst)
     }
 
     // ------------------------------------------------------------------ end of run
