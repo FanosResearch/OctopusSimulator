@@ -17,6 +17,17 @@ namespace octopus { namespace tl
         m_rng.seed(seq);
     }
 
+    ProgressHints Agent::hints() const
+    {
+        // Plan §3.6: an originator is a master somewhere and a slave nowhere; adapters and
+        // slaves do not count as masters in the default formula.
+        ProgressHints h;
+        bool master = false, slave = false;
+        for (auto &lr : m_links) (lr.role == Role::Master ? master : slave) = true;
+        h.is_master = master && !slave;
+        return h;
+    }
+
     std::unique_ptr<Agent> AgentRegistry::make(const std::string &type, const std::string &name, const Config &params) const
     {
         auto it = m_types.find(type);

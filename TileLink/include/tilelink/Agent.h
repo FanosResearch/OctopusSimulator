@@ -29,6 +29,16 @@ namespace octopus { namespace tl
         Role  role;
     };
 
+    // Plan §3.6: what an agent declares for the watchdog's default progress_bound formula
+    // (slowest slave latency + deepest queue + largest burst, times the number of masters).
+    // The defaults make the formula finite for an agent that declares nothing.
+    struct ProgressHints
+    {
+        uint64_t latency     = 1;      // cycles from a received request to its response, worst case
+        uint64_t queue_depth = 1;      // beats or requests the agent can hold ahead of one
+        bool     is_master   = false;  // counts in "the number of masters" (an originator of requests)
+    };
+
     class Agent
     {
     public:
@@ -57,6 +67,20 @@ namespace octopus { namespace tl
         // runUntilIdle stops when no channel is valid and every agent reports idle.
         virtual bool idle() const { return true; }
 
+        // Plan §3.6: the values the watchdog's default progress_bound formula is computed
+        // from. Default: latency 1, queue 1, and is_master iff the agent is a master on some
+        // link and a slave on none (an originator, not an adapter). Agents with a real
+        // latency or queue (RamSlave, Buffer, Xbar) override it; called at elaboration.
+        virtual ProgressHints hints() const;
+
+        // §5.1 (the DMA example): an agent whose links are driven by independent state
+        // machines may declare groups of its links as separate agents for rule 1; GraphCheck
+        // then splits the vertex. Each group is a set of link names; a link in no group stays
+        // with the agent's own vertex. Default: the groups set by setDecoupledGroups (from
+        // `agent[k].decoupled_groups(s)`, "L1+L2;L3"), none unless set.
+        virtual std::vector<std::vector<std::string>> decoupledGroups() const { return m_decoupled; }
+        void setDecoupledGroups(const std::vector<std::vector<std::string>> &g) { m_decoupled = g; }
+
         // Plan §3.2: all randomness comes from one seeded RNG per agent.
         std::mt19937_64 &rng() { return m_rng; }
 
@@ -69,6 +93,7 @@ namespace octopus { namespace tl
         int m_id = -1;
         Kernel *m_kernel = nullptr;
         std::vector<LinkRole> m_links;
+        std::vector<std::vector<std::string>> m_decoupled;
         std::mt19937_64 m_rng;
     };
 

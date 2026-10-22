@@ -35,6 +35,21 @@ namespace octopus { namespace tl
         DataMode data_mode = DataMode::None;
     };
 
+    // A system-level checker (plan §3.6: GraphCheck, Watchdog, later CoherenceCheck) hooked to
+    // the kernel. It only observes: the agents, links and channels are read through the
+    // kernel, never driven. onElaborate runs inside elaborate(), after the link and capability
+    // checks and before the agents are reset; a ConfigError thrown there is fatal (exit 2).
+    // onCycleEnd runs at the end of every step(), after the agents' commit, while the
+    // channels still show the cycle's valid, ready and accepted beat.
+    class Observer
+    {
+    public:
+        virtual ~Observer() {}
+        virtual const char *name() const = 0;
+        virtual void onElaborate(Kernel &) {}
+        virtual void onCycleEnd(Kernel &, uint64_t cycle) { (void)cycle; }
+    };
+
     class Kernel
     {
     public:
@@ -44,11 +59,20 @@ namespace octopus { namespace tl
         // ---- construction (before the first step)
         Agent &add(std::unique_ptr<Agent> a);                 // evaluation order = insertion order
         Link  &connect(const std::string &name, const LinkParams &p, Agent &master, Agent &slave);
-        // Plan §4: builds agents (`agent[k].type/name`) and links (`link[k].master/slave/w/a/z/
-        // o/i/level/name`) from a config; reads reset_cycles, seed and data_mode if present.
+        // Plan §4: builds agents (`agent[k].type/name`, `agent[k].decoupled_groups`) and links
+        // (`link[k].master/slave/w/a/z/o/i/level/name`) from a config; reads reset_cycles,
+        // seed and data_mode if present; registers the checkers of plan §3.6 (`graph_check(i)`
+        // default 1; `watchdog(i)` default 1 with `progress_bound(i)` and `watchdog_mode(s)`).
         void build(const Config &cfg, const AgentRegistry &reg);
-        // Validates params and capabilities; fatal on the first error. run()/step() call it once.
+        // Validates params and capabilities, then runs every observer's onElaborate; fatal on
+        // the first error. run()/step() call it once.
         void elaborate();
+        // Observers are called in registration order. The non-owning form is for an observer
+        // the caller keeps (a test); the owning form for one built by build().
+        void addObserver(Observer *o);
+        void addObserver(std::unique_ptr<Observer> o);
+        const std::vector<Observer *> &observers() const { return m_observers; }
+        Observer *observer(const std::string &name) const;   // the first one with that name, or null
 
         // ---- running
         void     step();
@@ -79,6 +103,8 @@ namespace octopus { namespace tl
         KernelOptions m_opts;
         std::vector<std::unique_ptr<Agent>> m_agents;
         std::vector<std::unique_ptr<Link>> m_links;
+        std::vector<Observer *> m_observers;                  // call order
+        std::vector<std::unique_ptr<Observer>> m_owned_observers;
         std::unique_ptr<Transcript> m_transcript;
         Stats m_stats;
         uint64_t m_cycle = 0, m_next_id = 0;

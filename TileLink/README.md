@@ -40,3 +40,19 @@ response. Burst-lock and reset violations go to `ChannelState::onViolation` (def
 
 writes `out/TLStats.csv` and `out/transcript.txt`. Flags match `Octopus_Simulator`: `-c <config.csv>`,
 `-o <dir>`, `--trace`, `-p name(type)=value`.
+
+## GraphCheck and Watchdog
+
+The system-level checkers of plan §3.6. Both are `Kernel::Observer`s (`onElaborate`, `onCycleEnd`) that `Kernel::build` registers from the config.
+
+| key | default | meaning |
+|---|---|---|
+| `graph_check(i)` | 1 | rule 1 of §5 at elaboration: the agent graph (§5.3, one edge per link, master to slave) has no cycle |
+| `agent[k].decoupled_groups(s)` | none | §5.1: links the agent drives independently, as separate vertices, e.g. `L_ctrl;L_dma` (`+` joins links into one group) |
+| `watchdog(i)` | 1 | per-message timers for rules 2, 3i and 3ii |
+| `progress_bound(i)` | formula | the declared bound in cycles; absent: (slowest latency + deepest queue + largest burst) x masters, from `Agent::hints()`; 0: watchdog off |
+| `watchdog_mode(s)` | `fatal` | `fatal` dumps and exits 2; `report` logs one line per trip and continues (`Watchdog::trips()`, `onTrip`) |
+
+A cycle is refused at elaboration with its path, `A -> B -> A (links: L1, L2)` (exit 2). `GraphCheck::topologicalOrder()` and `dot()` export the graph. The watchdog prints its bound and the formula that produced it once, at elaboration. A trip names the rule, the link, the channel, the agent the rule binds, the message and the timer. The dump then lists every unanswered request, every offered beat and every burst in progress, so that a reader can apply rule 3's exemption ("unless a higher-priority message is in flight or unanswered").
+
+A trip means that a timer outlived the declared bound. It is not a conformance verdict: a finite timer cannot tell an illegal permanent stall from a legal long delay (§4.3), so a conforming system with a bound that is too small also trips (TL-PROGRESS shows this). "Presented" is operational. A beat counts from the first cycle it is offered with its current control and data, and lowering valid or changing the beat resets it, so an agent that alternates valid accumulates no rule 3i timer. Its burst trips rule 2 instead, or the request it owes trips rule 3ii. There is no global "no beat anywhere" timer: one starved request behind busy links would escape it. The watchdog never recovers.

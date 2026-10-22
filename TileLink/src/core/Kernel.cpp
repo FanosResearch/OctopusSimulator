@@ -4,11 +4,49 @@
  * builder (plan §4).
  */
 #include "tilelink/Kernel.h"
+#include "tilelink/GraphCheck.h"
+#include "tilelink/Watchdog.h"
+#include <iostream>
 
 namespace octopus { namespace tl
 {
     Kernel::Kernel(const KernelOptions &opts) : m_opts(opts) {}
     Kernel::~Kernel() {}
+
+    void Kernel::addObserver(Observer *o)
+    {
+        if (m_elaborated) fatal(std::string("observer ") + o->name() + " added after elaboration");
+        m_observers.push_back(o);
+    }
+    void Kernel::addObserver(std::unique_ptr<Observer> o)
+    {
+        addObserver(o.get());
+        m_owned_observers.push_back(std::move(o));
+    }
+    Observer *Kernel::observer(const std::string &name) const
+    {
+        for (auto *o : m_observers) if (name == o->name()) return o;
+        return nullptr;
+    }
+
+    // "L1+L2;L3" -> {{L1, L2}, {L3}}; spaces ignored, empty groups dropped.
+    static std::vector<std::vector<std::string>> parseGroups(const std::string &s)
+    {
+        std::vector<std::vector<std::string>> groups;
+        std::vector<std::string> cur;
+        std::string tok;
+        auto flushTok = [&]() { if (!tok.empty()) cur.push_back(tok); tok.clear(); };
+        auto flushGroup = [&]() { flushTok(); if (!cur.empty()) groups.push_back(cur); cur.clear(); };
+        for (char c : s)
+        {
+            if (c == ' ' || c == '\t') continue;
+            if (c == '+') flushTok();
+            else if (c == ';') flushGroup();
+            else tok += c;
+        }
+        flushGroup();
+        return groups;
+    }
 
     Agent &Kernel::add(std::unique_ptr<Agent> a)
     {
@@ -53,7 +91,9 @@ namespace octopus { namespace tl
             {
                 Config a = cfg.sub("agent", k);
                 std::string name = a.get<std::string>("name", "agent" + std::to_string(k));
-                add(reg.make(a.get<std::string>("type"), name, a));
+                Agent &ag = add(reg.make(a.get<std::string>("type"), name, a));
+                // §5.1: the links this agent drives as independent agents (GraphCheck).
+                if (a.has("decoupled_groups")) ag.setDecoupledGroups(parseGroups(a.get<std::string>("decoupled_groups")));
             }
             for (int k : cfg.instances("link"))
             {
@@ -73,6 +113,23 @@ namespace octopus { namespace tl
                 if (!s) throw ConfigError("link " + name + ": unknown slave agent " + l.get<std::string>("slave"));
                 if (m == s) throw ConfigError("link " + name + ": master and slave are the same agent");
                 connect(name, p, *m, *s);
+            }
+            // Plan §3.6, the system-level checkers. graph_check(i): rule 1 at elaboration
+            // (default 1). watchdog(i) (default 1): the per-message timers, with
+            // progress_bound(i) (absent: the default formula; 0: watchdog off) and
+            // watchdog_mode(s) fatal|report.
+            if (cfg.get<int>("graph_check", 1) != 0) addObserver(std::unique_ptr<Observer>(new GraphCheck()));
+            int bound = cfg.get<int>("progress_bound", -1);
+            if (cfg.get<int>("watchdog", 1) != 0 && bound != 0)
+            {
+                WatchdogOptions wo;
+                if (bound < 0) wo.bound = 0;   // computed from the agents' hints at elaboration
+                else wo.bound = uint64_t(bound);
+                std::string mode = cfg.get<std::string>("watchdog_mode", "fatal");
+                if (mode == "report") wo.mode = WatchdogMode::Report;
+                else if (mode != "fatal") throw ConfigError("watchdog_mode must be fatal or report, got " + mode);
+                wo.info = &std::cout;
+                addObserver(std::unique_ptr<Observer>(new Watchdog(wo)));
             }
         }
         catch (ConfigError &e) { fatal(e.what()); }
@@ -98,6 +155,9 @@ namespace octopus { namespace tl
                 check(l->master(), Role::Master);
                 check(l->slave(), Role::Slave);
             }
+            // Plan §3.6: the elaboration-time checkers (GraphCheck's rule 1; the watchdog's
+            // bound), in registration order; a refused configuration is fatal.
+            for (auto *o : m_observers) o->onElaborate(*this);
         }
         catch (ConfigError &e) { fatal(e.what()); }
         for (auto &a : m_agents) a->reset(m_opts.reset_cycles);
@@ -145,6 +205,8 @@ namespace octopus { namespace tl
                 if (b.last()) m_stats.recordMessage(l->name(), c.id(), b.msg->opcode, c.lastLatency());
             });
         for (auto &a : m_agents) a->commit(t);
+        // 4. the observers see the cycle as it ended: valid, ready and accepted() still hold
+        for (auto *o : m_observers) o->onCycleEnd(*this, t);
         m_cycle++;
     }
 
