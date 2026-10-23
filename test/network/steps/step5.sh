@@ -90,6 +90,14 @@ step5() {
   # ---------------- P2-ADMIT-RF (spec s14.2): a controller with a full request queue still consumes a
   # forward and a response (unit tests on the shipped controllers with stub interfaces)
   unit P2-ADMIT-RF
+  # ---------------- P2-ADMIT-MSHR (docs/TileLink_Review_Action_Plan.md problem 1): an admission refused for
+  # a full MSHR reserves nothing (unit test), and Grid completes with 1 and 2 L1 MSHRs (it wedged when a
+  # refused request kept its transmit reservation and every retry added one)
+  unit P2-ADMIT-MSHR
+  t0=$(now); ok=1; detail=""
+  for m in 1 2; do sim "$OUT/s5-mshr/$m" -s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid -p "cache_controller[*].num_mshr(i)=$m" -p "workload_path(s)=$(W a2time01-trace)/" & done; wait
+  for m in 1 2; do [ "$(grep -l 'Average Latency' "$OUT/s5-mshr/$m"/LatencyReport_C*.csv 2>/dev/null | wc -l)" = 4 ] || { ok=0; detail="$detail num_mshr=$m"; }; done
+  if [ $ok = 1 ]; then pass P2-ADMIT-MSHR-SYS "Grid, num_mshr 1 and 2: 4/4 cores" "complete" "$(elapsed "$t0")"; else fail P2-ADMIT-MSHR-SYS "incomplete:$detail" "4/4 cores" "$(elapsed "$t0")"; fi
   # ---------------- P2-ADMISSION (spec s14.2, ADMIT-TX): injection queues as shallow as the home's
   # replacement fan-out (4 caches), both arbiters: every run completes and no push is ever refused;
   # one slot less and the home can never admit a replacement: the watchdog reports the wedge

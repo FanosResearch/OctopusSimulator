@@ -529,35 +529,30 @@ namespace octopus
 
     bool CacheController::canAdmitRequest(Message &msg)
     {
-        if (!txAdmit(msg))
-            return false;
+        // The structural check comes first and mutates nothing; transmit admission (txAdmit), which
+        // reserves slots and records a hold, runs only for a message that passes it. In the other
+        // order a request refused for a full MSHR kept its reservation, and every retry added one,
+        // until no request slot was left and the controller wedged (P2-ADMIT-MSHR).
+        //
         // Only a brand-new demand request can open a fresh outstanding miss (and
         // thus consume an MSHR slot). Responses, snoops, write-backs and self-
         // generated replacement messages must always proceed -- never back-pressure
         // a response, or a full MSHR/queue starves the traffic that would drain it.
         // Keyed on message kind, not interface: an L1 write-back is a response that
         // reaches the LLC on the lower interface.
-        if (!msg.isDemandRequest())
-            return true;
-
-        CacheDataHandler_COTS *cots = (CacheDataHandler_COTS *)m_data_handler;
-
-        // Already resident, or already tracked in MSHR/PWB -> a hit or a
-        // coalesced access; no new MSHR entry is needed.
-        if (cots->isAddressTracked(msg.addr))
-            return true;
-
-        // Coalesces with an already-outstanding miss to the same block.
-        if (m_pending_requests.find(getAddressKey(msg.addr)) != m_pending_requests.end())
-            return true;
-
-        // Brand-new miss: require a free MSHR slot (bound on the number of
-        // concurrent outstanding misses). The PWB is now enforced strictly at
-        // fill time (above), so misses are no longer throttled on PWB here.
-        if (m_num_mshr >= 0 && (int)m_pending_requests.size() >= m_num_mshr)
-            return false;
-
-        return true;
+        if (msg.isDemandRequest())
+        {
+            CacheDataHandler_COTS *cots = (CacheDataHandler_COTS *)m_data_handler;
+            // Already resident, or already tracked in MSHR/PWB -> a hit or a coalesced access; or
+            // coalescing with an already-outstanding miss to the same block: no new MSHR entry.
+            // Otherwise a brand-new miss needs a free MSHR slot (bound on the number of concurrent
+            // outstanding misses). The PWB is enforced strictly at fill time, not here.
+            bool new_miss = !cots->isAddressTracked(msg.addr) &&
+                            m_pending_requests.find(getAddressKey(msg.addr)) == m_pending_requests.end();
+            if (new_miss && m_num_mshr >= 0 && (int)m_pending_requests.size() >= m_num_mshr)
+                return false;
+        }
+        return txAdmit(msg);
     }
 
     // Array-port tracker (esweek-tutorial 443f0f39, docs/Logger.md S5): every
