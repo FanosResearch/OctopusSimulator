@@ -13,7 +13,8 @@
  * address order: `denied` is the OR of the fragments' `denied`, `corrupt` is per beat as
  * returned. The upstream source stays outstanding until the reassembled response has left, so
  * the ID is held until the last fragment's response. Known semantic gap, recorded in plan
- * §3.5: a fragment denied after earlier fragments were written leaves a partial effect.
+ * §3.5: a fragment denied after earlier fragments were written leaves a partial effect. The OR of
+ * the fragments' `denied` is not a rollback, and a retry does not undo it (README, support caveat).
  *
  * Config keys (agent[k].*):
  *   max_size(i)            the largest size (log2 bytes) the slave accepts; required
