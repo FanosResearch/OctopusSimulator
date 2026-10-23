@@ -73,6 +73,16 @@ unit() {
   msg=$(grep -c "no TileLink channel" "$OUT/fatal.stderr")
   if [ "$st" = 2 ] && [ "$msg" -ge 1 ]; then pass TL-PORT-FATAL-CH0 "exit 2, named" "exit 2, named"
   else fail TL-PORT-FATAL-CH0 "exit $st, message $msg" "exit 2 naming the missing channel"; fi
+  # review problem 2: a corrupt beat reaching Octopus is refused (status 2, named), whatever the monitor settings
+  # (monitor fatal, off and report; the first beat and a non-final one, beat 3 of 8)
+  for mb in "fatal 0" "fatal 3" "off 0" "off 3" "report 3"; do
+    set -- $mb; tag="$1-b$2"
+    ( cd "$OUT" && TL_TEST_OUT="$OUT" "$TESTS" --fatal-corrupt "$1" "$2" > "$OUT/fatal_corrupt_$tag.stdout" 2> "$OUT/fatal_corrupt_$tag.stderr" ); st=$?
+    msg=$(grep -c "does not model corruption" "$OUT/fatal_corrupt_$tag.stderr")
+    bt=$(grep -c "beat $2 of" "$OUT/fatal_corrupt_$tag.stderr")
+    if [ "$st" = 2 ] && [ "$msg" -ge 1 ] && [ "$bt" -ge 1 ] && ! grep -q "was delivered" "$OUT/fatal_corrupt_$tag.stdout"; then pass "TL-PORT-FATAL-CORRUPT-$tag" "exit 2, beat $2 named" "exit 2, beat $2 named"
+    else fail "TL-PORT-FATAL-CORRUPT-$tag" "exit $st, message $msg, beat $bt" "exit 2 naming the refused beat $2"; fi
+  done
 }
 
 # the directory tables in place of the TL-C handlers (which T7's handler step adds)

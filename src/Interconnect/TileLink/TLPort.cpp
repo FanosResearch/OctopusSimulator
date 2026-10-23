@@ -245,6 +245,7 @@ namespace octopus
             m->address = wire_addr; m->denied = msg.tl.denied;
             m->source = msg.tl.source; m->sink = msg.tl.sink;
             m->layout(w, mode);
+            if (m->denied && m->hasData()) for (auto &c : m->corrupt) c = 1;   // §4.4: a denied data response is corrupt on every beat
             if (mode == tl::DataMode::Full)
                 for (uint64_t x = 0; x < (uint64_t(1) << size); x++)
                 {
@@ -332,6 +333,16 @@ namespace octopus
         Message out; int src = -1, dst = -1;
         if (!m_owner->unstash(m->id, &out, &src, &dst))
             fatal("a message arrived without its Octopus record (tl id " + std::to_string(m->id) + ", " + m->describe() + ")");
+        // Corruption (§4.4) is not modeled inside Octopus: a Message carries no per-beat status, its caches and
+        // memory models keep none. A corrupt beat entering here would become clean data, so it is refused,
+        // whatever the monitor settings (docs/TileLink_Review_Action_Plan.md problem 2). A denied data response
+        // is exempt: §4.4 requires its beats corrupt, and its data is never used (a denied Grant installs none).
+        if (!m->denied)
+            for (size_t k = 0; k < m->corrupt.size(); k++)
+                if (m->corrupt[k])
+                    fatal("cycle " + std::to_string(kernel()->cycle()) + ": corrupt data (beat " + std::to_string(k) + " of " + m->describe() +
+                          ") reached Octopus, which does not model corruption: only clean data is supported "
+                          "(docs/TileLink_Review_Action_Plan.md problem 2)");
         const int oc = toOctopus(c);
         const Channel ch = Channel(c);
         out.tl.channel = (uint8_t)oc; out.tl.opcode = m->opcode; out.tl.param = m->param; out.tl.size = m->size;

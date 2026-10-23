@@ -197,7 +197,7 @@ namespace octopus { namespace tl
                 unsigned b, ln; at(x, b, ln);
                 if (full) d->data[size_t(b) * w + ln] = readByte(x);
                 else if (stamp) d->stamp[stampIdx(b, ln)] = readStamp(x);
-                if (m_poison.count(x >> 3)) d->corrupt[b] = 1;   // §4.4: stored corrupt data is returned corrupt
+                if (m_poison.count(x)) d->corrupt[b] = 1;   // §4.4: stored corrupt data is returned corrupt
             }
             return;
         }
@@ -210,7 +210,7 @@ namespace octopus { namespace tl
                 if (!p.wmask[i]) continue;                         // PutPartialData: only the masked bytes
                 if (full) writeByte(x, p.wdata[i]);
                 else if (stamp) m_stamps[x >> 3] = p.wstamp[stampIdx(b, ln)];
-                if (p.wcorrupt[b]) m_poison[x >> 3] = true; else m_poison.erase(x >> 3);
+                if (p.wcorrupt[b]) m_poison[x] = true; else m_poison.erase(x);
             }
             return;
         }
@@ -224,7 +224,7 @@ namespace octopus { namespace tl
             size_t i = size_t(b) * w + ln, k = size_t(x - r.address);
             old[k] = readByte(x);
             opnd[k] = full ? p.wdata[i] : 0;
-            if (p.wcorrupt[b] || m_poison.count(x >> 3)) bad = true;
+            if (p.wcorrupt[b] || m_poison.count(x)) bad = true;
             if (full) d->data[i] = old[k];
             else if (stamp) d->stamp[stampIdx(b, ln)] = readStamp(x);
         }
@@ -242,10 +242,10 @@ namespace octopus { namespace tl
         if (bad)
         {
             for (auto &c : d->corrupt) c = 1;
-            for (uint64_t x = r.address; x < r.address + bytes; x++) m_poison[x >> 3] = true;
+            for (uint64_t x = r.address; x < r.address + bytes; x++) m_poison[x] = true;
         }
         else
-            for (uint64_t x = r.address; x < r.address + bytes; x++) m_poison.erase(x >> 3);
+            for (uint64_t x = r.address; x < r.address + bytes; x++) m_poison.erase(x);
     }
 
     // ------------------------------------------------------------------ the three phases

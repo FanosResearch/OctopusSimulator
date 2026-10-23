@@ -275,3 +275,20 @@ TEST("TL-PORT-TRACE")
     }
     CHECK_EQ(n_req_enter, 1); CHECK_EQ(n_req_exit, 1); CHECK_EQ(n_resp_enter, 1); CHECK_EQ(n_resp_exit, 1);
 }
+
+// review problem 2: the refusal of corrupt data at the Octopus boundary (TLPort::deliver) exempts a denied data
+// response, whose beats §4.4 requires corrupt: it arrives, denied, its data unused
+TEST("TL-PORT-CORRUPT-DENIED")
+{
+    tltest::Sys s({});
+    tltest::send(s.port(0), tltest::get(1, 0x40, 0));
+    s.run(10);
+    Message req; CHECK(s.port(10)->peekMessage(&req)); s.port(10)->popFrontMessage();
+    Message d = tltest::answer(req, Message::K_FILL, tltest::pattern(1));
+    d.tl.denied = true;
+    tltest::send(s.port(10), d);
+    Message got;
+    CHECK(s.runUntil([&] { return s.port(0)->peekMessage(&got); }, 40));
+    CHECK(got.tl.denied);
+    CHECK_EQ(s.ic->monitorViolations(), uint64_t(0));            // the wire carried it corrupt on every beat (M-ERR)
+}

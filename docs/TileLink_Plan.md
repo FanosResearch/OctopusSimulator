@@ -707,6 +707,13 @@ Decided 2026-10-21, after review:
    limit: a permanently denied access stays outstanding (a run limit then reports it unfinished). The
    standalone CacheMaster still completes the access with an error; the tables are unchanged. Detail:
    docs/TileLink_Denied_Grant_Retry_Plan.md; measured: docs/TileLink_Implementation_Report.md.
+10. **Corruption: per-byte poison in the library, refused at the Octopus boundary** (decided 2026-10-23,
+   review problem 2). The library's TL-C agents and RamSlave keep §4.4 corruption per byte (poison), so a
+   corrupt beat is never laundered into clean data by a cache, a manager or a partial write. Octopus does
+   not model corruption: its Message, caches and memory models carry none, so TLPort refuses a corrupt
+   beat that would enter Octopus, independent of the monitor. A denied data response is exempt (§4.4
+   requires its beats corrupt; its data is never used). Full propagation inside Octopus is future work,
+   with its own error source and CPU-visible error contract.
 
 ## 9. Out of scope
 

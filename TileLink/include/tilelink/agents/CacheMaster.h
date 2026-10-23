@@ -88,7 +88,7 @@ namespace octopus { namespace tl
 
         struct Counters
         {
-            uint64_t loads = 0, stores = 0, errors = 0, evicts = 0;
+            uint64_t loads = 0, stores = 0, errors = 0, evicts = 0, poisoned_loads = 0;
             uint64_t acquires = 0, releases = 0, probes = 0, grants = 0, denied = 0, replacements = 0;
             uint64_t stalls = 0;     // Stall decodes (parked messages and accesses, per attempt)
             uint64_t states_entered[64] = {0};   // per table state, transitions into it

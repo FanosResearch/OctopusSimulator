@@ -27,8 +27,8 @@
  *   deny(vi)              pairs base,size of denied ranges: the response is denied, data beats corrupt (§4.4), no effect
  *   refresh_period(i) 0, refresh_cycles(i) 0   every `period` cycles, a_ready and d_valid LOW for `cycles` (§5.2 example 2)
  *   level(s) UH           the capability declared for elaboration (UL or UH)
- * A corrupt write beat (§4.4) stores its data and poisons the 8-byte groups it wrote; a read of a
- * poisoned group returns its beat corrupt, until a clean write. Atomics compute on the 2^size-byte
+ * A corrupt write beat (§4.4) stores its data and poisons the bytes it wrote; a read returns a beat
+ * corrupt when any byte it carries is poisoned, until a clean write of that byte. Atomics compute on the 2^size-byte
  * little-endian integer (plan §1.3; ValueCheck uses the same reading): MIN/MAX signed, MINU/MAXU
  * unsigned, ADD modulo 2^(8*2^size); XOR/OR/AND/SWAP per byte. In stamp mode an atomic returns
  * the old stamps and stores the operand's.
@@ -64,6 +64,8 @@ namespace octopus { namespace tl
         // ---- the memory, for tests
         uint8_t  readByte(uint64_t address) const;
         void     writeByte(uint64_t address, uint8_t v);
+        void     poisonByte(uint64_t address, bool p) { if (p) m_poison[address] = true; else m_poison.erase(address); }   // tests: a stored ECC error
+        bool     poisoned(uint64_t address) const { return m_poison.count(address) != 0; }
         uint64_t readWord(uint64_t address, unsigned bytes) const;   // little-endian, bytes <= 8
         uint64_t readStamp(uint64_t address) const;                   // stamp mode, its 8-byte group
 
@@ -101,7 +103,7 @@ namespace octopus { namespace tl
         Level m_level = Level::UH;
         std::map<uint64_t, std::vector<uint8_t>> m_pages;         // page number -> 4096 bytes
         std::map<uint64_t, uint64_t> m_stamps;                    // 8-byte group -> stamp
-        std::map<uint64_t, bool> m_poison;                        // 8-byte group written with corrupt data
+        std::map<uint64_t, bool> m_poison;                        // a byte written with corrupt data (per byte: a smaller clean write must not clear its neighbours, docs/TileLink_Review_Action_Plan.md problem 2)
         std::list<Pending> m_queue;                               // accepted, not fully answered
         std::list<Pending>::iterator m_cur;                       // the response on D (m_queue.end(): none)
         std::list<Pending>::iterator m_in;                        // the request burst being accepted

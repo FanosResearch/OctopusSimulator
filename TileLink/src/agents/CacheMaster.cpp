@@ -305,6 +305,7 @@ namespace octopus { namespace tl
             }
             else if (mode == DataMode::Stamp)
                 for (uint64_t g = op.addr & ~uint64_t(7); g < op.addr + op.bytes; g += 8) l.data.set(g, v);
+            for (unsigned i = 0; i < op.bytes; i++) l.data.setPoison(op.addr + i, false);   // the Store's own bytes are valid
             if (cc) cc->accessPerformed(*link(), op.addr, true, cycle);   // C-PERM (Table 29)
             if (cc && mode != DataMode::None)
             {
@@ -321,7 +322,13 @@ namespace octopus { namespace tl
                 for (unsigned i = 0; i < op.bytes; i++) op.value.push_back(uint8_t(l.data.value(op.addr + i)));
             }
             if (cc) cc->accessPerformed(*link(), op.addr, false, cycle);  // C-PERM (Table 29)
-            if (cc && mode != DataMode::None)
+            // a Load consuming poisoned bytes (§4.4) completes as an access error, never as clean data
+            // (docs/TileLink_Review_Action_Plan.md problem 2), and reports no value
+            if (l.data.anyPoisoned(op.addr, op.addr + op.bytes - 1))
+            {
+                op.error = true; m_c.errors++; m_c.poisoned_loads++;
+            }
+            else if (cc && mode != DataMode::None)
             {
                 uint64_t a = l.data.checkBytes(op.addr, op.bytes, bytes);
                 cc->loadPerformed(unsigned(id()), a, bytes.data(), unsigned(bytes.size()), cycle);

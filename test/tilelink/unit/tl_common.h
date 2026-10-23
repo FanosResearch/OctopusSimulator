@@ -25,7 +25,8 @@ namespace tltest
     {
         TileLinkInterconnect *ic = nullptr;
         // masters (the L1 ids) and one slave, endpoint 10
-        Sys(std::vector<std::pair<std::string, int>> ints, std::vector<int> masters = {0}, int monitor = 1, std::string level = "C")
+        Sys(std::vector<std::pair<std::string, int>> ints, std::vector<int> masters = {0}, int monitor = 1, std::string level = "C",
+            std::string monitor_mode = "fatal")
         {
             Configurable::ParametersMap m;
             auto put = [&](const Parameter &p) { m.erase(p.name); m.insert({p.name, p}); };
@@ -33,6 +34,7 @@ namespace tltest
             put(Parameter("slave_ids", Parameter::Vector_Integer, std::vector<int>{10}));
             put(Parameter("level", Parameter::String, level));
             put(Parameter("tl_monitor", Parameter::Integer, monitor));
+            put(Parameter("tl_monitor_mode", Parameter::String, monitor_mode));
             put(Parameter("tl_stats", Parameter::Integer, 0));
             for (auto &kv : ints) put(Parameter(kv.first, Parameter::Integer, kv.second));
             ic = new TileLinkInterconnect(m, "test");

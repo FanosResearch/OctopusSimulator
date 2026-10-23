@@ -4,6 +4,10 @@
  * kernel's data mode (plan §3.3: full = the bytes, stamp = one 64-bit value per 8-byte group,
  * none = nothing), and the copies between a block and the lanes of a message (§4.5: lane l of
  * beat k carries the byte at laneBase + k*w + l), whatever the bus width.
+ * Poison (§4.4, docs/TileLink_Review_Action_Plan.md problem 2): one flag per byte, in every data mode
+ * (no simulated bytes does not mean no corruption). A byte read from a corrupt beat is poisoned; a beat
+ * written from the block is corrupt if any byte it carries is poisoned (OR-ed into what the message
+ * already marks); a clean write clears only the bytes it establishes.
  */
 #ifndef _TL_COH_BLOCKDATA_H
 #define _TL_COH_BLOCKDATA_H
@@ -20,13 +24,22 @@ namespace octopus { namespace tl { namespace coh
         unsigned              bytes_n = 0;   // block size
         std::vector<uint8_t>  bytes;         // Full
         std::vector<uint64_t> stamps;        // Stamp: one per 8 bytes (a block below 8 bytes: one)
+        std::vector<uint8_t>  poison;        // one per byte, every mode
 
         void init(DataMode m, uint64_t block, unsigned block_bytes)
         {
             mode = m; base = block; bytes_n = block_bytes;
             bytes.assign(m == DataMode::Full ? block_bytes : 0, 0);
             stamps.assign(m == DataMode::Stamp ? (block_bytes + 7) / 8 : 0, 0);
+            poison.assign(block_bytes, 0);
         }
+        bool poisoned(uint64_t x) const { return poison[size_t(x - base)] != 0; }
+        bool anyPoisoned(uint64_t first, uint64_t last) const
+        {
+            for (uint64_t x = first; x <= last; x++) if (poisoned(x)) return true;
+            return false;
+        }
+        void setPoison(uint64_t x, bool p) { poison[size_t(x - base)] = p ? 1 : 0; }
         size_t group(uint64_t x) const { return size_t((x - base) / 8); }
 
         // The value of byte x as the checkers see it (Full: the byte; Stamp: its group's stamp).
@@ -47,25 +60,26 @@ namespace octopus { namespace tl { namespace coh
         // (PutPartialData, §4.5); A and B carry a mask, C and D do not (every lane counts).
         void fromMsg(const Msg &m, uint64_t geom, uint64_t first, uint64_t last, bool masked_only)
         {
-            if (mode == DataMode::None) return;
             for (uint64_t x = first; x <= last; x++)
             {
+                LanePos p = lanePos(geom, m.w, x);
                 if (masked_only)
                 {
-                    LanePos p = lanePos(geom, m.w, x);
                     size_t i = size_t(p.beat) * m.w + p.lane;
                     if (i < m.mask.size() && !m.mask[i]) continue;
                 }
-                set(x, laneValue(m, geom, x));
+                setPoison(x, m.beatCorrupt(p.beat));   // §4.4: the beat's flag covers every byte it carries
+                if (mode != DataMode::None) set(x, laneValue(m, geom, x));
             }
         }
         // Bytes [first, last] of the block into the lanes of a message at geometry address `geom`.
         void toMsg(Msg &m, uint64_t geom, uint64_t first, uint64_t last) const
         {
-            if (mode == DataMode::None) return;
             for (uint64_t x = first; x <= last; x++)
             {
                 LanePos p = lanePos(geom, m.w, x);
+                if (poisoned(x) && p.beat < m.corrupt.size()) m.corrupt[p.beat] = 1;   // OR-ed: never cleared here
+                if (mode == DataMode::None) continue;
                 if (mode == DataMode::Full)
                 {
                     size_t i = size_t(p.beat) * m.w + p.lane;

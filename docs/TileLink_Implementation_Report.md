@@ -265,6 +265,45 @@ change. TL-RETRY-SYS: a2time01 with 200 denials per LLC on the crossbar, 5 and 7
   (BaseController::processLogic), where a younger access to the same line from the same core can
   overtake it through the per-line gate. The replay keeps its place; the general case is open.
 
+## Review problem 2: corruption lost through caches and at the Octopus boundary (2026-10-23)
+
+**Standalone library: per-byte poison.**
+- `coh/BlockData.h` keeps a poison flag per byte, in every data mode (None too). Import: a byte written
+  from a beat takes that beat's corrupt flag. Export: a beat is corrupt when any byte it carries is
+  poisoned (ORed into the existing flags, so a denied data response stays corrupt on every beat).
+- CacheMaster: a clean Store clears poison only on the bytes it writes. A Load that reads a poisoned byte
+  completes as an access error (`CpuOp::error`, counters `errors` and `poisoned_loads`) and is not
+  reported to CoherenceCheck as a value.
+- CoherentManager: poisoned bytes are excluded from the value reports (Put, atomic, AccessAckData_in). An
+  atomic with a poisoned old value or a corrupt request beat returns every beat corrupt and poisons its
+  result bytes; the operation is still performed, not turned into a denial.
+- RamSlave: poison is per byte (it was per 8-byte group, and a smaller clean write erased the group's
+  poison).
+- Measured: TL-POISON (5 cases, 122 checks, all fail on the old code): GrantData corrupt on exactly the
+  beat that carries a poisoned RAM byte, at w = 4, 8, 16, Full and Stamp; the poisoned Load is an error,
+  a clean range of the same block is not; poison survives ReleaseData, the manager's copy, a Grant to a
+  second master and the manager's write-back to RAM; a 1-byte clean Store clears only that byte in the
+  cache; a 1-byte clean PutPartialData clears only that byte in RAM.
+- Limit, from §4.4: corrupt is per beat on the wire, so a write-back marks the whole beat and RAM poisons
+  every byte of it. The byte precision that survives a write-back is the cache's, not the memory's.
+
+**Octopus: refused at the boundary.**
+- `TLPort::deliver` refuses a beat with corrupt set, before the message is converted to an Octopus
+  Message: exit 2, naming the port, cycle, message and beat. The guard does not depend on `tl_monitor`.
+- A denied data response is exempt, because §4.4 requires its beats corrupt and its data is never used.
+  The send side now marks such a message corrupt on every beat (crossbar and Network ports). Octopus's
+  own denied Grant (`Grant_denied` at TLC_LLC) is dataless, so this exemption is reached only from the
+  unit fixture.
+- The Network port presents a dataless copy of each message to its monitor only. It cannot carry or
+  discover corruption, so Network support is clean data only. No Octopus memory model produces
+  corruption.
+- Measured: TL-PORT-FATAL-CORRUPT (a fault marks one beat of an 8-beat AccessAckData corrupt on the
+  wire: monitor fatal, off and report, beat 0 and beat 3: 5/5 exit 2, beat named, nothing delivered),
+  TL-PORT-CORRUPT-DENIED (a denied AccessAckData is delivered, denied, monitor 0). TL-RETRY-SYS still
+  6/6 after the Network change.
+- Not built, by decision (plan §8 decision 10): corruption inside Octopus messages, caches, MSHRs or
+  memory models.
+
 ## T10: documentation and the regression
 
 `SUPPORTED_CONFIGURATIONS.md` (TL-C protocols, the TileLink crossbar and network presets, the standalone

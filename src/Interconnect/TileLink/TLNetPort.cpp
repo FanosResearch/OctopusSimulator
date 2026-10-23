@@ -87,6 +87,9 @@ namespace octopus
         t->address = m.tl.size >= 64 ? 0 : (m.addr & ~((uint64_t(1) << m.tl.size) - 1));
         t->source = source; t->sink = sink;
         t->layout(link()->params().w, tl::DataMode::None);
+        // §4.4: a denied data response is corrupt on every beat. The network carries no data and no corruption
+        // (clean data only, docs/TileLink_Review_Action_Plan.md problem 2): this copy exists for the monitor
+        if (t->denied && t->hasData()) for (auto &c : t->corrupt) c = 1;
         t->id = kernel()->newMsgId();
         t->from_agent = id();
         const uint64_t now = m_b->tick();

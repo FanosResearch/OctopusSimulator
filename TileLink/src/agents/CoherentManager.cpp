@@ -380,16 +380,21 @@ namespace octopus { namespace tl
         const DataMode mode = kernel()->options().data_mode;
         CoherenceCheck *cc = CoherenceCheck::of(*kernel());
         const uint64_t a0 = req.address, a1 = req.address + req.bytes() - 1;
-        auto active = [&](uint64_t x) { return laneActive(req, x); };
+        // poisoned bytes (§4.4) are not known values: never reported to the value check
+        auto valid = [&](uint64_t x) { return !e.data.poisoned(x); };
+        auto active = [&](uint64_t x) { return laneActive(req, x) && valid(x); };
         if (isPut(req.opcode))
         {
-            e.data.fromMsg(req, req.address, a0, a1, true);
+            e.data.fromMsg(req, req.address, a0, a1, true);   // a corrupt beat poisons the bytes it writes
             reportBytes(cc, true, unsigned(id()), mode, a0, a1, [&](uint64_t x) { return e.data.value(x); }, active, cycle);
             return;
         }
-        // atomic
+        // atomic. A poisoned old value or a corrupt operand makes the whole result and the returned old
+        // value invalid (the plan's conservative rule: no clean result is derived from invalid data).
+        bool bad = e.data.anyPoisoned(a0, a1);
+        for (auto c : req.corrupt) if (c) bad = true;
         e.data.toMsg(resp, req.address, a0, a1);          // the old value
-        reportBytes(cc, false, unsigned(id()), mode, a0, a1, [&](uint64_t x) { return e.data.value(x); }, [](uint64_t) { return true; }, cycle);
+        reportBytes(cc, false, unsigned(id()), mode, a0, a1, [&](uint64_t x) { return e.data.value(x); }, valid, cycle);
         if (mode == DataMode::Full)
         {
             size_t n = size_t(req.bytes());
@@ -400,7 +405,9 @@ namespace octopus { namespace tl
         }
         else if (mode == DataMode::Stamp)
             e.data.fromMsg(req, req.address, a0, a1, false);   // RamSlave: the operand's stamps are stored
-        reportBytes(cc, true, unsigned(id()), mode, a0, a1, [&](uint64_t x) { return e.data.value(x); }, [](uint64_t) { return true; }, cycle);
+        for (uint64_t x = a0; x <= a1; x++) e.data.setPoison(x, bad);
+        if (bad) for (auto &c : resp.corrupt) c = 1;
+        reportBytes(cc, true, unsigned(id()), mode, a0, a1, [&](uint64_t x) { return e.data.value(x); }, valid, cycle);
     }
 
     void CoherentManager::reportForwarded(const Msg &req, const Msg &resp, uint64_t cycle)
@@ -606,7 +613,7 @@ namespace octopus { namespace tl
                         // TLC_Tables §3.3 AccessAckData_in: the LLC copy, masked to the request
                         e.data.toMsg(*m, r.address, r.address, r.address + r.bytes() - 1);
                         reportBytes(cc, false, unsigned(this->id()), mode, r.address, r.address + r.bytes() - 1,
-                                    [&](uint64_t x) { return e.data.value(x); }, [](uint64_t) { return true; }, cycle);
+                                    [&](uint64_t x) { return e.data.value(x); }, [&](uint64_t x) { return !e.data.poisoned(x); }, cycle);
                     }
                     m_ports[size_t(req->port)].outD.q.push_back(m);
                     m_c.uncached++;

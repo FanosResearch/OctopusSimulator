@@ -96,6 +96,7 @@ keys and defaults: `configuration/Interconnect/TileLink.csv`.
 | Memory | the point-to-point memory bus (default), or memory over TileLink (`memory_on_network 1`: a second, TL-UH crossbar; several controllers with `mem_ids`; fixed-latency memory or MCsim) |
 | Checking | a conformance monitor on every link (`tl_monitor`), the agent-graph check, SWMR and the permission check of every cache hit (`tl_coherence_check`), the read-after-write hazard detector |
 | Errors | a denied Grant is retried: the CPU access stays outstanding and is answered once, when an Acquire succeeds (no retry limit: a permanently denied access stays outstanding) |
+| Data integrity | clean data only, on the crossbar and on the Network. Octopus messages, caches and memory models carry no corruption (§4.4): a corrupt beat that is not part of a denied response is refused where it would enter Octopus (exit 2, naming the port, cycle, message and beat), whatever `tl_monitor` says. No Octopus memory model produces corruption. The standalone library models it per byte |
 | Observability | `TLStats.csv`, beat transcript (`transcript`), the Probe and Completion latency columns |
 
 Presets: `MultiCoreSystem_TileLink` (one LLC), `MultiCoreSystem_TileLink2B` (two banks),
