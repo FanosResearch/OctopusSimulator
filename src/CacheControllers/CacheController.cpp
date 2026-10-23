@@ -211,7 +211,12 @@ namespace octopus
             exit(2);
         }
 
-        if (msg->data == NULL && 
+        // A dataless hit reads the line. At an L1 a CPU Store that carries its bytes writes it: its hit claims the
+        // array too, so its answer (and the CPU commit) and its write (MODIFY_DATA, which follows in the cell and
+        // rides on this access) happen together, inline or later as one parked access
+        // (docs/Shared_Controller_Defects_Plan.md issue 2). The LLC's hits are unchanged.
+        const bool store_bytes = msg->data != NULL && msg->source == Message::Source::LOWER_INTERCONNECT && m_log_role != Logger::Role::LLC;
+        if ((msg->data == NULL || store_bytes) &&
             !checkReadinessOfCache(*msg, ControllerAction::Type::HIT_Action, data_ptr))
                 return;
         
@@ -359,9 +364,13 @@ namespace octopus
     {
         Message *msg = (Message *)data_ptr;
         Message data_msg;
+        bool saved = false;
 
         if(m_modifying_data_messages.find(msg->msg_id) != m_modifying_data_messages.end())
+        {
             data_msg = m_modifying_data_messages[msg->msg_id];
+            saved = true;
+        }
         else if ((msg->source == Message::Source::LOWER_INTERCONNECT) && (msg->data != NULL))
             data_msg = *msg;
         else
@@ -370,8 +379,36 @@ namespace octopus
             return;
         }
 
-        m_data_handler->modifyData(data_msg.addr, data_msg.data, data_msg.data_size);
-        m_modifying_data_messages.erase(msg->msg_id);
+        // docs/Shared_Controller_Defects_Plan.md issue 2: the Store's write belongs to the array access that serves
+        // it. A fill's own Store merge, or a hit's write, belongs to the access an earlier action of this cell made
+        // for the same request and line: parked, the write goes with that op; inline, it rides on it (no second
+        // claim of the port: soft when that access already closed it). Any other write is its own access and
+        // waits for the array like a hit. The saved bytes are dropped only once written.
+        const bool own = m_cell.active && m_cell.msg_id == msg->msg_id && m_cell.line == getAddressKey(data_msg.addr);
+        if (own && m_cell.parked)
+        {
+            for (DataArrayOp &op : m_array_ops)
+                if (op.op_id == m_cell.op_id)
+                {
+                    op.actions.push_back(ControllerAction{.type = ControllerAction::Type::MODIFY_DATA, .data = data_ptr});
+                    return;
+                }
+            cerr << "CacheController(id = " << m_id << "): the parked array access of request " << msg->msg_id
+                 << " is gone before its Store's bytes joined it" << endl;
+            exit(2);
+        }
+        if (!own && !checkReadinessOfCache(*msg, ControllerAction::Type::MODIFY_DATA, data_ptr))
+            return;                         // parked with its bytes (still saved) until the array is free
+
+        const bool soft = own && !m_data_handler->isReady(data_msg.addr);
+        if (!m_data_handler->modifyData(data_msg.addr, data_msg.data, data_msg.data_size, soft))
+        {
+            cerr << "CacheController(id = " << m_id << "): the Store of request " << msg->msg_id << " could not write its "
+                 << data_msg.data_size << " bytes at 0x" << hex << data_msg.addr << dec
+                 << " (line absent, or the array refused an access it had granted)" << endl;
+            exit(2);
+        }
+        if (saved) m_modifying_data_messages.erase(msg->msg_id);
 
         delete msg;
     }
@@ -760,7 +797,7 @@ namespace octopus
             m_array_park.erase(it);
         }
         m_array_served++;
-        if (type == ControllerAction::Type::WRITE_CACHE_LINE_DATA) m_array_served_writes++;
+        if (type == ControllerAction::Type::WRITE_CACHE_LINE_DATA || type == ControllerAction::Type::MODIFY_DATA) m_array_served_writes++;
         Logger::getLogger()->trace(msg, Logger::Role::ARRAY, (uint32_t)m_id, Logger::Phase::SERVICE,
                                    (uint16_t)type | (port_busy ? 0x100 : 0) | reg_flags);   // port claim; flags = action | cut-in | MSHR | PWB
     }
@@ -778,6 +815,7 @@ namespace octopus
             if (m_pipe_firing)
             {
                 trackArrayGrant(msg, type, port_busy, reg_flags);
+                noteCellAccess(msg, false, 0);
                 return true;
             }
             // A line held in the MSHR or the write-back buffer is not in the
@@ -790,12 +828,14 @@ namespace octopus
             if (loc == CacheDataHandler::LineLocation::MSHR || loc == CacheDataHandler::LineLocation::PWB)
             {
                 trackArrayGrant(msg, type, port_busy, reg_flags);   // a register cut-in, as in the occupancy model
+                noteCellAccess(msg, false, 0);
                 return true;
             }
         }
         else if (m_data_handler->isReady(msg.addr))
         {
             trackArrayGrant(msg, type, port_busy, reg_flags);
+            noteCellAccess(msg, false, 0);
             return true;    // array free, or the line is in a side buffer: run inline
         }
 
@@ -809,6 +849,7 @@ namespace octopus
         if (m_cur_valid) { op.req = m_cur_req; op.has_req = true; }
         op.actions.push_back(ControllerAction{.type = type, .data = data_ptr});
         arrayEnqueue(std::move(op));
+        noteCellAccess(msg, true, m_array_op_seq);
         return false;
     }
 
@@ -971,6 +1012,8 @@ namespace octopus
     {
         bool was_firing = m_pipe_firing;
         m_pipe_firing = true;
+        const CellAccess outer_cell = m_cell;   // the op's actions are a cell of their own (issue 2)
+        cellBegin();
 
         if (op.kind == DataArrayOp::MESSAGE)
         {
@@ -987,6 +1030,7 @@ namespace octopus
                 txRelease(op.msg);
                 m_processing_queue->pushBack(op.msg, FRFCFS_State::NonReady, /*force=*/true);
                 m_pipe_firing = was_firing;
+                m_cell = outer_cell;
                 m_processing_queue->markDirty();
                 return;
             }
@@ -1016,6 +1060,7 @@ namespace octopus
         }
 
         m_pipe_firing = was_firing;
+        m_cell = outer_cell;
         // The line's state may have changed; messages stalled on it must be
         // rescanned (readiness is state-only and rescans only after a push/pop).
         m_processing_queue->markDirty();

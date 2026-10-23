@@ -467,11 +467,10 @@ TEST("TL-ADMIT-ORDER")
 
 TEST("TL-RETRY-ARRAY")
 {
-    // occupancy and pipelined data array, latency 4: the denial changes nothing the CPU sees. Each run is
-    // compared with the same access sequence without the denial (the control). The pipelined model
-    // returns the Store's bytes; the occupancy model with an L1 latency above 0 loses them with or
-    // without a denial (the fill overwrites the Store: a separate, pre-existing defect, reported with
-    // docs/TileLink_Review_Action_Plan.md problem 3), so there the check is equality with the control.
+    // occupancy and pipelined data array, latency 4: the denial changes nothing the CPU sees, and the Store's
+    // bytes are read back in both models, with and without the denial (the occupancy model dropped them
+    // before docs/Shared_Controller_Defects_Plan.md issue 2: the fill closed the array and the Store's write
+    // was refused and ignored; now it rides on the fill's access)
     for (int mode = 0; mode < 2; mode++)
     {
         uint8_t got[2] = {0, 0};
@@ -494,6 +493,30 @@ TEST("TL-RETRY-ARRAY")
             CHECK(l.idle(A)); CHECK(l.net.balanced());
         }
         CHECK_EQ((int)got[1], (int)got[0]);                             // the retry changes nothing
-        if (mode == 1) CHECK_EQ((int)got[1], 0x77);
+        CHECK_EQ((int)got[0], 0x77);
+        CHECK_EQ((int)got[1], 0x77);
+    }
+}
+
+// docs/Shared_Controller_Defects_Plan.md issue 2, at the TLC L1: a Store hit right after another request's fill,
+// while that fill holds the occupancy array (latency 4), waits for its own access; it is answered once and its
+// bytes are read back (they were dropped: the hit answered inline and its write was refused and ignored).
+TEST("TL-DATA-STORE-HIT")
+{
+    for (int pipelined = 0; pipelined < 2; pipelined++)
+    {
+        L1 l(-2, 4, pipelined == 1);
+        l.cpu.deliver(load(1, A)); l.run(20);
+        l.net.deliver(grant(1, A, true, toT, false, 0x11, 1));
+        Message h = load(2, A); h.complementary_value = 1; { std::vector<uint8_t> b(8, 0x77); h.copy(b.data(), 8); }
+        l.cpu.deliver(h); l.run(40);
+        CHECK_EQ(l.responses(1), 1);
+        CHECK_EQ(l.responses(2), 1);
+        l.cpu.deliver(load(3, A)); l.run(40);
+        const Message *r = l.response(3);
+        bool ok = r && r->data && r->data_size >= 64;
+        for (unsigned i = 0; ok && i < 64; i++) ok = r->data[i] == (i < 8 ? 0x77 : 0x11);
+        CHECK(ok);
+        CHECK(l.idle(A)); CHECK(l.net.balanced());
     }
 }
