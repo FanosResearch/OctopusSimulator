@@ -304,6 +304,31 @@ change. TL-RETRY-SYS: a2time01 with 200 denials per LLC on the crossbar, 5 and 7
 - Not built, by decision (plan §8 decision 10): corruption inside Octopus messages, caches, MSHRs or
   memory models.
 
+## Review problem 4: atomics, the checker against the agents (2026-10-23)
+
+**Cause.** ValueCheck computed an arithmetic atomic wider than 8 bytes per 8-byte group (a 16-byte ADD
+lost its carry out of byte 7; MIN/MAX compared each half alone), and in Stamp mode it did arithmetic on
+stamps (stamp 10 ADD operand stamp 5 expected 15; RamSlave stores 5). The agents were right.
+
+**Built.**
+- `include/tilelink/Atomic.h`: `atomicLess`, `atomicOp`, `applyAtomic`, pure functions on little-endian
+  byte vectors. RamSlave, CoherentManager and ValueCheck all call it; the two agents' identical local
+  copies are removed.
+- ValueCheck Full: one `applyAtomic` on the whole operand. An unknown old byte or a corrupt operand beat
+  makes the whole arithmetic result unknown; a logical result is unknown per byte.
+- ValueCheck Stamp: a write enters every byte of each 8-byte group it touches (the last write in address
+  order wins within a group, as RamSlave); an atomic installs its operand's stamp; its returned old stamp
+  is checked as a read. Acknowledgement and denial visit exactly the bytes a write entered (`Op::written`).
+
+**Measured.** TL-ATOMIC (8 cases, 57 checks): the helper against literal vectors (16- and 32-byte ADD
+carries and wraparound; signed and unsigned MIN/MAX decided by the sign byte and by byte 9; logical ops
+and SWAP); RamSlave end to end at w = 4, 8, 16 (the review's 16-byte ADD over two beats; signed MIN then
+MAXU); the review's stamp 10 / operand 5 case at w = 4, 8; a 4-byte stamp write read back from the other
+half of its group; the CoherentManager's Execute cell (an LLC copy with no holder) running a 16-byte
+Put, ADD, MIN and MAXU at w = 4, 8, 16 with no outer write, ValueCheck on the uncached link agreeing. The
+old checker fails the end-to-end cases (1, 8 and 4 violations). `test_valuecheck`
+`wide_atomic_wrong_old_value_still_rejected`: a wrong 16-byte old value is still reported. Library 45/45.
+
 ## T10: documentation and the regression
 
 `SUPPORTED_CONFIGURATIONS.md` (TL-C protocols, the TileLink crossbar and network presets, the standalone

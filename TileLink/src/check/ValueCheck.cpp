@@ -4,6 +4,8 @@
  */
 #include "tilelink/ValueCheck.h"
 #include "tilelink/agents/Pipe.h"
+#include "tilelink/Atomic.h"
+#include <map>
 #include <algorithm>
 #include <sstream>
 
@@ -71,6 +73,11 @@ namespace octopus { namespace tl
         WriteRec r;
         r.id = op.wid; r.issue = op.issue; r.value = value; r.unknown = unknown;
         m_bytes[x].writes.push_back(r);
+        admit(op, x, value, unknown);
+    }
+
+    void ValueCheck::admit(Op &op, uint64_t x, uint64_t value, bool unknown)
+    {
         // Plan §3.6: a read (or atomic) outstanding now may be served after this write; its
         // admissible set grows by the write's value.
         for (auto &kv : m_ops)
@@ -85,8 +92,7 @@ namespace octopus { namespace tl
 
     void ValueCheck::ackWrite(Op &op, uint64_t t, bool denied)
     {
-        const Msg &m = *op.req;
-        for (uint64_t x = m.address; x < m.address + m.bytes(); x++)
+        for (uint64_t x : op.written)
         {
             auto bit = m_bytes.find(x);
             if (bit == m_bytes.end()) continue;
@@ -156,87 +162,74 @@ namespace octopus { namespace tl
         uint64_t first, last;
         if (!beatRange(m, b.index, first, last)) return;
         bool corrupt = m.beatCorrupt(b.index);
+        if (is_atomic && corrupt) o->operand_corrupt = true;
+        const bool stamp = m.data_mode == DataMode::Stamp;
         for (uint64_t x = first; x <= last; x++)
         {
             LanePos p = lanePos(m, x);
             if (!m.mask[size_t(p.beat) * m.w + p.lane]) continue;       // PutPartialData: masked bytes only
-            if (is_atomic) addWrite(*o, x, 0, true);                      // value known at its ack
-            else addWrite(*o, x, laneValue(m, x), corrupt);
+            uint64_t v = is_atomic ? 0 : laneValue(m, x);
+            bool unknown = is_atomic || corrupt;                         // an atomic's value is known at its ack
+            // Full: the byte itself. Stamp: every byte of x's group takes the stamp (RamSlave replaces the
+            // group); a later byte of the same group in address order overrides an earlier one, as there
+            uint64_t g0 = stamp ? (x & ~uint64_t(7)) : x, g1 = stamp ? g0 + 8 : x + 1;
+            for (uint64_t y = g0; y < g1; y++)
+            {
+                if (o->written.insert(y).second) { addWrite(*o, y, v, unknown); continue; }
+                for (auto &r : m_bytes[y].writes)
+                    if (r.id == o->wid) { r.value = v; r.unknown = unknown; }
+                admit(*o, y, v, unknown);   // the reads outstanding meanwhile may see the overriding value too
+            }
         }
-    }
-
-    // Plan §1.3: the atomic result from the old value and the operand, on n-byte little-endian
-    // integers (n <= 8), signed for MIN/MAX/ADD, unsigned for MINU/MAXU.
-    static uint64_t arith(unsigned param, uint64_t old, uint64_t operand, unsigned n)
-    {
-        unsigned bits = n * 8;
-        uint64_t mask = bits >= 64 ? ~uint64_t(0) : (uint64_t(1) << bits) - 1;
-        auto sext = [&](uint64_t v) -> int64_t
-        {
-            if (bits >= 64) return int64_t(v);
-            uint64_t sign = uint64_t(1) << (bits - 1);
-            return int64_t((v & mask) ^ sign) - int64_t(sign);
-        };
-        switch (static_cast<Arith>(param))
-        {
-            case Arith::MIN:  return (sext(old) < sext(operand) ? old : operand) & mask;
-            case Arith::MAX:  return (sext(old) > sext(operand) ? old : operand) & mask;
-            case Arith::MINU: return ((old & mask) < (operand & mask) ? old : operand) & mask;
-            case Arith::MAXU: return ((old & mask) > (operand & mask) ? old : operand) & mask;
-            case Arith::ADD:  return (old + operand) & mask;
-        }
-        return old & mask;
-    }
-    static uint64_t logic(unsigned param, uint64_t old, uint64_t operand)
-    {
-        switch (static_cast<Logic>(param))
-        {
-            case Logic::XOR:  return old ^ operand;
-            case Logic::OR:   return old | operand;
-            case Logic::AND:  return old & operand;
-            case Logic::SWAP: return operand;
-        }
-        return old;
     }
 
     void ValueCheck::finishAtomic(Op &op, uint64_t t)
     {
+        // docs/TileLink_Review_Action_Plan.md problem 4: the same operation the agents execute.
         const Msg &m = *op.req;
-        bool logical = m.opcode == unsigned(OpA::LogicalData);
-        bool stamp = m.data_mode == DataMode::Stamp;
-        // Group size: the operation's 2^size bytes up to 8 (an arithmetic atomic wider than 8
-        // bytes is applied per 8-byte lane); logical ops are per byte. In Stamp mode a byte's
-        // value is its group's 64-bit stamp, so every group is one 64-bit integer.
-        uint64_t n = m.bytes();
-        uint64_t group = (logical && !stamp) ? 1 : (stamp ? 8 : (n < 8 ? n : 8));
-        for (uint64_t g = m.address; g < m.address + n; g += group)
+        const bool logical = m.opcode == unsigned(OpA::LogicalData);
+        const bool stamp = m.data_mode == DataMode::Stamp;
+        const uint64_t a0 = m.address, n = m.bytes();
+        auto set = [&](uint64_t x, uint64_t v, bool unknown) {
+            auto bit = m_bytes.find(x);
+            if (bit == m_bytes.end()) return;
+            for (auto &r : bit->second.writes) if (r.id == op.wid) { r.unknown = unknown; r.value = unknown ? 0 : v; }
+        };
+        auto known = [&](uint64_t x) {
+            LanePos p = lanePos(m, x);
+            return m.mask[size_t(p.beat) * m.w + p.lane] && !op.old_unknown.count(x) && op.old.count(x);
+        };
+        if (stamp)
         {
-            uint64_t old = 0, operand = 0;
-            bool unknown = false;
-            for (uint64_t x = g; x < g + group && x < m.address + n; x++)
+            // Stamp: a stamp names a write, it is not a number. The atomic installs the operand's stamp for
+            // every group it touches (the last byte of the group in address order, as RamSlave); the old
+            // stamp it returned is checked in onD. No arithmetic on stamps.
+            std::map<uint64_t, uint64_t> group_stamp;
+            for (uint64_t x = a0; x < a0 + n; x++) if (known(x)) group_stamp[x & ~uint64_t(7)] = laneValue(m, x);
+            for (uint64_t y : op.written)
             {
-                LanePos p = lanePos(m, x);
-                if (!m.mask[size_t(p.beat) * m.w + p.lane] || op.old_unknown.count(x) || !op.old.count(x)) { unknown = true; break; }
-                if (stamp) { old = op.old[x]; operand = laneValue(m, x); }
-                else
-                {
-                    unsigned shift = unsigned((x - g) * 8);
-                    old |= op.old[x] << shift;
-                    operand |= laneValue(m, x) << shift;
-                }
+                auto g = group_stamp.find(y & ~uint64_t(7));
+                set(y, g == group_stamp.end() ? 0 : g->second, g == group_stamp.end() || op.operand_corrupt);
             }
-            uint64_t nv = unknown ? 0 : (logical ? logic(m.param, old, operand) : arith(m.param, old, operand, unsigned(stamp ? 8 : group)));
-            for (uint64_t x = g; x < g + group && x < m.address + n; x++)
-            {
-                auto bit = m_bytes.find(x);
-                if (bit == m_bytes.end()) continue;
-                for (auto &r : bit->second.writes)
-                    if (r.id == op.wid)
-                    {
-                        r.unknown = unknown;
-                        r.value = unknown ? 0 : (stamp ? nv : (nv >> ((x - g) * 8)) & 0xff);
-                    }
-            }
+            ackWrite(op, t, false);
+            return;
+        }
+        // Full: one operation on the whole 2^size-byte operand (Atomic.h). Logical operations are per byte, so
+        // a byte whose old value is unknown leaves only its own result unknown; arithmetic depends on every
+        // byte (a carry, a sign), so any unknown or corrupt input leaves the whole result unknown.
+        std::vector<uint8_t> old(size_t(n), 0), opnd(size_t(n), 0);
+        bool all = !op.operand_corrupt;
+        for (uint64_t x = a0; x < a0 + n; x++)
+        {
+            size_t k = size_t(x - a0);
+            if (known(x)) old[k] = uint8_t(op.old[x]); else all = false;
+            opnd[k] = uint8_t(laneValue(m, x));
+        }
+        std::vector<uint8_t> res = applyAtomic(m.opcode, m.param, old, opnd);
+        for (uint64_t x = a0; x < a0 + n; x++)
+        {
+            bool unknown = res.empty() || op.operand_corrupt || (logical ? !known(x) : !all);
+            set(x, unknown ? 0 : res[size_t(x - a0)], unknown);
         }
         ackWrite(op, t, false);
     }

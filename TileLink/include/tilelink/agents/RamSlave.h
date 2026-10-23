@@ -29,7 +29,7 @@
  *   level(s) UH           the capability declared for elaboration (UL or UH)
  * A corrupt write beat (§4.4) stores its data and poisons the bytes it wrote; a read returns a beat
  * corrupt when any byte it carries is poisoned, until a clean write of that byte. Atomics compute on the 2^size-byte
- * little-endian integer (plan §1.3; ValueCheck uses the same reading): MIN/MAX signed, MINU/MAXU
+ * little-endian integer (plan §1.3; tl::atomicOp in Atomic.h, which CoherentManager and ValueCheck share): MIN/MAX signed, MINU/MAXU
  * unsigned, ADD modulo 2^(8*2^size); XOR/OR/AND/SWAP per byte. In stamp mode an atomic returns
  * the old stamps and stores the operand's.
  */

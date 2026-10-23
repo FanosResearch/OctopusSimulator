@@ -3,6 +3,7 @@
  * The inclusive TL-C manager (plan §3.5) executing the manager table (docs/TileLink_TLC_Tables.md
  * §3). See CoherentManager.h for the engine rules around a cell.
  */
+#include "tilelink/Atomic.h"
 #include "tilelink/agents/CoherentManager.h"
 #include "tilelink/CoherenceCheck.h"
 #include "tilelink/Kernel.h"
@@ -31,49 +32,7 @@ namespace octopus { namespace tl
         uint64_t       lru = 0;
     };
 
-    // Plan §1.3 / Tables 23, 25: an atomic on the n-byte little-endian integer (RamSlave's reading,
-    // which ValueCheck shares).
-    static bool lessThan(const uint8_t *a, const uint8_t *b, size_t n, bool is_signed)
-    {
-        if (is_signed)
-        {
-            bool sa = (a[n - 1] & 0x80) != 0, sb = (b[n - 1] & 0x80) != 0;
-            if (sa != sb) return sa;
-        }
-        for (size_t i = n; i-- > 0;)
-            if (a[i] != b[i]) return a[i] < b[i];
-        return false;
-    }
-    static void atomicOp(unsigned opcode, unsigned param, const uint8_t *old, const uint8_t *opnd, uint8_t *out, size_t n)
-    {
-        std::copy(old, old + n, out);
-        if (opcode == unsigned(OpA::ArithmeticData))
-        {
-            switch (param)
-            {
-                case unsigned(Arith::ADD):
-                {
-                    unsigned carry = 0;
-                    for (size_t i = 0; i < n; i++) { unsigned s = unsigned(old[i]) + opnd[i] + carry; out[i] = uint8_t(s); carry = s >> 8; }
-                    return;
-                }
-                case unsigned(Arith::MIN):  if (lessThan(opnd, old, n, true))  std::copy(opnd, opnd + n, out); return;
-                case unsigned(Arith::MAX):  if (lessThan(old, opnd, n, true))  std::copy(opnd, opnd + n, out); return;
-                case unsigned(Arith::MINU): if (lessThan(opnd, old, n, false)) std::copy(opnd, opnd + n, out); return;
-                case unsigned(Arith::MAXU): if (lessThan(old, opnd, n, false)) std::copy(opnd, opnd + n, out); return;
-            }
-            return;
-        }
-        for (size_t i = 0; i < n; i++)
-            switch (param)
-            {
-                case unsigned(Logic::XOR):  out[i] = old[i] ^ opnd[i]; break;
-                case unsigned(Logic::OR):   out[i] = old[i] | opnd[i]; break;
-                case unsigned(Logic::AND):  out[i] = old[i] & opnd[i]; break;
-                case unsigned(Logic::SWAP): out[i] = opnd[i]; break;
-                default: break;
-            }
-    }
+    // the atomics (plan §1.3, Tables 23 and 25): tl::atomicOp in tilelink/Atomic.h, shared with ValueCheck
     static bool isPut(unsigned op) { return op == unsigned(OpA::PutFullData) || op == unsigned(OpA::PutPartialData); }
     static bool laneActive(const Msg &m, uint64_t x)
     {

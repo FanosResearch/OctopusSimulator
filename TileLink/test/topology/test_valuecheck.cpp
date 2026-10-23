@@ -234,3 +234,16 @@ TEST(shared_by_two_links)
 }
 
 TL_TEST_MAIN("test_valuecheck")
+
+TEST(wide_atomic_wrong_old_value_still_rejected)
+{
+    // problem 4: the whole-operand model does not weaken the old-value check. A 16-byte word = 0..15, an ADD
+    // returning a wrong old value is V-ATOMIC; the write it models is computed from the returned value.
+    VC t;
+    auto seq = [](uint64_t x) { return x & 0xf; };
+    t.put(0, 0, 0x40, 4, seq); t.ack(2, 0, 4);
+    t.atomic(4, 1, 0x40, 4, unsigned(OpA::ArithmeticData), unsigned(Arith::ADD), c(0)); t.data(6, 1, 0x40, 4, [](uint64_t x) { return (x & 0xf) ^ 0x80; });
+    t.run();
+    CHECK(t.v.size() >= 1);
+    if (!t.v.empty()) CHECK_EQ(t.v[0].rule, std::string("V-ATOMIC"));
+}

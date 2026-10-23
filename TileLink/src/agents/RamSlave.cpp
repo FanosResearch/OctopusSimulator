@@ -2,6 +2,7 @@
  * File  :      RamSlave.cpp
  * The TL-UL/UH memory slave of plan §3.5. See RamSlave.h for the behaviour and parameters.
  */
+#include "tilelink/Atomic.h"
 #include "tilelink/agents/RamSlave.h"
 #include "tilelink/Kernel.h"
 #include <algorithm>
@@ -108,48 +109,7 @@ namespace octopus { namespace tl
         for (size_t i = 0; i < n; i++) out[i] = readByte(address + i);
     }
 
-    // Plan §1.3 / Tables 23, 25: the atomic on the n-byte little-endian integer.
-    static bool lessThan(const uint8_t *a, const uint8_t *b, size_t n, bool is_signed)
-    {
-        if (is_signed)
-        {
-            bool sa = (a[n - 1] & 0x80) != 0, sb = (b[n - 1] & 0x80) != 0;
-            if (sa != sb) return sa;   // the negative one is smaller
-        }
-        for (size_t i = n; i-- > 0;)
-            if (a[i] != b[i]) return a[i] < b[i];
-        return false;
-    }
-    static void atomicOp(unsigned opcode, unsigned param, const uint8_t *old, const uint8_t *opnd, uint8_t *out, size_t n)
-    {
-        if (opcode == unsigned(OpA::ArithmeticData))
-        {
-            switch (param)
-            {
-                case unsigned(Arith::ADD):
-                {
-                    unsigned carry = 0;
-                    for (size_t i = 0; i < n; i++) { unsigned s = unsigned(old[i]) + opnd[i] + carry; out[i] = uint8_t(s); carry = s >> 8; }
-                    return;
-                }
-                case unsigned(Arith::MIN):  std::copy(old, old + n, out); if (lessThan(opnd, old, n, true))  std::copy(opnd, opnd + n, out); return;
-                case unsigned(Arith::MAX):  std::copy(old, old + n, out); if (lessThan(old, opnd, n, true))  std::copy(opnd, opnd + n, out); return;
-                case unsigned(Arith::MINU): std::copy(old, old + n, out); if (lessThan(opnd, old, n, false)) std::copy(opnd, opnd + n, out); return;
-                case unsigned(Arith::MAXU): std::copy(old, old + n, out); if (lessThan(old, opnd, n, false)) std::copy(opnd, opnd + n, out); return;
-            }
-            std::copy(old, old + n, out);
-            return;
-        }
-        for (size_t i = 0; i < n; i++)
-            switch (param)
-            {
-                case unsigned(Logic::XOR):  out[i] = old[i] ^ opnd[i]; break;
-                case unsigned(Logic::OR):   out[i] = old[i] | opnd[i]; break;
-                case unsigned(Logic::AND):  out[i] = old[i] & opnd[i]; break;
-                case unsigned(Logic::SWAP): out[i] = opnd[i]; break;
-                default: out[i] = old[i]; break;
-            }
-    }
+    // the atomics (plan §1.3, Tables 23 and 25): tl::atomicOp in tilelink/Atomic.h, shared with ValueCheck
 
     // ------------------------------------------------------------------ execution
     void RamSlave::execute(Pending &p, uint64_t cycle)

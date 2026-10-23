@@ -16,9 +16,13 @@
  *   - a read's returned byte must be in the set as it stood at the read's issue, plus the
  *     values of writes outstanding during the read's interval;
  *   - an atomic's returned old value is checked the same way, and its written value is
- *     computed from the returned old value (plan §1.3: MIN/MAX/MINU/MAXU/ADD on the
- *     2^size-byte little-endian integer, XOR/OR/AND/SWAP per byte), so a wrong old value is
- *     caught once, not twice; until it is acknowledged the atomic's bytes admit any value;
+ *     computed from the returned old value by tl::atomicOp (Atomic.h, the agents' own: MIN/MAX/
+ *     MINU/MAXU/ADD on the whole 2^size-byte little-endian integer, XOR/OR/AND/SWAP per byte), so
+ *     a wrong old value is caught once, not twice; until it is acknowledged the atomic's bytes
+ *     admit any value. An arithmetic result with any unknown input byte or a corrupt operand is
+ *     unknown as a whole (a carry or a sign depends on every byte); a logical one per byte;
+ *   - Stamp data: a stamp names a write, not a number. A write's stamp replaces its whole 8-byte
+ *     group (as RamSlave stores it), and an atomic installs its operand's stamp: no arithmetic;
  *   - a denied or corrupt beat is not checked, a denied write adds nothing, a corrupt write
  *     beat makes its bytes admit any value;
  *   - a byte never written admits any value.
@@ -94,12 +98,18 @@ namespace octopus { namespace tl
             std::map<uint64_t, Admissible> snap;   // reads and atomics: per byte, at issue + accumulated
             std::map<uint64_t, uint64_t>   old;    // atomics: the returned old value per byte
             std::set<uint64_t>             old_unknown;
+            // the bytes this write or atomic entered into the model: its masked bytes, and in Stamp mode
+            // every byte of each 8-byte group they touch (a stamp write replaces its group, plan §3.3);
+            // acknowledgement and denial visit exactly these
+            std::set<uint64_t>             written;
+            bool                           operand_corrupt = false;   // an atomic: a corrupt request beat (§4.4)
         };
         using Key = std::pair<const Link *, uint64_t>;   // (link, source)
 
         void onA(const ChannelState &c, const Beat &b, uint64_t t);
         void onD(const ChannelState &c, const Beat &b, uint64_t t);
         void addWrite(Op &op, uint64_t x, uint64_t value, bool unknown);
+        void admit(Op &op, uint64_t x, uint64_t value, bool unknown);   // grow the outstanding reads' admissible sets
         void ackWrite(Op &op, uint64_t t, bool denied);
         void checkByte(const Op &op, uint64_t x, uint64_t got, uint64_t t, const char *rule);
         void finishAtomic(Op &op, uint64_t t);
