@@ -340,6 +340,22 @@ net() {
   net_fatal TL-NEG-NET-UNTAGGED "annotates Octopus message kinds" OCTOPUS_NET_DEBUG= -s MultiCoreSystem_Mesh -c MultiCoreSystem_GridTL "${DIR_TABLES[@]}"
 }
 
+mshr() { # TL-ADMIT-MSHR-SYS (docs/TileLink_Review_Action_Plan.md problem 1): a2time01 with 1 and 2 L1 MSHRs on the
+  # crossbar and on the network (5 and 7 classes) completes; it wedged when an admission refused for a full MSHR
+  # kept its transmit reservation and every retry added one
+  local c m d bad="" n=0
+  for c in TileLink GridTL Grid2BMTL; do for m in 1 2; do
+    sim "$OUT/mshr/$c-$m" -s MultiCoreSystem_Mesh -c MultiCoreSystem_$c -p "cache_controller[*].num_mshr(i)=$m" \
+        -p "workload_path(s)=$(wpath "$ROOT/BMs/eembc-traces/a2time01-trace")/" &
+  done; done; wait
+  for c in TileLink GridTL Grid2BMTL; do for m in 1 2; do
+    d="$OUT/mshr/$c-$m"
+    if [ "$(grep -l 'Average Latency' "$d"/LatencyReport_C*.csv 2>/dev/null | wc -l)" = 4 ] && grep -q "0 violations" "$d/.stderr"; then n=$((n+1)); else bad="$bad $c/num_mshr=$m"; fi
+  done; done
+  [ -z "$bad" ] && pass TL-ADMIT-MSHR-SYS "6/6 (crossbar, 5 and 7 classes; 1 and 2 MSHRs): 4/4 cores, checks 0" "complete" \
+                || fail TL-ADMIT-MSHR-SYS "$n/6, incomplete:$bad" "6/6 complete"
+}
+
 echo "id,status,measured,expected" > "$RESULTS"
 build
 case "$WHAT" in
@@ -348,8 +364,9 @@ case "$WHAT" in
   mem)  mem;;
   oct)  oct;;
   net)  net;;
-  all)  unit; sys;;
-  *) echo "usage: run.sh [unit|sys|mem|oct|net|all]"; exit 2;;
+  mshr) mshr;;
+  all)  unit; sys; mshr;;
+  *) echo "usage: run.sh [unit|sys|mem|oct|net|mshr|all]"; exit 2;;
 esac
 echo "----"; echo "$FAILS failure(s); results in $RESULTS"
 [ "$FAILS" = 0 ]

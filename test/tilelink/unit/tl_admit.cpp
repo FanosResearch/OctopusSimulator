@@ -166,3 +166,43 @@ TEST("TL-ADMIT-LEGACY")
     CHECK_EQ(net.count(Message::K_GETS), 1);
     CHECK_EQ(net.ch_calls, 0); CHECK_EQ(cpu.ch_calls, 0);
 }
+
+// TL-ADMIT-MSHR (docs/TileLink_Review_Action_Plan.md problem 1): the real TLC_L1, one MSHR, two lines.
+// While the first Acquire waits for its Grant the second miss is refused at every retry; the A-channel
+// slot and source reservations must stay at their baseline (the refused admission reserves nothing),
+// and when the GrantData arrives the second Acquire issues and both loads complete.
+TEST("TL-ADMIT-MSHR")
+{
+    Cfg cfg("MultiCoreSystem_TileLink");
+    Configurable::ParametersMap map = cfg.getSubMap("cache_controller", 0);
+    map.erase("num_mshr"); map.emplace("num_mshr", Parameter("num_mshr", Parameter::Integer, 1));
+    StubTL net(0), cpu(-1);
+    auto *l1 = new CacheControllerDirectory(map, &net, &cpu, "test");
+    cpu.deliver(msg(1, 0x1000, 0, 0, -1, 0, Message::K_DEMAND));
+    cycles(l1, 10);
+    cpu.deliver(msg(2, 0x2000, 0, 0, -1, 0, Message::K_DEMAND));
+    cycles(l1, 2);
+    CHECK_EQ(net.count(Message::K_GETS), 1);                       // one Acquire: the second miss is refused
+    const int slots = net.reserved[1], ids = net.ids_reserved[1];
+    CHECK_EQ(slots, 0); CHECK_EQ(ids, 0);                          // the first Acquire's transition has run
+    for (int k = 0; k < 50; k++)
+    {
+        cycles(l1, 1);
+        CHECK_EQ(net.reserved[1], slots); CHECK_EQ(net.ids_reserved[1], ids);
+    }
+    CHECK_EQ(net.count(Message::K_GETS), 1);
+    // the first Acquire's GrantData (toB): the first load completes, the MSHR frees, the second Acquire issues
+    Message g = msg(1, 0x1000, 20, 0, 10, 0, Message::K_RESP, true);
+    g.tl.channel = 4; g.tl.opcode = unsigned(octopus::tl::OpD::GrantData); g.tl.param = unsigned(octopus::tl::Cap::toB); g.tl.size = 6;
+    g.tl.source = net.tx[0].tl.source;
+    net.deliver(g);
+    cycles(l1, 30);
+    CHECK_EQ(net.count(Message::K_GETS), 2);
+    Message g2 = msg(2, 0x2000, 20, 0, 10, 0, Message::K_RESP, true);
+    g2.tl = g.tl;
+    for (auto &m : net.tx) if (m.kind == Message::K_GETS && m.msg_id == 2) g2.tl.source = m.tl.source;
+    net.deliver(g2);
+    cycles(l1, 30);
+    CHECK_EQ((int)cpu.tx.size(), 2);                               // both loads answered
+    CHECK_EQ(net.reserved[1], 0); CHECK_EQ(net.ids_reserved[1], 0);
+}
