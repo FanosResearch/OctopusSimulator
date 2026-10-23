@@ -63,7 +63,19 @@ namespace octopus
                                                     // reservation is held until they have run, spec s14.2)
         };
         Message m_cur_req; bool m_cur_valid = false;   // the request whose transition is running now
-        void beginTransition(const Message &msg) override { m_cur_req = msg; m_cur_valid = true; }
+        void beginTransition(const Message &msg) override { m_cur_req = msg; m_cur_valid = true; cellBegin(); }
+        // The data-array access of the transition whose actions are running (docs/Shared_Controller_Defects_Plan.md
+        // issue 2): the first action of the cell that reads or writes the array claims it (inline) or parks it (an
+        // ACTIONS op). A Store's byte write (MODIFY_DATA) of the same request and line belongs to that access: it
+        // rides on it when it ran inline, it is appended to it when it was parked. Reset at every cell.
+        struct CellAccess { bool active = false, parked = false; uint64_t msg_id = 0, line = 0, op_id = 0; };
+        CellAccess m_cell;
+        void cellBegin() { m_cell = CellAccess(); }
+        void noteCellAccess(const Message &msg, bool parked, uint64_t op_id)
+        {
+            if (m_cell.active) return;
+            m_cell.active = true; m_cell.parked = parked; m_cell.msg_id = msg.msg_id; m_cell.line = getAddressKey(msg.addr); m_cell.op_id = op_id;
+        }
         // Level 2: every access that needs the data array, in arrival order,
         // whole deferred messages and parked single actions alike. Level 1
         // (the processing queue's hold) releases at most one access per line,
