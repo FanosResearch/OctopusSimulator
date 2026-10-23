@@ -69,6 +69,10 @@ namespace octopus { namespace tl
         // reporting agent's id, for the message only.
         void loadPerformed(unsigned agent, uint64_t addr, const uint8_t *bytes, unsigned n, uint64_t cycle);
         void storePerformed(unsigned agent, uint64_t addr, const uint8_t *bytes, unsigned n, uint64_t cycle);
+        // A store whose value is not known (written from a corrupt beat, or an atomic computed from corrupt input,
+        // §4.4): the bytes admit any value until the next known store. Not reporting it would leave the previous
+        // value as the latest store (docs/TileLink_Review_Followup.md R2).
+        void storeUnknown(unsigned agent, uint64_t addr, unsigned n, uint64_t cycle);
 
         // C-PERM, the permission invariant (Table 29): a cache serving an access from its copy must hold
         // the permission for it on its link: a load at least B, a store T. The checker's permission is
@@ -86,7 +90,7 @@ namespace octopus { namespace tl
         // call `if (auto *c = CoherenceCheck::of(kernel())) c->loadPerformed(...)`.
         static CoherenceCheck *of(Kernel &k);
 
-        struct Counters { uint64_t grants = 0, probe_acks = 0, releases = 0, loads = 0, stores = 0, bytes_checked = 0, violations = 0; };
+        struct Counters { uint64_t grants = 0, probe_acks = 0, releases = 0, loads = 0, stores = 0, unknown_stores = 0, bytes_checked = 0, violations = 0; };
         const Counters &counters() const { return m_c; }
         std::function<void(const CoherenceViolation &)> onViolation;   // default: fatal
 

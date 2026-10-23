@@ -299,6 +299,17 @@ namespace octopus { namespace tl
         }
     }
 
+    void CoherenceCheck::storeUnknown(unsigned agent, uint64_t addr, unsigned n, uint64_t cycle)
+    {
+        m_c.unknown_stores++;
+        for (unsigned i = 0; i < n; i++)
+        {
+            m_known[addr + i] = false;   // any value until the next known store (loadPerformed skips it)
+            Writer w; w.agent = int(agent); w.cycle = cycle;
+            m_writer[addr + i] = w;
+        }
+    }
+
     void CoherenceCheck::loadPerformed(unsigned agent, uint64_t addr, const uint8_t *bytes, unsigned n, uint64_t cycle)
     {
         // C-VALUE, §6.5: a load returns the most recent store to each byte (plan §3.6, §8 decision 8).

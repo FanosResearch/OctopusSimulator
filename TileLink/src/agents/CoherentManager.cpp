@@ -331,6 +331,36 @@ namespace octopus { namespace tl
         flush();
     }
 
+    // The bytes of [first, last] for which `unknown` holds become unknown to the checker (CoherenceCheck::storeUnknown);
+    // Stamp data: the whole 8-byte group, as a stamp store reports it.
+    template <typename Pred>
+    static void reportUnknown(CoherenceCheck *cc, unsigned agent, DataMode mode, uint64_t first, uint64_t last, Pred unknown, uint64_t cycle)
+    {
+        if (!cc || mode == DataMode::None) return;
+        uint64_t start = 0; unsigned n = 0;
+        auto flush = [&]() { if (n) cc->storeUnknown(agent, start, n, cycle); n = 0; };
+        if (mode == DataMode::Full)
+        {
+            for (uint64_t x = first; x <= last; x++)
+            {
+                if (!unknown(x)) { flush(); continue; }
+                if (!n) start = x;
+                n++;
+            }
+            flush();
+            return;
+        }
+        for (uint64_t g = first & ~uint64_t(7); g <= last; g += 8)
+        {
+            bool any = false;
+            for (uint64_t x = std::max(g, first); x <= std::min(g + 7, last); x++) if (unknown(x)) any = true;
+            if (!any) { flush(); continue; }
+            if (!n) start = g;
+            n += 8;
+        }
+        flush();
+    }
+
     void CoherentManager::executeAccess(Entry &e, const Msg &req, Msg &resp, uint64_t cycle)
     {
         // TLC_Tables §3.3 Execute: a Put writes the LLC copy (masked bytes, §4.5), an atomic reads the
@@ -346,6 +376,7 @@ namespace octopus { namespace tl
         {
             e.data.fromMsg(req, req.address, a0, a1, true);   // a corrupt beat poisons the bytes it writes
             reportBytes(cc, true, unsigned(id()), mode, a0, a1, [&](uint64_t x) { return e.data.value(x); }, active, cycle);
+            reportUnknown(cc, unsigned(id()), mode, a0, a1, [&](uint64_t x) { return laneActive(req, x) && !valid(x); }, cycle);
             return;
         }
         // atomic. A poisoned old value or a corrupt operand makes the whole result and the returned old
@@ -367,26 +398,38 @@ namespace octopus { namespace tl
         for (uint64_t x = a0; x <= a1; x++) e.data.setPoison(x, bad);
         if (bad) for (auto &c : resp.corrupt) c = 1;
         reportBytes(cc, true, unsigned(id()), mode, a0, a1, [&](uint64_t x) { return e.data.value(x); }, valid, cycle);
+        reportUnknown(cc, unsigned(id()), mode, a0, a1, [&](uint64_t x) { return !valid(x); }, cycle);
     }
 
     void CoherentManager::reportForwarded(const Msg &req, const Msg &resp, uint64_t cycle)
     {
         // N_u + AccessAck[Data] -> ForwardIn: the access was performed at memory, with no inner copy
-        // anywhere and the block blocked until now, so it is reported at the response.
+        // anywhere and the block blocked until now, so it is reported at the response. Corruption (§4.4,
+        // docs/TileLink_Review_Followup.md R2): a byte on a corrupt response beat is not compared; a byte
+        // written from a corrupt request beat, and an atomic's result from corrupt input (old value or
+        // operand), become unknown; clean bytes are reported as before.
         if (resp.denied) return;
         const DataMode mode = kernel()->options().data_mode;
         CoherenceCheck *cc = CoherenceCheck::of(*kernel());
         const uint64_t a0 = req.address, a1 = req.address + req.bytes() - 1;
-        auto all = [](uint64_t) { return true; };
         auto respVal = [&](uint64_t x) { return laneValue(resp, req.address, x); };
-        if (req.opcode == unsigned(OpA::Get)) { reportBytes(cc, false, unsigned(id()), mode, a0, a1, respVal, all, cycle); return; }
+        auto respBad = [&](uint64_t x) { return resp.hasData() && resp.beatCorrupt(lanePos(req.address, resp.w, x).beat); };
+        auto reqBad = [&](uint64_t x) { return req.beatCorrupt(lanePos(req, x).beat); };
+        auto respGood = [&](uint64_t x) { return !respBad(x); };
+        if (req.opcode == unsigned(OpA::Get)) { reportBytes(cc, false, unsigned(id()), mode, a0, a1, respVal, respGood, cycle); return; }
         if (isPut(req.opcode))
         {
             reportBytes(cc, true, unsigned(id()), mode, a0, a1, [&](uint64_t x) { return laneValue(req, x); },
-                        [&](uint64_t x) { return laneActive(req, x); }, cycle);
+                        [&](uint64_t x) { return laneActive(req, x) && !reqBad(x); }, cycle);
+            reportUnknown(cc, unsigned(id()), mode, a0, a1, [&](uint64_t x) { return laneActive(req, x) && reqBad(x); }, cycle);
             return;
         }
-        reportBytes(cc, false, unsigned(id()), mode, a0, a1, respVal, all, cycle);
+        // an atomic: its old value (the clean bytes), then its result, unknown as a whole from any corrupt input
+        reportBytes(cc, false, unsigned(id()), mode, a0, a1, respVal, respGood, cycle);
+        bool bad = false;
+        for (uint64_t x = a0; x <= a1; x++) if (respBad(x) || reqBad(x)) bad = true;
+        if (bad) { reportUnknown(cc, unsigned(id()), mode, a0, a1, [](uint64_t) { return true; }, cycle); return; }
+        auto all = [](uint64_t) { return true; };
         if (mode == DataMode::Full)
         {
             size_t n = size_t(req.bytes());
@@ -466,9 +509,13 @@ namespace octopus { namespace tl
                     if (m->hasData())
                     {
                         for (uint64_t x = r.address; x < r.address + r.bytes(); x++) copyByte(*m, r.address, *consumed, r.address, x);
-                        bool any = false;
-                        for (auto cr : consumed->corrupt) if (cr) any = true;
-                        if (any || consumed->denied) for (auto &cr : m->corrupt) cr = 1;   // §4.4
+                        // §4.4: a denied response is corrupt on every beat; otherwise a relayed beat is corrupt when a
+                        // byte it carries came on a corrupt outer beat (by byte address, so link widths may differ),
+                        // and its other beats stay clean (docs/TileLink_Review_Followup.md R2)
+                        if (consumed->denied) for (auto &cr : m->corrupt) cr = 1;
+                        else
+                            for (uint64_t x = r.address; x < r.address + r.bytes(); x++)
+                                if (consumed->beatCorrupt(lanePos(r.address, consumed->w, x).beat)) m->corrupt[lanePos(r.address, m->w, x).beat] = 1;
                     }
                     reportForwarded(r, *m, cycle);
                     m_ports[size_t(req->port)].outD.q.push_back(m);
