@@ -101,6 +101,7 @@ namespace octopus
         // won the bus for its GetM had already answered it: two data copies).
         m_processing_queue->setHold([this](const Message &m) {
             bool held = m_line_interlock != 0 && lineHasDeferredOp(m.addr);
+            if (admitHeld(m)) held = true;   // a demand admission refused this cycle (BaseController::processLogic)
             if (held && m_trace_addr != 0 && m_trace_held.insert(m.msg_id).second)
             {
                 traceMsg("hold", m);
@@ -540,7 +541,7 @@ namespace octopus
         // a response, or a full MSHR/queue starves the traffic that would drain it.
         // Keyed on message kind, not interface: an L1 write-back is a response that
         // reaches the LLC on the lower interface.
-        if (msg.isDemandRequest())
+        if (m_protocol->isCpuDemand(msg))
         {
             CacheDataHandler_COTS *cots = (CacheDataHandler_COTS *)m_data_handler;
             // Already resident, or already tracked in MSHR/PWB -> a hit or a coalesced access; or

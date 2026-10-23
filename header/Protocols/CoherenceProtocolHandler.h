@@ -42,6 +42,9 @@ namespace octopus
 
         virtual std::vector<ControllerAction> processRequest(Message& request_msg, DebugPrint* dprint = NULL) = 0;
         virtual FRFCFS_State getRequestState(const Message &, FRFCFS_State) = 0;
+        // A CPU demand access (the MSHR check of CacheController::canAdmitRequest, the scheduling of a demand
+        // that admission refuses). Default: Message::isDemandRequest.
+        virtual bool isCpuDemand(const Message &msg) const { return msg.isDemandRequest(); }
         virtual void initializeCacheStates();
         virtual void createDefaultCacheLine(uint64_t address, GenericCacheLine *cache_line) {};
         // Whether a line in this state still gives the core a readable copy.

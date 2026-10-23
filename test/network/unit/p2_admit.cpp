@@ -198,3 +198,104 @@ TEST("P2-ADMIT-MSHR")
     CHECK_EQ(cpu.count(Message::K_RESP), 2);                      // both loads answered
     CHECK_EQ(net.total(), 0);                                     // every reservation returned
 }
+
+// P2-ADMIT-ORDER (docs/Shared_Controller_Defects_Plan.md issue 3): a demand refused by admission keeps its place.
+// One MSHR: Load(1, B) misses and holds it; Load(2, A) then Store(3, A) arrive and are refused at every retry.
+// When B's fill frees the MSHR, the older Load(2, A) must issue first (its GetS), and be answered before the
+// Store; on the old requeue-at-back the refused Load moved behind the Store and the Store's GetM went first.
+// While the demands are refused, a hit to a resident line is served (hit-under-miss), the queue does not grow,
+// and no transmit reservation accumulates.
+TEST("P2-ADMIT-ORDER")
+{
+    prepare();
+    Cfg cfg("MultiCoreSystem_Grid");
+    CountingStub net(0); Stub cpu(-1);
+    CacheControllerDirectory *l1 = new CacheControllerDirectory(withInt(cfg.getSubMap("cache_controller", 0), "num_mshr", 1), &net, &cpu, "test");
+    const uint64_t A = 0x7f0000001000ull, B = 0x7f0000002000ull, C = 0x7f0000003000ull;
+    // C resident first
+    cpu.deliver(msg(10, C, 0, 0, -1, 0, Message::K_DEMAND));
+    cycles(l1, 8);
+    net.deliver(msg(10, C, 0, 0, 10, 0, Message::K_RESP, true));
+    cycles(l1, 10);
+    CHECK_EQ(cpu.count(Message::K_RESP), 1);
+    // B misses and holds the one MSHR; Load A then Store A are refused
+    cpu.deliver(msg(1, B, 0, 0, -1, 0, Message::K_DEMAND));
+    cycles(l1, 8);
+    cpu.deliver(msg(2, A, 0, 0, -1, 0, Message::K_DEMAND));
+    cpu.deliver(msg(3, A, 1, 0, -1, 0, Message::K_DEMAND));
+    cycles(l1, 8);
+    const int queued = l1->queued();
+    for (int k = 0; k < 40; k++) { cycles(l1, 1); CHECK_EQ(net.total(), 0); CHECK_EQ(l1->queued(), queued); }
+    // a hit to C while the demands to A are refused
+    cpu.deliver(msg(11, C, 0, 0, -1, 0, Message::K_DEMAND));
+    cycles(l1, 6);
+    bool hit = false; for (auto &m : cpu.tx) if (m.msg_id == 11) hit = true;
+    CHECK(hit);
+    CHECK_EQ(net.count(Message::K_GETS) + net.count(Message::K_GETM), 2);   // C's and B's only
+    // B's fill frees the MSHR: the older Load(2, A) issues first
+    net.deliver(msg(1, B, 0, 0, 10, 0, Message::K_RESP, true));
+    cycles(l1, 10);
+    const Message *firstA = nullptr;
+    for (auto &m : net.tx) if ((m.kind == Message::K_GETS || m.kind == Message::K_GETM) && ((m.addr ^ A) & ~uint64_t(63)) == 0) { firstA = &m; break; }
+    CHECK(firstA != nullptr);
+    if (firstA) { CHECK_EQ(firstA->msg_id, uint64_t(2)); CHECK_EQ((int)firstA->kind, (int)Message::K_GETS); }
+    // A's data: the Load is answered, then the Store (its upgrade or miss in turn)
+    if (firstA) net.deliver(msg(firstA->msg_id, A, 0, 0, 10, 0, Message::K_RESP, true));
+    cycles(l1, 10);
+    for (auto &m : net.tx) if (m.kind == Message::K_GETM && ((m.addr ^ A) & ~uint64_t(63)) == 0 && m.msg_id == 3)
+    { net.deliver(msg(3, A, 0, 0, 10, 0, Message::K_RESP, true)); break; }
+    cycles(l1, 10);
+    int at2 = -1, at3 = -1;
+    for (int i = 0; i < (int)cpu.tx.size(); i++) { if (cpu.tx[i].msg_id == 2 && at2 < 0) at2 = i; if (cpu.tx[i].msg_id == 3 && at3 < 0) at3 = i; }
+    CHECK(at2 >= 0 && at3 >= 0 && at2 < at3);                   // program order on line A
+    CHECK_EQ(net.total(), 0);
+}
+
+// P2-ADMIT-ORDER-LLC (docs/Shared_Controller_Defects_Plan.md issue 3, at an LLC): one MSHR held by a read that memory
+// does not answer. A GetS to line D from core 1 is refused and held; it carries the msg_id of an outstanding
+// eviction invalidation, so the InvAck that answers that invalidation (non-demand, the same lower interface, the same
+// msg_id) must still be consumed and complete the eviction while the GetS is held. A younger GetM to D from core 2
+// stays behind the GetS: when the MSHR frees, D's memory read is the GetS's.
+TEST("P2-ADMIT-ORDER-LLC")
+{
+    prepare();
+    Cfg cfg("MultiCoreSystem_Grid");
+    Stub mem(100), net(10);
+    CacheControllerDirectory *llc = new CacheControllerDirectory(withInt(cfg.getSubMap("llc_controller"), "num_mshr", 1), &mem, &net, "test");
+    std::vector<uint64_t> served;
+    auto serveMemory = [&](uint64_t only_addr) {
+        for (auto &m : mem.tx) if (m.kind == Message::K_MEM_READ && !m.to.empty() && m.to[0] == 100 && ((m.addr ^ only_addr) & ~uint64_t(63)) == 0)
+        { Message f = msg(m.msg_id, m.addr, 0, m.owner, 100, 10, Message::K_FILL, true); mem.deliver(f); m.to.clear(); }
+    };
+    const uint64_t C1 = 0x7f0000010000ull, C2 = C1 + 0x4000, C3 = C1 + 0x8000, D = 0x7f0000020000ull, E = 0x7f0000030000ull;
+    int id = 100;
+    for (uint64_t line : {C1, C2, C3})
+    {
+        net.deliver(msg(id++, line, MSIDirectory::REQUEST_TYPE_GETS, 0, 0, 10, Message::K_GETS));
+        for (int k = 0; k < 6; k++) { cycles(llc, 4); serveMemory(line); }
+    }
+    cycles(llc, 20);
+    CHECK_EQ(net.count(Message::K_INV), 1);                      // C1's eviction waits for core 0's InvAck
+    const Message inv = *net.last(Message::K_INV);
+    // E's read holds the one MSHR (memory does not answer it yet)
+    net.deliver(msg(id++, E, MSIDirectory::REQUEST_TYPE_GETS, 2, 2, 10, Message::K_GETS));
+    cycles(llc, 8);
+    // GetS(D) from core 1, with the invalidation's msg_id, then a younger GetM(D) from core 2: both refused
+    net.deliver(msg(inv.msg_id, D, MSIDirectory::REQUEST_TYPE_GETS, 1, 1, 10, Message::K_GETS));
+    net.deliver(msg(500, D, MSIDirectory::REQUEST_TYPE_GETM, 2, 2, 10, Message::K_GETM));
+    cycles(llc, 8);
+    CHECK_EQ(llc->queued(), 2);
+    auto readsOf = [&](uint64_t a) { std::vector<uint64_t> v; for (auto &m : mem.tx) if (m.kind == Message::K_MEM_READ && ((m.addr ^ a) & ~uint64_t(63)) == 0) v.push_back(m.msg_id); return v; };
+    CHECK(readsOf(D).empty());
+    // the InvAck (same msg_id as the held GetS) is consumed and completes the eviction
+    net.deliver(msg(inv.msg_id, inv.addr, MSIDirectory::REQUEST_TYPE_INV_ACK, 0, 0, 10, Message::K_ACK));
+    cycles(llc, 6);
+    CHECK_EQ((int)net.pending(), 0);
+    CHECK_EQ(llc->queued(), 2);                                  // only the two held demands to D
+    // E's fill frees the MSHR: D's memory read belongs to the older GetS
+    serveMemory(E);
+    cycles(llc, 12);
+    std::vector<uint64_t> rd = readsOf(D);
+    CHECK(!rd.empty());
+    if (!rd.empty()) CHECK_EQ(rd[0], inv.msg_id);
+}

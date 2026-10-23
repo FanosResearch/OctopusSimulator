@@ -125,6 +125,8 @@ namespace octopus
             m_local_fills.erase(m_local_fills.begin());
 
         this->addRequests2ProcessingQueue(*m_processing_queue);
+        // the demands refused last cycle are eligible again (the queue caches readiness on state only, so it is told)
+        if (!m_admit_hold.empty()) { m_admit_hold.clear(); m_processing_queue->markDirty(); }
 
         while(true)
         {
@@ -147,26 +149,33 @@ namespace octopus
                 }
                 return;
             }
-            m_last_progress_cycle = m_cache_cycle;
             traceMsg("popped", ready_msg);
 
             if (!canAdmitRequest(ready_msg))
             {
                 traceMsg("admit-fail", ready_msg);
                 m_admit_fail_cycles++;
-                // Structural stall (e.g., MSHR/PWB full, no transmit slot): put the request back
-                // and retry next cycle. It was admitted already, so it must not meet the demand
-                // cap again: force-admitted traffic can hold the queue above the cap, and a
-                // refused re-queue would silently drop the request.
-                // A non-demand message (forward, invalidation, acknowledgement, data) goes back to its own
-                // place: the protocol relies on the order in which a home's messages arrive. A demand
-                // request goes to the back as before (bus systems refuse demand when MSHRs are full).
-                if (ready_msg.isDemandRequest())
-                    m_processing_queue->pushBack(ready_msg, FRFCFS_State::NonReady, /*force=*/true);
-                else
-                    m_processing_queue->restoreLast(ready_msg, FRFCFS_State::NonReady);
+                // Structural stall (e.g., MSHR/PWB full, no transmit slot): the message goes back to its own
+                // place and is retried next cycle; a refused pop is not progress (the hang dump sees a
+                // controller that can only refuse). It was admitted to the queue already, so it does not meet
+                // the demand cap again (restoreLast never refuses).
+                m_processing_queue->restoreLast(ready_msg, FRFCFS_State::NonReady);
+                // (a demand already refused this cycle ends the scan: a controller without the queue hold would
+                // otherwise select it again and again)
+                if (m_protocol->isCpuDemand(ready_msg) && m_admit_hold.insert(ready_msg.msg_id).second)
+                {
+                    // A CPU demand keeps its age (docs/Shared_Controller_Defects_Plan.md issue 3): at the back,
+                    // a younger access to its line passed it through the per-line gate and ran first (an older
+                    // Load returned a younger Store's value). Held for the rest of this cycle, it is skipped and
+                    // the scan goes on: other lines' hits and the completion traffic that frees the resource
+                    // still run, the line's younger demands stay behind it.
+                    continue;
+                }
+                // A non-demand message (forward, invalidation, acknowledgement, data): the protocol relies on the
+                // order in which a home's messages arrive, so nothing behind it runs this cycle.
                 return;
             }
+            m_last_progress_cycle = m_cache_cycle;
 
             if (deferForDataArray(ready_msg))
                 continue;
