@@ -138,13 +138,19 @@ step5() {
   for t in $EEMBC; do { [ "$(cat "$O/bank/$t/.rc")" = 0 ] && completed "$O/bank/$t" "$ROOT/BMs/eembc-traces/$t"; } || { ok=0; detail="$detail $t(rc=$(cat "$O/bank/$t/.rc"))"; }; done
   rm -rf "${O:?}/bank-trace"; mkdir -p "$O/bank-trace"
   OCTOPUS_TRACE="$(wpath "$O/bank-trace/trace.bin")" timeout 1800 "$BIN" $G2B -p "workload_path(s)=$(W a2time01-trace)/" -o "$(wpath "$O/bank-trace")" > "$O/bank-trace/.stdout" 2> "$O/bank-trace/.stderr"
-  local hm; hm=$($PY "$HERE/homecheck.py" "$O/bank-trace" 10,11 0 64 2>&1 | tail -1); [ "$(echo "$hm" | cut -d' ' -f2)" = 0 ] || { ok=0; detail="$detail homemap:$hm"; }
+  # the home map, from the raw trace (numpy): its own result, so a missing package skips only it
+  local hm="not checked"
+  if py_has numpy; then
+    hm=$($PY "$HERE/homecheck.py" "$O/bank-trace" 10,11 0 64 2>&1 | tail -1)
+    if [ "$(echo "$hm" | cut -d' ' -f2)" = 0 ]; then pass P2-BANKING-MAP "home map $hm (requests, mismatches)" "0 home mismatches"
+    else fail P2-BANKING-MAP "$hm" "0 home mismatches"; fi
+  else xfail P2-BANKING-MAP "$(py_lacks numpy)"; fi
   rm -rf "${O:?}/bank-adm"; mkdir -p "$O/bank-adm"
   ( OCTOPUS_HANG_DUMP=200000 timeout 1800 "$BIN" $G2B -p "workload_path(s)=$(W cacheb01-trace)/" -p "interconnect.inject_queue_depth(i)=4" -p "interconnect.eject_queue_depth(i)=2" -p "interconnect.arbiter_type(s)=RRArbiter" -o "$(wpath "$O/bank-adm")" > "$O/bank-adm/.stdout" 2> "$O/bank-adm/.stderr" ); [ $? = 0 ] && completed "$O/bank-adm" "$ROOT/BMs/eembc-traces/cacheb01-trace" || { ok=0; detail="$detail admission-on-banks"; }
   rm -rf "${O:?}/bank-adj"; mkdir -p "$O/bank-adj"
   "$BIN" $G2B -p "workload_path(s)=$(W a2time01-trace)/" -p "interconnect.node_map[11](i)=1" -o "$(wpath "$O/bank-adj")" > "$O/bank-adj/.stdout" 2> "$O/bank-adj/.stderr"
   local f03 f01 f1; f03=$(sed -n 2p "$O/bank/a2time01-trace/Summary.csv" | cut -d, -f13); f01=$(sed -n 2p "$O/bank-adj/Summary.csv" | cut -d, -f13); f1=$(sed -n 2p "$O/eembc/a2time01-trace/Summary.csv" | cut -d, -f13)
-  if [ $ok = 1 ]; then pass P2-BANKING "10/10 complete; home map $hm; admission holds per bank; a2time01 first-core finish: one LLC $f1, banks on routers 0,3 $f03, on 0,1 $f01" "complete, 0 home mismatches" "$(elapsed "$t0")"
-  else fail P2-BANKING "$detail" "10/10 complete, 0 home mismatches, admission holds on banks" "$(elapsed "$t0")"; fi
+  if [ $ok = 1 ]; then pass P2-BANKING "10/10 complete; home map: P2-BANKING-MAP; admission holds per bank; a2time01 first-core finish: one LLC $f1, banks on routers 0,3 $f03, on 0,1 $f01" "complete, 0 home mismatches" "$(elapsed "$t0")"
+  else fail P2-BANKING "$detail" "10/10 complete, admission holds on banks" "$(elapsed "$t0")"; fi
   unset OCTOPUS_EVENT_DEBUG
 }
