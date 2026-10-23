@@ -147,3 +147,54 @@ TEST("P2-ADMIT-RF-SNOOP-L1")
     cycles(l1, 3);
     CHECK_EQ((int)bus.pending(), 0);
 }
+
+// P2-ADMIT-MSHR (docs/TileLink_Review_Action_Plan.md problem 1): an admission refused because the
+// MSHRs are full must not reserve transmit slots. One MSHR, two loads to different lines: while the
+// first miss is outstanding the second is refused at every retry; the transmit reservations must
+// stay at their baseline, and when the first fill arrives the second miss issues and both complete.
+namespace
+{
+    // a network side with a finite request queue that records reservations (spec s14.2)
+    struct CountingStub : Stub
+    {
+        int cap = 4, reserved[3] = {0, 0, 0};
+        CountingStub(int id) : Stub(id) {}
+        static int t(MessageType type) { return type == MessageType::REQUEST ? 0 : type == MessageType::SERVICE_REQUEST ? 1 : 2; }
+        int  txFreeSlots(MessageType type) override { return cap - reserved[t(type)]; }
+        void txReserve(MessageType type, int n) override { reserved[t(type)] += n; }
+        void txRelease(MessageType type, int n) override { reserved[t(type)] -= n; }
+        int  total() const { return reserved[0] + reserved[1] + reserved[2]; }
+    };
+    Configurable::ParametersMap withInt(Configurable::ParametersMap m, const std::string &key, int v)
+    {
+        m.erase(key);
+        m.insert({key, Parameter(key, Parameter::Integer, v)});
+        return m;
+    }
+}
+
+TEST("P2-ADMIT-MSHR")
+{
+    prepare();
+    Cfg cfg("MultiCoreSystem_Grid");
+    CountingStub net(0); Stub cpu(-1);
+    CacheControllerDirectory *l1 = new CacheControllerDirectory(withInt(cfg.getSubMap("cache_controller", 0), "num_mshr", 1), &net, &cpu, "test");
+    const uint64_t A = 0x7f0000001000ull, B = 0x7f0000002000ull;   // two lines
+    cpu.deliver(msg(1, A, 0, 0, -1, 0, Message::K_DEMAND));
+    cpu.deliver(msg(2, B, 0, 0, -1, 0, Message::K_DEMAND));
+    cycles(l1, 8);
+    CHECK_EQ(net.count(Message::K_GETS), 1);                      // A misses; B is refused (one MSHR)
+    const int baseline = net.total();
+    CHECK_EQ(baseline, 0);                                        // A's GetS transition has run and released its slot
+    // many retries of B's admission while A's fill is held back: no reservation accumulates
+    for (int k = 0; k < 50; k++) { cycles(l1, 1); CHECK_EQ(net.total(), baseline); }
+    CHECK_EQ(net.count(Message::K_GETS), 1);
+    // A's fill: A completes, the MSHR frees, B's GetS issues; B's fill: B completes
+    net.deliver(msg(1, A, 0, 0, 10, 0, Message::K_RESP, true));
+    cycles(l1, 10);
+    CHECK_EQ(net.count(Message::K_GETS), 2);
+    net.deliver(msg(2, B, 0, 0, 10, 0, Message::K_RESP, true));
+    cycles(l1, 10);
+    CHECK_EQ(cpu.count(Message::K_RESP), 2);                      // both loads answered
+    CHECK_EQ(net.total(), 0);                                     // every reservation returned
+}

@@ -1195,3 +1195,19 @@ DecSharers/PutAck/N_a` (a PutE comes from a clean copy: the home's data is valid
 
 **Tests** (`bash test/network/run.sh D`). DIR-MOESI-NET: directory MOESI on Grid, Grid2B, Grid2BM, Grid2B2M,
 FCFS and RR, normal and small queues: 160/160 complete. DIR-MESI and DIR-MOESI-BUS pass.
+
+## Fix: admission refused for a full MSHR leaked its transmit reservation (2026-10-23)
+
+Found in the TileLink review (`docs/TileLink_Review_Action_Plan.md` problem 1, on branch `tilelink`), but
+present since P2-ADMISSION (`869f46c0`). `CacheController::canAdmitRequest` called `txAdmit`, which
+reserves transmit slots and records a hold, before the MSHR check; a demand refused for a full MSHR kept
+the reservation, and every retry of it added one, until no request slot was left. With one L1 MSHR,
+directory MSI on Grid wedged after one access per core (a2time01: 1 of about 69 000 rows per core). The
+shipped presets leave the L1 MSHRs unbounded, so no suite reached it.
+
+**Fixed.** The structural check (resident, tracked, coalescing, free MSHR) runs first and mutates
+nothing; `txAdmit`, which itself checks every port before reserving any slot, runs only for a request
+that passes it. **Measured.** P2-ADMIT-MSHR (unit: one MSHR, two lines, 50 refused retries leave the
+reservations at their baseline, both loads complete and every reservation returns), P2-ADMIT-MSHR-SYS
+(Grid a2time01 with 1 and 2 L1 MSHRs: 4/4 cores, 4 s and 3 s); `run.sh reg` 6/6 byte-identical (no
+reference changed); `run.sh all` no PASS lost.
