@@ -42,6 +42,13 @@ Contents
   of exit codes, messages or file layout.
 - **Expected-fail.** A test may be marked `XFAIL <reason>`; the runner reports it separately and
   turns it into a failure when the step that is meant to fix it is reached (§12).
+- **Python packages.** The trace checks need numpy; the converter and viewer checks need duckdb too.
+  The runner probes them once with `$PY` (set by the caller, for example a virtual environment's
+  python, or python3) and prints the interpreter and the package versions. A check whose packages
+  are missing is `XFAIL` with an install hint, and only that check; with the packages present a
+  validator or converter failure is a `FAIL`. Full validation needs both packages.
+- **Complete runs.** A run that stops early prints `RUN ABORTED before completion` and records
+  `RUN-ABORTED` in `results.csv`; a complete run ends with `(run complete)`.
 - **No user configuration file is edited by a test.** Tests use the committed presets and `-p`
   overrides, and write under `test/network/out/`.
 
@@ -258,7 +265,7 @@ Recorded now so the XFAILs above have an owner:
 | P2-ADMIT-RF | a controller with a full request queue still consumes a forward and a response | DONE: `test/network/unit/p2_admit.cpp` drives the directory L1, the directory LLC and the snoop L1 through stub interfaces with one receive queue per class; a two-deep processing queue is filled with stalled demand requests (a fourth waits outside), then an invalidation and the home's data (L1), an eviction's InvAck and a memory fill (LLC), a snooped request and a data response (snoop L1) are consumed while it stays full |
 | P2-FSM-CLASS | every event and action of the directory FSM tables carries its class annotation (handler tables) | DONE: the check on the three-class grid reports no unannotated name and "consumption order holds" |
 | P2-CHECKER | the two-class configuration with the directory protocol | DONE: refused at construction with status 2, 36 cells named; `MultiCoreSystem_NetNoC` runs it with `deadlock_check warn` |
-| P2-BANKING | `MultiCoreSystem_Grid2B`: two LLC banks on routers 0 and 3, lines interleaved (spec §24) | EEMBC 10/10; every request to a home in a2time01's raw trace went to the bank the map names, from every core (`test/network/homecheck.py`); cacheb01 with `inject_queue_depth 4`, `eject_queue_depth 2`, RR completes (admission per bank); the first core's finish cycle is reported for one LLC, banks on routers 0 and 3, and banks on routers 0 and 1 |
+| P2-BANKING | `MultiCoreSystem_Grid2B`: two LLC banks on routers 0 and 3, lines interleaved (spec §24) | EEMBC 10/10; every request to a home in a2time01's raw trace went to the bank the map names, from every core (`test/network/homecheck.py`, reported as P2-BANKING-MAP); cacheb01 with `inject_queue_depth 4`, `eject_queue_depth 2`, RR completes (admission per bank); the first core's finish cycle is reported for one LLC, banks on routers 0 and 3, and banks on routers 0 and 1 |
 
 ## 12a. Memory on the network (spec §25, plan `docs/NoC_Memory_Plan.md`)
 
@@ -278,7 +285,7 @@ router 1. `MultiCoreSystem_Grid2B2M` adds controller 101 on router 2 (M5).
 | MEM-TILING | M4 | `OCTOPUS_EVENT_DEBUG=1` on `Grid2BM`, ten traces: event-path tiling 0 failures; the L2-DRAM bus stage is present |
 | MEM-COLUMNS | M4 | on `Grid2BM` the coherence NoC trackers of every row equal the trace's coherence packets (`s7check.py sum`), NoC Mem Hops of every row equals the router hops of the request's memory packets (`test/network/memcolumns.py`); the Mem columns are absent with `memory_on_network = 0` |
 | MEM-VIEWER | M4 | `octoviz convert` on a `Grid2BM` run: every check 0 mismatches, no end without a start, one `MEM_BUS` interval per memory packet (= packets received by the memory controller and the memory ports) |
-| MEM-MULTI | M5 | `Grid2B2M`: EEMBC under FCFS and RR, with and without `inject_queue_depth 4` / `eject_queue_depth 2`, 40/40 complete, 0 overtakes, 0 refused pushes; every memory read and write of a2time01's raw trace went to the controller the map names, both controllers carry traffic, and each controller's receive count equals the trace's (`test/network/memmulti.py`); a SPLASH subset completes |
+| MEM-MULTI | M5 | `Grid2B2M`: EEMBC under FCFS and RR, with and without `inject_queue_depth 4` / `eject_queue_depth 2`, 40/40 complete, 0 overtakes, 0 refused pushes; every memory read and write of a2time01's raw trace went to the controller the map names, both controllers carry traffic, and each controller's receive count equals the trace's (`test/network/memmulti.py`, reported as MEM-MULTI-MAP); a SPLASH subset completes |
 | MEM-MCSIM | M6 | `Grid2BM` and `Grid2B2M` with `main_memory_type = MCsim` (one instance per controller, controller-select bits removed): EEMBC 20/20 complete, 0 overtakes, 0 tiling failures; every read the controllers received equals the reads the banks sent (conservation); three runs on two controllers byte-identical. (Equality with the bus system's DRAM count, first planned, does not hold: the network changes timing and with it the LLC's hits and misses.) |
 | MEM-DETERMINISM | M2-M6 | two runs of each memory preset are byte-identical |
 
