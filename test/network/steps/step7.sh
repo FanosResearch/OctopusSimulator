@@ -10,18 +10,19 @@ step7() {
   else
     local w; for w in hops sum timebase; do
       local id; case $w in hops) id=S7-TRACE-HOPS;; sum) id=S7-TRACKER-SUM;; timebase) id=S7-TIMEBASE;; esac
+      if ! py_has numpy; then xfail $id "$(py_lacks numpy)"; continue; fi
       local out; out=$($PY "$HERE/s7check.py" "$run" $w 2>&1 | tail -1)
       if [ "${out#* }" = 0 ]; then pass $id "$out checked/mismatches" "0 mismatches" "$(elapsed "$t0")"; else fail $id "$out" "0 mismatches" "$(elapsed "$t0")"; fi
     done
     # ---- the converter: zero mismatches against the Logger rows, one lane per router
     t0=$(now)
-    if $PY -c "import duckdb, numpy" 2>/dev/null; then
+    if py_has duckdb numpy; then
       ( cd "$ROOT" && KEEP_TRACE=1 PY=$PY bash octoviz.sh convert "$run" > "$run/.convert" 2>&1 ); local crc=$?
       local mm; mm=$(grep -o "mismatches=[0-9]*" "$run/.convert" | grep -vc "mismatches=0")
       local lanes; lanes=$($PY "$HERE/s7lanes.py" "$(wpath "$run")" 2>&1 | tail -1)
       if [ $crc = 0 ] && [ "$mm" = 0 ] && [ "$lanes" = 4 ]; then pass S7-CONVERT "all checks mismatches=0, $lanes router lanes" "0 mismatches, 4 lanes" "$(elapsed "$t0")"
       else fail S7-CONVERT "rc=$crc nonzero-mismatch lines=$mm lanes=$lanes (see $run/.convert)" "0 mismatches, 4 lanes" "$(elapsed "$t0")"; fi
-    else xfail S7-CONVERT "python lacks duckdb/numpy (pip install duckdb numpy)"; fi
+    else xfail S7-CONVERT "$(py_lacks duckdb numpy)"; fi
   fi
   # ---- S7-AHEAD: the contention case of spec s21 on the 2x2 grid: core 1 streams a 9-flit write-back
   # 1->3 from cycle 1; core 0's 1-flit request 0->3 (injected at cycle 3) arrives at router 1 while the
@@ -39,9 +40,13 @@ step7() {
   # and the router intervals, on a converted two-bank grid run
   t0=$(now); local vr="$O/viewer"; rm -rf "${vr:?}"; mkdir -p "$vr/grid2b"
   OCTOPUS_TRACE="$(wpath "$vr/grid2b/trace.bin")" timeout 1800 "$BIN" -s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid2B -p "workload_path(s)=$(W a2time01-trace)/" -o "$(wpath "$vr/grid2b")" > "$vr/grid2b/.stdout" 2> "$vr/grid2b/.stderr"
-  if $PY -c "import duckdb, numpy" 2>/dev/null && ( cd "$ROOT" && PY=$PY bash octoviz.sh convert "$vr/grid2b" > "$vr/.convert" 2>&1 ); then
+  # packages first (XFAIL when missing); with them present a failed conversion is a FAIL, not an XFAIL
+  if ! py_has duckdb numpy; then xfail S7-VIEWER-API "$(py_lacks duckdb numpy)"
+  elif ! ( cd "$ROOT" && PY=$PY bash octoviz.sh convert "$vr/grid2b" > "$vr/.convert" 2>&1 ); then
+    fail S7-VIEWER-API "the conversion failed (see $vr/.convert)" "converted, 4 router lanes, banks 10 and 11" "$(elapsed "$t0")"
+  else
     local va; va=$($PY "$HERE/s7viewer.py" "$vr" 4 10,11 2>&1 | tail -1)
     case "$va" in ok*) pass S7-VIEWER-API "${va#ok }" "4 router lanes, banks 10 and 11, heat and intervals" "$(elapsed "$t0")";; *) fail S7-VIEWER-API "$va" "4 router lanes, banks 10 and 11" "$(elapsed "$t0")";; esac
-  else xfail S7-VIEWER-API "python lacks duckdb/numpy or the conversion failed (see $vr/.convert)"; fi
+  fi
   xfail S7-VIEWER "manual: the router lanes, the route of a selected request and the contention grid are checked by eye once per release"
 }

@@ -1,7 +1,8 @@
 # Step 4 -- the engine on synthetic traffic (docs/NoC_Test_Plan.md §7). Every run is NetworkOnly
 # with -p overrides; expectations are computed here from the specification's formulas.
 NS="$HERE/netstat.py"
-PY=python; command -v python3 > /dev/null 2>&1 && PY=python3
+# the interpreter: $PY when the caller sets it (run.sh reports it and its packages), else python3 or python
+[ -n "${PY:-}" ] || { PY=python; command -v python3 > /dev/null 2>&1 && PY=python3; }
 nstat() { $PY "$NS" "$1/NetworkStats.csv" "$2" "$3" "$4"; }          # nstat <out> <section> <key> <col>
 nsum()  { $PY "$NS" "$1/NetworkStats.csv" sum "$2" "$3" "${4:-}"; }   # nsum <out> <section> <col> [local|link]
 CONSERVE_FAILS=0

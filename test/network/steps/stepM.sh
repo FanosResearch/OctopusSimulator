@@ -105,8 +105,8 @@ mem_unl() { echo $(( $1 * 2 + ($1 - 1) * 1 + $2 - 1 )); }
 
 stepM4() {
   local O="$OUT/mem4" t0 ok detail; mkdir -p "$O"
-  if ! $PY -c "import numpy" 2>/dev/null; then
-    xfail MEM-UNLOADED "python lacks numpy"; xfail MEM-COLUMNS "python lacks numpy"; xfail MEM-VIEWER "python lacks numpy/duckdb"
+  if ! py_has numpy; then
+    xfail MEM-UNLOADED "$(py_lacks numpy)"; xfail MEM-COLUMNS "$(py_lacks numpy)"; xfail MEM-VIEWER "$(py_lacks numpy duckdb)"
   else
     # ---------------- MEM-UNLOADED: the fastest read (1 flit) and fill (5 flits) per bank equal the formula, two placements
     t0=$(now); ok=1; detail=""
@@ -132,7 +132,7 @@ stepM4() {
     else fail MEM-COLUMNS "memcolumns '$mcol' trackers '$tsum'" "0 mismatches, absent on the bus" "$(elapsed "$t0")"; fi
     # ---------------- MEM-VIEWER: the converter's checks are clean and draws one MEM_BUS interval per memory packet
     t0=$(now)
-    if $PY -c "import duckdb" 2>/dev/null; then
+    if py_has duckdb; then
       ( cd "$ROOT" && KEEP_TRACE=1 PY=$PY bash octoviz.sh convert "$O/unl1" > "$O/unl1/.convert" 2>&1 ); local crc=$?
       local mm; mm=$(grep -o "mismatches=[0-9]*" "$O/unl1/.convert" | grep -vc "mismatches=0")
       local memiv; memiv=$(awk '$1=="MEM_BUS" {print $2}' "$O/unl1/.convert" | head -1)
@@ -141,7 +141,7 @@ stepM4() {
       if [ $crc = 0 ] && [ "$mm" = 0 ] && ! grep -q "ends without a start" "$O/unl1/.convert" && [ "$memiv" = "$pk" ]; then
         pass MEM-VIEWER "converted, 0 mismatches, $memiv MEM_BUS intervals = memory packets" "clean" "$(elapsed "$t0")"
       else fail MEM-VIEWER "rc=$crc nonzero-mismatch lines=$mm MEM_BUS intervals=$memiv packets=$pk" "clean, one interval per packet" "$(elapsed "$t0")"; fi
-    else xfail MEM-VIEWER "python lacks duckdb"; fi
+    else xfail MEM-VIEWER "$(py_lacks duckdb)"; fi
   fi
   # ---------------- MEM-TILING: the event path tiles on every row of the ten traces
   t0=$(now); ok=1; detail=""
@@ -173,19 +173,20 @@ stepM5() {
     local d="$O/$mode-$arb/$t" r; r=$(mem_refused "$d")
     { [ "$(cat "$d/.rc")" = 0 ] && completed "$d" "$ROOT/BMs/eembc-traces/$t" && mem_hazard_ok "$d" && [ "$r" = 0 ] && ! grep -q Fault "$d/.stdout"; } || { ok=0; detail="$detail $mode-$arb:$t(rc=$(cat "$d/.rc"),refused=$r)"; }
   done; done; done
-  # the map: every memory request of a2time01 went to the controller mem_ids names
-  local mm=""
-  if $PY -c "import numpy" 2>/dev/null; then
-    local run="$O/map"; rm -rf "$run"; mkdir -p "$run"
+  if [ $ok = 1 ]; then pass MEM-MULTI "40/40 complete, 0 overtakes, 0 refused; routing: MEM-MULTI-MAP" "complete" "$(elapsed "$t0")"
+  else fail MEM-MULTI "$detail" "40/40 complete" "$(elapsed "$t0")"; fi
+  # the map (its own result, numpy): every memory request of a2time01 went to the controller mem_ids names
+  t0=$(now)
+  if py_has numpy; then
+    local run="$O/map" mm n100="" n101="" first; rm -rf "$run"; mkdir -p "$run"
     OCTOPUS_TRACE="$(wpath "$run/trace.bin")" timeout 1800 "$BIN" $MEM2 -p "workload_path(s)=$(W a2time01-trace)/" -o "$(wpath "$run")" > "$run/.stdout" 2> "$run/.stderr"
     mm=$($PY "$HERE/memmulti.py" "$run" 6 100 101 2>&1)
-    local first; first=$(echo "$mm" | head -1)
-    [ "${first#* }" = "0 0" ] || { ok=0; detail="$detail map:'$first'"; }
-    local n100 n101; n100=$(echo "$mm" | awk '$1==100 {print $2}'); n101=$(echo "$mm" | awk '$1==101 {print $2}')
-    { [ "${n100:-0}" -gt 0 ] && [ "${n101:-0}" -gt 0 ]; } || { ok=0; detail="$detail map: a controller saw no traffic"; }
-  else detail="$detail (map check skipped: python lacks numpy)"; fi
-  if [ $ok = 1 ]; then pass MEM-MULTI "40/40 complete, 0 overtakes, 0 refused; map $(echo "$mm" | head -1 | cut -d' ' -f1) packets 0 misrouted (100: $n100, 101: $n101)" "complete, routed by the map" "$(elapsed "$t0")"
-  else fail MEM-MULTI "$detail" "40/40 complete, 0 misrouted" "$(elapsed "$t0")"; fi
+    first=$(echo "$mm" | head -1)
+    n100=$(echo "$mm" | awk '$1==100 {print $2}'); n101=$(echo "$mm" | awk '$1==101 {print $2}')
+    if [ "${first#* }" = "0 0" ] && [ "${n100:-0}" -gt 0 ] 2>/dev/null && [ "${n101:-0}" -gt 0 ] 2>/dev/null; then
+      pass MEM-MULTI-MAP "${first%% *} packets, 0 misrouted (100: $n100, 101: $n101)" "routed by the map, both controllers used" "$(elapsed "$t0")"
+    else fail MEM-MULTI-MAP "'$first' (100: ${n100:-none}, 101: ${n101:-none})" "0 misrouted, both controllers used" "$(elapsed "$t0")"; fi
+  else xfail MEM-MULTI-MAP "$(py_lacks numpy)"; fi
 }
 
 stepM6() {

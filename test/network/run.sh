@@ -148,6 +148,23 @@ step0() {
 }
 for s in "$HERE"/steps/step*.sh; do [ -f "$s" ] && source "$s"; done
 
+# ---------------------------------------------------------------- Python packages (docs/Shared_Controller_Defects_Plan.md issue 1)
+# The trace checks need numpy, the converter and the viewer duckdb too. Probed once with the interpreter the
+# steps use ($PY, from step4.sh; set PY=... to choose another), reported once; a check whose packages are
+# missing is XFAIL, and only that check: a validator or converter that fails with its packages present is FAIL.
+PY_MISSING=""
+for p in numpy duckdb; do "$PY" -c "import $p" > /dev/null 2>&1 || PY_MISSING="$PY_MISSING $p"; done
+py_has() { local p; for p in "$@"; do case " $PY_MISSING " in *" $p "*) return 1;; esac; done; return 0; }
+py_lacks() { local p o=""; for p in "$@"; do py_has "$p" || o="$o $p"; done; echo "python lacks${o} (pip install${o})"; }
+echo "python: $(command -v "$PY") $("$PY" -c 'import sys; print(sys.version.split()[0])' 2>/dev/null)," \
+     "numpy $("$PY" -c 'import numpy; print(numpy.__version__)' 2>/dev/null || echo missing)," \
+     "duckdb $("$PY" -c 'import duckdb; print(duckdb.__version__)' 2>/dev/null || echo missing)"
+[ -n "$PY_MISSING" ] && echo "python: missing${PY_MISSING}: the checks that need them are XFAIL"
+
+# A run that stops early (a script error under set -u, a signal) must not read as a short list of results
+RUN_DONE=0
+trap 'st=$?; [ "$RUN_DONE" = 1 ] || { echo "RUN ABORTED before completion (status $st): the results above are incomplete"; echo "RUN-ABORTED,ABORTED,status $st,completed run,0" >> "$RESULTS"; }' EXIT
+
 # ---------------------------------------------------------------- main
 : > "$RESULTS"; echo "id,status,measured,expected,seconds" > "$RESULTS"
 build
@@ -158,5 +175,6 @@ case "$WHAT" in
   [0-8]|M[2-7]|D) regression; "step$WHAT";;
   *) echo "usage: run.sh [step (0-8, M2..M7, D)|all|reg|refs]"; exit 2;;
 esac
-echo "----"; echo "$FAILS failure(s); results in $RESULTS"
+RUN_DONE=1
+echo "----"; echo "$FAILS failure(s); results in $RESULTS (run complete)"
 [ "$FAILS" = 0 ]
