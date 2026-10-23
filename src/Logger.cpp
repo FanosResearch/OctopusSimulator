@@ -423,6 +423,21 @@ namespace octopus
         long long memin = nth(Role::MEM_BUS, Phase::EXIT, 1);
         long long dre   = find(Role::DRAM, Phase::ENTER, false);
         long long drx   = find(Role::DRAM, Phase::EXIT,  true);
+        // More than one memory round trip for one request (a TileLink access retried after a denied Grant,
+        // docs/TileLink_Denied_Grant_Retry_Plan.md: the denied fill, then the retry's): the memory stages
+        // and the LLC service that consumed the fill are those of the last trip, so the stages stay in
+        // order and Total still includes the failed attempt (it falls in the LLC stall before the last
+        // trip). A request with one round trip is unaffected.
+        int mem_exits = 0;
+        for (auto &e : ev) if (e.role == Role::MEM_BUS && e.phase == Phase::EXIT) mem_exits++;
+        if (mem_exits > 2)
+        {
+            memout = nth(Role::MEM_BUS, Phase::EXIT, mem_exits - 2);
+            memin  = nth(Role::MEM_BUS, Phase::EXIT, mem_exits - 1);
+            dre    = find(Role::DRAM, Phase::ENTER, true);
+            long long s = find(Role::LLC, Phase::SERVICE, true);
+            if (s >= 0) llcs = s;
+        }
 
         if (issue < 0 || rx < 0)
             return;

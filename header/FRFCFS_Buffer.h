@@ -154,6 +154,23 @@ namespace octopus
         // must mark the buffer dirty when the hold can have lifted.
         std::function<bool(const TItem &)> m_hold;
         void setHold(std::function<bool(const TItem &)> hold) { m_hold = std::move(hold); }
+        // Optional: which items the per-line FCFS gate orders besides invalidations. Unset = the
+        // demand requests (TItem::isDemandRequest), as always; a protocol that also orders a CPU Store
+        // carrying its bytes sets it (CoherenceProtocolHandler::isCpuDemand).
+        std::function<bool(const TItem &)> m_ordered;
+        void setOrdered(std::function<bool(const TItem &)> ordered) { m_ordered = std::move(ordered); }
+        bool ordered(const TItem &x) const { return (m_ordered ? m_ordered(x) : x.isDemandRequest()) || x.isInvalidation(); }
+        // Put an item ahead of every queued ordered item to its line (at the back when there is none),
+        // bypassing the bound: work the owner accepted earlier and must not lose (a replayed access,
+        // which then precedes the younger accesses to its line through the gate).
+        void insertBeforeLine(const TItem &item, FRFCFS_State state)
+        {
+            size_t at = m_buffer.size();
+            for (size_t i = 0; i < m_buffer.size(); i++)
+                if (ordered(m_buffer[i].item) && ((m_buffer[i].item.addr ^ item.addr) & m_line_mask) == 0) { at = i; break; }
+            m_buffer.insert(m_buffer.begin() + at, Element{item, state});
+            m_dirty = true;
+        }
         // Debug access to the queued items in order (state dumps).
         const TItem &itemAt(int i) const { return m_buffer[i].item; }
         FRFCFS_State stateAt(int i) const { return m_buffer[i].state; }
@@ -185,13 +202,12 @@ namespace octopus
                 // too stops an eviction's Own_Invalidation from leapfrogging earlier-
                 // broadcast GetS/GetM and orphaning them. DATA responses stay exempt so
                 // they can still advance waiting transients (ordering those deadlocks).
-                if (this->m_line_mask != 0 &&
-                    (m_buffer[i].item.isDemandRequest() || m_buffer[i].item.isInvalidation()))
+                if (this->m_line_mask != 0 && ordered(m_buffer[i].item))
                 {
                     bool blocked_by_older_same_line = false;
                     for (int j = 0; j < i; j++)
                     {
-                        if ((m_buffer[j].item.isDemandRequest() || m_buffer[j].item.isInvalidation()) &&
+                        if (ordered(m_buffer[j].item) &&
                             ((m_buffer[j].item.addr ^ m_buffer[i].item.addr) & this->m_line_mask) == 0)
                         {
                             blocked_by_older_same_line = true;

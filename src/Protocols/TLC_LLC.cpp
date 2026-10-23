@@ -39,6 +39,7 @@ namespace octopus
         m_stall_id = t.actionId("Stall");
         m_save_id = t.actionId("SaveData");
         m_lg_block = tlc::lgOf(m_data_handler->getBlockSize());
+        if (const char *e = getenv("OCTOPUS_TL_DENY_FILLS")) m_deny_left = atol(e);
         static bool registered = false;
         if (!registered) { atexit(reportAll); registered = true; }
         s_llcs.push_back(this);
@@ -54,6 +55,8 @@ namespace octopus
         fprintf(stderr, "TLC_LLC %d: acquires %llu, grants %llu, probes %llu, releases %llu, fills %llu, replacements %llu, write-backs %llu\n", m_id,
                 (unsigned long long)m_c.acquires, (unsigned long long)m_c.grants, (unsigned long long)m_c.probes, (unsigned long long)m_c.releases,
                 (unsigned long long)m_c.fills, (unsigned long long)m_c.replacements, (unsigned long long)m_c.writebacks);
+        if (m_deny_left >= 0)
+            fprintf(stderr, "TLC_LLC %d: %llu fills taken as denied (OCTOPUS_TL_DENY_FILLS)\n", m_id, (unsigned long long)m_c.denied);
     }
 
     void TLC_LLC::initializeCacheStates()
@@ -146,16 +149,25 @@ namespace octopus
                 else fault("an inner message that is not on A, C or E (Message::tl.channel 0 = untagged)", msg, stateOf(msg.addr), -1);
                 break;
             case Message::Source::UPPER_INTERCONNECT:      // the memory side: the fill (the write's AccessAck never gets here, rule 7)
-                if (msg.tl.channel == 4) d = m_policy->decodeOuterD(tlc::toHeader(msg));
+            {
+                tl::MsgHeader h;
+                if (msg.tl.channel == 4) h = tlc::toHeader(msg);
                 else if (msg.tl.channel == 0 && (msg.kind == Message::K_FILL || msg.kind == Message::K_FILL_ROLLBACK) && msg.data != NULL)
                 {
                     // a memory side that does not speak TileLink (the point-to-point memory bus, a fill
                     // from the write table): AccessAckData
-                    tl::MsgHeader h;
                     h.channel = tl::Channel::D; h.opcode = uint8_t(tl::OpD::AccessAckData); h.size = uint8_t(m_lg_block);
-                    d = m_policy->decodeOuterD(h);
                 }
                 else fault("a memory-side message that is neither a fill nor a TileLink D", msg, stateOf(msg.addr), -1);
+                // the test hook: this fill taken as denied (decided at its first decode)
+                if (m_deny_left >= 0 && h.opcode == uint8_t(tl::OpD::AccessAckData) && !h.denied)
+                {
+                    auto key = std::make_pair(msg.msg_id, block);
+                    if (!m_deny_keys.count(key) && m_deny_left > 0) { m_deny_keys.insert(key); m_deny_left--; }
+                    if (m_deny_keys.count(key)) h.denied = true;
+                }
+                d = m_policy->decodeOuterD(h);
+            }
                 break;
             case Message::Source::SELF:                    // CacheController::checkReplacements' victim
                 if (msg.owner != m_id) fault("a self-raised message of another controller", msg, -1, -1);
@@ -193,6 +205,7 @@ namespace octopus
         for (int id : cell.actions)
             if (m_policy->action(id).op == tc::MgrOp::Fault) fault("a Fault cell of " + t.name(), msg, state, event);
 
+        if (msg.source == Message::Source::UPPER_INTERCONNECT && m_deny_keys.erase(std::make_pair(msg.msg_id, block))) m_c.denied++;
         Dir &d = m_dir[block];
         const bool consumed_a = msg.source == Message::Source::LOWER_INTERCONNECT && msg.tl.channel == 1;
         Message req_copy;
@@ -341,7 +354,11 @@ namespace octopus
         GenericCacheLine line;
         m_data_handler->readLineBits(msg.addr, &line);
         line.state = next;
-        line.valid = next_valid;
+        // A transient state keeps the line tracked even without a valid copy (N_g: a denied Grant waiting
+        // for its GrantAck; N_u): an invalid line that is not in the array loses its MSHR entry, and with
+        // it the state, so the block would read N and a new Acquire open a second transaction while the
+        // GrantAck of the first is still due (docs/TileLink_Denied_Grant_Retry_Plan.md).
+        line.valid = next_valid || !t.stable(next);
         Message bits(msg);
         if (!(save && next_valid) && bits.data != NULL) { delete[] bits.data; bits.data = NULL; bits.data_size = 0; }
         ControllerAction update;

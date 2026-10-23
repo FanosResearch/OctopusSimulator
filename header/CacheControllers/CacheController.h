@@ -125,6 +125,13 @@ namespace octopus
         // a request parked on the line under that msg_id leaves the pending list (txAnswered). Pushed to
         // the lower interface (the LLC's inner TileLink port).
         virtual void tlRespond(void *);
+        // TileLink retry after a denied Grant (docs/TileLink_Denied_Grant_Retry_Plan.md): the line's parked
+        // CPU access stays parked (its pending entry is the MSHR credit, its saved Store bytes stay in
+        // m_modifying_data_messages); a copy of the oldest one is replayed through the processing queue,
+        // ahead of every younger access to the line, and decodes in the line's current state for a new
+        // Acquire. Its Acquire cell does not park it again (addtoPendingRequests). The CPU is answered
+        // once, by the Grant that finally succeeds.
+        virtual void tlRetryPending(void *);
         // Snoop LLC eviction back-invalidation. Routed via MessageType::SERVICE_REQUEST
         // on the TripleBus service channel, which broadcasts it to every interface, so
         // all L1 sharers see the INV (Invalidation) and the LLC receives its own copy

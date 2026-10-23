@@ -700,6 +700,13 @@ Decided 2026-10-21, after review:
    uncached access (None after a Get, at most Branch after a Put), not a probe algorithm; its wording
    is the subject of an open issue on the specification (chipsalliance/tilelink #5) and is not relied
    on.
+9. **A denied Grant in Octopus is retried** (decided 2026-10-23, review problem 3). The CPU access stays
+   outstanding; the denied attempt completes as TileLink requires (GrantAck, no data installed) and the
+   access is replayed for a new Acquire in the line's current state, ahead of the line's younger
+   accesses, from the next controller cycle. The CPU is answered once, when an Acquire succeeds. No retry
+   limit: a permanently denied access stays outstanding (a run limit then reports it unfinished). The
+   standalone CacheMaster still completes the access with an error; the tables are unchanged. Detail:
+   docs/TileLink_Denied_Grant_Retry_Plan.md; measured: docs/TileLink_Implementation_Report.md.
 
 ## 9. Out of scope
 

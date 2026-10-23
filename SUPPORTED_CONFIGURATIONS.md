@@ -95,6 +95,7 @@ keys and defaults: `configuration/Interconnect/TileLink.csv`.
 | LLC banking | `llc_banks` with the cores' `home_interleave_shift`: interleaved crossbar routes |
 | Memory | the point-to-point memory bus (default), or memory over TileLink (`memory_on_network 1`: a second, TL-UH crossbar; several controllers with `mem_ids`; fixed-latency memory or MCsim) |
 | Checking | a conformance monitor on every link (`tl_monitor`), the agent-graph check, SWMR and the permission check of every cache hit (`tl_coherence_check`), the read-after-write hazard detector |
+| Errors | a denied Grant is retried: the CPU access stays outstanding and is answered once, when an Acquire succeeds (no retry limit: a permanently denied access stays outstanding) |
 | Observability | `TLStats.csv`, beat transcript (`transcript`), the Probe and Completion latency columns |
 
 Presets: `MultiCoreSystem_TileLink` (one LLC), `MultiCoreSystem_TileLink2B` (two banks),

@@ -20,6 +20,7 @@
 #include "Protocols.h"
 #include "FRFCFS_Buffer.h"
 #include "Logger.h"
+#include <set>
 
 #include <functional>
 #include <ostream>
@@ -77,6 +78,7 @@ namespace octopus
         // write-back buffer full), interconnect intakes refused because the
         // demand queue was at its bound, and the queue's peak occupancy.
         uint64_t m_admit_fail_cycles = 0;
+        uint64_t m_tl_retries = 0;        // TileLink: CPU accesses replayed after a denied Grant
         uint64_t m_intake_refusals = 0;
         int m_queue_peak = 0;
         static std::vector<BaseController *> s_controllers;   // every controller built, for the report
@@ -84,6 +86,13 @@ namespace octopus
         // key is the msg.addr & mask(nbits of CacheLineSize) and the value is vector of Messages
         // to ensure order of requests of the same cache line
         std::map<uint64_t, std::vector<Message>> m_pending_requests;
+        // TileLink retry (docs/TileLink_Denied_Grant_Retry_Plan.md): msg_ids of parked CPU accesses replayed
+        // after a denied Grant; the copy in the processing queue is the same access, not a new one
+        // (CacheController::tlRetryPending, addtoPendingRequests)
+        std::set<uint64_t> m_tl_replay;
+        // a replay waits in the queue (holding its place ahead of the line's younger accesses) until the
+        // controller cycle after the denied Grant: msg_id -> the cycle it was inserted
+        std::map<uint64_t, uint64_t> m_tl_replay_hold;
 
         //An array of action functions of this class an its derived ones
         std::vector<std::function<void(void*)>> action_functions;
@@ -171,6 +180,12 @@ namespace octopus
         Logger::Role logRole() const { return m_log_role; }
         static const std::vector<BaseController *> &controllers() { return s_controllers; }
         CoherenceProtocolHandler *protocol() const { return m_protocol; }
+        // inspection (tests, diagnostics): TileLink retries, accesses being replayed, parked accesses per line
+        uint64_t tlRetries() const { return m_tl_retries; }
+        size_t tlReplaying() const { return m_tl_replay.size(); }
+        size_t pendingOn(uint64_t addr) { auto it = m_pending_requests.find(getAddressKey(addr)); return it == m_pending_requests.end() ? 0 : it->second.size(); }
+        size_t pendingLines() const { return m_pending_requests.size(); }
+        int queued() const { return m_processing_queue ? m_processing_queue->size() : 0; }
         int id() const { return m_id; }
 
         virtual void initialize(uint64_t address, const uint8_t* data, int size) {} //for Initializable

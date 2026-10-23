@@ -104,6 +104,13 @@ namespace octopus
         return isStall(stateOf(msg.addr), decode(msg)) ? FRFCFS_State::NonReady : FRFCFS_State::Ready;
     }
 
+    // every CPU Load and Store, with or without its bytes (the external CPU's Store carries them):
+    // the queue's per-line order and the MSHR count (docs/TileLink_Review_Action_Plan.md problems 1, 3)
+    bool TLC_L1::isCpuDemand(const Message &m) const
+    {
+        return m.source == Message::Source::LOWER_INTERCONNECT && m.tl.channel == 0 && m.complementary_value <= 1;
+    }
+
     bool TLC_L1::isReadableState(int state)
     {
         const string &n = m_policy->table().stateName(state);
@@ -149,7 +156,7 @@ namespace octopus
         if (dprint)   // coherence transition hook (docs/Debugger.md): readable names + raw-trace FSM record
             dprint->transition(&msg, (uint32_t)m_id, state, event, stall ? state : next, stall, this->m_fsm);
 
-        vector<ControllerAction> pre, pending, post, out;
+        vector<ControllerAction> pre, pending, post, retry, out;
         auto act = [](vector<ControllerAction> &v, ControllerAction::Type type, Message *m) { v.push_back(ControllerAction{.type = type, .data = (void *)m}); };
         if (staleReplacement(msg)) return out;
 
@@ -194,18 +201,14 @@ namespace octopus
                     answered = true;
                     break;
                 case tc::L1Op::Error:
-                {
-                    // TLC_Tables s2.3: the CPU response, marked as an access error (the denied Grant).
-                    // Octopus's CPU has no error response; the mark is Message::tl.denied.
-                    Message *r = new Message(msg);
-                    vector<uint8_t> zeros(m_data_handler->getBlockSize(), 0);
-                    r->copy(zeros.data(), (uint16_t)zeros.size());
-                    r->tl = Message::TLHeader();
-                    r->tl.denied = true;
-                    act(post, ControllerAction::Type::REMOVE_PENDING, r);
+                    // TLC_Tables s2.3, Octopus's policy (docs/TileLink_Denied_Grant_Retry_Plan.md): the denied
+                    // Grant answers no CPU access. The cell's GrantAck and state update run as for any Grant;
+                    // the line's parked access is then replayed for a new Acquire (after every other action
+                    // of the cell), and the CPU is answered once, by the Grant that succeeds. The standalone
+                    // CacheMaster instead completes its access with an error.
+                    act(retry, ControllerAction::Type::TL_RETRY_PENDING, new Message(msg));
                     answered = true;
                     break;
-                }
                 case tc::L1Op::AcquireBlock:
                 case tc::L1Op::GrantAck:
                 case tc::L1Op::ProbeAck:
@@ -249,6 +252,7 @@ namespace octopus
         out.push_back(update);
         out.insert(out.end(), pending.begin(), pending.end());
         out.insert(out.end(), post.begin(), post.end());
+        out.insert(out.end(), retry.begin(), retry.end());
         return out;
     }
 }

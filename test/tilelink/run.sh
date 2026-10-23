@@ -356,6 +356,36 @@ mshr() { # TL-ADMIT-MSHR-SYS (docs/TileLink_Review_Action_Plan.md problem 1): a2
                 || fail TL-ADMIT-MSHR-SYS "$n/6, incomplete:$bad" "6/6 complete"
 }
 
+retry() { # TL-RETRY-SYS (docs/TileLink_Denied_Grant_Retry_Plan.md): a2time01 with the first 200 outer fills of every
+  # LLC taken as denied (OCTOPUS_TL_DENY_FILLS: the table's NT_d -> Grant_denied/N_g), MESI and MSI, on the crossbar
+  # and on the network with 5 and 7 classes: every denied CPU access is retried and answered exactly once
+  local c P d bad="" n=0 total=0
+  for c in TileLink GridTL Grid2BMTL; do for P in MESI MSI; do
+    local L=llc_controller; [ $c = Grid2BMTL ] && L="llc_controller[*]"
+    local -a x=(); [ $P = MSI ] && x=(-p "$L.fsm_filename(s)=TLC_MSI_LLC")
+    ( OCTOPUS_TL_DENY_FILLS=200 OCTOPUS_EVENT_DEBUG=1 OCTOPUS_MEM_HAZARD=1 sim "$OUT/retry/$c-$P" -s MultiCoreSystem_Mesh -c MultiCoreSystem_$c "${x[@]}" \
+        -p "workload_path(s)=$(wpath "$ROOT/BMs/eembc-traces/a2time01-trace")/" ) &
+  done; done; wait
+  for c in TileLink GridTL Grid2BMTL; do for P in MESI MSI; do
+    d="$OUT/retry/$c-$P"; total=$((total+1)); local why=""
+    local banks=1; [ $c = Grid2BMTL ] && banks=2
+    [ "$(grep -l 'Average Latency' "$d"/LatencyReport_C*.csv 2>/dev/null | wc -l)" = 4 ] || why="$why unfinished"
+    local k; for k in 0 1 2 3; do
+      local want rows uniq; want=$(awk 'END{print NR}' "$ROOT/BMs/eembc-traces/a2time01-trace/trace_C$k.trc.shared")
+      rows=$(awk -F, 'NR>1 && $1 ~ /^[0-9]+$/ && NF >= 20' "$d/LatencyReport_C$k.csv" | wc -l); uniq=$(awk -F, 'NR>1 && $1 ~ /^[0-9]+$/ && NF >= 20{print $1}' "$d/LatencyReport_C$k.csv" | sort -u | wc -l)
+      { [ "$rows" -ge "$want" ] && [ "$rows" = "$uniq" ]; } || why="$why core$k:$rows/$uniq"
+    done
+    [ "$(grep -c '200 fills taken as denied' "$d/.stderr")" = $banks ] || why="$why denied:$(grep -o '[0-9]* fills taken as denied' "$d/.stderr" | tr '\n' ' ')"
+    grep -q "link monitors, 0 violations" "$d/.stderr" || why="$why monitor"
+    grep -q "coherence check: .* 0 violations" "$d/.stderr" || why="$why coherence"
+    [ "$(grep -o 'NET overtakes [0-9]*, MC overtakes [0-9]*' "$d/.stderr")" = "NET overtakes 0, MC overtakes 0" ] || why="$why hazard"
+    grep -q "\[EVENT-PATH\] tiling ok=[0-9]* fail=0 " "$d/.stderr" || why="$why tiling:$(grep -o 'fail=[0-9]*' "$d/.stderr" | tail -1)"
+    [ -z "$why" ] && n=$((n+1)) || bad="$bad $c-$P($why)"
+  done; done
+  [ -z "$bad" ] && pass TL-RETRY-SYS "$n/$total (crossbar, 5 and 7 classes; MESI, MSI): 200 denials per LLC, every access answered once, checks 0" "complete" \
+                || fail TL-RETRY-SYS "$n/$total:$bad" "$total/$total"
+}
+
 echo "id,status,measured,expected" > "$RESULTS"
 build
 case "$WHAT" in
@@ -365,8 +395,9 @@ case "$WHAT" in
   oct)  oct;;
   net)  net;;
   mshr) mshr;;
-  all)  unit; sys; mshr;;
-  *) echo "usage: run.sh [unit|sys|mem|oct|net|mshr|all]"; exit 2;;
+  retry) retry;;
+  all)  unit; sys; mshr; retry;;
+  *) echo "usage: run.sh [unit|sys|mem|oct|net|mshr|retry|all]"; exit 2;;
 esac
 echo "----"; echo "$FAILS failure(s); results in $RESULTS"
 [ "$FAILS" = 0 ]

@@ -125,6 +125,11 @@ namespace octopus
             m_local_fills.erase(m_local_fills.begin());
 
         this->addRequests2ProcessingQueue(*m_processing_queue);
+        // TileLink retry: a replay held since an earlier cycle becomes eligible now (the queue's readiness
+        // is cached on state only, so it is told; docs/TileLink_Denied_Grant_Retry_Plan.md)
+        for (auto it = m_tl_replay_hold.begin(); it != m_tl_replay_hold.end();)
+            if (it->second < m_cache_cycle) { it = m_tl_replay_hold.erase(it); m_processing_queue->markDirty(); }
+            else ++it;
 
         while(true)
         {
@@ -161,7 +166,9 @@ namespace octopus
                 // A non-demand message (forward, invalidation, acknowledgement, data) goes back to its own
                 // place: the protocol relies on the order in which a home's messages arrive. A demand
                 // request goes to the back as before (bus systems refuse demand when MSHRs are full).
-                if (ready_msg.isDemandRequest())
+                // A replayed TileLink access (tlRetryPending) keeps its place: behind the line's younger
+                // accesses the per-line gate would let them issue first.
+                if (ready_msg.isDemandRequest() && !m_tl_replay.count(ready_msg.msg_id))
                     m_processing_queue->pushBack(ready_msg, FRFCFS_State::NonReady, /*force=*/true);
                 else
                     m_processing_queue->restoreLast(ready_msg, FRFCFS_State::NonReady);

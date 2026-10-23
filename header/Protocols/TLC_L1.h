@@ -23,7 +23,9 @@
  *      TLPort's receive queues keep accepting meanwhile (TLPort.h), so a Stall never withholds ready.
  *   3. Parking a request: a CPU access that leaves a stable state for a transient one is parked on
  *      the line (ADD_PENDING, as MSIDirectory's GetS / GetM); the Grant cell's Hit answers it
- *      (REMOVE_PENDING), its Error answers it marked denied (Message::tl.denied on the response).
+ *      (REMOVE_PENDING). Its Error (a denied Grant) answers nothing: the access stays parked and is
+ *      replayed for a new Acquire (TL_RETRY_PENDING, CacheController::tlRetryPending), the CPU is
+ *      answered once by the Grant that succeeds (docs/TileLink_Denied_Grant_Retry_Plan.md).
  *   Replacement: CacheController::checkReplacements raises it when a fill moves the victim to the
  *      write-back buffer; a victim a Probe has invalidated before the event runs is gone, and its
  *      Replacement is a no-op, as the library's CacheMaster treats an Evict of an absent line.
@@ -68,6 +70,8 @@ namespace octopus
         virtual FRFCFS_State getRequestState(const Message &msg, FRFCFS_State state) override;
         // S, E, M give the core a readable copy, and SM_a keeps its Branch until the Grant (TLC_Tables s2.1)
         virtual bool isReadableState(int state) override;
+        bool isCpuDemand(const Message &msg) const override;
+        bool overridesCpuDemand() const override { return true; }
 
         // Class annotation (docs/NoC_Architecture_Spec.md s14.3) with the TileLink channel of every
         // message (plan s5.2), and the admission prediction (plan s5.2 point 1, TLC_Tables s7.1).

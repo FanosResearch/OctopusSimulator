@@ -43,6 +43,10 @@ namespace octopus
             // TileLink (docs/TileLink_Plan.md s5.3 I-A): a home's D response to a request, fully built
             // by the protocol (TLC_LLC's Grant[Data]); CacheController::tlRespond
             TL_RESPOND,
+            // TileLink: a denied Grant (TLC_L1's Error): the line's parked CPU access is replayed through the
+            // processing queue for a new Acquire, the CPU stays unanswered (CacheController::tlRetryPending,
+            // docs/TileLink_Denied_Grant_Retry_Plan.md)
+            TL_RETRY_PENDING,
 
             MAX_ACTIONS_NUM
         } type;

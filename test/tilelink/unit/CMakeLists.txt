@@ -8,6 +8,7 @@ add_executable(Octopus_tl_tests
     tl_admit.cpp
     tl_logger.cpp
     tl_mem.cpp
+    tl_retry.cpp
 )
 target_link_libraries(Octopus_tl_tests Octopus_core)
 target_include_directories(Octopus_tl_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/test/network/unit)   # testing.h

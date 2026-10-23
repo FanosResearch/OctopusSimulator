@@ -143,7 +143,7 @@ AccessAckData, HintAck) is a decode fault: the L1 issues no uncached access.
 | Release_TtoN / _BtoN | Release | C | Prune TtoN / BtoN | no |
 | ReleaseData_TtoN | ReleaseData | C | Prune TtoN | the line |
 | Hit | the CPU response | (CPU) | | |
-| Error | the CPU response, marked as an access error (the denied Grant) | (CPU) | | |
+| Error | the denied Grant's outcome for the CPU access: the standalone CacheMaster completes it with an access error; Octopus's TLC_L1 retries it (the access stays parked and is replayed for a new Acquire; docs/TileLink_Denied_Grant_Retry_Plan.md) | (CPU) | | |
 | Stall, Fault | nothing | | | |
 
 ### 2.4 Every cell
@@ -1622,3 +1622,9 @@ the manager's pool, released at the GrantAck.
 11. **The B transmit depth must be at least the largest probe fan-out** (the number of L1s, for an LLC
     eviction of a block every L1 holds), or the probing message can never be admitted. The 4-core
     defaults satisfy it; 8 cores need `tx_depth_B >= 8`. TileLinkInterconnect does not check it yet.
+12. **Denied Grant in Octopus: retry, and N_g must stay tracked** (2026-10-23). The cells are unchanged. In
+    Octopus the Error action retries instead of answering (above). Running it exposed that the manager's
+    `N_g` (a denied Grant awaiting its GrantAck) has `isDataValid` 0, and an Octopus line that is invalid and
+    not in the array loses its MSHR entry and with it its state: the block read N and the retried Acquire
+    opened a second transaction before the GrantAck (Fault). TLC_LLC keeps every transient state tracked
+    whatever `isDataValid` says (`N_g`, `N_u` are the only such states).

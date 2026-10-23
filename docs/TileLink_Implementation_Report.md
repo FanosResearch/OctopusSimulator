@@ -215,6 +215,56 @@ D_out->D_in D_in->E; consumption order holds on both, with the Replacement cells
 self-consumed emitters. Negative: a broken class order, a too-shallow inject queue and untagged tables on a
 TileLink network are refused. `test/tilelink/run.sh net` 50/50.
 
+## Review problem 1: admission refused for a full MSHR leaked transmit reservations (2026-10-23)
+
+Fixed on `network` (`0f5b4f0c`, present since P2-ADMISSION `869f46c0`), carried here (`3a39532f`): the
+structural MSHR check runs before `txAdmit`, so a refused admission reserves nothing. TL-ADMIT-MSHR (the
+real TLC_L1, one MSHR, two lines: the A slots and sources stay at their baseline through 50 refused
+retries; 2 slots leaked on the old ordering) and the `mshr` step (a2time01 with 1 and 2 L1 MSHRs on the
+crossbar, 5 and 7 classes: 6/6, all of which wedged before). Commit `5fe2164a`.
+
+## Review problem 3: retry after a denied Grant (2026-10-23)
+
+**Policy** (the user's): a CPU access whose Acquire meets a denied Grant stays outstanding and is retried;
+the CPU is answered once, by the Grant that succeeds (docs/TileLink_Denied_Grant_Retry_Plan.md). The
+standalone CacheMaster keeps completing it with an access error; the tables are unchanged.
+
+**Built.**
+- TLC_L1's Error action no longer fabricates a zero-data response: after the cell's GrantAck and state
+  update, `TL_RETRY_PENDING` (a new controller action, appended to the enum) replays the line's parked
+  access. It stays parked: its pending entry is the MSHR credit, its Store bytes stay where they were
+  saved. The replay copy enters the processing queue ahead of every younger access to its line, so the
+  queue's per-line gate keeps them behind it (a younger access must not issue its own Acquire in the
+  stable-state window after the denial), is held until the next controller cycle, and keeps its place
+  when admission refuses it. Its Acquire cell does not park it a second time. It decodes in the line's
+  current state, so a Probe that took S away makes the retry NtoT.
+- `CoherenceProtocolHandler::isCpuDemand` (default `Message::isDemandRequest`; TLC_L1: every CPU Load
+  and Store, also a Store carrying its bytes) drives the MSHR check and, through
+  `FRFCFS_Buffer::setOrdered`, the per-line gate. The other protocols keep the default.
+- TLC_LLC keeps a transient line tracked without a valid copy (`N_g`: see TLC_Tables s11.1 item 12).
+- Test hook: `OCTOPUS_TL_DENY_FILLS=<n>` makes each LLC take its first n outer fills as denied, the table's
+  own `NT_d -> Grant_denied/N_g`.
+- Logger: a request with more than one memory round trip (the denied fill, then the retry's) takes its
+  memory milestones and LLC service from the last trip; Total includes the failed attempt, which falls in
+  the LLC stall. Requests with one trip are unaffected.
+
+**Measured.** TL-RETRY (12 unit tests on the real TLC_L1 and, for E-BLOCKED's second part, the real
+TLC_LLC): LOAD, GRANTDATA, STORE-MISS, UPGRADE, PROBE, E-BLOCKED (the denied Grant waits for an E slot;
+at the manager an Acquire arriving in N_g stalls while the GrantAck is consumed), A-BLOCKED, ORDER (a
+younger same-line Store stays behind the retried Load; another line and a Probe progress), REPEATED,
+PERMANENT (20 denials: no response, one parked access, bounded), MSHR, ARRAY. All 12 fail on the old
+Error action (a premature CPU response; in ORDER the younger Store issued first) and pass with the
+change. TL-RETRY-SYS: a2time01 with 200 denials per LLC on the crossbar, 5 and 7 classes, MESI and MSI:
+6/6, every access answered once, monitor 0, coherence 0, hazard 0/0, tiling 0 failures.
+
+**Found, not fixed (pre-existing, reported).**
+- With the occupancy data-array model and an L1 latency above 0, a TLC Store miss loses its bytes to the
+  fill, denial or not (TL-RETRY-ARRAY checks that the retry changes nothing there; the pipelined model is
+  correct). The shipped presets set no L1 latency.
+- A demand refused by admission is re-queued at the back of the processing queue
+  (BaseController::processLogic), where a younger access to the same line from the same core can
+  overtake it through the per-line gate. The replay keeps its place; the general case is open.
+
 ## T10: documentation and the regression
 
 `SUPPORTED_CONFIGURATIONS.md` (TL-C protocols, the TileLink crossbar and network presets, the standalone

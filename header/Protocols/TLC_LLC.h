@@ -110,7 +110,13 @@ namespace octopus
         int m_stall_id = -1, m_save_id = -1;
         unsigned m_lg_block = 6;
         uint32_t m_next_tag = 0;
-        struct Counters { uint64_t replacements = 0, writebacks = 0, fills = 0, grants = 0, probes = 0, releases = 0, acquires = 0; } m_c;
+        struct Counters { uint64_t replacements = 0, writebacks = 0, fills = 0, grants = 0, probes = 0, releases = 0, acquires = 0, denied = 0; } m_c;
+        // Test hook (docs/TileLink_Denied_Grant_Retry_Plan.md): OCTOPUS_TL_DENY_FILLS=<n> takes the first n
+        // outer fills of this LLC as denied (AccessAckData_denied), the table's own path to a denied Grant
+        // (NT_d -> Grant_denied/N_g). Decided once per fill (decode also runs for readiness), counted when
+        // the fill is consumed. -1 = off.
+        mutable long m_deny_left = -1;
+        mutable std::set<std::pair<uint64_t, uint64_t>> m_deny_keys;   // (the fill's msg_id, line)
 
         uint64_t blockOf(uint64_t addr) const { return addr & ~uint64_t(m_data_handler->getBlockSize() - 1); }
         int  stateOf(uint64_t addr) const;

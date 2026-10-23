@@ -86,6 +86,14 @@ namespace octopus
         action_functions[ControllerAction::Type::STALL] = [&](void* ptr) {stall(ptr);};
         action_functions[ControllerAction::Type::SEND_INV_MSG] = [&](void* ptr) {sendInvalidationMessage(ptr);};
         action_functions[ControllerAction::Type::TL_RESPOND] = [&](void* ptr) {tlRespond(ptr);};
+        action_functions[ControllerAction::Type::TL_RETRY_PENDING] = [&](void* ptr) {tlRetryPending(ptr);};
+        // a protocol that orders and counts more CPU accesses than Message::isDemandRequest (TLC_L1: a Store
+        // carrying its bytes) gives the queue's per-line gate its predicate; the others keep the default
+        if (m_protocol->overridesCpuDemand())
+        {
+            CoherenceProtocolHandler *p = m_protocol;
+            m_processing_queue->setOrdered([p](const Message &m) { return p->isCpuDemand(m); });
+        }
 
         // Address interlock. A message to a line that has a deferred data-array
         // access waiting or in flight stays in the processing queue, in place,
@@ -103,6 +111,8 @@ namespace octopus
         // won the bus for its GetM had already answered it: two data copies).
         m_processing_queue->setHold([this](const Message &m) {
             bool held = m_line_interlock != 0 && lineHasDeferredOp(m.addr);
+            // a replayed TileLink access waits until the controller cycle after its denied Grant (tlRetryPending)
+            if (!m_tl_replay_hold.empty() && m_tl_replay_hold.count(m.msg_id) && m.source == Message::Source::LOWER_INTERCONNECT) held = true;
             if (held && m_trace_addr != 0 && m_trace_held.insert(m.msg_id).second)
             {
                 traceMsg("hold", m);
@@ -162,7 +172,24 @@ namespace octopus
     void CacheController::addtoPendingRequests(void *data_ptr)
     {
         Message *msg = (Message *)data_ptr;
-        
+        // a replayed access (tlRetryPending) is still parked on its line: it is not parked a second time,
+        // and its saved Store bytes are the ones it was parked with
+        if (m_tl_replay.erase(msg->msg_id))
+        {
+            auto pr = m_pending_requests.find(getAddressKey(msg->addr));
+            bool parked = false;
+            if (pr != m_pending_requests.end())
+                for (auto &pm : pr->second) if (pm.msg_id == msg->msg_id) { parked = true; break; }
+            if (!parked)
+            {
+                cerr << "CacheController(id = " << m_id << "): replayed access " << msg->msg_id << " is no longer parked on line 0x"
+                     << hex << getAddressKey(msg->addr) << dec << " (docs/TileLink_Denied_Grant_Retry_Plan.md)" << endl;
+                exit(2);
+            }
+            delete msg;
+            return;
+        }
+
         if(msg->data != NULL)
             this->m_modifying_data_messages[msg->msg_id] = *msg;
 
@@ -172,6 +199,15 @@ namespace octopus
     void CacheController::hitAction(void *data_ptr)
     {
         Message *msg = (Message *)data_ptr;
+        // after a denied Grant the line is in I or S and the replayed access is the one whose Acquire
+        // failed (a Load from I, a Store from I or S), so it misses again; a hit would leave its parked
+        // entry behind with no Grant to answer it
+        if (m_tl_replay.count(msg->msg_id))
+        {
+            cerr << "CacheController(id = " << m_id << "): replayed access " << msg->msg_id << " hit on line 0x" << hex
+                 << getAddressKey(msg->addr) << dec << " (docs/TileLink_Denied_Grant_Retry_Plan.md)" << endl;
+            exit(2);
+        }
 
         if (msg->data == NULL && 
             !checkReadinessOfCache(*msg, ControllerAction::Type::HIT_Action, data_ptr))
@@ -359,6 +395,27 @@ namespace octopus
             exit(0);
         }
         delete msg;
+    }
+
+    void CacheController::tlRetryPending(void *data_ptr)
+    {
+        Message *grant = (Message *)data_ptr;
+        const uint64_t key = getAddressKey(grant->addr);
+        auto pr = m_pending_requests.find(key);
+        if (pr == m_pending_requests.end() || pr->second.empty())
+        {
+            cerr << "CacheController(id = " << m_id << "): a denied Grant on line 0x" << hex << key << dec
+                 << " with no parked CPU access to retry (docs/TileLink_Denied_Grant_Retry_Plan.md)" << endl;
+            exit(2);
+        }
+        const Message &head = pr->second.front();   // the oldest parked access: the one whose Acquire was denied
+        m_tl_replay.insert(head.msg_id);
+        m_tl_replay_hold[head.msg_id] = m_cache_cycle;   // eligible from the next controller cycle (processLogic)
+        m_tl_retries++;
+        // NonReady: the protocol decodes it in the line's current state when the queue scans it, the
+        // next controller cycle at the earliest; ahead of the line's younger accesses (the per-line gate)
+        m_processing_queue->insertBeforeLine(head, FRFCFS_State::NonReady);
+        delete grant;
     }
 
     void CacheController::tlRespond(void *data_ptr)
@@ -666,7 +723,7 @@ namespace octopus
         // a response, or a full MSHR/queue starves the traffic that would drain it.
         // Keyed on message kind, not interface: an L1 write-back is a response that
         // reaches the LLC on the lower interface.
-        if (msg.isDemandRequest())
+        if (m_protocol->isCpuDemand(msg))
         {
             CacheDataHandler_COTS *cots = (CacheDataHandler_COTS *)m_data_handler;
             // Already resident, or already tracked in MSHR/PWB -> a hit or a coalesced access; or
