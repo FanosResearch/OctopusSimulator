@@ -9,6 +9,7 @@
 #ifndef _BaseController_H
 #define _BaseController_H
 
+#include <set>
 #include "CommunicationInterface.h"
 #include "CacheDataHandler.h"
 #include "CacheXml.h"
@@ -109,6 +110,12 @@ namespace octopus
         // Diagnostics: OCTOPUS_HANG_DUMP=<cycles> dumps this controller's queues to
         // stderr once it has processed nothing for that many cycles (deadlock triage).
         uint64_t m_last_progress_cycle = 0;
+        // Demands refused by admission this controller cycle (docs/Shared_Controller_Defects_Plan.md issue 3): each
+        // stays in its place in the processing queue, skipped by the scan until the next cycle, while the per-line
+        // gate still counts it as older. Keyed by msg_id and held only while the message is a CPU demand
+        // (admitHeld), so completion traffic that shares the request's msg_id stays eligible.
+        std::set<uint64_t> m_admit_hold;
+        bool admitHeld(const Message &m) const { return !m_admit_hold.empty() && m_admit_hold.count(m.msg_id) && m_protocol->isCpuDemand(m); }
         bool m_hang_dumped = false;
         [[noreturn]] void pushRefused(const char *where, const Message &msg);
         virtual void dumpState();

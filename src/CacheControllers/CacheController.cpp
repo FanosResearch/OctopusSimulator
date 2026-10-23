@@ -111,8 +111,10 @@ namespace octopus
         // won the bus for its GetM had already answered it: two data copies).
         m_processing_queue->setHold([this](const Message &m) {
             bool held = m_line_interlock != 0 && lineHasDeferredOp(m.addr);
-            // a replayed TileLink access waits until the controller cycle after its denied Grant (tlRetryPending)
-            if (!m_tl_replay_hold.empty() && m_tl_replay_hold.count(m.msg_id) && m.source == Message::Source::LOWER_INTERCONNECT) held = true;
+            // a replayed TileLink access waits until the controller cycle after its denied Grant (tlRetryPending);
+            // only the CPU demand itself (the classified predicate): a Grant sharing its msg_id stays eligible
+            if (!m_tl_replay_hold.empty() && m_tl_replay_hold.count(m.msg_id) && m_protocol->isCpuDemand(m)) held = true;
+            if (admitHeld(m)) held = true;   // a demand admission refused this cycle (BaseController::processLogic)
             if (held && m_trace_addr != 0 && m_trace_held.insert(m.msg_id).second)
             {
                 traceMsg("hold", m);

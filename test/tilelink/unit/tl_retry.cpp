@@ -370,6 +370,101 @@ TEST("TL-RETRY-MSHR")
     CHECK(l.idle(A) && l.idle(B)); CHECK(l.net.balanced());
 }
 
+// docs/Shared_Controller_Defects_Plan.md R1 (introduced by 3df508a4): with the one MSHR held, a younger Store
+// carrying its bytes is refused; the dataless Grant behind it in the queue must still be processed. Case one:
+// the Grant is denied (the GrantAck goes out and the Load is retried); case two (TL-RETRY-MSHR-UPGRADE): a
+// successful dataless upgrade Grant. Before the fix the refused Store ended every controller cycle at the head
+// of the queue and neither Grant was ever processed.
+TEST("TL-RETRY-MSHR-STORE")
+{
+    L1 l(1);
+    l.cpu.deliver(load(1, A)); l.run(10);
+    l.cpu.deliver(store(2, B, 0x77)); l.run(10);
+    CHECK_EQ(l.net.acquires(), 1);                                      // the Store is refused: one MSHR
+    const int q = l.c->queued();
+    for (int k = 0; k < 20; k++) { l.run(1); CHECK_EQ(l.c->queued(), q); CHECK(l.net.balanced()); }
+    l.net.deliver(grant(1, A, false, toB, true, 0, 3)); l.run(20);
+    CHECK_EQ(l.net.count(Message::K_GRANT_ACK), 1);                     // the denied Grant ran behind the refused Store
+    CHECK_EQ(l.net.acquires(), 2);
+    { const Message *a = l.net.lastAcquire(); CHECK(a && a->msg_id == 1u); }   // the Load's retry holds the credit
+    l.net.deliver(grant(1, A, true, toB, false, 0x11, 4)); l.run(20);
+    CHECK_EQ(l.responses(1), 1);
+    CHECK_EQ(l.net.acquires(), 3);
+    { const Message *a = l.net.lastAcquire(); CHECK(a && a->msg_id == 2u); }   // the MSHR freed: the Store's Acquire
+    l.net.deliver(grant(2, B, true, toT, false, 0x22, 5)); l.run(20);
+    CHECK_EQ(l.responses(2), 1);
+    CHECK_EQ(l.net.count(Message::K_GRANT_ACK), 3);
+    l.cpu.deliver(load(3, B)); l.run(20);
+    CHECK(l.response(3) && l.response(3)->data && l.response(3)->data[0] == 0x77);   // the Store's saved bytes
+    CHECK(l.idle(A) && l.idle(B)); CHECK(l.net.balanced()); CHECK_EQ(l.c->queued(), 0);
+}
+
+TEST("TL-RETRY-MSHR-UPGRADE")
+{
+    L1 l(1);
+    l.cpu.deliver(load(1, A)); l.run(10);
+    l.net.deliver(grant(1, A, true, toB, false, 0x5a, 1)); l.run(20);
+    CHECK_EQ(l.responses(1), 1);                                        // A in B (Branch)
+    l.cpu.deliver(store(2, A, 0x77)); l.run(10);                        // Acquire BtoT: the one MSHR
+    l.cpu.deliver(store(3, B, 0x88)); l.run(10);                        // refused
+    CHECK_EQ(l.net.acquires(), 2);
+    l.net.deliver(grant(2, A, false, toT, false, 0, 2)); l.run(20);     // successful, dataless
+    CHECK_EQ(l.net.count(Message::K_GRANT_ACK), 2);
+    CHECK_EQ(l.responses(2), 1);
+    CHECK_EQ(l.net.acquires(), 3);
+    { const Message *a = l.net.lastAcquire(); CHECK(a && a->msg_id == 3u); }
+    l.net.deliver(grant(3, B, true, toT, false, 0x22, 3)); l.run(20);
+    CHECK_EQ(l.responses(3), 1);
+    CHECK_EQ(l.net.count(Message::K_GRANT_ACK), 3);
+    l.cpu.deliver(load(4, A)); l.cpu.deliver(load(5, B)); l.run(20);
+    CHECK(l.response(4) && l.response(4)->data && l.response(4)->data[0] == 0x77);
+    CHECK(l.response(5) && l.response(5)->data && l.response(5)->data[0] == 0x88);
+    CHECK(l.idle(A) && l.idle(B)); CHECK(l.net.balanced()); CHECK_EQ(l.c->queued(), 0);
+}
+
+// docs/Shared_Controller_Defects_Plan.md issue 3: a demand refused by admission keeps its place. One MSHR held by
+// Load(1, B); an older access to A and a younger one are both refused; when B's fill frees the MSHR the older
+// issues first and the values follow program order. Load then Store: the Load returns memory's 0x11, not the
+// younger Store's 0x77 (before the fix the refused Load moved behind the Store); Store then Load: the Load
+// returns the Store's 0x77.
+TEST("TL-ADMIT-ORDER")
+{
+    for (int store_first = 0; store_first < 2; store_first++)
+    {
+        L1 l(1);
+        l.cpu.deliver(load(1, B)); l.run(10);
+        // one cycle apart, so the older access enters the controller first (the stub port hands out a message
+        // carrying data, the Store, ahead of a dataless one delivered with it)
+        if (store_first) { l.cpu.deliver(store(2, A, 0x77)); l.run(1); l.cpu.deliver(load(3, A)); }
+        else             { l.cpu.deliver(load(2, A)); l.run(1); l.cpu.deliver(store(3, A, 0x77)); }
+        l.run(10);
+        CHECK_EQ(l.net.acquires(), 1);
+        l.net.deliver(grant(1, B, true, toB, false, 0x22, 1)); l.run(20);
+        CHECK_EQ(l.responses(1), 1);
+        const Message *a = l.net.lastAcquire();
+        CHECK(a && a->msg_id == 2u);                                    // the older access to A goes first
+        if (!a || a->msg_id != 2u) continue;
+        if (store_first)
+        {
+            l.net.deliver(grant(2, A, true, toT, false, 0x11, 2)); l.run(30);
+            CHECK_EQ(l.responses(2), 1);
+            CHECK(l.response(3) && l.response(3)->data && l.response(3)->data[0] == 0x77);
+        }
+        else
+        {
+            l.net.deliver(grant(2, A, true, toB, false, 0x11, 2)); l.run(20);
+            CHECK(l.response(2) && l.response(2)->data && l.response(2)->data[0] == 0x11);
+            const Message *u = l.net.lastAcquire();                     // the Store's upgrade
+            CHECK(u && u->msg_id == 3u);
+            l.net.deliver(grant(3, A, false, toT, false, 0, 3)); l.run(20);
+            CHECK_EQ(l.responses(3), 1);
+            l.cpu.deliver(load(4, A)); l.run(20);
+            CHECK(l.response(4) && l.response(4)->data && l.response(4)->data[0] == 0x77);
+        }
+        CHECK(l.idle(A) && l.idle(B)); CHECK(l.net.balanced()); CHECK_EQ(l.c->queued(), 0);
+    }
+}
+
 TEST("TL-RETRY-ARRAY")
 {
     // occupancy and pipelined data array, latency 4: the denial changes nothing the CPU sees. Each run is

@@ -98,7 +98,8 @@ namespace octopus
             if (c.tl_channel == 4) return c.kind == Message::K_RESP && !c.memory;
             return false;
         }
-        // A CPU demand access (the queue's per-line order, the MSHR check of CacheController::canAdmitRequest).
+        // A CPU demand access (the queue's per-line order, the MSHR check of CacheController::canAdmitRequest, the
+        // scheduling of a demand that admission refuses).
         // Default: Message::isDemandRequest, which leaves out a Store that carries its bytes (the external CPU);
         // a protocol that must order and count such Stores too (TLC_L1) overrides both.
         virtual bool isCpuDemand(const Message &msg) const { return msg.isDemandRequest(); }
