@@ -329,6 +329,21 @@ Put, ADD, MIN and MAXU at w = 4, 8, 16 with no outer write, ValueCheck on the un
 old checker fails the end-to-end cases (1, 8 and 4 violations). `test_valuecheck`
 `wide_atomic_wrong_old_value_still_rejected`: a wrong 16-byte old value is still reported. Library 45/45.
 
+## Review problem 5: mask checks stopped at lane 64 (2026-10-23)
+
+**Cause.** The M-MASK rules packed the mask into a 64-bit integer, so on a bus wider than 64 bytes a
+missing or extra lane at 64 or above was never reported.
+
+**Built.** The monitor walks all w lanes into lane lists, A and B alike. The diagnostic formats the lists
+as ranges (the first 16 runs, then a count). It no longer decides which lanes are checked.
+
+**Measured.** TL-MASK (7 cases, 70 checks): a missing active lane at 63, 64, 100 and the last lane, at
+w = 8, 64, 128, 4096 (M-MASK-2, the lane named, nothing else reported); an extra inactive lane (M-MASK-1);
+a fault on beat 1; legal full, partial and zero PutPartialData masks (no report); a PutPartialData lane
+outside its region (M-MASK-3, not M-MASK-1); a ProbeBlock on B at w = 128 with lane 100 HIGH and lane
+63 LOW; fatal mode in a child process (exit 2, M-MASK-2 and lane 100 named). The cases above lane 63
+fail on the old monitor. Library 45/45.
+
 ## T10: documentation and the regression
 
 `SUPPORTED_CONFIGURATIONS.md` (TL-C protocols, the TileLink crossbar and network presets, the standalone

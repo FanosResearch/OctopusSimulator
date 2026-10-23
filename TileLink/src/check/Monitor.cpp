@@ -440,23 +440,35 @@ namespace octopus { namespace tl
             if (bytes >= w) for (auto &a : active) a = 1;
             else { size_t off = size_t(m.address % w); for (uint64_t i = 0; i < bytes && off + i < w; i++) active[off + size_t(i)] = 1; }
             const uint8_t *mk = m.beatMask(beat);
-            uint64_t inactive_high = 0, active_low = 0, maskv = 0;
-            for (unsigned i = 0; i < w && i < 64; i++)
+            // every lane of the bus, w up to 4096 (Table 4): the lanes are collected, not packed into an
+            // integer, so no lane escapes the check (docs/TileLink_Review_Action_Plan.md problem 5)
+            std::vector<unsigned> inactive_high, active_low;
+            for (unsigned i = 0; i < w; i++)
             {
-                if (mk[i]) maskv |= uint64_t(1) << i;
-                if (mk[i] && !active[i]) inactive_high |= uint64_t(1) << i;
-                if (!mk[i] && active[i]) active_low |= uint64_t(1) << i;
+                if (mk[i] && !active[i]) inactive_high.push_back(i);
+                if (!mk[i] && active[i]) active_low.push_back(i);
             }
+            auto lanes = [](const std::vector<unsigned> &v) {   // "3, 64-67, 100" (ranges; the first 16 runs, then a count)
+                std::string o; size_t runs = 0;
+                for (size_t i = 0; i < v.size();)
+                {
+                    size_t j = i; while (j + 1 < v.size() && v[j + 1] == v[j] + 1) j++;
+                    if (runs++ == 16) { o += ", ... (" + std::to_string(v.size()) + " lanes)"; break; }
+                    o += (o.empty() ? "" : ", ") + std::to_string(v[i]) + (j > i ? "-" + std::to_string(v[j]) : "");
+                    i = j + 1;
+                }
+                return o;
+            };
             const bool partial = op == unsigned(OpA::PutPartialData);
-            if (!partial && inactive_high)   // M-MASK-1, §4.5 "the mask must always be LOW for all inactive byte lanes"
-                report("M-MASK-1", "§4.5", ch, &m, beat, cycle, "mask " + hex(maskv) + " HIGH on inactive lane(s) " + hex(inactive_high) +
-                       " (size " + std::to_string(m.size) + ", address " + hex(m.address) + ")");
-            if (!partial && active_low)      // M-MASK-2, §4.5 "for all messages other than PutPartialData ... active byte lanes must be HIGH"
-                report("M-MASK-2", "§4.5", ch, &m, beat, cycle, "mask " + hex(maskv) + " LOW on active lane(s) " + hex(active_low) + " (" + opn +
-                       " size " + std::to_string(m.size) + ", address " + hex(m.address) + ")");
-            if (partial && inactive_high)    // M-MASK-3, §7.2.3 "any HIGH bits of a_mask must be contained within an aligned region of a_size"
-                report("M-MASK-3", "§7.2.3", ch, &m, beat, cycle, "PutPartialData mask " + hex(maskv) + " outside its aligned region (size " +
-                       std::to_string(m.size) + ", address " + hex(m.address) + ")");
+            if (!partial && !inactive_high.empty())   // M-MASK-1, §4.5 "the mask must always be LOW for all inactive byte lanes"
+                report("M-MASK-1", "§4.5", ch, &m, beat, cycle, "mask HIGH on inactive lane(s) " + lanes(inactive_high) +
+                       " (size " + std::to_string(m.size) + ", address " + hex(m.address) + ", w " + std::to_string(w) + ")");
+            if (!partial && !active_low.empty())      // M-MASK-2, §4.5 "for all messages other than PutPartialData ... active byte lanes must be HIGH"
+                report("M-MASK-2", "§4.5", ch, &m, beat, cycle, "mask LOW on active lane(s) " + lanes(active_low) + " (" + opn +
+                       " size " + std::to_string(m.size) + ", address " + hex(m.address) + ", w " + std::to_string(w) + ")");
+            if (partial && !inactive_high.empty())    // M-MASK-3, §7.2.3 "any HIGH bits of a_mask must be contained within an aligned region of a_size"
+                report("M-MASK-3", "§7.2.3", ch, &m, beat, cycle, "PutPartialData mask HIGH on lane(s) " + lanes(inactive_high) +
+                       " outside its aligned region (size " + std::to_string(m.size) + ", address " + hex(m.address) + ", w " + std::to_string(w) + ")");
         }
 
         // ---- M-RSV (reserved fields)
