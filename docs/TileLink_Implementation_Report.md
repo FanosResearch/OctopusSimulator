@@ -344,6 +344,31 @@ outside its region (M-MASK-3, not M-MASK-1); a ProbeBlock on B at w = 128 with l
 63 LOW; fatal mode in a child process (exit 2, M-MASK-2 and lane 100 named). The cases above lane 63
 fail on the old monitor. Library 45/45.
 
+## Review problem 6: a run that hit its cycle limit reported success (2026-10-23)
+
+**Cause.** `Kernel::runUntilIdle` returned the cycles stepped, whether the system drained or the budget ran
+out, and tlsim exited 0 either way (a reset-only budget of 100 cycles "passed" with no traffic). A negative
+`max_cycles` became a huge unsigned limit.
+
+**Built.**
+- `Kernel::runToDrain(max)` returns a `RunResult` (cycles stepped, Idle or CycleLimit). `drained()` is the
+  predicate: reset complete, every agent idle, no channel valid or mid-burst. It is checked after every
+  step, so a run that drains on its last allowed cycle is Idle. A zero budget steps nothing and reports
+  the state as it is. `busy()` lists the agents and links still active. `runUntilIdle` is a wrapper.
+- tlsim: negative `cycles` or `max_cycles` refused (exit 2); the `stop_reason` line printed before the
+  end-of-run rules; an incomplete run lists what is busy and exits 4; report-mode violations stay exit 3;
+  a fixed window that did not drain skips the end-of-run rules and says so.
+
+**Measured.** TL-RUN (6 cases, 22 checks, tlsim as a subprocess, its exit status and TLStats.csv): the
+review's 100-cycle budget exits 4 with `stop_reason=cycle_limit` and the busy agents, with and without
+the monitor; a drained run exits 0; a 500-cycle window prints `fixed_cycles` and exits 0; a 150-cycle
+limit in report mode exits 3 with the stop line and the M-RESP-7 reports; the drained run's own cycle
+count as the limit exits 0, one less exits 4; negative limits exit 2. The old tlsim exits 0 with no stop
+reason on the 100-cycle budget; on `max_cycles=-1` it was still running after 13 minutes and was stopped. `test_kernel`
+`run_to_drain_reports_how_it_ended`: drained on the last cycle, one short, early, planned future work,
+zero budget, an unfinished reset. TL-NEG's exit-status case now runs until drained (a fixed window no longer
+applies M-RESP-7). Library 45/45.
+
 ## T10: documentation and the regression
 
 `SUPPORTED_CONFIGURATIONS.md` (TL-C protocols, the TileLink crossbar and network presets, the standalone

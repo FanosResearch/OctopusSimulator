@@ -77,7 +77,22 @@ namespace octopus { namespace tl
         // ---- running
         void     step();
         void     run(uint64_t cycles);
-        uint64_t runUntilIdle(uint64_t max_cycles);           // returns the cycles stepped
+        uint64_t runUntilIdle(uint64_t max_cycles);           // returns the cycles stepped (compatibility: runToDrain(...).cycles)
+        // How a bounded run ended (docs/TileLink_Review_Action_Plan.md problem 6): drained, or the cycle limit
+        // reached with work left. Drained = reset complete, every agent idle (including work it will start
+        // later), no channel valid or with a burst in progress; checked after every step, so a run that
+        // drains on its last allowed cycle is Idle. A zero budget steps nothing and reports the state as it
+        // is (elaborating first).
+        struct RunResult
+        {
+            enum class Stop { Idle, CycleLimit };
+            uint64_t cycles = 0;
+            Stop     stop = Stop::CycleLimit;
+            bool     drained() const { return stop == Stop::Idle; }
+        };
+        RunResult runToDrain(uint64_t max_cycles);
+        bool     drained();                                    // the predicate above, now
+        std::vector<std::string> busy();                       // diagnostics: the agents not idle, the links with traffic
         uint64_t cycle() const { return m_cycle; }
         bool     inReset() const { return m_cycle < m_opts.reset_cycles; }
         const KernelOptions &options() const { return m_opts; }

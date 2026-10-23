@@ -276,14 +276,17 @@ TEST(m_reset_2_tlsim_refuses_short_reset)
 
 TEST(tlsim_exit_status)
 {
-    // Exit 3: report mode counted violations (requests still unanswered when cycles(i) ends: M-RESP-7);
-    // exit 2: the same run in fatal mode; exit 0: a clean run.
+    // Exit 3: report mode counted violations (requests still unanswered when a run until drained stops at
+    // max_cycles(i): M-RESP-7; the violations are the primary verdict over the incomplete run, exit 4);
+    // exit 2: the same run in fatal mode; exit 0: a clean run. (A fixed cycles(i) window is an observation and
+    // applies no end-of-run rule unless it drained: docs/TileLink_Review_Action_Plan.md problem 6, TL-RUN.)
     std::string out;
     std::string base = std::string(SYS) + "reset_cycles(i),100\n";
-    CHECK_EQ(runTlsim(base + "cycles(i),130\nmonitor_mode(s),report\n", "exit3", &out), 3);
+    CHECK_EQ(runTlsim(base + "cycles(i),0\nmax_cycles(i),130\nmonitor_mode(s),report\n", "exit3", &out), 3);
     CHECK(out.find("M-RESP-7") != std::string::npos);
     CHECK(out.find("monitor link0: ") != std::string::npos);
-    CHECK_EQ(runTlsim(base + "cycles(i),130\nmonitor_mode(s),fatal\n", "exit2", &out), 2);
+    CHECK(out.find("stop_reason=cycle_limit") != std::string::npos);
+    CHECK_EQ(runTlsim(base + "cycles(i),0\nmax_cycles(i),130\nmonitor_mode(s),fatal\n", "exit2", &out), 2);
     CHECK(out.find("TileLink: M-RESP-7") != std::string::npos);
     CHECK_EQ(runTlsim(base + "cycles(i),0\n", "exit0", &out), 0);
     CHECK(out.find("monitor link0: 0 violations") != std::string::npos);

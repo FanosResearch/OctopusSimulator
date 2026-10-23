@@ -15,7 +15,8 @@
  * Outputs in the output directory (default "."): TLStats.csv, transcript.txt (trace=1 or --trace),
  * monitor.txt (the per-link monitor summaries, also printed).
  * Exit status: 0 clean; 1 usage; 2 a fatal error or fatal violation (monitor, watchdog, a refused
- * configuration); 3 the monitor in report mode counted violations.
+ * configuration); 3 the monitor in report mode counted violations; 4 a run until drained (cycles(i) 0) reached
+ * max_cycles(i) with work left (incomplete; printed as stop_reason=cycle_limit with the busy agents and links).
  */
 #include "tilelink/Kernel.h"
 #include "tilelink/Monitor.h"
@@ -113,14 +114,47 @@ int main(int argc, char *argv[])
         }
     }
 
-    uint64_t cycles = uint64_t(cfg.get<int>("cycles", 1000));
+    // docs/TileLink_Review_Action_Plan.md problem 6: cycles(i) 0 = run until drained, bounded by max_cycles(i); a
+    // budget exhausted with work left is an incomplete run (exit 4), not a success. cycles(i) > 0 = a fixed
+    // observation window, which need not drain.
+    const int cycles_i = cfg.get<int>("cycles", 1000), max_i = cfg.get<int>("max_cycles", 1000000);
+    if (cycles_i < 0) fatal("cycles(i) must be >= 0, got " + std::to_string(cycles_i));
+    if (max_i < 0) fatal("max_cycles(i) must be >= 0, got " + std::to_string(max_i));
+    const uint64_t cycles = uint64_t(cycles_i), limit = uint64_t(max_i);
     uint64_t ran;
-    if (cycles == 0) ran = kernel.runUntilIdle(uint64_t(cfg.get<int>("max_cycles", 1000000)));
-    else { kernel.run(cycles); ran = cycles; }
+    bool incomplete = false;
+    std::string stop_line;
+    if (cycles == 0)
+    {
+        Kernel::RunResult r = kernel.runToDrain(limit);
+        ran = r.cycles;
+        incomplete = !r.drained();
+        stop_line = std::string("tlsim: stop_reason=") + (r.drained() ? "idle" : "cycle_limit") + ", complete=" + (r.drained() ? "true" : "false") +
+                    ", cycles=" + std::to_string(ran) + ", limit=" + std::to_string(limit);
+    }
+    else
+    {
+        kernel.run(cycles); ran = cycles;
+        stop_line = std::string("tlsim: stop_reason=fixed_cycles, drained=") + (kernel.drained() ? "true" : "false") + ", cycles=" + std::to_string(ran);
+    }
+    std::vector<std::string> busy = incomplete ? kernel.busy() : std::vector<std::string>();
+    const bool fixed_undrained = cycles != 0 && !kernel.drained();
+    // the stop reason first: a fatal end-of-run report below must not hide why the run stopped
+    std::cout << stop_line << std::endl;
+    if (incomplete)
+    {
+        std::cout << "tlsim: incomplete: the cycle limit " << limit << " was reached with work left:";
+        for (size_t i = 0; i < busy.size() && i < 10; i++) std::cout << (i ? ", " : " ") << busy[i];
+        if (busy.size() > 10) std::cout << ", ... (" << busy.size() << " in all)";
+        std::cout << std::endl;
+    }
     kernel.writeStats(out_dir + "/TLStats.csv");
     if (kernel.transcript()) kernel.transcript()->flush();
 
-    Monitor::finishAll(monitors, kernel.cycle());   // M-BURST-4, M-BURST-5, M-RESP-7
+    // M-BURST-4, M-BURST-5, M-RESP-7 are "eventually" rules: a fixed window that ends mid-transaction is an
+    // observation, not a drained run, so they apply only when it drained (or in a run until drained)
+    if (fixed_undrained) std::cout << "tlsim: end-of-run rules not applied: the fixed window ended with work in flight" << std::endl;
+    else Monitor::finishAll(monitors, kernel.cycle());
     uint64_t violations = Monitor::totalViolations(monitors);
     if (monitor)
     {
@@ -140,5 +174,6 @@ int main(int argc, char *argv[])
     std::cout << "tlsim: " << kernel.agents().size() << " agents, " << kernel.links().size() << " links, "
               << ran << " cycles, outputs in " << out_dir << std::endl;
     monitors.clear();   // before the kernel that owns the links
-    return violations ? 3 : 0;
+    // 3: the monitor counted violations (the primary verdict); 4: the run did not drain within max_cycles
+    return violations ? 3 : (incomplete ? 4 : 0);
 }

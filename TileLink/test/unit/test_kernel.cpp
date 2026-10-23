@@ -450,3 +450,49 @@ TEST(elaboration_checks)
 }
 
 TL_TEST_MAIN("test_kernel")
+
+namespace
+{
+    // problem 6: an agent with work planned for cycle `until` (future work, not visible on any wire): idle after it
+    class Planned : public Agent
+    {
+    public:
+        uint64_t until;
+        Planned(const std::string &n, uint64_t u) : Agent(n), until(u) {}
+        Level capability(const Link &, Role) const override { return Level::C; }
+        uint64_t now = 0;
+        void offer(uint64_t) override {}
+        void accept(uint64_t) override {}
+        void commit(uint64_t t) override { now = t + 1; }
+        bool idle() const override { return now >= until; }
+    };
+    struct PlannedSys
+    {
+        Kernel k; Planned *a; PatternSlave *s;
+        PlannedSys(uint64_t reset, uint64_t until) : k(KernelOptions{reset, 1, DataMode::None})
+        {
+            a = static_cast<Planned *>(&k.add(std::unique_ptr<Agent>(new Planned("a", until))));
+            s = static_cast<PatternSlave *>(&k.add(std::unique_ptr<Agent>(new PatternSlave("s"))));
+            LinkParams p; p.w = 8; p.level = Level::UH;
+            k.connect("L", p, *a, *s);
+        }
+    };
+}
+
+TEST(run_to_drain_reports_how_it_ended)
+{
+    // docs/TileLink_Review_Action_Plan.md problem 6: idle versus the cycle limit, at the exact boundary
+    { PlannedSys s(0, 10); auto r = s.k.runToDrain(10); CHECK(r.drained()); CHECK_EQ(r.cycles, uint64_t(10)); }   // drains on the last allowed cycle
+    { PlannedSys s(0, 10); auto r = s.k.runToDrain(9);  CHECK(!r.drained()); CHECK_EQ(r.cycles, uint64_t(9)); }   // one short: the limit
+    { PlannedSys s(0, 3);  auto r = s.k.runToDrain(100); CHECK(r.drained()); CHECK_EQ(r.cycles, uint64_t(3)); }   // early: stops when drained
+    // future work, no traffic: not drained while planned
+    { PlannedSys s(0, 50); auto r = s.k.runToDrain(20); CHECK(!r.drained()); CHECK(!s.k.busy().empty()); }
+    // a zero budget steps nothing and reports the state as it is
+    { PlannedSys s(0, 0); auto r = s.k.runToDrain(0); CHECK(r.drained()); CHECK_EQ(r.cycles, uint64_t(0)); }
+    { PlannedSys s(0, 5); auto r = s.k.runToDrain(0); CHECK(!r.drained()); }
+    // an unfinished reset is not drained, whatever the agents say
+    { PlannedSys s(100, 0); auto r = s.k.runToDrain(50); CHECK(!r.drained()); CHECK_EQ(r.cycles, uint64_t(50)); }
+    { PlannedSys s(100, 0); auto r = s.k.runToDrain(101); CHECK(r.drained()); }
+    // compatibility: runUntilIdle returns the cycles stepped
+    { PlannedSys s(0, 7); CHECK_EQ(s.k.runUntilIdle(100), uint64_t(7)); }
+}

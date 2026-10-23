@@ -41,6 +41,19 @@ response. Burst-lock and reset violations go to `ChannelState::onViolation` (def
 writes `out/TLStats.csv` and `out/transcript.txt`. Flags match `Octopus_Simulator`: `-c <config.csv>`,
 `-o <dir>`, `--trace`, `-p name(type)=value`.
 
+`cycles(i)` 0 runs until the system drains (reset complete, every agent idle including work it has planned,
+no channel valid or mid-burst), bounded by `max_cycles(i)`. `cycles(i)` > 0 is a fixed observation window.
+Negative values are refused. tlsim prints how the run stopped before any end-of-run report:
+
+    tlsim: stop_reason=idle, complete=true, cycles=3387, limit=2000000
+    tlsim: stop_reason=cycle_limit, complete=false, cycles=100, limit=100
+    tlsim: incomplete: the cycle limit 100 was reached with work left: agent m0, agent s0
+    tlsim: stop_reason=fixed_cycles, drained=false, cycles=500
+
+A fixed window that ends with work in flight skips the end-of-run monitor rules (M-BURST-4, M-BURST-5,
+M-RESP-7) and says so. `Kernel::runToDrain(max)` returns the same outcome (`RunResult`); `runUntilIdle`
+keeps returning the cycles stepped.
+
 ## GraphCheck and Watchdog
 
 The system-level checkers of plan §3.6. Both are `Kernel::Observer`s (`onElaborate`, `onCycleEnd`) that `Kernel::build` registers from the config.
@@ -76,7 +89,7 @@ Every violation is one line:
 
 The mask rules (M-MASK-1/2/3, A and B) check every byte lane of the bus, w up to 4096 (Table 4), and name the offending lanes as ranges (`lane(s) 63-64, 100`). The slave's `max_size` (M-ALIGN-3) and address region (M-ALIGN-5) come from the slave itself when it implements `SlaveLimits` (`RamSlave` and `ErrorSlave` do), or from `MonitorOptions`. `Monitor::finish(cycle)` applies the end-of-run rules M-BURST-4, M-BURST-5 and M-RESP-7. A request whose own burst is still in progress is excluded from M-RESP-7 (M-BURST-4 reports it). `violations()`, `count(rule)`, `byRule()` and `log()` are for tests. `summary()` gives `monitor L0: 2 violations (M-ALIGN-1: 1, M-RESP-7: 1)`. The monitor also pairs each request with its response and feeds `Stats::recordOperation` (the `operation` section of TLStats.csv: request first beat offered to response last beat accepted). The test fixture reports M-LEVEL-4 (a beat on a channel that a TL-UL/UH link does not have) through `offerOnMissingChannel`.
 
-tlsim exit status: 0 clean, 1 usage, 2 a fatal error (a monitor violation in fatal mode, a watchdog trip, a refused configuration), 3 the monitor counted violations in report mode. The summaries are printed and written to `<out>/monitor.txt`.
+tlsim exit status: 0 clean, 1 usage, 2 a fatal error (a monitor violation in fatal mode, a watchdog trip, a refused configuration), 3 the monitor counted violations in report mode, 4 a run until drained reached `max_cycles` with work left (incomplete). Code 3 takes precedence over 4; both facts are printed. The summaries are printed and written to `<out>/monitor.txt`.
 
 ## Agents: RamSlave, ErrorSlave, FuzzMaster
 

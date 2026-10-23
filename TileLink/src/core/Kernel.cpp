@@ -221,20 +221,50 @@ namespace octopus { namespace tl
         for (uint64_t i = 0; i < cycles; i++) step();
     }
 
-    uint64_t Kernel::runUntilIdle(uint64_t max_cycles)
+    uint64_t Kernel::runUntilIdle(uint64_t max_cycles) { return runToDrain(max_cycles).cycles; }
+
+    bool Kernel::drained()
     {
-        uint64_t n = 0;
-        while (n < max_cycles)
+        if (!m_elaborated) elaborate();
+        if (inReset()) return false;
+        for (auto &l : m_links)
+        {
+            bool busy = false;
+            l->forEachChannel([&](ChannelState &c) { if (c.valid() || c.inProgress()) busy = true; });
+            if (busy) return false;
+        }
+        for (auto &a : m_agents) if (!a->idle()) return false;
+        return true;
+    }
+
+    std::vector<std::string> Kernel::busy()
+    {
+        std::vector<std::string> v;
+        if (inReset()) v.push_back("reset (cycle " + std::to_string(m_cycle) + " of " + std::to_string(m_opts.reset_cycles) + ")");
+        for (auto &a : m_agents) if (!a->idle()) v.push_back("agent " + a->name());
+        for (auto &l : m_links)
+            l->forEachChannel([&](ChannelState &c) {
+                if (c.valid() || c.inProgress()) v.push_back("link " + l->name() + " " + channelName(c.id()) + (c.inProgress() ? " (burst in progress)" : ""));
+            });
+        return v;
+    }
+
+    Kernel::RunResult Kernel::runToDrain(uint64_t max_cycles)
+    {
+        RunResult r;
+        if (max_cycles == 0)
+        {
+            r.stop = drained() ? RunResult::Stop::Idle : RunResult::Stop::CycleLimit;
+            return r;
+        }
+        while (r.cycles < max_cycles)
         {
             step();
-            n++;
-            if (inReset()) continue;
-            bool idle = true;
-            for (auto &l : m_links) l->forEachChannel([&](ChannelState &c) { if (c.valid() || c.inProgress()) idle = false; });
-            for (auto &a : m_agents) if (!a->idle()) idle = false;
-            if (idle) break;
+            r.cycles++;
+            if (drained()) { r.stop = RunResult::Stop::Idle; return r; }
         }
-        return n;
+        r.stop = RunResult::Stop::CycleLimit;
+        return r;
     }
 
     void Kernel::finishStats()
