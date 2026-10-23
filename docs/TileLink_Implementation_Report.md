@@ -369,6 +369,84 @@ reason on the 100-cycle budget; on `max_cycles=-1` it was still running after 13
 zero budget, an unfinished reset. TL-NEG's exit-status case now runs until drained (a fixed window no longer
 applies M-RESP-7). Library 45/45.
 
+## Shared controller defects and review follow-up (2026-10-23)
+
+Plan: docs/Shared_Controller_Defects_Plan.md and docs/TileLink_Review_Followup.md. Order agreed with the user:
+issue 3 with R1, issue 2, R2, issue 1. Issues 3 and 2 are fixed on `network` first and carried here.
+
+**Issue 3 and R1: a refused demand keeps its place** (`network` e67a9e7c, here 0ccb1a3c).
+- A CPU demand refused by admission went to the back of the processing queue, where a younger access to its
+  line passed it through the per-line gate (an older Load returned a younger Store's value). It now goes back
+  to its own place, is held for the rest of the controller cycle and the scan continues: other lines' hits and
+  the completion traffic that frees the resource still run, the line's younger demands stay behind it. A
+  refused non-demand message still ends the cycle in place. A refused pop is not progress for the hang dump.
+- The hold is keyed by msg_id and applies only while the message is a CPU demand
+  (`CoherenceProtocolHandler::isCpuDemand`), so completion traffic sharing the request's msg_id stays eligible.
+  The denied-Grant replay hold uses the same predicate now (it used the lower-interface source).
+- R1, introduced here by 3df508a4: TLC_L1 counted a Store carrying its bytes as a demand for the MSHR check, but
+  the refusal path classified it with `Message::isDemandRequest`, restored it in place and ended the cycle; the
+  dataless Grant queued behind it was never processed. Both paths now use `isCpuDemand`.
+- Tests: P2-ADMIT-ORDER and P2-ADMIT-ORDER-LLC (network unit: the older request issues first at an L1 and at an
+  LLC, hit-under-miss, an InvAck sharing a held GetS's msg_id completes its eviction); TL-RETRY-MSHR-STORE and
+  TL-RETRY-MSHR-UPGRADE (R1: a denied and a successful dataless Grant behind a refused Store, both Stores
+  complete, bytes read back); TL-ADMIT-ORDER (the older Load returns 0x11, not the younger Store's 0x77). Each
+  fails on the code before the fix.
+
+**Issue 2: a Store's bytes belong to the array access that serves it** (`network` 002aa522, here 09bf2360).
+- With the occupancy array and an L1 latency above 0 a Store miss's merge was refused by the busy array after
+  the fill, and the refusal was ignored; a Store hit during another request's fill lost its write the same way.
+  Reproduced for TLC, directory MSI and directory MESI.
+- The controller records the transition's array access (the first action that claims the array inline or
+  parks it). A Store's write of the same request and line rides on it when inline (the fill and its merge are
+  one access) and is appended to it when parked. Any other write waits for its own access. At an L1 a Store hit
+  that carries its bytes claims the array, so its answer, its commit and its write happen together. A refused
+  write is fatal; the saved bytes are dropped only once written.
+- Tests: DATA-STORE-MISS and DATA-STORE-HIT (directory MSI and MESI; occupancy 0 and 4, pipelined 4; offsets 0,
+  8, 48; untouched bytes; the eviction's write-back), TL-RETRY-ARRAY (now requires the Store's bytes in both
+  models, with and without the denial), TL-DATA-STORE-HIT. Each fails on the code before the fix.
+- Trace runs carry no Store bytes: the 30 MEM-OFF runs and the crossbar TileLink run are byte-identical to the
+  issue 3 results.
+- Not covered: a CPU Store of a whole line (64 bytes) takes the full-line fill path and exits on an absent line.
+
+**R2: corrupt data on the manager's forwarded path** (175f8204, library only).
+- `CoherenceCheck::storeUnknown`: the bytes admit any value until the next known store.
+- `reportForwarded`: a byte on a corrupt response beat is not compared, the clean beats still are; a corrupt
+  Put's bytes and an atomic's result from corrupt input become unknown. ForwardIn relays corruption per beat by
+  the bytes each beat carries (it marked every beat corrupt). The manager's own copy marks its poisoned Put bytes
+  and atomic results unknown too.
+- Tests: TL-FORWARDED (4 cases; three fail on the old code; the unflagged wrong value is still C-VALUE).
+  Library 46/46.
+
+**Issue 1: the Network runner and missing Python packages** (`network` f31b751d and c3519a2e, here 20f0b886
+and e2c33a14).
+- numpy and duckdb are probed once with the steps' interpreter (`$PY`, which a caller may now set) and reported
+  with their versions. Each check that needs them is XFAIL with an install hint when they are missing, and only
+  that check; with them present a validator or converter failure stays FAIL. The home map of P2-BANKING and the
+  controller map of MEM-MULTI are their own results (P2-BANKING-MAP, MEM-MULTI-MAP). An EXIT trap reports a run
+  that stops early (`RUN ABORTED before completion`); a complete run ends with `(run complete)`.
+- Measured with interpreter wrappers that block a package (nothing uninstalled): both present, all: 121 PASS,
+  10 XFAIL; both missing, all: the run completes, 111 PASS, 20 XFAIL; duckdb missing, steps 7 and M4: the
+  numpy checks PASS, the duckdb ones XFAIL; a converter forced to fail: S7-CONVERT and S7-VIEWER-API FAIL; the
+  old stepM.sh without numpy: `RUN ABORTED before completion (status 1)`. Each full run's two FAILs are the
+  reference checks below.
+- Validation environment on this machine: the system python3 3.12.3 has neither package; the runs use a
+  virtual environment with numpy 2.5.4 and duckdb 1.5.6 (`PY=<venv>/bin/python3` or that venv first on PATH).
+
+**Regression references: measured differences, not updated** (issue 3 changes timing; issue 2 and R2 change none).
+
+| Check | Before | After | Difference |
+|---|---|---|---|
+| REG-MEMNET (Grid2BM, a2time01) | finish 1001680, mean of core averages 9.095, worst total 422 | 1001619, 9.088, 437 | finish -0.01%, average -0.07% |
+| MEM-OFF, Grid2B (10 EEMBC) | reference | 9 of 10 differ | finish -0.05% to +0.14%, average -0.30% to +0.33% |
+| MEM-OFF, Grid (10 EEMBC) | reference | 9 of 10 differ | finish -0.36% to +0.37%, average -2.24% (pntrch01) to +0.99% |
+| MEM-OFF, Directory (bus) | reference | 10 of 10 identical | none |
+| REG-TILELINK, crossbar (TileLinkM) | finish 996714, average 9.032, worst total 918 | 997660, 9.042, 674 | finish +0.09%, average +0.11% |
+| REG-TILELINK, network (Grid2BMTL) | reference | identical | none |
+
+mi_pingpong is identical everywhere. The refusals happen at the LLC banks (Grid2BM a2time01: 157 refused pops
+before, 297 after, since held demands keep their place and the scan reaches more messages). Every other check
+of `network` all and of the TileLink runner is unchanged.
+
 ## T10: documentation and the regression
 
 `SUPPORTED_CONFIGURATIONS.md` (TL-C protocols, the TileLink crossbar and network presets, the standalone
