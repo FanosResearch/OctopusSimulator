@@ -8,6 +8,7 @@ add_executable(Octopus_tests
     step4_engine.cpp
     p2_admit.cpp
     data_store.cpp
+    data_line.cpp
 )
 target_link_libraries(Octopus_tests Octopus_core)
 target_include_directories(Octopus_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
