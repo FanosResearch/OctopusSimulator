@@ -432,6 +432,32 @@ and e2c33a14).
 - Validation environment on this machine: the system python3 3.12.3 has neither package; the runs use a
   virtual environment with numpy 2.5.4 and duckdb 1.5.6 (`PY=<venv>/bin/python3` or that venv first on PATH).
 
+**Runner: a successful reference generation is complete** (`network` 9d1824b4, here a3ed2c8d). `refs` and
+`tilelink-refs` exited before the completion flag and printed `RUN ABORTED (status 0)`; they are marked complete
+once their generator has returned, and a usage error is not an abort. `test/network/selftest.sh` checks every mode
+with stubs (8/8 here; the old runner fails REFS and USAGE).
+
+**Whole-line CPU Store** (`network` be5f59a2, here c9bbaa86).
+- An aligned 64-byte CPU Store was taken for fill data by `CacheController::updateCacheLine` (its size, with the
+  transient state's valid flag): a miss wrote an absent line and the run exited with status 0 ("update data of
+  an unfound line") before the GetM; an S upgrade wrote the line at the Store, before the GetM was granted.
+  Directory MSI, directory MESI and snoop MSI, every array model. TLC_L1 was not affected.
+- At an L1 a lower-interface message is a CPU access (`cpuAccess`: the L1 role and the source; not the size, not
+  the kind, not a CPU port); its update is a state update, the bytes are written at the Store's hit. A fill with
+  no line to install into exits 2 with a diagnostic.
+- Tests run as child processes that must exit 0 and print a completion marker: DATA-LINE-MISS, -HIT, -UPGRADE
+  (3 protocols x 3 array models, nonuniform patterns; the upgrade's line keeps its old bytes and the Store is
+  unanswered before any response and while an acknowledgement or the own GetM is pending), -LLC-WRITEBACK, -API
+  (ExternalCPU's default-size WRITE on the gem5 preset), -FATAL (nonzero status, diagnostic); TL-DATA-LINE (the TLC
+  control). MISS, HIT, UPGRADE, API and FATAL fail on the old code.
+- Trace output: `network` all on be5f59a2 gives the same verdicts as the reference commit (123 PASS, 0 FAIL): no
+  reference-checked output changed. Not covered: a Store that crosses a line boundary.
+- Found, not fixed: `test/network/run.sh` resolves the simulator path before it builds, so on a fresh worktree
+  (no binary yet) every simulation of that first run fails and `refs` writes the hash of empty output without
+  complaint. The first of three reference generations here hit it and was discarded; the committed references
+  come from the two that agree. Proposed: resolve the binaries after `build`, and refuse a reference whose run
+  produced no Summary.csv.
+
 **Regression references: measured differences, updated 2026-10-24 with the user's approval** (issue 3 changes
 timing; issue 2 and R2 change none). Regenerated, and only these: `reg-memnet.md5`, the nine EEMBC hashes of
 `mem-off/Grid2B` and of `mem-off/Grid` that changed, and `reg-tilelink-xbar.md5` (20 files here, the first 19 on
