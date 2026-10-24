@@ -432,7 +432,12 @@ and e2c33a14).
 - Validation environment on this machine: the system python3 3.12.3 has neither package; the runs use a
   virtual environment with numpy 2.5.4 and duckdb 1.5.6 (`PY=<venv>/bin/python3` or that venv first on PATH).
 
-**Regression references: measured differences, not updated** (issue 3 changes timing; issue 2 and R2 change none).
+**Regression references: measured differences, updated 2026-10-24 with the user's approval** (issue 3 changes
+timing; issue 2 and R2 change none). Regenerated, and only these: `reg-memnet.md5`, the nine EEMBC hashes of
+`mem-off/Grid2B` and of `mem-off/Grid` that changed, and `reg-tilelink-xbar.md5` (20 files here, the first 19 on
+`network` e52ed82e). Unchanged and untouched: every Directory hash, both mi_pingpong hashes, `reg-tilelink-net.md5`,
+the legacy mesh, bus and TDM references. Two generations agree; with them `network` all and this branch's
+`network` all pass with no FAIL.
 
 | Check | Before | After | Difference |
 |---|---|---|---|
@@ -443,11 +448,40 @@ and e2c33a14).
 | REG-TILELINK, crossbar (TileLinkM) | finish 996714, average 9.032, worst total 918 | 997660, 9.042, 674 | finish +0.09%, average +0.11% |
 | REG-TILELINK, network (Grid2BMTL) | reference | identical | none |
 
+Per benchmark (MEM-OFF; finish = the last core's finish cycle, average = the mean of the four cores' average
+latency, worst total = the largest worst-case total latency; before = `network` 0f5b4f0c, after = e67a9e7c):
+
+| Preset | Benchmark | Finish before | Finish after | Finish change | Average before | Average after | Average change | Worst total before | Worst total after |
+|---|---|---|---|---|---|---|---|---|---|
+| Grid2B | a2time01 | 985608 | 985390 | -0.02% | 8.8593 | 8.8459 | -0.15% | 410 | 428 |
+| Grid2B | aifirf01 | 1023969 | 1023965 | -0.00% | 8.6732 | 8.6731 | -0.00% | 417 | 417 |
+| Grid2B | basefp01 | 1067254 | 1066736 | -0.05% | 9.3456 | 9.3174 | -0.30% | 413 | 422 |
+| Grid2B | cacheb01 | 1493111 | 1493323 | +0.01% | 9.8977 | 9.8989 | +0.01% | 432 | 437 |
+| Grid2B | empty | 654004 | 654908 | +0.14% | 7.5347 | 7.5597 | +0.33% | 404 | 407 |
+| Grid2B | iirflt01 | 1018865 | 1018528 | -0.03% | 9.1152 | 9.1081 | -0.08% | 427 | 399 |
+| Grid2B | mi_pingpong | 348 | identical | | 77.8214 | identical | | 292 | identical |
+| Grid2B | pntrch01 | 1318208 | 1318236 | +0.00% | 8.7414 | 8.7393 | -0.02% | 452 | 450 |
+| Grid2B | rspeed01 | 1768321 | 1768407 | +0.00% | 8.6876 | 8.6870 | -0.01% | 418 | 407 |
+| Grid2B | ttsprk01 | 2512975 | 2514403 | +0.06% | 9.3256 | 9.3011 | -0.26% | 430 | 422 |
+| Grid | a2time01 | 970455 | 968998 | -0.15% | 8.6071 | 8.5889 | -0.21% | 559 | 468 |
+| Grid | aifirf01 | 1024000 | 1020354 | -0.36% | 8.6131 | 8.5985 | -0.17% | 563 | 471 |
+| Grid | basefp01 | 1065796 | 1067326 | +0.14% | 9.3040 | 9.3123 | +0.09% | 500 | 520 |
+| Grid | cacheb01 | 1495498 | 1501011 | +0.37% | 9.9329 | 10.0315 | +0.99% | 571 | 560 |
+| Grid | empty | 652172 | 652873 | +0.11% | 7.3544 | 7.3772 | +0.31% | 531 | 450 |
+| Grid | iirflt01 | 1016744 | 1020043 | +0.32% | 9.0798 | 9.1214 | +0.46% | 469 | 456 |
+| Grid | mi_pingpong | 351 | identical | | 57.1032 | identical | | 295 | identical |
+| Grid | pntrch01 | 1314362 | 1310270 | -0.31% | 8.6728 | 8.4788 | -2.24% | 566 | 617 |
+| Grid | rspeed01 | 1766553 | 1764776 | -0.10% | 8.6999 | 8.6761 | -0.27% | 555 | 493 |
+| Grid | ttsprk01 | 2506596 | 2507434 | +0.03% | 9.1814 | 9.1954 | +0.15% | 543 | 614 |
+
 mi_pingpong is identical everywhere. The refusals happen at the LLC banks (Grid2BM a2time01: 157 refused pops
 before, 297 after, since held demands keep their place and the scan reaches more messages). Every other check
 of `network` all and of the TileLink runner is unchanged.
 
 ## T10: documentation and the regression
+
+*Historical (2026-10-22, before the review fixes): the reference and `reg 7/7` results below describe that
+checkpoint. The current references and results are in "Shared controller defects and review follow-up".*
 
 `SUPPORTED_CONFIGURATIONS.md` (TL-C protocols, the TileLink crossbar and network presets, the standalone
 component), `docs/NoC_Architecture_Spec.md` (5 and 7 classes, `memory_ids`, the TileLink annotations in the
