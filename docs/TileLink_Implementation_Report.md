@@ -452,11 +452,14 @@ with stubs (8/8 here; the old runner fails REFS and USAGE).
   control). MISS, HIT, UPGRADE, API and FATAL fail on the old code.
 - Trace output: `network` all on be5f59a2 gives the same verdicts as the reference commit (123 PASS, 0 FAIL): no
   reference-checked output changed. Not covered: a Store that crosses a line boundary.
-- Found, not fixed: `test/network/run.sh` resolves the simulator path before it builds, so on a fresh worktree
-  (no binary yet) every simulation of that first run fails and `refs` writes the hash of empty output without
-  complaint. The first of three reference generations here hit it and was discarded; the committed references
-  come from the two that agree. Proposed: resolve the binaries after `build`, and refuse a reference whose run
-  produced no Summary.csv.
+- Runner build order (found here, then fixed: `network` 9806190a, here 6dc17744): `test/network/run.sh` and
+  `test/tilelink/run.sh` resolved their binaries before building, so on a fresh worktree every simulation of the
+  first run failed and `refs` wrote the checksum of empty output (the first of three reference generations here
+  hit it and was discarded). The binaries are resolved after the build, and a reference is written only for a
+  run that wrote its Summary.csv (otherwise status 2, reported as an abort). `selftest.sh` FRESH-TREE,
+  REFS-FAILED-RUNS, REFS-NOTHING-WRITTEN (the old runner wrote 12 references from failed runs). In a worktree
+  that had never been built: `run.sh refs` on `network` and `tilelink-refs` here reproduce the committed
+  references exactly; TileLink `all` 56 PASS and `network reg` 7/7.
 
 **Regression references: measured differences, updated 2026-10-24 with the user's approval** (issue 3 changes
 timing; issue 2 and R2 change none). Regenerated, and only these: `reg-memnet.md5`, the nine EEMBC hashes of
