@@ -520,3 +520,28 @@ TEST("TL-DATA-STORE-HIT")
         CHECK(l.idle(A)); CHECK(l.net.balanced());
     }
 }
+
+// docs/Shared_Controller_Defects_Plan.md, whole-line CPU Store: the TLC control. A Store of a whole line (nonuniform
+// 64 bytes, aligned) misses: answered once, after the Grant; the read-back shows every byte of the Store over the
+// GrantData's (the directory and snoop L1s exited here; TLC_L1 never takes a Store's bytes for a fill)
+TEST("TL-DATA-LINE")
+{
+    for (int mode = 0; mode < 3; mode++)
+    {
+        L1 l(-2, mode == 0 ? 0 : 4, mode == 2);
+        Message s = load(1, A); s.complementary_value = 1;
+        std::vector<uint8_t> b(64); for (int i = 0; i < 64; i++) b[i] = uint8_t(0xa1 + 7 * i);
+        s.copy(b.data(), 64);
+        l.cpu.deliver(s); l.run(20);
+        CHECK_EQ(l.net.count(Message::K_GETM), 1);
+        CHECK_EQ(l.responses(1), 0);
+        l.net.deliver(grant(1, A, true, toT, false, 0x11, 1)); l.run(40);
+        CHECK_EQ(l.responses(1), 1);
+        l.cpu.deliver(load(2, A)); l.run(40);
+        const Message *r = l.response(2);
+        bool ok = r && r->data && r->data_size >= 64;
+        for (int i = 0; ok && i < 64; i++) ok = r->data[i] == b[i];
+        CHECK(ok);
+        CHECK(l.idle(A)); CHECK(l.net.balanced());
+    }
+}

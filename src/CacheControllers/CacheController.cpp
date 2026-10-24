@@ -215,7 +215,7 @@ namespace octopus
         // array too, so its answer (and the CPU commit) and its write (MODIFY_DATA, which follows in the cell and
         // rides on this access) happen together, inline or later as one parked access
         // (docs/Shared_Controller_Defects_Plan.md issue 2). The LLC's hits are unchanged.
-        const bool store_bytes = msg->data != NULL && msg->source == Message::Source::LOWER_INTERCONNECT && m_log_role != Logger::Role::LLC;
+        const bool store_bytes = msg->data != NULL && cpuAccess(*msg);
         if ((msg->data == NULL || store_bytes) &&
             !checkReadinessOfCache(*msg, ControllerAction::Type::HIT_Action, data_ptr))
                 return;
@@ -317,7 +317,11 @@ namespace octopus
                 m_cpu_port->invalidate(msg->addr);
         }
 
-        bool has_data = (msg->data != NULL);
+        // A CPU Store's bytes are never installed here as a fill, whatever their size: this update carries the
+        // line's new state (on a miss it allocates the miss entry), and the bytes are written at the Store's Hit
+        // (MODIFY_DATA, on the array access that serves it). A whole-line Store was taken for a fill: on a miss it
+        // wrote an absent line and the run exited; on an upgrade it wrote the line before the GetM was granted.
+        bool has_data = (msg->data != NULL) && !cpuAccess(*msg);
         if (!has_data || !cache_line->valid || msg->data_size < m_data_handler->getBlockSize())
         {
             if (!m_data_handler->updateLineBits(msg->addr, cache_line))
@@ -350,8 +354,15 @@ namespace octopus
         m_data_handler->setRequester(-1);
         if (!ok)
         {
-            cout << "CacheController: update data of an unfound line" << endl;
-            exit(0);
+            // an invariant failure (a fill admitted for a line neither in the array nor in an MSHR), not back-pressure
+            const char *where[] = {"absent", "array", "MSHR", "write-back buffer"};
+            CacheDataHandler::LineLocation loc = m_data_handler->lineLocation(msg->addr);
+            cerr << "CacheController(id = " << m_id << "): cycle " << m_cache_cycle << ": the fill of request " << msg->msg_id
+                 << " (" << msg->data_size << " bytes at 0x" << hex << msg->addr << ", line 0x" << getAddressKey(msg->addr) << dec
+                 << ", next state " << cache_line->state << ") found no line to install into (line "
+                 << where[loc == CacheDataHandler::LineLocation::ARRAY ? 1 : loc == CacheDataHandler::LineLocation::MSHR ? 2 :
+                          loc == CacheDataHandler::LineLocation::PWB ? 3 : 0] << ")" << endl;
+            exit(2);
         }
 
         cache_line->~GenericCacheLine();    //explicit call for the destructor due to the use of placement new

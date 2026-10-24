@@ -69,6 +69,11 @@ namespace octopus
         // ACTIONS op). A Store's byte write (MODIFY_DATA) of the same request and line belongs to that access: it
         // rides on it when it ran inline, it is appended to it when it was parked. Reset at every cell.
         struct CellAccess { bool active = false, parked = false; uint64_t msg_id = 0, line = 0, op_id = 0; };
+        // A CPU access (docs/Shared_Controller_Defects_Plan.md, whole-line Store): at an L1 every message on the
+        // lower interface comes from the core; an LLC's lower interface carries the L1s' requests, write-backs and
+        // data. Neither the data's presence or size nor the message kind identifies it (an external CPU sets no
+        // kind; an LLC receives full-line write-backs from below).
+        bool cpuAccess(const Message &m) const { return m_log_role != Logger::Role::LLC && m.source == Message::Source::LOWER_INTERCONNECT; }
         CellAccess m_cell;
         void cellBegin() { m_cell = CellAccess(); }
         void noteCellAccess(const Message &msg, bool parked, uint64_t op_id)

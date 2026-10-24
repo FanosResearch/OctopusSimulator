@@ -10,6 +10,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <sys/wait.h>
+#include <unistd.h>
 
 namespace octest
 {
@@ -40,6 +42,56 @@ namespace octest
     }
 }
 
+// Child cases (a case that may end the process, or must be shown to): CHILD("name") { ... } runs only in a child
+// process, `Octopus_tests --child name`; it prints "CHILD-DONE <name>" when its body returns. runChild runs it and
+// collects its status and its output (stdout and stderr). A positive case requires status 0 AND the marker
+// (CHECK_CHILD_OK): code under test that calls exit(0) would pass a status-only check.
+namespace octest
+{
+    struct Child { std::string name; std::function<void()> body; };
+    inline std::vector<Child> &children() { static std::vector<Child> c; return c; }
+    struct ChildRegistrar { ChildRegistrar(const char *n, std::function<void()> f) { children().push_back({n, f}); } };
+    inline int childMain(const std::string &name)
+    {
+        for (auto &c : children())
+            if (c.name == name)
+            {
+                try { c.body(); }
+                catch (Failure &f) { std::printf("CHILD-FAIL %s: %s\n", name.c_str(), f.detail.c_str()); std::fflush(stdout); return 1; }
+                std::printf("CHILD-DONE %s\n", name.c_str()); std::fflush(stdout);
+                return 0;
+            }
+        std::printf("CHILD-UNKNOWN %s\n", name.c_str());
+        return 3;
+    }
+    struct ChildResult
+    {
+        int status = -1; std::string out; std::string name;
+        bool done() const { return out.find("CHILD-DONE " + name + "\n") != std::string::npos; }
+    };
+    inline ChildResult runChild(const std::string &name)
+    {
+        ChildResult r; r.name = name;
+        int p[2];
+        if (pipe(p) != 0) return r;
+        std::fflush(stdout);
+        pid_t pid = fork();
+        if (pid == 0)
+        {
+            dup2(p[1], 1); dup2(p[1], 2); close(p[0]); close(p[1]);
+            execl("/proc/self/exe", "Octopus_tests", "--child", name.c_str(), static_cast<char *>(nullptr));
+            _exit(127);
+        }
+        close(p[1]);
+        char buf[4096]; ssize_t n;
+        while ((n = read(p[0], buf, sizeof buf)) > 0) r.out.append(buf, size_t(n));
+        close(p[0]);
+        int st = 0;
+        if (waitpid(pid, &st, 0) == pid) r.status = WIFEXITED(st) ? WEXITSTATUS(st) : 128 + WTERMSIG(st);
+        return r;
+    }
+}
+
 #define OCTEST_CAT2(a, b) a##b
 #define OCTEST_CAT(a, b) OCTEST_CAT2(a, b)
 #define TEST(id) \
@@ -47,6 +99,13 @@ namespace octest
     static octest::Registrar OCTEST_CAT(octest_reg_, __LINE__)(id, OCTEST_CAT(octest_body_, __LINE__)); \
     static void OCTEST_CAT(octest_body_, __LINE__)()
 
+#define CHILD(name) \
+    static void OCTEST_CAT(octest_child_, __LINE__)(); \
+    static octest::ChildRegistrar OCTEST_CAT(octest_creg_, __LINE__)(name, OCTEST_CAT(octest_child_, __LINE__)); \
+    static void OCTEST_CAT(octest_child_, __LINE__)()
+#define CHECK_CHILD_OK(name) do { octest::ChildResult _r = octest::runChild(name); \
+    if (!(_r.status == 0 && _r.done())) octest::fail("child " + std::string(name) + ": status " + octest::str(_r.status) + \
+        (_r.done() ? "" : ", no completion marker") + "; output: " + _r.out.substr(_r.out.size() > 600 ? _r.out.size() - 600 : 0)); } while (0)
 #define CHECK(cond) do { if (!(cond)) octest::fail(std::string(#cond) + " at line " + octest::str(__LINE__)); } while (0)
 #define CHECK_EQ(a, b) do { auto _a = (a); auto _b = (b); if (!(_a == _b)) \
     octest::fail(std::string(#a) + " = " + octest::str(_a) + ", expected " + octest::str(_b) + " at line " + octest::str(__LINE__)); } while (0)
