@@ -35,8 +35,13 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 OUT="$HERE/out"; mkdir -p "$OUT"
 RESULTS="$OUT/results.csv"
-BIN="$ROOT/build/Octopus_Simulator"; [ -f "$BIN" ] || BIN="$ROOT/build/Octopus_Simulator.exe"
-TESTS="$ROOT/build/test/tilelink/unit/Octopus_tl_tests"; [ -f "$TESTS" ] || TESTS="$TESTS.exe"
+# the binaries; resolved again by build() (resolved only before the build, a fresh tree's first run chose a path
+# that did not exist yet), as test/network/run.sh
+resolve_bins() {
+  BIN="$ROOT/build/Octopus_Simulator"; [ -f "$BIN" ] || BIN="$ROOT/build/Octopus_Simulator.exe"
+  TESTS="$ROOT/build/test/tilelink/unit/Octopus_tl_tests"; [ -f "$TESTS" ] || TESTS="$TESTS.exe"
+}
+resolve_bins
 WHAT="${1:-all}"
 FAILS=0
 
@@ -55,6 +60,8 @@ build() {
   if ! cmake --build "$ROOT/build" -j"$(nproc 2>/dev/null || echo 4)" > "$OUT/build.log" 2>&1; then
     echo "BUILD FAILED, see $OUT/build.log"; tail -20 "$OUT/build.log"; exit 2
   fi
+  resolve_bins
+  [ -f "$BIN" ] && [ -f "$TESTS" ] || { echo "BUILD FAILED: no simulator or unit tests after the build ($BIN, $TESTS), see $OUT/build.log"; exit 2; }
   echo "build ok"
 }
 

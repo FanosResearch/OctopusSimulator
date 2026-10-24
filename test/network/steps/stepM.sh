@@ -7,7 +7,7 @@ mem_off_refs() {   # called by make_refs
   for p in "Grid2B|-s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid2B" "Grid|-s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid" "Dir|-s MultiCoreSystem -c MultiCoreSystem_Directory"; do
     name=${p%%|*}; args=${p#*|}; mkdir -p "$REF/mem-off/$name"
     for t in $EEMBC; do sim "$OUT/mem-off/$name/$t" $args -p "workload_path(s)=$(W $t)/" & done; wait
-    for t in $EEMBC; do sumdir "$OUT/mem-off/$name/$t" > "$REF/mem-off/$name/$t.md5"; done
+    for t in $EEMBC; do write_ref "$OUT/mem-off/$name/$t" "$REF/mem-off/$name/$t.md5"; done
     echo "mem-off $name: $(cat "$REF/mem-off/$name/"*.md5 | md5sum | cut -c1-12)"
   done
 }

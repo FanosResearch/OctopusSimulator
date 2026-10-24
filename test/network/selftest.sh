@@ -10,15 +10,20 @@ mkdir -p "$T/test/network/steps"
 cp "$HERE/run.sh" "$T/test/network/run.sh"
 cat > "$T/test/network/steps/stepZ_stub.sh" <<'STUB'
 PY=python3
+# fresh / realrefs: the real build() runs a stub cmake (first on PATH) that "builds" a stub simulator: fresh's writes
+# its outputs, realrefs' writes nothing, as a failed run
+if [ "${STUB_MODE:-}" != fresh ] && [ "${STUB_MODE:-}" != realrefs ]; then
 build() { [ "${STUB_MODE:-}" = buildfail ] && { echo "BUILD FAILED (stub)"; exit 2; }; echo "build ok (stub)"; }
 make_refs() { echo "make_refs (stub)"; }
 tilelink_refs() { echo "tilelink_refs (stub)"; }
+fi
 regression() {
   case "${STUB_MODE:-ok}" in
     ok) pass STUB-OK;;
     fail) fail STUB-FAIL x y;;
     unbound) echo "$STUB_UNDEFINED_VARIABLE";;
     sleep) sleep 30;;
+    fresh) sim "$OUT/fresh" -s Any; [ -s "$OUT/fresh/Summary.csv" ] && pass STUB-FRESH || fail STUB-FRESH "no output from $BIN" "output";;
   esac
 }
 STUB
@@ -34,6 +39,30 @@ check() { # name mode args... ; expected status (0 / nonzero / exact), abort mar
   if [ $ok = 1 ]; then echo "PASS RUNNER-$name (status $st, abort marker $ab)"
   else echo "FAIL RUNNER-$name: status $st (expected $want_st), abort marker $ab (expected $want_abort)"; echo "$out" | sed 's/^/    /'; fails=$((fails+1)); fi
 }
+# the stub cmake: `cmake --build <dir> ...` creates <dir>/Octopus_Simulator; it writes Summary.csv into its -o
+# directory unless STUB_SIM_SILENT is set
+mkdir -p "$T/bin"
+cat > "$T/bin/cmake" <<'CM'
+#!/usr/bin/env bash
+[ "$1" = --build ] || exit 0
+mkdir -p "$2"
+cat > "$2/Octopus_Simulator" <<'SIMEOF'
+#!/usr/bin/env bash
+o=""; while [ $# -gt 0 ]; do [ "$1" = -o ] && o="$2"; shift; done
+[ -n "${STUB_SIM_SILENT:-}" ] && exit 1
+[ -n "$o" ] && { mkdir -p "$o"; echo "core,x" > "$o/Summary.csv"; echo "0,1" >> "$o/Summary.csv"; }
+SIMEOF
+chmod +x "$2/Octopus_Simulator"
+CM
+chmod +x "$T/bin/cmake"
+check FRESH-TREE 0 no env STUB_MODE=fresh PATH="$T/bin:$PATH" bash test/network/run.sh reg   # no simulator before the build
+rm -rf "${T:?}/build"
+mkdir -p "$T/test/network/ref"
+check REFS-FAILED-RUNS 2 yes env STUB_MODE=realrefs STUB_SIM_SILENT=1 PATH="$T/bin:$PATH" bash test/network/run.sh refs
+n=$(find "$T/test/network/ref" -name '*.md5' | wc -l)
+if [ "$n" = 0 ]; then echo "PASS RUNNER-REFS-NOTHING-WRITTEN (no reference from failed runs)"
+else echo "FAIL RUNNER-REFS-NOTHING-WRITTEN: $n reference(s) written from failed runs"; fails=$((fails+1)); fi
+rm -rf "${T:?}/build"
 check REFS 0 no env STUB_MODE=ok bash test/network/run.sh refs
 grep -q "tilelink-refs)" "$T/test/network/run.sh" && check TILELINK-REFS 0 no env STUB_MODE=ok bash test/network/run.sh tilelink-refs
 check REG-OK 0 no env STUB_MODE=ok bash test/network/run.sh reg

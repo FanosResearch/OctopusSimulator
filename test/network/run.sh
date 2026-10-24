@@ -14,8 +14,13 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 OUT="$HERE/out"; REF="$HERE/ref"; mkdir -p "$OUT"
 RESULTS="$OUT/results.csv"
-BIN="$ROOT/build/Octopus_Simulator"; [ -f "$BIN" ] || BIN="$ROOT/build/Octopus_Simulator.exe"
-TESTS="$ROOT/build/test/network/unit/Octopus_tests"; [ -f "$TESTS" ] || TESTS="$TESTS.exe"
+# the binaries; resolved again by build(): resolved only here, before the build, a fresh tree's first run chose a
+# path that did not exist yet and every simulation of that run failed
+resolve_bins() {
+  BIN="$ROOT/build/Octopus_Simulator"; [ -f "$BIN" ] || BIN="$ROOT/build/Octopus_Simulator.exe"
+  TESTS="$ROOT/build/test/network/unit/Octopus_tests"; [ -f "$TESTS" ] || TESTS="$TESTS.exe"
+}
+resolve_bins
 WHAT="${1:-all}"
 FAILS=0
 
@@ -49,7 +54,15 @@ build() {
   if ! cmake --build "$ROOT/build" -j"$(nproc 2>/dev/null || echo 4)" > "$OUT/build.log" 2>&1; then
     echo "BUILD FAILED, see $OUT/build.log"; tail -20 "$OUT/build.log"; exit 2
   fi
+  resolve_bins
+  [ -f "$BIN" ] || { echo "BUILD FAILED: no simulator at $BIN after the build, see $OUT/build.log"; exit 2; }
   echo "build ok ($(printf '%.0f' "$(elapsed "$t0")") s)"
+}
+# write_ref <run dir> <reference file>: the run's checksum as a reference; a run that wrote no Summary.csv (it
+# failed) stops the generation (status 2, reported as an abort) instead of writing the checksum of nothing
+write_ref() {
+  [ -s "$1/Summary.csv" ] || { echo "REFS: $1 has no Summary.csv (see $1/.stderr): $2 not written" >&2; exit 2; }
+  local h; h=$(sumdir "$1"); echo "$h" > "$2"
 }
 
 # ---------------------------------------------------------------- regression suite
@@ -132,18 +145,18 @@ regression() { reg_bus; reg_env; reg_mesh; reg_tdm; reg_hazard; reg_memnet; reg_
 make_refs() {
   mkdir -p "$REF/legacy-mesh"
   for t in $EEMBC; do sim "$OUT/reg-mesh/$t" -s MultiCoreSystem_Mesh -p "workload_path(s)=$(W $t)/" & done; wait
-  for t in $EEMBC; do sumdir "$OUT/reg-mesh/$t" > "$REF/legacy-mesh/$t.md5"; echo "$t $(cat "$REF/legacy-mesh/$t.md5") rows=$(wc -l < "$OUT/reg-mesh/$t/Summary.csv")"; done
+  for t in $EEMBC; do write_ref "$OUT/reg-mesh/$t" "$REF/legacy-mesh/$t.md5"; echo "$t $(cat "$REF/legacy-mesh/$t.md5") rows=$(wc -l < "$OUT/reg-mesh/$t/Summary.csv")"; done
   sim "$OUT/reg-tdm" -s MultiCoreSystem -c "$COMMITTED_CFG" -p "workload_path(s)=$(W a2time01-trace)/" -p "bus[0].interconnect_controller.arbiter_type(s)=TDMArbiter"
-  sumdir "$OUT/reg-tdm" > "$REF/reg-tdm.md5"; echo "reg-tdm $(cat "$REF/reg-tdm.md5")"
+  write_ref "$OUT/reg-tdm" "$REF/reg-tdm.md5"; echo "reg-tdm $(cat "$REF/reg-tdm.md5")"
   mem_off_refs
   sim "$OUT/reg-memnet" -s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid2BM -p "workload_path(s)=$(W a2time01-trace)/"
-  sumdir "$OUT/reg-memnet" > "$REF/reg-memnet.md5"; echo "reg-memnet $(cat "$REF/reg-memnet.md5")"
+  write_ref "$OUT/reg-memnet" "$REF/reg-memnet.md5"; echo "reg-memnet $(cat "$REF/reg-memnet.md5")"
   tilelink_refs
 }
 tilelink_refs() { # the REG-TILELINK references (run alone with: run.sh tilelink-refs)
   local c; for c in "xbar|MultiCoreSystem_TileLinkM" "net|MultiCoreSystem_Grid2BMTL"; do
     sim "$OUT/reg-tilelink/${c%%|*}" -s MultiCoreSystem_Mesh -c "${c#*|}" -p "workload_path(s)=$(W a2time01-trace)/"
-    sumdir "$OUT/reg-tilelink/${c%%|*}" > "$REF/reg-tilelink-${c%%|*}.md5"; echo "reg-tilelink-${c%%|*} $(cat "$REF/reg-tilelink-${c%%|*}.md5")"
+    write_ref "$OUT/reg-tilelink/${c%%|*}" "$REF/reg-tilelink-${c%%|*}.md5"; echo "reg-tilelink-${c%%|*} $(cat "$REF/reg-tilelink-${c%%|*}.md5")"
   done
 }
 
