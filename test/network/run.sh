@@ -193,12 +193,12 @@ trap 'st=$?; [ "$RUN_DONE" = 1 ] || { echo "RUN ABORTED before completion (statu
 : > "$RESULTS"; echo "id,status,measured,expected,seconds" > "$RESULTS"
 build
 case "$WHAT" in
-  refs) make_refs; exit 0;;
-  tilelink-refs) tilelink_refs; exit 0;;   # only the REG-TILELINK references (make_refs regenerates them all)
+  refs) make_refs; RUN_DONE=1; echo "references written (run complete)"; exit 0;;   # complete only once the generator returned
+  tilelink-refs) tilelink_refs; RUN_DONE=1; echo "references written (run complete)"; exit 0;;   # only the REG-TILELINK references (make_refs regenerates them all)
   reg)  regression;;
   all)  regression; for n in 0 1 2 3 4 5 6 7 8 M2 M3 M4 M5 M6 D TL; do declare -f "step$n" > /dev/null && "step$n"; done;;
   [0-8]|M[2-7]|D|TL) regression; "step$WHAT";;
-  *) echo "usage: run.sh [step (0-8, M2..M7, D, TL)|all|reg|refs|tilelink-refs]"; exit 2;;
+  *) RUN_DONE=1; echo "usage: run.sh [step (0-8, M2..M7, D, TL)|all|reg|refs|tilelink-refs]"; exit 2;;   # a usage error, not an aborted run
 esac
 RUN_DONE=1
 echo "----"; echo "$FAILS failure(s); results in $RESULTS (run complete)"
