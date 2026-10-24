@@ -160,6 +160,10 @@ adapters, and its checkers (`TileLink/README.md`).
 
 - **CPU-side integration:** gem5, MacSim
 - **Memory-side integration:** MCsim
+- **Store data** (ExternalCPU and other front ends that carry a Store's bytes): 1 to 64 bytes within one line,
+  a whole aligned line included, written at the Store's hit on the data-array access that serves it, in every
+  array model (occupancy at any latency, pipelined). Tested for directory MSI and MESI, snoop MSI and TileLink
+  TLC. Trace runs carry no Store data. A Store that crosses a line boundary is not covered.
 - **Arm ISA support:** LL/SC (`LDXR`/`STXR`) with per-core exclusivity tracking,
   LSE atomics (`SWP`, `CAS`/`CASP`, `LD`/`ST` arithmetic-logical); boots Linux
 - **Adaptive Traffic Profile (ATP)** engine for injecting aggressor (GPU/DPU)
