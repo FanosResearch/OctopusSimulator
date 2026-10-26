@@ -50,11 +50,23 @@ namespace octopus
         for (auto it = s_llcs.begin(); it != s_llcs.end(); ++it) if (*it == this) { s_llcs.erase(it); break; }
     }
 
+    // The generic dirty bit (GenericCacheLine::dirty, kept by CacheController's protocol-independent rules) must
+    // agree with the TL-C events' view (Dir::dirty_view) before this cell's own SaveData, which is installed after it.
+    void TLC_LLC::checkDirtyBit(uint64_t block, const Dir &d, const Message &msg, int state, int event) const
+    {
+        const bool bit = m_data_handler->isDirty(block);
+        if (bit != d.dirty_view)
+            fault(string("the line's dirty bit is ") + (bit ? "set" : "clear") + " but the TL-C events say the copy is " +
+                  (d.dirty_view ? "dirty" : "clean") + " (docs/TileLink_LLC_Dirty_Writeback_Plan.md s3.3)", msg, state, event);
+    }
+
     void TLC_LLC::report() const
     {
         fprintf(stderr, "TLC_LLC %d: acquires %llu, grants %llu, probes %llu, releases %llu, fills %llu, replacements %llu, write-backs %llu\n", m_id,
                 (unsigned long long)m_c.acquires, (unsigned long long)m_c.grants, (unsigned long long)m_c.probes, (unsigned long long)m_c.releases,
                 (unsigned long long)m_c.fills, (unsigned long long)m_c.replacements, (unsigned long long)m_c.writebacks);
+        if (m_c.clean_evictions > 0)   // v2 tables only: the v1 line stays as it was
+            fprintf(stderr, "TLC_LLC %d: %llu clean evictions not written back\n", m_id, (unsigned long long)m_c.clean_evictions);
         if (m_deny_left >= 0)
             fprintf(stderr, "TLC_LLC %d: %llu fills taken as denied (OCTOPUS_TL_DENY_FILLS)\n", m_id, (unsigned long long)m_c.denied);
     }
@@ -220,6 +232,7 @@ namespace octopus
         if (event == m_policy->eventReplacement()) m_c.replacements++;
         if (msg.source == Message::Source::UPPER_INTERCONNECT) m_c.fills++;
         bool answered = false;
+        bool wrote = false;   // this cell sent the block to memory
 
         for (int id : cell.actions)
         {
@@ -237,8 +250,22 @@ namespace octopus
                     act(post, ControllerAction::Type::SEND_BUS_MSG, m);
                     break;
                 }
+                case tc::MgrOp::PutFullDataDirtyOut:
+                    checkDirtyBit(block, d, msg, state, event);
+                    // the v2 tables (docs/TileLink_LLC_Dirty_Writeback_Plan.md s3.3): write only a dirty copy. Dirty:
+                    // the line's bit (GenericCacheLine::dirty, in the array or the write-back buffer), or this cell's
+                    // own SaveData of an L1's data (ProbeAckData, ReleaseData), whose bytes are installed after the cell
+                    if (!(save && msg.data != NULL && msg.kind != Message::K_FILL && msg.kind != Message::K_FILL_ROLLBACK) &&
+                        !m_data_handler->isDirty(block))
+                    {
+                        m_c.clean_evictions++;   // memory already holds this copy
+                        break;
+                    }
+                    [[fallthrough]];
                 case tc::MgrOp::PutFullDataOut:
                 {
+                    if (a.op == tc::MgrOp::PutFullDataOut) checkDirtyBit(block, d, msg, state, event);
+                    wrote = true;
                     // rule 7: PutFullData of the line (performWriteBack addresses memory and records the
                     // write for H1); the bytes this cell saved, else the line, read before the state
                     // update when the cell frees it
@@ -336,6 +363,10 @@ namespace octopus
             }
         }
         if (event == m_policy->eventGrantAck()) d.grant_out = false;
+        // the events' dirty view: a saved L1 datum (the inner side) is newer than memory, the fill (outer) is
+        // memory's; a write to memory makes memory current
+        if (save) d.dirty_view = msg.source == Message::Source::LOWER_INTERCONNECT;
+        if (wrote) d.dirty_view = false;
         // rule 3: an inner-A cell that does not answer parks its request; the answering cell releases it
         if (consumed_a && !answered)
         {
@@ -409,6 +440,8 @@ namespace octopus
         m.tl_channel = 1; m.memory = true;
         if (a == "Get_out" || a == "ForwardOut") { m.kind = Message::K_MEM_READ; o.push_back(m); return true; }
         if (a == "PutFullData_out") { m.kind = Message::K_MEM_WRITE; m.data = true; o.push_back(m); return true; }
+        // at most one: none when the copy is clean (the prediction is an upper bound)
+        if (a == "PutFullData_dirty_out") { m.kind = Message::K_MEM_WRITE; m.data = true; o.push_back(m); return true; }
         m.memory = false; m.tl_channel = 2;
         if (a == "ProbeBlock_toN_all") { m.kind = Message::K_INV; m.count = -1; o.push_back(m); return true; }   // one per holder but the requester
         if (a == "ProbeBlock_toN_owner" || a == "ProbeBlock_toB_owner") { m.kind = Message::K_FWD; o.push_back(m); return true; }

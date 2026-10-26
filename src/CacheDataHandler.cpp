@@ -220,11 +220,30 @@ namespace octopus
         if (findline(address, &set, &way))
         {
             if (out_line != NULL)
+            {
                 out_line->copyBits(*((GenericCacheLine *)getLine(set, way)));
+                out_line->dirty = ((GenericCacheLine *)getLine(set, way))->dirty;
+            }
             return true;
         }
         else
             return false;
+    }
+
+    bool CacheDataHandler::isDirty(uint64_t address)
+    {
+        uint64_t set;
+        int way;
+        return findline(address, &set, &way) && ((GenericCacheLine *)getLine(set, way))->dirty;
+    }
+
+    bool CacheDataHandler::setDirty(uint64_t address, bool dirty)
+    {
+        uint64_t set;
+        int way;
+        if (!findline(address, &set, &way)) return false;
+        ((GenericCacheLine *)getLine(set, way))->dirty = dirty;
+        return true;
     }
 
     int CacheDataHandler::findEmptyWay(uint64_t address)

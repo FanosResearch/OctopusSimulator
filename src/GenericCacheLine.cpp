@@ -21,6 +21,7 @@ namespace octopus
         tag = -1;
         state = 0;
         owner_id = -1;
+        dirty = false;
 
         m_block_size = 0;
         m_data = NULL;
@@ -68,6 +69,7 @@ namespace octopus
     void GenericCacheLine::copy(const GenericCacheLine &line)
     {
         copyBits(line);
+        this->dirty = line.dirty;   // the whole line moves: its dirty bit with it (not in copyBits, see the header)
         if (line.m_data != NULL)
             copyData(line.m_data);
     }

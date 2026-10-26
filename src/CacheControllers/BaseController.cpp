@@ -569,6 +569,7 @@ namespace octopus
                 return;
             }
             msg->to.push_back((uint16_t)homeOf(msg->addr));
+            m_data_handler->setDirty(msg->addr, false);   // this cache's own copy goes to the next level
         }
         else
         {

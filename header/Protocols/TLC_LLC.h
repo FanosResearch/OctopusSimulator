@@ -104,13 +104,17 @@ namespace octopus
             Message req;
             bool grant_out = false;         // a Grant sent, its GrantAck not yet consumed
             uint32_t grant_tag = 0;         // the Grant's tl.sink as the handler gave it (TLPort restores it on the GrantAck)
+            // The TL-C events' own view of GenericCacheLine::dirty (docs/TileLink_LLC_Dirty_Writeback_Plan.md s3.3):
+            // an L1's data saved (ReleaseData, ProbeAckData) sets it, the memory fill clears it, a write to memory
+            // clears it. Every memory write the LLC considers checks the generic bit against it.
+            bool dirty_view = false;
         };
         std::unique_ptr<tl::coh::ManagerPolicy> m_policy;
         std::map<uint64_t, Dir> m_dir;
         int m_stall_id = -1, m_save_id = -1;
         unsigned m_lg_block = 6;
         uint32_t m_next_tag = 0;
-        struct Counters { uint64_t replacements = 0, writebacks = 0, fills = 0, grants = 0, probes = 0, releases = 0, acquires = 0, denied = 0; } m_c;
+        struct Counters { uint64_t replacements = 0, writebacks = 0, fills = 0, grants = 0, probes = 0, releases = 0, acquires = 0, denied = 0, clean_evictions = 0; } m_c;
         // Test hook (docs/TileLink_Denied_Grant_Retry_Plan.md): OCTOPUS_TL_DENY_FILLS=<n> takes the first n
         // outer fills of this LLC as denied (AccessAckData_denied), the table's own path to a denied Grant
         // (NT_d -> Grant_denied/N_g). Decided once per fill (decode also runs for readiness), counted when
@@ -130,6 +134,7 @@ namespace octopus
         int  decode(const Message &msg) const;
         bool isStall(int state, int event) const { return m_stall_id >= 0 && m_policy->table().hasAction(state, event, m_stall_id); }
         [[noreturn]] void fault(const std::string &why, const Message &msg, int state, int event) const;
+        void checkDirtyBit(uint64_t block, const Dir &d, const Message &msg, int state, int event) const;
     };
 }
 

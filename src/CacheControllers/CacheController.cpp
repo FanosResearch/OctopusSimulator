@@ -364,6 +364,11 @@ namespace octopus
                           loc == CacheDataHandler::LineLocation::PWB ? 3 : 0] << ")" << endl;
             exit(2);
         }
+        // the dirty bit (docs/TileLink_LLC_Dirty_Writeback_Plan.md s3.1): at the LLC (the role both system
+        // builders set) a fill from memory (every memory model tags it K_FILL) is memory's copy, and any other
+        // data came from an L1 (a write-back, or an owner's data sent to the home): newer than memory
+        if (m_log_role == Logger::Role::LLC)
+            m_data_handler->setDirty(msg->addr, msg->kind != Message::K_FILL && msg->kind != Message::K_FILL_ROLLBACK);
 
         cache_line->~GenericCacheLine();    //explicit call for the destructor due to the use of placement new
         msg->~Message();                    //explicit call for the destructor due to the use of placement new
@@ -419,6 +424,7 @@ namespace octopus
                  << " (line absent, or the array refused an access it had granted)" << endl;
             exit(2);
         }
+        m_data_handler->setDirty(data_msg.addr, true);   // a Store's bytes: newer than the next level
         if (saved) m_modifying_data_messages.erase(msg->msg_id);
 
         delete msg;

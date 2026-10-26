@@ -174,7 +174,7 @@ namespace octopus { namespace tl { namespace coh
             case MgrOp::ProbeOwner: return "ProbeBlock_owner"; case MgrOp::SetOwner: return "SetOwner"; case MgrOp::AddSharer: return "AddSharer";
             case MgrOp::OwnerToSharer: return "OwnerToSharer"; case MgrOp::RemoveHolder: return "RemoveHolder"; case MgrOp::DecCount: return "DecCount";
             case MgrOp::Execute: return "Execute"; case MgrOp::AccessAckDataIn: return "AccessAckData_in"; case MgrOp::HintAck: return "HintAck";
-            case MgrOp::HintAckDenied: return "HintAck_denied";
+            case MgrOp::HintAckDenied: return "HintAck_denied"; case MgrOp::PutFullDataDirtyOut: return "PutFullData_dirty_out";
         }
         return "?";
     }
@@ -223,6 +223,7 @@ namespace octopus { namespace tl { namespace coh
             else if (n == "Fault") a.op = MgrOp::Fault;
             else if (n == "Get_out") a.op = MgrOp::GetOut;
             else if (n == "PutFullData_out") a.op = MgrOp::PutFullDataOut;
+            else if (n == "PutFullData_dirty_out") a.op = MgrOp::PutFullDataDirtyOut;
             else if (n == "ForwardOut") a.op = MgrOp::ForwardOut;
             else if (n == "ForwardIn") a.op = MgrOp::ForwardIn;
             else if (n == "SaveData") a.op = MgrOp::SaveData;

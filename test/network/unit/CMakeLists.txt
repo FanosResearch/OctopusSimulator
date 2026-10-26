@@ -10,6 +10,7 @@ add_executable(Octopus_tests
     tl_classes.cpp
     data_store.cpp
     data_line.cpp
+    dirty_bit.cpp
 )
 target_link_libraries(Octopus_tests Octopus_core)
 target_include_directories(Octopus_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

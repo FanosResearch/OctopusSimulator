@@ -101,7 +101,8 @@ namespace octopus { namespace tl { namespace coh
     {
         Stall, Fault, GetOut, PutFullDataOut, ForwardOut, ForwardIn, SaveData, Drop,
         GrantData, Grant, GrantDenied, ReleaseAck, ProbeAll, ProbeOwner, SetOwner, AddSharer,
-        OwnerToSharer, RemoveHolder, DecCount, Execute, AccessAckDataIn, HintAck, HintAckDenied
+        OwnerToSharer, RemoveHolder, DecCount, Execute, AccessAckDataIn, HintAck, HintAckDenied,
+        PutFullDataDirtyOut   // PutFullData_out only if the manager's copy is dirty (docs/TileLink_LLC_Dirty_Writeback_Plan.md)
     };
     struct MgrAction
     {

@@ -96,6 +96,10 @@ namespace octopus
 
         virtual bool readCacheLine(uint64_t address, GenericCacheLine *out_line = NULL, bool soft_read = false);
         virtual bool readLineBits(uint64_t address, GenericCacheLine *out_line = NULL);
+        // The line's dirty bit (GenericCacheLine::dirty), wherever the line is: the array, an MSHR or the
+        // write-back buffer. setDirty returns false (and isDirty false) when the line is not held.
+        bool isDirty(uint64_t address);
+        bool setDirty(uint64_t address, bool dirty);
 
         int findEmptyWay(uint64_t address);
         uint32_t allowedWays() const

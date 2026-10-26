@@ -87,6 +87,7 @@ namespace octopus { namespace tl
             uint64_t acquires = 0, grants = 0, denied_grants = 0, probes = 0, probe_acks = 0, releases = 0;
             uint64_t evictions = 0, outer_reads = 0, outer_writes = 0, uncached = 0, cmos = 0, hint_acks = 0;
             uint64_t stalls = 0, h1_holds = 0;
+            uint64_t clean_evictions = 0;   // PutFullData_dirty_out on a clean copy: no write
         };
         const Counters &counters() const { return m_c; }
 

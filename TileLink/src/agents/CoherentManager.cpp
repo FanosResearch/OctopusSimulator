@@ -24,6 +24,7 @@ namespace octopus { namespace tl
         unsigned       probes = 0;          // Probes sent and not answered (§1.2 rule 4)
         coh::BlockData data;                // the LLC copy
         bool           has_data = false;
+        bool           dirty = false;       // the LLC copy is newer than memory (docs/TileLink_LLC_Dirty_Writeback_Plan.md s2)
         Rx             req;                 // the parked request (§1.2 rule 3)
         bool           parked = false;
         int            sink_port = -1;      // the sink reserved for the Grant (plan §5.2)
@@ -478,7 +479,15 @@ namespace octopus { namespace tl
                     break;
                 }
                 case coh::MgrOp::PutFullDataOut:
+                case coh::MgrOp::PutFullDataDirtyOut:
                 {
+                    if (a.op == coh::MgrOp::PutFullDataDirtyOut && !e.dirty)
+                    {
+                        // a clean copy equals memory: nothing to write
+                        if (t.stable(c.next)) m_c.clean_evictions++;
+                        break;
+                    }
+                    e.dirty = false;   // memory now holds the copy (a CMO's block stays resident)
                     MsgPtr m = makeMsg(*kernel(), this->id(), coh::ManagerPolicy::outerPut(block, m_lg), o->params().w);
                     e.data.wholeToMsg(*m);
                     // §1.2 rule 7: an eviction row's write (its next state is stable) is the port's.
@@ -528,10 +537,14 @@ namespace octopus { namespace tl
                     // the fill (outer AccessAckData, placed by the Get's address) or the ProbeAckData / ReleaseData
                     uint64_t geom = consumed->channel == Channel::D ? block : consumed->address;
                     e.data.fromMsg(*consumed, geom, block, block + m_bb - 1, false);
+                    // a client's data (C: ReleaseData, ProbeAckData; sent only from a dirty Tip) is newer than
+                    // memory; the outer fill (D) is memory's
+                    e.dirty = consumed->channel == Channel::C;
                     break;
                 }
                 case coh::MgrOp::Drop:
                     e.has_data = false;
+                    e.dirty = false;
                     break;
                 case coh::MgrOp::GrantData:
                 case coh::MgrOp::Grant:
@@ -613,7 +626,7 @@ namespace octopus { namespace tl
                     const Msg &r = *req->msg;
                     if (r.address < block || r.address + r.bytes() > block + m_bb) fail("an uncached access crosses its block");
                     MsgPtr m = makeMsg(*kernel(), this->id(), coh::ManagerPolicy::accessAck(r, false), m_ports[size_t(req->port)].link->params().w);
-                    if (a.op == coh::MgrOp::Execute) executeAccess(e, r, *m, cycle);
+                    if (a.op == coh::MgrOp::Execute) { executeAccess(e, r, *m, cycle); e.dirty = true; }
                     else
                     {
                         // TLC_Tables §3.3 AccessAckData_in: the LLC copy, masked to the request
