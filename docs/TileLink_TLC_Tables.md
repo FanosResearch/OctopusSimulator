@@ -388,6 +388,7 @@ TL-COH-ENGINE asserts that exactly these two cells and `NB_d` differ; under MSI 
 |---|---|---|---|---|---|
 | Get_out | Get | outer A | size = block | no | 1 |
 | PutFullData_out | PutFullData | outer A | size = block | the LLC copy | 1 |
+| PutFullData_dirty_out (v2 tables, s3.5) | PutFullData, only when the LLC copy is dirty | outer A | size = block | the LLC copy | 0 or 1 |
 | ForwardOut | the parked uncached access, unchanged opcode/param/size/mask | outer A | as received | as received | 1 |
 | ForwardIn | AccessAck or AccessAckData | inner D | copied from the outer response, `denied` and `corrupt` as received | as received | 1 |
 | GrantData_toT / GrantData_toB | GrantData | inner D | Cap toT (0) / toB (1), `denied` 0, new sink | the LLC copy | 1 |
@@ -451,7 +452,7 @@ TL-COH-ENGINE asserts that exactly these two cells and `NB_d` differ; under MSI 
 - (I, last_Release_BtoN) -> `Fault/`: Fault: the directory lists no Branch for this block, so no master can legally send Release BtoN (M-PERM: a Release param starts from the tracked permission).
 - (I, Release_TtoN) -> `Fault/`: Fault: the directory lists no Tip for this block, so no master can legally send Release TtoN / ReleaseData TtoN (M-PERM).
 - (I, ReleaseData_TtoN) -> `Fault/`: Fault: the directory lists no Tip for this block, so no master can legally send Release TtoN / ReleaseData TtoN (M-PERM).
-- (I, Replacement) -> `PutFullData_out/N`: PutFullData_out/N: the LLC copy is written outward (as MESI_LLC_directory_v2 I + Replacement = WriteBack/N; the data handler decides whether a clean line really transfers). The AccessAck of this write is consumed by the port (H1: later outer requests to the block wait for it), not by the table [plan S5.1 K_MEM_WACK].
+- (I, Replacement) -> `PutFullData_out/N`: PutFullData_out/N: the LLC copy is written outward (as MESI_LLC_directory_v2 I + Replacement = WriteBack/N). It is written whether the copy is clean or dirty: this table keeps no dirty state, and nothing else skips the write. The v2 tables (s3.5) write only a dirty copy. The AccessAck of this write is consumed by the port (H1: later outer requests to the block wait for it), not by the table [plan S5.1 K_MEM_WACK].
 - (I, AccessAckData) -> `Fault/`: Fault: no outer request (Get, PutFullData, forwarded access) issued by a table cell is outstanding on the block. An eviction's PutFullData is answered to the port, not to the table (see the decode rules).
 - (I, AccessAckData_denied) -> `Fault/`: Fault: no outer request (Get, PutFullData, forwarded access) issued by a table cell is outstanding on the block. An eviction's PutFullData is answered to the port, not to the table (see the decode rules).
 - (I, AccessAck) -> `Fault/`: Fault: no outer request (Get, PutFullData, forwarded access) issued by a table cell is outstanding on the block. An eviction's PutFullData is answered to the port, not to the table (see the decode rules).
@@ -1158,6 +1159,42 @@ TL-COH-ENGINE asserts that exactly these two cells and `NB_d` differ; under MSI 
 - (N_w, Intent_CBOInval) -> `Stall/`: Stall: a CMO is in progress on the block; plan S3.5: no Grant or Probe on the block from the Intent to the HintAck, serialized like a Grant->GrantAck window.
 - (N_w, Intent_CBOClean) -> `Stall/`: Stall: a CMO is in progress on the block; plan S3.5: no Grant or Probe on the block from the Intent to the HintAck, serialized like a Grant->GrantAck window.
 - (N_w, Intent_CBOFlush) -> `Stall/`: Stall: a CMO is in progress on the block; plan S3.5: no Grant or Probe on the block from the Intent to the HintAck, serialized like a Grant->GrantAck window.
+### 3.5 The v2 tables: write back only dirty blocks
+
+`TileLink/tables/TLC_MESI_LLC_v2.csv` and `TLC_MSI_LLC_v2.csv` (2026-10-26, docs/TileLink_LLC_Dirty_Writeback_Plan.md)
+are the v1 tables with one action appended (`PutFullData_dirty_out`, ActionNum 25) and four eviction cells using
+it in place of `PutFullData_out`:
+
+| cell | v1 | v2 |
+|---|---|---|
+| (I, Replacement) | `PutFullData_out/N` | `PutFullData_dirty_out/N` |
+| (BN_e, last_ProbeAck_toN) | `RemoveHolder/DecCount/PutFullData_out/N` | `RemoveHolder/DecCount/PutFullData_dirty_out/N` |
+| (TN_e, last_ProbeAck_toN) | `RemoveHolder/DecCount/PutFullData_out/N` | `RemoveHolder/DecCount/PutFullData_dirty_out/N` |
+| (TN_e, ProbeAckData_toN) | `SaveData/RemoveHolder/DecCount/PutFullData_out/N` | `SaveData/RemoveHolder/DecCount/PutFullData_dirty_out/N` |
+
+No state is added, so the row order (and every state's id) is v1's. `PutFullData_dirty_out` writes the block
+outward when the LLC's copy is dirty, and emits nothing otherwise (a clean copy equals memory, as in
+InclusiveCache, which keeps a dirty bit per block). The copy is dirty when it is newer than memory:
+
+- an L1's data saved (`SaveData` of `ReleaseData_TtoN`, `ProbeAckData_toN`, `ProbeAckData_toB`, channel C) makes
+  it dirty. The L1 table sends data only from M (s2), so data from an L1 is dirty data. In `tlsim`, `Execute`
+  (an uncached Put or atomic performed in the LLC) also makes it dirty;
+- the outer fill (`SaveData` of `AccessAckData`, channel D) makes it clean, and so does any write of the block to
+  memory (`PutFullData_out`, `PutFullData_dirty_out` when it writes; a CMO's block stays resident and clean);
+- a dataless `Release` or `ProbeAck` changes nothing: a copy that was dirty in the LLC, granted toT and released
+  clean, is still dirty.
+
+Where the bit lives: in `tlsim`, `CoherentManager::Entry::dirty`; in Octopus, the main cache-line model's
+`GenericCacheLine::dirty`, kept by protocol-independent rules (a CPU Store sets it; at the LLC a `K_FILL` clears it
+and any other data sets it; writing the cache's own copy to the next level clears it), and checked by `TLC_LLC`
+against the TL-C events' own view at every memory write it considers. In a cell that saves an L1's data and
+writes in the same step, `(TN_e, ProbeAckData_toN)`, the saved data counts as dirty (Octopus installs the bytes
+after the cell).
+
+The CMO cells (`Intent_CBOClean/Flush` in I and B, `TB_c`, `BN_f`, `TN_f`) are unchanged in v2: they wait in a
+`_w` state for the memory's AccessAck before answering, so skipping the write would need other next states;
+Octopus's L1 never issues CMOs.
+
 ## 4. Invariants
 
 1. **Single writer or multiple readers (CoherenceCheck).** At most one L1 is in E/M/IM_a-after-Grant
@@ -1319,7 +1356,8 @@ Tip toB (TB_u) and leaves Branches in place: their copies equal the LLC copy.
 Per cell that sends anything: the channels and counts the prediction step must reserve before the
 message is popped. "holders" marks the fan-out of `ProbeBlock_toN_all`, counted from the directory at
 prediction time (it cannot grow while the message waits, because the line is busy). Cells not listed
-emit nothing. ID pools: every A emission needs a source from the master's A pool (the L1) or the LLC's
+emit nothing. In the v2 tables (s3.5) the four `PutFullData_dirty_out` cells emit `outer A: PutFullData` x0..1
+(none for a clean copy): the prediction reserves one, an upper bound. ID pools: every A emission needs a source from the master's A pool (the L1) or the LLC's
 outer A pool; every C emission a source from the C pool (Release namespace for Release/ReleaseData, the
 Probe's `source` copied for ProbeAck[Data], which needs no allocation, S6.4); every Grant a sink from
 the manager's pool, released at the GrantAck.
@@ -1525,6 +1563,7 @@ the manager's pool, released at the GrantAck.
 | LLC ReleaseAck | ReleaseAck | `K_ACK` (PutAck) | no |
 | LLC Get_out | Get | `K_MEM_READ` | no |
 | LLC PutFullData_out | PutFullData | `K_MEM_WRITE` | yes |
+| LLC PutFullData_dirty_out (v2) | PutFullData, when dirty | `K_MEM_WRITE` (none when clean) | yes |
 | LLC ForwardOut | the uncached access | `K_MEM_READ` (Get, Atomic) / `K_MEM_WRITE` (Put) | per opcode |
 | LLC ForwardIn, AccessAckData_in, Execute | AccessAck[Data] | `K_RESP` | per opcode |
 | LLC HintAck, HintAck_denied | HintAck | `K_ACK` | no |

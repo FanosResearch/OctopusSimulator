@@ -214,5 +214,11 @@ statement (line 454) that the data handler decides whether a clean line is writt
 - DW-11 (after step 3, default v1 presets, the dirty cross-check active): `test/network/run.sh all` 145 PASS,
   9 XFAIL, 0 FAIL, the seven REG suites identical to their references; `test/tilelink/run.sh all` 56 PASS. The
   cross-check did not fire in any suite.
-- Remaining: the step 4 docs (`docs/TileLink_TLC_Tables.md`, `docs/TileLink_Guide.md`); the explanation of the
-  higher v2 maxima; whether the default presets switch to v2 (a separate decision).
+- Committed: tilelink bbff70ed (steps 1 to 3).
+
+### Step 4, docs (2026-10-26): done
+
+`docs/TileLink_TLC_Tables.md`: s3.5 (the v2 tables, the dirty rule, the CMO cells kept), the action in s3.3, the
+x0..1 emission in s7, the kind in s8, and the corrected (I, Replacement) justification (it said the data handler
+decides whether a clean line transfers; nothing did). `docs/TileLink_Guide.md` s7.1 and s16 (the guide is not yet
+in the repository). Remaining: whether the default presets switch to v2 (a separate decision).
