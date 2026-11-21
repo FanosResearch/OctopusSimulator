@@ -114,8 +114,8 @@ TEST("S1-GRID-COORD")
 {
     Topology t = Topology::grid2d(4, 4, {}, 0);
     for (int y = 0; y < 4; y++) for (int x = 0; x < 4; x++)
-    { CHECK_EQ(t.coord(y * 4 + x).first, x); CHECK_EQ(t.coord(y * 4 + x).second, y); }
-    CHECK_EQ(t.dimX(), 4); CHECK_EQ(t.dimY(), 4);
+    { CHECK_EQ(t.lattice()->coord(y * 4 + x)[0], x); CHECK_EQ(t.lattice()->coord(y * 4 + x)[1], y); }
+    CHECK_EQ(t.lattice()->dims[0], 4); CHECK_EQ(t.lattice()->dims[1], 4);
 }
 TEST("S1-TORUS")
 {
@@ -125,7 +125,7 @@ TEST("S1-TORUS")
     CHECK_EQ(t.link(0, 1).router, 2); CHECK_EQ(t.portName(0, 1), std::string("west(wrap)"));
     CHECK_EQ(t.link(2, 0).router, 0); CHECK_EQ(t.portName(2, 0), std::string("east(wrap)"));
     CHECK_EQ(t.link(0, 2).router, 6); CHECK_EQ(t.link(6, 3).router, 0);
-    CHECK_EQ(t.kind() == Topology::Kind::Torus2D, true);
+    CHECK_EQ(t.kindName() == "torus2d" && t.lattice()->wrap[0] && t.lattice()->wrap[1], true);
     CHECK_EQ(errOf([] { Topology::grid2d(2, 2, {}, 0, true); }).empty(), false);
 }
 TEST("S1-RING")

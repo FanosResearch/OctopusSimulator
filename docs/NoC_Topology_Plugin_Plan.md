@@ -1,6 +1,6 @@
 # NoC topologies as plug-ins: design and plan
 
-Status: proposal, 2026-11-21. Nothing in this note is implemented.
+Status: T0, T1, T2, T3 and T5 implemented on `network` (2026-11-21); T4 features follow. Every step was gated on byte-identical results over a 35-configuration matrix and the full test suite.
 Branch: `network`. Related: `docs/NoC_Architecture_Spec.md` §4.1, §5 and §10, `docs/NoC_Test_Plan.md`.
 
 ## 1. Goal

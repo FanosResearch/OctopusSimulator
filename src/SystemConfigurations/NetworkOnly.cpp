@@ -19,11 +19,13 @@ namespace octopus
             vector<int> others; for (int o : ids) if (o != id) others.push_back(o);
             // transpose: the endpoint at the router with swapped coordinates, if any
             int transpose = -1;
-            int r = t.routerOf(id); auto c = t.coord(r);
-            if (t.kind() == net::Topology::Kind::Grid2D || t.kind() == net::Topology::Kind::Torus2D)
+            int r = t.routerOf(id);
+            const net::Lattice *L = t.lattice();
+            if (L && L->rank() == 2)
             {
-                int tr = c.first * t.dimX() + c.second;
-                if (c.first < t.dimY() && c.second < t.dimX() && tr < t.routers() && !t.endpointsAt(tr).empty())
+                auto c = L->coord(r);
+                int tr = c[0] * L->dims[0] + c[1];
+                if (c[0] < L->dims[1] && c[1] < L->dims[0] && tr < t.routers() && !t.endpointsAt(tr).empty())
                     transpose = t.endpointsAt(tr)[0];
             }
             m_gens.push_back(new net::TrafficGenerator(getSubMap(STRINGIFY(generator), id), id, m_net->getInterfaceFor(id), others, transpose, name));

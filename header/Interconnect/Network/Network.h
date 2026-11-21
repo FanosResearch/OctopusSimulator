@@ -92,6 +92,8 @@ namespace octopus { namespace net
             bool routed = false;
             int out_port = -1, out_vc = -1;
             uint32_t vc_mask = 0;
+            int alt_port = -1;         // the fallback route (Route::alt), granted only if VA picks it
+            uint32_t alt_mask = 0;
             uint64_t head_arrival = 0;
         };
         struct OutVC { int credits = 0; uint64_t holder = 0; int holder_ep = -1; std::unique_ptr<Arbiter> va; };   // holder_ep: the injecting endpoint (local ports only)

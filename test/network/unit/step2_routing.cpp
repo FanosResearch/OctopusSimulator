@@ -6,15 +6,17 @@ using namespace octopus;
 using namespace octopus::net;
 
 static std::string errOf(std::function<void()> f) { try { f(); } catch (ConfigError &e) { return e.what(); } return ""; }
-static int manhattan(const Topology &t, int a, int b) { return std::abs(t.coord(a).first - t.coord(b).first) + std::abs(t.coord(a).second - t.coord(b).second); }
+static std::pair<int, int> xy(const Topology &t, int r) { auto c = t.lattice()->coord(r); return {c[0], c[1]}; }
+static int manhattan(const Topology &t, int a, int b) { return std::abs(xy(t, a).first - xy(t, b).first) + std::abs(xy(t, a).second - xy(t, b).second); }
 static int hopsOf(const RoutingAlgorithm &r, const Topology &t, int s, int d) { return (int)r.path(t, s, d).size() - 1; }  // last hop is the local port
 
 // an independent XY reference: step X to the column, then Y; returns the router sequence
 static std::vector<int> xyRef(const Topology &t, int s, int d)
 {
-    std::vector<int> seq{s}; int x = t.coord(s).first, y = t.coord(s).second;
-    while (x != t.coord(d).first) { x += (t.coord(d).first > x) ? 1 : -1; seq.push_back(y * t.dimX() + x); }
-    while (y != t.coord(d).second) { y += (t.coord(d).second > y) ? 1 : -1; seq.push_back(y * t.dimX() + x); }
+    int kx = t.lattice()->dims[0];
+    std::vector<int> seq{s}; int x = xy(t, s).first, y = xy(t, s).second;
+    while (x != xy(t, d).first) { x += (xy(t, d).first > x) ? 1 : -1; seq.push_back(y * kx + x); }
+    while (y != xy(t, d).second) { y += (xy(t, d).second > y) ? 1 : -1; seq.push_back(y * kx + x); }
     return seq;
 }
 static std::map<int, int> grid4 = {{0, 0}, {1, 3}, {2, 12}, {3, 15}, {10, 5}};

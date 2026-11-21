@@ -7,6 +7,7 @@
 #define _NET_ROUTING_H
 #include "NetTypes.h"
 #include "Topology.h"
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -34,6 +35,10 @@ namespace octopus { namespace net
     {
         int out_port = -1;
         uint32_t vc_mask = ~0u;                // bit i = output VC i of the class is allowed
+        // a fallback the head may take at VC allocation when the primary cannot be granted
+        // (Duato: the escape route of an adaptive algorithm); alt_port < 0 = none
+        int alt_port = -1;
+        uint32_t alt_mask = 0;
     };
 
     class RoutingAlgorithm
@@ -43,7 +48,16 @@ namespace octopus { namespace net
         virtual Route nextHop(const RouteContext &) const = 0;
         virtual Ordering ordering() const = 0;
         virtual bool needsEscapeVC() const { return false; }
+        // true if the VC a packet uses is a function of (source, destination, class), so that
+        // several VCs per class still keep a pair's packets in order (a dateline does this)
+        virtual bool fixesVCPerPair() const { return false; }
+        // Every output the algorithm may use at this hop, whatever the credits (the primary and
+        // any fallback). The channel dependency check explores these. Default: nextHop and its
+        // fallback.
+        virtual std::vector<Route> candidates(const RouteContext &c) const;
         virtual bool deadlockFreeOn(const Topology &) const = 0;
+        // why deadlockFreeOn failed: one cycle, for the error message (empty if none)
+        virtual std::string deadlockCycle(const Topology &t, int vcs_per_class) const;
         virtual std::string name() const = 0;
         // the full path src -> dst as (router, out_port) hops, following nextHop with no
         // adaptivity (credits unknown); used by the deadlock check and by tests
@@ -55,6 +69,7 @@ namespace octopus { namespace net
         int vcs_per_class = 1;
         int escape_vc = -1;
         std::map<int, std::vector<int>> routing_table;     // router id -> dest,port,dest,port,...
+        std::map<int, std::vector<int>> routing_via;       // router id -> dest,neighbour,... (port-order independent)
     };
 
     // Factory keyed by name: Table, XY, WestFirst, AdaptiveMinimal. ConfigError on an unknown
@@ -65,6 +80,12 @@ namespace octopus { namespace net
     // every source/destination path the algorithm produces; true if acyclic. On failure
     // `cycle` receives a human-readable description of one cycle.
     bool channelDependencyAcyclic(const Topology &t, const RoutingAlgorithm &r, int vcs_per_class, std::string *cycle);
+    // The same check over a route function of (router, in_port, in_vc, destination router) for
+    // packets that may enter at any router: used for the escape network of an adaptive algorithm
+    // (Duato: escape packets never leave it, so its own graph must be acyclic).
+    bool escapeDependencyAcyclic(const Topology &t, int vcs_per_class,
+                                 const std::function<Route(int router, int in_port, int in_vc, int dst)> &escape,
+                                 std::string *cycle);
 
     // Spec §14.1: refuse a protocol ordering requirement the network cannot meet.
     void checkOrderingRequirement(const std::string &required, const RoutingAlgorithm &r, const Topology &t, int vcs_per_class);

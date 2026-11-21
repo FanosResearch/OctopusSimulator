@@ -184,9 +184,9 @@ build
 case "$WHAT" in
   refs) make_refs; RUN_DONE=1; echo "references written (run complete)"; exit 0;;   # complete only once the generator returned
   reg)  regression;;
-  all)  regression; for n in 0 1 2 3 4 5 6 7 8 M2 M3 M4 M5 M6 D; do declare -f "step$n" > /dev/null && "step$n"; done;;
-  [0-8]|M[2-7]|D) regression; "step$WHAT";;
-  *) RUN_DONE=1; echo "usage: run.sh [step (0-8, M2..M7, D)|all|reg|refs]"; exit 2;;   # a usage error, not an aborted run
+  all)  regression; for n in 0 1 2 3 4 5 6 7 8 M2 M3 M4 M5 M6 D T; do declare -f "step$n" > /dev/null && "step$n"; done;;
+  [0-8]|M[2-7]|D|T) regression; "step$WHAT";;
+  *) RUN_DONE=1; echo "usage: run.sh [step (0-8, M2..M6, D, T)|all|reg|refs]"; exit 2;;   # a usage error, not an aborted run
 esac
 RUN_DONE=1
 echo "----"; echo "$FAILS failure(s); results in $RESULTS (run complete)"

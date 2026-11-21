@@ -5,6 +5,7 @@
 #include "../../../header/Interconnect/Network/Network.h"
 #include "../../../header/HangDump.h"
 #include "../../../header/Interconnect/Network/TrafficGenerator.h"
+#include "../../../header/Interconnect/Network/TopologyBuilder.h"
 #include "../../../header/Arbiters/FCFSArbiter.h"
 #include "../../../header/Arbiters/RRArbiter.h"
 #include <algorithm>
@@ -108,34 +109,8 @@ namespace octopus { namespace net
         auto has  = [&](const std::string &k) { return parameters.count(k) > 0; };
         auto geti = [&](const std::string &k) { return std::get<int>(parameters.at(k).value); };
         auto getvi = [&](const std::string &k) { return std::get<std::vector<int>>(parameters.at(k).value); };
-        const std::string &t = m_cfg.topology;
-        if (t == "custom")
-        {
-            std::vector<std::vector<int>> rows;
-            for (int n = 0; has("connection_matrix[" + std::to_string(n) + "]"); n++) rows.push_back(getvi("connection_matrix[" + std::to_string(n) + "]"));
-            if (rows.empty()) throw ConfigError("topology custom needs connection_matrix[i] rows");
-            std::vector<int> rids; if (has("router_ids")) { rids = getvi("router_ids"); if (!rids.empty() && rids[0] < 0) rids.clear(); }
-            m_topo = std::make_unique<Topology>(Topology::custom(rows, m_component_ids, rids, m_cfg.local_ports));
-        }
-        else if (t == "grid2d" || t == "torus2d" || t == "ring")
-        {
-            std::vector<int> dims = getvi("dims");
-            std::map<int, int> node_map;
-            for (int id : m_component_ids)
-            {
-                std::string k = "node_map[" + std::to_string(id) + "]";
-                if (!has(k)) throw ConfigError("endpoint " + std::to_string(id) + " has no " + k + " (which router it attaches to)");
-                node_map[id] = geti(k);
-            }
-            if (t == "ring") m_topo = std::make_unique<Topology>(Topology::ring(dims.empty() ? 0 : dims[0], node_map, m_cfg.local_ports));
-            else
-            {
-                if (dims.size() < 2) throw ConfigError("dims needs kx,ky for " + t);
-                m_topo = std::make_unique<Topology>(Topology::grid2d(dims[0], dims[1], node_map, m_cfg.local_ports, t == "torus2d"));
-            }
-        }
-        else if (t == "star") m_topo = std::make_unique<Topology>(Topology::star(m_component_ids, m_cfg.local_ports));
-        else throw ConfigError("unknown topology '" + t + "' (custom, grid2d, torus2d, ring, star)");
+        // topologies are plug-ins (docs/NoC_Topology_Plugin_Plan.md s3.4)
+        m_topo = std::make_unique<Topology>(TopologyRegistry::builtin().create(m_cfg.topology, KeyView(parameters), m_component_ids, m_cfg.local_ports));
 
         RoutingParams rp; rp.vcs_per_class = m_cfg.vcs_per_class; rp.escape_vc = m_cfg.escape_vc;
         for (auto &kv : parameters)
@@ -144,12 +119,17 @@ namespace octopus { namespace net
                 int rid = std::atoi(kv.first.c_str() + 14);
                 rp.routing_table[rid] = std::get<std::vector<int>>(kv.second.value);
             }
+            else if (kv.first.rfind("routing_via[", 0) == 0)
+            {
+                int rid = std::atoi(kv.first.c_str() + 12);
+                rp.routing_via[rid] = std::get<std::vector<int>>(kv.second.value);
+            }
         m_routing = createRouting(m_cfg.routing, *m_topo, rp);
         if (!m_routing->deadlockFreeOn(*m_topo) && m_debug != "nocheck")
         {
-            std::string cyc; channelDependencyAcyclic(*m_topo, *m_routing, m_cfg.vcs_per_class, &cyc);
+            std::string cyc = m_routing->deadlockCycle(*m_topo, m_cfg.vcs_per_class);
             throw ConfigError("routing " + m_cfg.routing + " is not deadlock-free on this topology: " + cyc +
-                              (m_cfg.escape_vc < 0 ? " (set escape_vc or use a deadlock-free algorithm)" : ""));
+                              (m_routing->needsEscapeVC() ? "" : " (use a deadlock-free algorithm, or routing_via / routing_table entries that break the cycle)"));
         }
         std::set<int> homes(m_home_ids.begin(), m_home_ids.end());
         m_classifier = std::make_unique<Classifier>(m_cfg.num_classes, homes);
@@ -402,6 +382,13 @@ namespace octopus { namespace net
                 if (m_debug == "mask" && m_tick >= 50) rt.vc_mask = 0;
                 if (rt.vc_mask == 0) fatal("routing " + m_cfg.routing + " returned an empty vc_mask at router " + std::to_string(t.routerId(r)) + " for packet " + std::to_string(p.seq));
                 v.cur = p.seq; v.routed = true; v.out_port = rt.out_port; v.out_vc = -1; v.vc_mask = rt.vc_mask; v.head_arrival = v.fifo.front().arrived;
+                v.alt_port = -1; v.alt_mask = 0;
+                if (rt.alt_port >= 0)
+                {
+                    if (rt.alt_port >= t.ports(r) || (rt.alt_mask & allVCs(m_cfg.vcs_per_class)) == 0)
+                        fatal("routing " + m_cfg.routing + " returned a bad fallback route at router " + std::to_string(t.routerId(r)) + " for packet " + std::to_string(p.seq));
+                    v.alt_port = rt.alt_port; v.alt_mask = rt.alt_mask & allVCs(m_cfg.vcs_per_class);
+                }
                 p.hops++; p.pipe += t.implicitRouter(r) ? 0 : m_cfg.router_latency;
             }
         }
@@ -410,7 +397,12 @@ namespace octopus { namespace net
     // ---- phase 4: VC allocation (spec §11.2)
     void Network::phaseVCAlloc()
     {
+        // Pass 0 grants primary routes. Pass 1 (only for algorithms with an escape network) grants
+        // the fallback route to heads still without a VC: Duato's condition that a waiting head
+        // can always use the escape network.
         const Topology &t = *m_topo;
+        int passes = m_routing->needsEscapeVC() ? 2 : 1;
+        for (int pass = 0; pass < passes; pass++)
         for (int r = 0; r < t.routers(); r++)
         {
             RouterState &R = m_routers[r];
@@ -425,7 +417,9 @@ namespace octopus { namespace net
                     for (int q = 0; q < t.ports(r); q++) for (int w = 0; w < m_cfg.vcs_per_class; w++)
                     {
                         VCState &v = R.in[q][c][w];
-                        if (!v.routed || v.out_port != p || v.out_vc >= 0 || !(v.vc_mask & (1u << ov))) continue;
+                        if (!v.routed || v.out_vc >= 0) continue;
+                        int want = pass == 0 ? v.out_port : v.alt_port; uint32_t mask = pass == 0 ? v.vc_mask : v.alt_mask;
+                        if (want != p || !(mask & (1u << ov))) continue;
                         if (m_tick < v.head_arrival + (uint64_t)(t.implicitRouter(r) ? 0 : m_cfg.router_latency)) continue;   // implicit routers add no latency
                         Packet &pk = m_packets.at(v.cur);
                         if (local && !m_nis.at(pk.dst_endpoint)->canReserve(c)) continue;
@@ -434,7 +428,9 @@ namespace octopus { namespace net
                     if (cands.empty()) continue;
                     int w = cands.size() == 1 ? 0 : o.va->electIndex(m_tick, cands);
                     if (w < 0) continue;
-                    VCState &v = *who[w]; v.out_vc = ov; o.holder = v.cur;
+                    VCState &v = *who[w];
+                    if (pass == 1) { v.out_port = v.alt_port; v.vc_mask = v.alt_mask; }
+                    v.out_vc = ov; o.holder = v.cur;
                     Logger::getLogger()->trace(m_packets.at(v.cur).msg, Logger::Role::NOC, (uint32_t)t.routerId(r), Logger::Phase::SERVICE, (uint16_t)((p << 8) | ov));
                     if (local) m_nis.at(m_packets.at(v.cur).dst_endpoint)->reserve(c);
                 }
@@ -526,7 +522,7 @@ namespace octopus { namespace net
         {
             ov.holder = 0;
             uint64_t seq = v.cur;
-            v.cur = 0; v.routed = false; v.out_port = -1; v.out_vc = -1; v.vc_mask = 0;
+            v.cur = 0; v.routed = false; v.out_port = -1; v.out_vc = -1; v.vc_mask = 0; v.alt_port = -1; v.alt_mask = 0;
             if (local) eject(seq, r, p);
         }
     }

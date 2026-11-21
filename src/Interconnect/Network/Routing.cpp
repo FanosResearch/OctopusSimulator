@@ -8,6 +8,7 @@
 #include <functional>
 #include <set>
 #include <sstream>
+#include <tuple>
 
 namespace octopus { namespace net
 {
@@ -79,7 +80,24 @@ namespace octopus { namespace net
                         if (dist[t.link(r, p).router] == dist[r] - 1) { m_next[r][d] = p; break; }
                 }
             }
-            // CSV overrides: dest id, port, dest id, port, ...
+            // CSV overrides by neighbour: dest id, neighbour router id, ... (the preferred form: it
+            // states the intent without depending on port numbering)
+            for (auto &kv : p.routing_via)
+            {
+                int r = t.routerIndex(kv.first);
+                if (r < 0) throw ConfigError("routing_via[" + std::to_string(kv.first) + "]: not a router id");
+                if (kv.second.size() % 2) throw ConfigError("routing_via[" + std::to_string(kv.first) + "]: expects dest,neighbour pairs");
+                for (size_t i = 0; i + 1 < kv.second.size(); i += 2)
+                {
+                    int d = t.routerIndex(kv.second[i]), n = t.routerIndex(kv.second[i + 1]);
+                    if (d < 0) throw ConfigError("routing_via[" + std::to_string(kv.first) + "]: destination " + std::to_string(kv.second[i]) + " is not a router id");
+                    int port = n < 0 ? -1 : portTowards(t, r, n);
+                    if (port < 0)
+                        throw ConfigError("routing_via[" + std::to_string(kv.first) + "]: " + std::to_string(kv.second[i + 1]) + " is not a neighbour of router " + std::to_string(kv.first));
+                    m_next[r][d] = port;
+                }
+            }
+            // CSV overrides by port: dest id, port, dest id, port, ... (applied last)
             for (auto &kv : p.routing_table)
             {
                 int r = t.routerIndex(kv.first);
@@ -109,64 +127,65 @@ namespace octopus { namespace net
         std::string name() const override { return "Table"; }
     };
 
-    // ------------------------------------------------------------------ XY (grid and torus)
+    // ------------------------------------------------------------------ XY: dimension order on any lattice
+    // (grid, torus, ring, any rank). Dimension 0 first, then 1, ... On a wrapped dimension the
+    // shorter way round, and the dateline rule: a leg (from the source) that crosses the wrap
+    // link uses VC 1, any other leg VC 0. The rule is a function of (src, dst), so a pair's
+    // packets keep one path and one VC.
     class XYRouting : public RoutingAlgorithm
     {
     protected:
-        const Topology &m_t; int m_vcs; bool m_torus;
-        // signed step in a dimension: +1, -1 or 0; on a torus the shorter way, and `wrap` says
-        // whether that way crosses the wrap link
-        int stepIn(int from, int to, int k, bool &wrap) const
+        const Topology &m_t; int m_vcs; const Lattice &m_l;
+        static const Lattice &needLattice(const Topology &t, const std::string &who)
+        {
+            if (!t.lattice()) throw ConfigError(who + " routing needs a lattice topology (grid2d, torus2d, ring)");
+            return *t.lattice();
+        }
+        // signed step in dimension d: +1, -1 or 0; on a wrapped dimension the shorter way, and
+        // `wrap` says whether that way crosses the wrap link
+        int stepIn(int d, int from, int to, bool &wrap) const
         {
             wrap = false;
             if (from == to) return 0;
+            int k = m_l.dims[d];
             int fwd = (to - from + k) % k, back = (from - to + k) % k;
-            if (!m_torus) return to > from ? 1 : -1;
+            if (!m_l.wrap[d]) return to > from ? 1 : -1;
             if (fwd <= back) { wrap = (from + fwd) >= k; return 1; }
             wrap = (from - back) < 0; return -1;
         }
-        int portForStep(int r, int dx, int dy) const
+        int portForStep(int r, int d, int dir) const
         {
-            auto c = m_t.coord(r);
-            int tx = c.first + dx, ty = c.second + dy;
-            if (m_torus) { tx = (tx + m_t.dimX()) % m_t.dimX(); ty = (ty + m_t.dimY()) % m_t.dimY(); }
-            int n = ty * m_t.dimX() + tx;
-            return portTowards(m_t, r, n);
+            int p = m_t.dirPort(r, d, dir);
+            if (p < 0) throw ConfigError("internal: router " + std::to_string(m_t.routerId(r)) + " has no port in dimension " + std::to_string(d));
+            return p;
         }
+        int localOut(const RouteContext &c) const { return c.packet ? localPortFor(m_t, c.router, c.packet->dst_endpoint) : m_t.linkPorts(c.router); }
     public:
-        XYRouting(const Topology &t, const RoutingParams &p) : m_t(t), m_vcs(p.vcs_per_class), m_torus(t.kind() == Topology::Kind::Torus2D)
+        XYRouting(const Topology &t, const RoutingParams &p) : m_t(t), m_vcs(p.vcs_per_class), m_l(needLattice(t, "XY"))
         {
-            if (t.kind() != Topology::Kind::Grid2D && t.kind() != Topology::Kind::Torus2D)
-                throw ConfigError("XY routing needs a grid2d or torus2d topology");
-            if (m_torus && m_vcs < 2) throw ConfigError("torus2d with XY needs vcs_per_class >= 2 (dateline rule)");
+            if (m_l.anyWrap() && m_vcs < 2) throw ConfigError(t.kindName() + " with XY needs vcs_per_class >= 2 (dateline rule)");
         }
         Route nextHop(const RouteContext &c) const override
         {
             Route rt; rt.vc_mask = allVCs(m_vcs);
-            auto here = m_t.coord(c.router), dst = m_t.coord(c.dst_router), src = m_t.coord(c.src_router);
-            bool wrapx = false, wrapy = false;
-            int sx = stepIn(here.first, dst.first, m_t.dimX(), wrapx);
-            int sy = stepIn(here.second, dst.second, m_t.dimY(), wrapy);
-            if (m_torus)
+            auto here = m_l.coord(c.router), dst = m_l.coord(c.dst_router), src = m_l.coord(c.src_router);
+            int D = m_l.rank(), dim = D - 1, step = 0;
+            for (int d = 0; d < D; d++) { bool w; int s = stepIn(d, here[d], dst[d], w); if (s) { dim = d; step = s; break; } }
+            if (m_l.anyWrap())
             {
-                // dateline (spec §10.2): a packet whose X leg (from its source) wraps uses VC 1 on X,
-                // and likewise on Y; the rule is a function of (src, dst) so order is preserved
-                bool wx = false, wy = false;
-                stepIn(src.first, dst.first, m_t.dimX(), wx); stepIn(src.second, dst.second, m_t.dimY(), wy);
-                bool onX = sx != 0;
-                rt.vc_mask = (onX ? wx : wy) ? 0b10u : 0b01u;
+                bool w; stepIn(dim, src[dim], dst[dim], w);
+                rt.vc_mask = w ? 0b10u : 0b01u;
             }
-            if (sx != 0) rt.out_port = portForStep(c.router, sx, 0);
-            else if (sy != 0) rt.out_port = portForStep(c.router, 0, sy);
-            else rt.out_port = c.packet ? localPortFor(m_t, c.router, c.packet->dst_endpoint) : m_t.linkPorts(c.router);
+            rt.out_port = step ? portForStep(c.router, dim, step) : localOut(c);
             return rt;
         }
         Ordering ordering() const override { return Ordering::PAIR_PER_CLASS; }
+        bool fixesVCPerPair() const override { return m_l.anyWrap(); }
         bool deadlockFreeOn(const Topology &) const override { return true; }    // by construction
         std::string name() const override { return "XY"; }
     };
 
-    // ------------------------------------------------------------------ WestFirst (grid)
+    // ------------------------------------------------------------------ WestFirst (2-D lattice without wraps)
     class WestFirstRouting : public XYRouting
     {
         int sumCredits(const RouteContext &c, int port) const
@@ -178,19 +197,32 @@ namespace octopus { namespace net
     public:
         WestFirstRouting(const Topology &t, const RoutingParams &p) : XYRouting(t, p)
         {
-            if (t.kind() != Topology::Kind::Grid2D) throw ConfigError("WestFirst routing needs a grid2d topology");
+            if (m_l.rank() != 2 || m_l.anyWrap()) throw ConfigError("WestFirst routing needs a grid2d topology");
+        }
+        bool fixesVCPerPair() const override { return false; }
+        std::vector<Route> candidates(const RouteContext &c) const override
+        {
+            auto here = m_l.coord(c.router), dst = m_l.coord(c.dst_router);
+            int dx = dst[0] - here[0], dy = dst[1] - here[1];
+            Route rt; rt.vc_mask = allVCs(m_vcs);
+            if (dx == 0 && dy == 0) { rt.out_port = localOut(c); return {rt}; }
+            if (dx < 0) { rt.out_port = portForStep(c.router, 0, -1); return {rt}; }
+            std::vector<Route> out;
+            if (dx > 0) { rt.out_port = portForStep(c.router, 0, +1); out.push_back(rt); }
+            if (dy != 0) { rt.out_port = portForStep(c.router, 1, dy > 0 ? 1 : -1); out.push_back(rt); }
+            return out;
         }
         Route nextHop(const RouteContext &c) const override
         {
             Route rt; rt.vc_mask = allVCs(m_vcs);
-            auto here = m_t.coord(c.router), dst = m_t.coord(c.dst_router);
-            int dx = dst.first - here.first, dy = dst.second - here.second;
-            if (dx == 0 && dy == 0) { rt.out_port = c.packet ? localPortFor(m_t, c.router, c.packet->dst_endpoint) : m_t.linkPorts(c.router); return rt; }
-            if (dx < 0) { rt.out_port = portForStep(c.router, -1, 0); return rt; }   // west first, always
+            auto here = m_l.coord(c.router), dst = m_l.coord(c.dst_router);
+            int dx = dst[0] - here[0], dy = dst[1] - here[1];
+            if (dx == 0 && dy == 0) { rt.out_port = localOut(c); return rt; }
+            if (dx < 0) { rt.out_port = portForStep(c.router, 0, -1); return rt; }   // west first, always
             // allowed minimal outputs: east if dx > 0, north/south if dy != 0; pick the most credits, ties lowest port
             std::vector<int> cand;
-            if (dx > 0) cand.push_back(portForStep(c.router, 1, 0));
-            if (dy != 0) cand.push_back(portForStep(c.router, 0, dy > 0 ? 1 : -1));
+            if (dx > 0) cand.push_back(portForStep(c.router, 0, +1));
+            if (dy != 0) cand.push_back(portForStep(c.router, 1, dy > 0 ? 1 : -1));
             std::sort(cand.begin(), cand.end());
             int best = cand[0], bestc = sumCredits(c, cand[0]);
             for (size_t i = 1; i < cand.size(); i++) { int cr = sumCredits(c, cand[i]); if (cr > bestc) { best = cand[i]; bestc = cr; } }
@@ -201,46 +233,92 @@ namespace octopus { namespace net
     };
 
     // ------------------------------------------------------------------ AdaptiveMinimal
+    // Minimal adaptive routing with an escape network (Duato). A head takes the minimal output
+    // with the most adaptive credits; if it cannot get an adaptive VC there, VC allocation may
+    // grant it the escape route instead (Route::alt). A packet that arrived over a link on an
+    // escape VC stays on the escape network. The escape network is dimension-order routing; on a
+    // wrapped dimension it uses two VCs, escape_vc and escape_vc + 1, with a memoryless dateline:
+    // a hop whose remaining leg in that dimension still crosses the wrap link uses escape_vc + 1,
+    // any other escape_vc. deadlockFreeOn checks the escape network's own dependency graph.
     class AdaptiveMinimalRouting : public XYRouting
     {
-        int m_escape;
+        int m_escape; bool m_wrapped;
+        bool onEscape(int vc) const { return vc == m_escape || (m_wrapped && vc == m_escape + 1); }
+        uint32_t escapeMask() const { return (1u << m_escape) | (m_wrapped ? (1u << (m_escape + 1)) : 0u); }
+        uint32_t adaptiveMask() const { return allVCs(m_vcs) & ~escapeMask(); }
         int sumCredits(const RouteContext &c, int port) const
         {
             if (!c.here) return 0;
-            int s = 0; for (int v = 0; v < c.here->vcsPerClass(); v++) if (v != m_escape) s += c.here->credits(port, c.cls, v);
+            int s = 0; for (int v = 0; v < c.here->vcsPerClass(); v++) if (!onEscape(v)) s += c.here->credits(port, c.cls, v);
             return s;
         }
+        // the escape route at `router` toward `dst` (dst_endpoint for the local port when known)
+        Route escapeRoute(int router, int dst, const Packet *pk) const
+        {
+            Route rt;
+            auto here = m_l.coord(router), to = m_l.coord(dst);
+            for (int d = 0; d < m_l.rank(); d++)
+            {
+                bool w; int s = stepIn(d, here[d], to[d], w);
+                if (!s) continue;
+                rt.out_port = portForStep(router, d, s);
+                rt.vc_mask = 1u << ((m_l.wrap[d] && w) ? m_escape + 1 : m_escape);
+                return rt;
+            }
+            rt.out_port = pk ? localPortFor(m_t, router, pk->dst_endpoint) : m_t.linkPorts(router);
+            rt.vc_mask = allVCs(m_vcs);
+            return rt;
+        }
+        std::vector<int> minimalPorts(const RouteContext &c) const
+        {
+            auto here = m_l.coord(c.router), dst = m_l.coord(c.dst_router);
+            std::vector<int> cand;                                // one minimal output per dimension still to cover
+            for (int d = 0; d < m_l.rank(); d++) { bool w; int s = stepIn(d, here[d], dst[d], w); if (s) cand.push_back(portForStep(c.router, d, s)); }
+            std::sort(cand.begin(), cand.end());
+            return cand;
+        }
+        bool stays(const RouteContext &c) const { return onEscape(c.in_vc) && c.in_port >= 0 && !m_t.isLocalPort(c.router, c.in_port); }
     public:
-        AdaptiveMinimalRouting(const Topology &t, const RoutingParams &p) : XYRouting(t, p), m_escape(p.escape_vc)
+        AdaptiveMinimalRouting(const Topology &t, const RoutingParams &p) : XYRouting(t, p), m_escape(p.escape_vc), m_wrapped(m_l.anyWrap())
         {
             if (p.escape_vc < 0) throw ConfigError("AdaptiveMinimal needs escape_vc >= 0");
             if (p.escape_vc >= p.vcs_per_class) throw ConfigError("escape_vc must be < vcs_per_class");
             if (p.vcs_per_class < 2) throw ConfigError("AdaptiveMinimal needs vcs_per_class >= 2 (one adaptive VC plus the escape VC)");
+            if (m_wrapped && (p.vcs_per_class < 3 || p.escape_vc + 1 >= p.vcs_per_class))
+                throw ConfigError("AdaptiveMinimal on " + t.kindName() + " needs two escape VCs for the dateline (escape_vc and escape_vc + 1 < vcs_per_class) and one adaptive VC, so vcs_per_class >= 3");
         }
         bool needsEscapeVC() const override { return true; }
         Route nextHop(const RouteContext &c) const override
         {
-            // on the escape VC (arrived over a link on it), or when no adaptive VC has credits: XY on
-            // the escape VC. The VC a packet was injected on at its local port carries no meaning:
-            // the NI uses the lowest free VC, which is usually the escape VC's index.
-            Route esc = XYRouting::nextHop(c); esc.vc_mask = 1u << m_escape;
-            if (c.in_vc == m_escape && !m_t.isLocalPort(c.router, c.in_port)) return esc;
-            auto here = m_t.coord(c.router), dst = m_t.coord(c.dst_router);
-            int dx = dst.first - here.first, dy = dst.second - here.second;
-            bool wx, wy;
-            int sx = stepIn(here.first, dst.first, m_t.dimX(), wx), sy = stepIn(here.second, dst.second, m_t.dimY(), wy);
-            if (dx == 0 && dy == 0) { esc.vc_mask = allVCs(m_vcs); return esc; }
-            std::vector<int> cand;
-            if (sx) cand.push_back(portForStep(c.router, sx, 0));
-            if (sy) cand.push_back(portForStep(c.router, 0, sy));
-            std::sort(cand.begin(), cand.end());
+            Route esc = escapeRoute(c.router, c.dst_router, c.packet);
+            if (stays(c)) return esc;
+            std::vector<int> cand = minimalPorts(c);
+            if (cand.empty()) return esc;                          // arrived: the local port, any VC
             int best = cand[0], bestc = sumCredits(c, cand[0]);
             for (size_t i = 1; i < cand.size(); i++) { int cr = sumCredits(c, cand[i]); if (cr > bestc) { best = cand[i]; bestc = cr; } }
             if (c.here && bestc == 0) return esc;                 // no adaptive credit anywhere: escape
-            Route rt; rt.out_port = best; rt.vc_mask = allVCs(m_vcs) & ~(1u << m_escape); return rt;
+            Route rt; rt.out_port = best; rt.vc_mask = adaptiveMask();
+            rt.alt_port = esc.out_port; rt.alt_mask = esc.vc_mask;  // Duato: the escape stays available
+            return rt;
+        }
+        std::vector<Route> candidates(const RouteContext &c) const override
+        {
+            Route esc = escapeRoute(c.router, c.dst_router, c.packet);
+            if (stays(c)) return {esc};
+            std::vector<Route> out;
+            for (int p : minimalPorts(c)) { Route rt; rt.out_port = p; rt.vc_mask = adaptiveMask(); out.push_back(rt); }
+            out.push_back(esc);
+            return out;
         }
         Ordering ordering() const override { return Ordering::NONE; }
-        bool deadlockFreeOn(const Topology &t) const override { return XYRouting::deadlockFreeOn(t); }   // the escape VC is XY
+        bool fixesVCPerPair() const override { return false; }
+        bool deadlockFreeOn(const Topology &t) const override { return deadlockCycle(t, m_vcs).empty(); }
+        std::string deadlockCycle(const Topology &t, int) const override
+        {
+            std::string c;
+            escapeDependencyAcyclic(t, m_vcs, [this](int r, int, int, int d) { return escapeRoute(r, d, nullptr); }, &c);
+            return c.empty() ? c : "its escape network has a " + c;
+        }
         std::string name() const override { return "AdaptiveMinimal"; }
     };
 
@@ -258,59 +336,122 @@ namespace octopus { namespace net
     }
 
     // ------------------------------------------------------------------ deadlock check
+    // channel = (router, out link port, vc); an edge c1 -> c2 when a packet may hold c1 and then
+    // request c2 (spec s14.3).
+    namespace
+    {
+        struct CDG
+        {
+            std::map<int, std::set<int>> edges; std::set<int> nodes;
+            static int id(int router, int port, int vc) { return (router * 64 + port) * 32 + vc; }
+            void add(int prev, int cur) { nodes.insert(cur); if (prev >= 0) edges[prev].insert(cur); }
+        };
+        bool acyclic(const Topology &t, CDG &g, std::string *cycle)
+        {
+            std::map<int, int> colour; std::vector<int> stack;
+            std::function<bool(int)> dfs = [&](int u) -> bool {
+                colour[u] = 1; stack.push_back(u);
+                for (int v : g.edges[u])
+                {
+                    if (colour[v] == 1)
+                    {
+                        if (cycle)
+                        {
+                            std::ostringstream o; o << "cycle:";
+                            auto it = std::find(stack.begin(), stack.end(), v);
+                            for (; it != stack.end(); ++it) { int id = *it; int vc = id % 32, port = (id / 32) % 64, router = id / 32 / 64; o << " (router " << t.routerId(router) << " " << t.portName(router, port) << " vc" << vc << ")"; }
+                            *cycle = o.str();
+                        }
+                        return false;
+                    }
+                    if (colour[v] == 0 && !dfs(v)) return false;
+                }
+                colour[u] = 2; stack.pop_back(); return true;
+            };
+            for (int n : g.nodes) if (colour[n] == 0 && !dfs(n)) return false;
+            if (cycle) cycle->clear();
+            return true;
+        }
+        void checkPorts(const Topology &t, const std::string &who, int r, int port, int d)
+        {
+            if (t.linkPorts(r) > 64 || port >= 64) throw ConfigError("the deadlock check supports at most 64 ports per router");
+            if (port < 0 || port >= t.ports(r))
+                throw ConfigError(who + ": router " + std::to_string(t.routerId(r)) + " has no port " + std::to_string(port) +
+                                  " for destination router " + std::to_string(t.routerId(d)));
+        }
+    }
+
+    std::vector<Route> RoutingAlgorithm::candidates(const RouteContext &c) const { return {nextHop(c)}; }
+    std::string RoutingAlgorithm::deadlockCycle(const Topology &t, int vcs_per_class) const
+    {
+        std::string c; channelDependencyAcyclic(t, *this, vcs_per_class, &c); return c;
+    }
+
     bool channelDependencyAcyclic(const Topology &t, const RoutingAlgorithm &r, int vcs_per_class, std::string *cycle)
     {
-        // channel = (router, out link port, vc). Edge c1 -> c2 when some path uses c1 then c2.
-        int R = t.routers();
-        auto chan = [&](int router, int port, int vc) { return (router * 64 + port) * 32 + vc; };
-        std::map<int, std::set<int>> edges; std::set<int> nodes;
-        std::vector<std::vector<int>> routes;   // only for paths; VC masks come from nextHop per hop
+        if (vcs_per_class > 32) throw ConfigError("the deadlock check supports at most 32 VCs per class");
+        // every state (router, in_port, in_vc) a packet from s to d can reach, following every
+        // candidate output (primary and fallback) with every VC its mask allows
+        int R = t.routers(); CDG g;
+        uint32_t all = vcs_per_class >= 32 ? ~0u : ((1u << vcs_per_class) - 1);
         for (int s = 0; s < R; s++) for (int d = 0; d < R; d++)
         {
             if (s == d) continue;
-            auto hops = r.path(t, s, d);
-            int prev = -1;
-            for (size_t i = 0; i < hops.size(); i++)
+            struct St { int router, in_port, in_vc, prev; };
+            std::set<std::tuple<int, int, int>> seen; std::vector<St> todo{{s, -1, 0, -1}};
+            while (!todo.empty())
             {
-                int router = hops[i].first, port = hops[i].second;
-                if (t.isLocalPort(router, port)) break;
-                RouteContext c; c.router = router; c.dst_router = d; c.src_router = s; c.in_port = i ? t.link(hops[i - 1].first, hops[i - 1].second).port : -1;
-                uint32_t mask = r.nextHop(c).vc_mask;
-                for (int vc = 0; vc < vcs_per_class; vc++)
+                St st = todo.back(); todo.pop_back();
+                if (st.router == d) continue;
+                RouteContext c; c.router = st.router; c.in_port = st.in_port; c.in_vc = st.in_vc; c.dst_router = d; c.src_router = s;
+                for (const Route &rt : r.candidates(c))
                 {
-                    if (!(mask & (1u << vc))) continue;
-                    int id = chan(router, port, vc); nodes.insert(id);
-                    if (prev >= 0) edges[prev].insert(id);
+                    std::pair<int, uint32_t> opts[2] = {{rt.out_port, rt.vc_mask}, {rt.alt_port, rt.alt_mask}};
+                    for (int k = 0; k < 2; k++)
+                    {
+                        int port = opts[k].first; uint32_t mask = opts[k].second & all;
+                        if (k == 1 && port < 0) continue;
+                        checkPorts(t, r.name(), st.router, port, d);
+                        if (t.isLocalPort(st.router, port)) continue;
+                        auto f = t.link(st.router, port);
+                        for (int vc = 0; vc < vcs_per_class; vc++)
+                        {
+                            if (!(mask & (1u << vc))) continue;
+                            int id = CDG::id(st.router, port, vc); g.add(st.prev, id);
+                            if (seen.insert({f.router, f.port, vc}).second) todo.push_back({f.router, f.port, vc, id});
+                        }
+                    }
                 }
-                // the dependency chain follows the packet's own VC; with one VC per hop in the mask
-                // that is exact, with several we conservatively link every allowed VC
-                for (int vc = 0; vc < vcs_per_class; vc++) if (mask & (1u << vc)) { prev = chan(router, port, vc); break; }
             }
         }
-        // DFS cycle detection
-        std::map<int, int> colour; std::vector<int> stack;
-        std::function<bool(int)> dfs = [&](int u) -> bool {
-            colour[u] = 1; stack.push_back(u);
-            for (int v : edges[u])
+        return acyclic(t, g, cycle);
+    }
+
+    bool escapeDependencyAcyclic(const Topology &t, int vcs_per_class,
+                                 const std::function<Route(int, int, int, int)> &escape, std::string *cycle)
+    {
+        // a packet may enter the escape network at any router; there it follows the escape route
+        // to its destination and never leaves it
+        int R = t.routers(); CDG g;
+        uint32_t all = vcs_per_class >= 32 ? ~0u : ((1u << vcs_per_class) - 1);
+        for (int e = 0; e < R; e++) for (int d = 0; d < R; d++)
+        {
+            if (e == d) continue;
+            int r = e, in_port = -1, in_vc = -1, prev = -1;
+            for (int guard = 0; r != d; guard++)
             {
-                if (colour[v] == 1)
-                {
-                    if (cycle)
-                    {
-                        std::ostringstream o; o << "cycle:";
-                        auto it = std::find(stack.begin(), stack.end(), v);
-                        for (; it != stack.end(); ++it) { int id = *it; int vc = id % 32, port = (id / 32) % 64, router = id / 32 / 64; o << " (router " << t.routerId(router) << " " << t.portName(router, port) << " vc" << vc << ")"; }
-                        *cycle = o.str();
-                    }
-                    return false;
-                }
-                if (colour[v] == 0 && !dfs(v)) return false;
+                if (guard > 4 * (R + 2)) throw ConfigError("escape route from router " + std::to_string(t.routerId(e)) + " never reaches " + std::to_string(t.routerId(d)));
+                Route rt = escape(r, in_port, in_vc, d);
+                checkPorts(t, "escape", r, rt.out_port, d);
+                if (t.isLocalPort(r, rt.out_port)) break;
+                uint32_t mask = rt.vc_mask & all; int vc = -1;
+                for (int v = 0; v < vcs_per_class; v++) if (mask & (1u << v)) { if (vc >= 0) throw ConfigError("an escape route must name exactly one VC"); vc = v; }
+                if (vc < 0) throw ConfigError("an escape route named no VC");
+                int id = CDG::id(r, rt.out_port, vc); g.add(prev, id); prev = id;
+                auto f = t.link(r, rt.out_port); r = f.router; in_port = f.port; in_vc = vc;
             }
-            colour[u] = 2; stack.pop_back(); return true;
-        };
-        for (int n : nodes) if (colour[n] == 0 && !dfs(n)) return false;
-        if (cycle) cycle->clear();
-        return true;
+        }
+        return acyclic(t, g, cycle);
     }
 
     void checkOrderingRequirement(const std::string &required, const RoutingAlgorithm &r, const Topology &t, int vcs_per_class)
@@ -319,8 +460,7 @@ namespace octopus { namespace net
         if (required != "pair_per_class") throw ConfigError("requires_ordering must be none or pair_per_class, got '" + required + "'");
         if (r.ordering() != Ordering::PAIR_PER_CLASS)
             throw ConfigError("the protocol requires pair_per_class ordering but routing " + r.name() + " does not preserve it");
-        bool dateline = (t.kind() == Topology::Kind::Torus2D && r.name() == "XY");
-        if (vcs_per_class > 1 && !dateline)
+        if (vcs_per_class > 1 && !r.fixesVCPerPair())
             throw ConfigError("the protocol requires pair_per_class ordering but vcs_per_class = " + std::to_string(vcs_per_class) +
                               " lets a pair's packets take different VCs (only the torus dateline fixes the VC)");
     }

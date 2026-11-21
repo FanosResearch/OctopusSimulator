@@ -21,6 +21,9 @@ target_sources(Octopus_core PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/Network/ProtocolCheck.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/Network/Classifier.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/Network/Topology.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/Network/topologies/Builtin.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/Network/topologies/Lattice.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/Network/topologies/Graph.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/Network/Routing.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/Network/Network.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/Network/NetworkInterface.cpp
