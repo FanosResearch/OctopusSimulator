@@ -109,13 +109,12 @@ instead is the discussion the exercise exists for.
 
 \section{Planned}
 
-Multi-hop routing on the NoC is designed, not built: a \code{Topology} that knows coordinates
-and endpoint attachment, a \code{RoutingAlgorithm} plug-in with one method,
-\code{nextHop(router, dest, msg)}, selected by name like an arbiter, input-buffered routers with
-credit-based back-pressure, and three virtual networks so that a directory protocol's
-request--forward--response dependency cannot deadlock. The current single-switch NoC becomes its
-degenerate case, and ``add a routing algorithm'' becomes the mesh's analogue of ``add an
-arbiter''. \file{docs/NoC_MultiHop_Plan.md} has the design and its phasing.
+Multi-hop routing is built: \cref{ch:noc} describes the network. A new routing algorithm is a
+subclass of \code{RoutingAlgorithm} in \file{src/Interconnect/Network/Routing.cpp} with
+\code{nextHop}, \code{ordering} and \code{deadlockFreeOn}, plus one line in \code{createRouting},
+the network's analogue of adding an arbiter. Real-time arbitration on the network (TDM slot
+tables, priority VCs) and snooping over the network are planned. \file{docs/NoC_MultiHop_Plan.md}
+has the design and its phasing.
 
 \begin{wherebox}
 \begin{itemize}[nosep,leftmargin=1.2em]

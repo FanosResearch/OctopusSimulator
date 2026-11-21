@@ -1,0 +1,856 @@
+\chapter{The Network-on-Chip}\label{ch:noc}
+\begingroup\emergencystretch=3em
+
+\whatyoufind{The flit-level network that connects L1s, LLC banks and memory controllers on a
+grid, a torus, a ring, a star or any graph you write down. What it models, from packets and flits
+to routers, credits and virtual channels. The routing algorithms and arbiters it ships. How the
+directory protocols stay free of deadlock on it. LLC banks and memory controllers as network
+endpoints. How to configure and run it, what it reports, and how it is validated.}
+
+\section{What the network models}\label{sec:noc-overview}
+
+The network is the interconnect \code{Network}. The system \code{MultiCoreSystem\_Mesh} selects it
+when \key{interconnect\_type} is \code{Network}. It replaces the single shared medium of a bus with routers
+joined by point-to-point links (\cref{fig:noc-system}). Every cache, LLC bank and memory
+controller is an \emph{endpoint}. Each endpoint has a \emph{network interface} (NI) that attaches
+it to one router through a local port. The controllers keep the \code{CommunicationInterface}
+contract of every other interconnect. They push and pop messages as before and never learn that a
+network sits between them.
+
+A message travels as a \emph{packet}. A packet is cut into \emph{flits}, the unit a link carries
+in one tick and a buffer slot holds. The model is flit-level wormhole switching with virtual
+channels (VCs) and credit-based flow control. A head flit reserves a path through each router,
+the body and tail flits follow it, and a flit moves only when the buffer ahead of it has room.
+The blocking that dominates worst-case latency in a real network is therefore simulated, not
+estimated.
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/noc-system}\end{adjustbox}
+\caption{The network of \code{MultiCoreSystem\_Grid2B2M}, the largest system preset: four L1s,
+two LLC banks with their memory ports and two memory controllers on a 2$\times$2 grid. Each
+endpoint has its own NI and local port. Right: the same numbering on a 4$\times$4 grid.}
+\label{fig:noc-system}
+\end{figure}
+
+\begin{table}[htbp]\centering\small
+\caption{Terms used in this chapter.}\label{tab:noc-terms}
+\begin{tabularx}{\textwidth}{@{}lY@{}}
+\toprule term & meaning \\ \midrule
+endpoint & a cache, an LLC bank, an LLC bank's memory port or a memory controller, with its own id \\
+NI & network interface: the endpoint's side of the network, its injection and RX queues \\
+router & a switching node with link ports and local ports \\
+port & one side of a link at a router. Link ports are numbered first, local ports last \\
+link & a one-way channel between two routers. A connection is two links, one per direction \\
+packet & one message for one destination, as a sequence of flits \\
+flit & what a link carries in one tick and a buffer slot holds, \key{flit\_bytes} wide \\
+class & REQUEST, FORWARD or RESPONSE: a virtual network with its own buffers \\
+VC & virtual channel: one flit FIFO at an input port, belonging to one class \\
+credit & permission to send one flit into one downstream VC \\
+tick & one step of the network. One tick is one core cycle as shipped \\
+home & the LLC bank that owns a line's directory entry \\
+owner & the endpoint a message is attributed to (\code{Message::owner}) \\
+$R$, $f$ & routers a packet crosses (first and last included), flits in a packet \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Scope.} The network carries the directory protocols: directory MSI (the presets),
+MESI and MOESI. Their traffic is point-to-point, and three message classes keep it free of
+deadlock (\cref{sec:noc-deadlock}). Snooping protocols do not run on the network, because they need
+an ordered broadcast that a mesh does not give. Real-time arbitration on the network (TDM slot
+tables, priority VCs, a \code{TDM\_XY} routing) is not available. Its key names are reserved and
+refused at start-up. \Cref{sec:noc-limits} lists every limitation.
+
+\section{Running it}\label{sec:noc-running}
+
+Six presets ship (\cref{tab:noc-presets}). The system \code{MultiCoreSystem\_Mesh} runs every
+one of them except the network-only one, with the preset given as its configuration file:
+
+\begin{lstlisting}[style=shell]
+# directory MSI on the 2x2 grid, one LLC on router 3
+./build/Octopus_Simulator -s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid \
+    -p "workload_path(s)=BMs/eembc-traces/a2time01-trace/" \
+    -o results/grid
+# the same with the LLC moved to router 0 and round-robin allocation
+./build/Octopus_Simulator -s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid \
+    -p "interconnect.node_map[10](i)=0" \
+    -p "interconnect.arbiter_type(s)=RRArbiter" -o results/grid-llc0
+# two banks and two memory controllers, each simulated by MCsim
+./build/Octopus_Simulator -s MultiCoreSystem_Mesh -c MultiCoreSystem_Grid2B2M \
+    -p "main_memory_type(s)=MCsim" -o results/grid2b2m
+# the network alone: sixteen traffic generators on a 4x4 grid
+./build/Octopus_Simulator -s NetworkOnly -o results/netonly
+\end{lstlisting}
+
+Every network key lives under \code{interconnect.} in the system file and can be overridden with
+\code{-p} like any other key (\cref{ch:configuration}). Their defaults are in
+\file{configuration/Interconnect/Network.csv}, which extends \file{Mesh.csv}.
+
+\begin{table}[htbp]\centering\small
+\caption{The network presets in \code{configuration/SystemConfigurations/}. The four
+\code{Grid} presets are 2$\times$2 with \code{XY} routing, three classes, injection and RX queues
+of 32, and \code{requires\_ordering pair\_per\_class}. \code{NetworkOnly} is 4$\times$4 with the
+default queues of 16 and no ordering requirement. \code{NetNoC} is a \code{custom} graph with an
+injection queue of 1024.}\label{tab:noc-presets}
+\begin{tabularx}{\textwidth}{@{}lY@{}}
+\toprule preset & what it contains \\ \midrule
+\code{MultiCoreSystem\_Grid} & L1 0 to 3 on routers 0 to 3, one LLC (id 10) on router 3 beside L1 3. Directory MSI. Memory on a point-to-point bus off the grid \\
+\code{MultiCoreSystem\_Grid2B} & two LLC banks, 10 on router 0 and 11 on router 3, lines interleaved, each bank half the single LLC. Both banks share one memory bus \\
+\code{MultiCoreSystem\_Grid2BM} & \code{Grid2B} with the memory controller on the network: memory ports 110 and 111 beside the banks, controller 100 on router 1 \\
+\code{MultiCoreSystem\_Grid2B2M} & \code{Grid2BM} with a second controller, 101 on router 2, and 4\,KiB pages interleaved across the two \\
+\code{MultiCoreSystem\_NetNoC} & the legacy single-switch NoC expressed as a network (\cref{sec:noc-legacy}) \\
+\code{NetworkOnly} & a 4$\times$4 grid with a traffic generator on every router and no caches (\cref{sec:noc-generators}) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+To run directory MESI or MOESI on a grid preset, set four protocol keys as on the bus directory
+system (\cref{ch:coherence-engine}). For MESI they are:
+
+\begin{lstlisting}[style=shell]
+-p "cache_controller[*].protocol_type(s)=DIRECTORY_MESI" \
+-p "cache_controller[*].fsm_filename(s)=MESI_directory_v2" \
+-p "llc_controller.protocol_type(s)=DIRECTORY_LLC_MESI" \
+-p "llc_controller.fsm_filename(s)=MESI_LLC_directory_v2"
+\end{lstlisting}
+
+MOESI uses \code{DIRECTORY\_MOESI}, \code{MOESI\_directory\_v2}, \code{DIRECTORY\_LLC\_MOESI} and
+\code{MOESI\_LLC\_directory\_v2}. On the banked presets (\code{Grid2B}, \code{Grid2BM},
+\code{Grid2B2M}) the two LLC keys take the prefix \code{llc\_controller[*].} instead of
+\code{llc\_controller.}, so that every bank gets them.
+
+\section{Topology and endpoint attachment}\label{sec:noc-topology}
+
+A topology is a set of routers, the links between them and the router each endpoint attaches to.
+\key{topology} selects it:
+
+\begin{description}
+\item[\code{grid2d}] $k_x \times k_y$ routers from \key{dims(vi),kx,ky}, numbered row-major,
+  $r = y\cdot k_x + x$, with $y$ growing downwards (north is $y-1$). Link ports are ordered east,
+  west, north, south, and directions that do not exist at an edge are skipped
+  (\cref{fig:noc-system}, right).
+\item[\code{torus2d}] the grid plus wrap links on every row and column. Both dimensions must be
+  at least 3, so that a wrap link differs from a direct link.
+\item[\code{ring}] $k \ge 3$ routers from \key{dims(vi),k}. Ports are clockwise, then
+  counter-clockwise.
+\item[\code{star}] one router with every endpoint on it.
+\item[\code{custom}] any graph from \key{connection\_matrix[i]} rows (node id, then its
+  neighbours), as for the mesh. The matrix must be symmetric. A node in \key{component\_ids} is an
+  endpoint and gets an \emph{implicit router} of its own, which stands for the endpoint's link
+  ports and adds no router latency. The other nodes are explicit routers (\key{router\_ids} may
+  list them). At a node the link ports to lower-id neighbours come first, in ascending id, and
+  the ports to higher-id neighbours follow in the order of the node's row. For every shipped
+  matrix this is the row order.
+\end{description}
+
+On the generated topologies \key{node\_map[<id>](i)} names the router of every endpoint in
+\key{component\_ids}, and a missing entry stops the run with the key named. Several endpoints may
+share a router. With \key{local\_ports} 0, the default, each endpoint gets its own local port,
+numbered after the link ports. On \code{grid2d}, \code{torus2d} and \code{ring} the local ports
+follow ascending endpoint id, on \code{star} and \code{custom} the order of
+\key{component\_ids}. In \code{MultiCoreSystem\_Grid} router 3
+has west (0), north (1), L1 3 on local port 2 and the LLC on local port 3. A positive
+\key{local\_ports} smaller than the endpoints at a router makes them share ports round-robin. The
+NIs on a shared port then compete for it through the port's arbiter, and the RX credits stay per
+endpoint and class.
+
+\section{Packets, flits and classes}\label{sec:noc-packets}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/noc-packet}\end{adjustbox}
+\caption{A message becomes a packet of flits, the classifier gives it a class, and the NI queues
+it for that class before it takes a VC of the class at the router's local input port.}
+\label{fig:noc-packet}
+\end{figure}
+
+A message with several destinations (an LLC invalidating its sharers) becomes one packet per
+destination, in the order of its \code{to} list. The NI accepts all of them or none. Each packet
+carries the whole \code{Message}, which is delivered unchanged. The only field the network writes
+is \code{from}, stamped at injection with the sending endpoint's id, as every Octopus interface
+does. A packet's flit count is (\cref{fig:noc-packet})
+\[
+f = \left\lceil \frac{\textit{header\_bytes} + \textit{payload}}{\textit{flit\_bytes}} \right\rceil ,
+\]
+where the payload is the message's \code{data\_size} if it carries data and 0 otherwise. With the
+defaults (\key{header\_bytes} 8, \key{flit\_bytes} 16) a request is one flit and a 64-byte line is
+five. \key{flit\_bytes} 0 makes every packet one flit, the message-level model.
+
+\paragraph{Classes.} Every packet belongs to one class. A class is a virtual network: it has its
+own VCs at every input port, its own injection queue and its own RX queue at every NI. With
+\key{num\_classes} 3, the default, the classifier reads \code{Message::kind}
+(\cref{tab:noc-classes}). An untagged message falls back on its shape: with data it is a
+RESPONSE, without data to a home it is a REQUEST, and without data from a home, or owned by a
+home, it is a FORWARD. A message that matches no rule stops the run
+with its fields printed. \key{num\_classes} 2 applies the legacy split of the mesh: class 0 for
+messages without data and class 1 for messages with data, whatever their kind.
+
+\begin{table}[htbp]\centering\small
+\caption{Message kinds and their classes with three classes.}\label{tab:noc-classes}
+\begin{tabularx}{\textwidth}{@{}llY@{}}
+\toprule class & index & kinds \\ \midrule
+REQUEST & 0 & GetS, GetM, PutS, PutM, PutE, PutO, any demand request \\
+FORWARD & 1 & forwarded requests (FwdGetS, FwdGetM), invalidations, a home's acknowledgement without data (PutAck, the MOESI ack count), a bank's memory read (\code{MEM\_READ}) \\
+RESPONSE & 2 & data responses and supplies, InvAck, fills, write-back data, memory writes (\code{MEM\_WRITE}), write acknowledgements (\code{MEM\_WACK}) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+A home's PutAck travels in the FORWARD class on purpose. The directory L1 handles a home's Inv
+followed by its PutAck to the same cache, but not the reverse order. In one class with ordered
+routing (\cref{sec:noc-routing}) the PutAck can never overtake the Inv. An acknowledgement is
+consumed without sending anything, so the FORWARD class stays drainable.
+
+\section{The network interface}\label{sec:noc-ni}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/noc-ni}\end{adjustbox}
+\caption{The NI between a controller and its router. Transmit: admission reserves the injection
+slots a transition will use, and the local port injects one flit per tick, oldest eligible packet
+first. Receive:
+a packet's RX slot is reserved at its last router, and the controller always admits responses and
+forwards.}
+\label{fig:noc-ni}
+\end{figure}
+
+\paragraph{Injection.} \code{pushMessage} classifies each destination's packet and puts it in the
+injection queue of its class, \key{inject\_queue\_depth} packets deep (16 by default, 32 in the
+grid presets). Each tick a local port sends at most one flit. Its candidates are the next flit of
+every started packet that holds a credit and the head of every class queue that finds a free VC
+of its class with a credit. The port's arbiter elects one. Under \code{FCFSArbiter} that is the
+oldest eligible packet over all classes. A class head that finds no free VC with a credit is not a
+candidate, so a younger packet of another class may leave first while an older one is blocked.
+Within a class an endpoint never reorders its own messages. A started packet
+keeps its VC until its tail has left, and no other packet's flits enter that VC in between
+(wormhole). A new packet takes the lowest-index free VC of its class that its first route admits.
+The local link costs nothing: a flit injected in a tick is in the router's input VC in the same
+tick.
+
+\paragraph{Ejection.} A packet's RX slot is reserved when its head wins VC allocation on the last
+router's local output port. A local output port has no credit counter. This reservation plays
+its role: a head wins a VC there only if the endpoint has a free RX slot in its class
+(\code{canReserve}). When the tail leaves through the local port the packet is
+complete and the message enters the RX queue of its class, \key{eject\_queue\_depth} messages
+deep. The last router holds the message from the head's arrival to the tail's ejection, the one
+store-and-forward step a delivered message object implies.
+
+\paragraph{RX serving.} \key{rx\_serving} \code{priority} (the default) makes \code{peekMessage}
+return a RESPONSE if there is one, else a FORWARD, else a REQUEST. \code{alternate} rotates over the
+non-empty class queues and moves on every peek, as the legacy \code{MeshInterface} does.
+
+\paragraph{Transmit-side admission (ADMIT-TX).} A push into an injection queue never fails. A
+controller pops a message from its processing queue only if the injection queues its transition
+will use have room (\code{txFreeSlots}), and reserves those slots before the actions run
+(\cref{fig:noc-ni}, table). A refused message stays in the processing queue and is retried, as a
+message is when the MSHR is full. The queues it waits for drain on their own, so no cycle closes.
+A push refused despite the admission is an accounting error: the controller prints the queue and
+the message and exits with status 2. The buses report unlimited room, so admission changes nothing
+for them. The smallest workable \key{inject\_queue\_depth} is the number of caches, the fan-out of
+the home's replacement. Below it the home can never admit a replacement and the run wedges. With
+\env{OCTOPUS\_HANG\_DUMP} set, the watchdog then ends it with status 2.
+
+\paragraph{Endpoint admission (ADMIT-RF).} The network is free of buffer deadlock only if every
+endpoint eventually consumes any RESPONSE or FORWARD packet in its RX, whether or not it can take
+a REQUEST. The cache controllers do: responses and forwards are always admitted to the processing
+queue, and only requests wait for room. The memory controller \code{MainMemoryController} is the
+exception. It accepts a \code{MEM\_READ}, a FORWARD, only with room in its queue
+(\cref{sec:noc-banking}). It still drains, because it never waits on the network to serve its
+queue: its fills go to an unbounded output queue.
+\code{rx\_serving priority} lets the NI honour the property when all three RX queues hold packets. A unit test checks the property on the directory L1, the
+directory LLC and the snooping L1 (\cref{sec:noc-validation}).
+
+\section{The router}\label{sec:noc-router}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/noc-router}\end{adjustbox}
+\caption{A router. Each input port has one FIFO per class and VC. Route computation runs once per
+packet, VC allocation claims an output VC, switch allocation moves one flit per output port per
+tick. Credits flow back upstream when a flit leaves an input FIFO. Bottom: the five phases of
+every tick.}
+\label{fig:noc-router}
+\end{figure}
+
+A router has an input side and an output side per port (\cref{fig:noc-router}). An input port
+holds \key{num\_classes} $\times$ \key{vcs\_per\_class} FIFOs of \key{vc\_depth} flits. An output
+port keeps, per class and VC, a credit counter for the downstream FIFO and the packet that holds
+the output VC. A VC may contain the tail of one packet followed by the head of the next, because
+the upstream router releases its output VC when it sends the tail. The packet at the front is the
+one being served.
+
+A packet passes four stages:
+
+\begin{description}
+\item[RC, route computation] once per packet, when its head reaches the front of its FIFO. The
+  routing algorithm returns an output port and a mask of the output VCs the packet may use.
+\item[VA, VC allocation] once per packet. A head competes for a free output VC of its class on
+  its output port no earlier than \key{router\_latency} ticks after it arrived (2 by default).
+  Implicit routers of a \code{custom} graph add no latency. On a local output port the head also
+  needs and reserves an RX slot.
+\item[SA, switch allocation] once per flit. A flit competes for its output port if it is at the
+  front of its FIFO, its output VC has a credit and the link is free. One flit leaves each input
+  port and each output port per tick. Body and tail flits can leave in the tick they arrive.
+\item[LT, link traversal] the flit is at the downstream router \key{link\_latency} ticks later
+  (1 by default). A tail sent on a local port completes the packet.
+\end{description}
+
+The network executes each tick in five phases, over all routers in ascending id and all ports and
+VCs in ascending index: injection, arrivals (flits and credits whose time has come), route
+computation, VC allocation, and switch allocation with link traversal and ejection. Injection uses
+the credits visible at the start of the tick. Arrivals precede allocation, so a flit or a credit
+that arrives in a tick is usable in that same tick. No decision depends on pointer values,
+unordered containers or random numbers, so two runs of the same configuration produce
+byte-identical reports.
+
+\section{Flow control and latency}\label{sec:noc-flow}
+
+\begin{figure}[!tbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/noc-credits}\end{adjustbox}
+\caption{Top: the credit loop of one VC and the throughput bound it sets. Bottom: the unloaded
+latency of a packet.}
+\label{fig:noc-credits}
+\end{figure}
+
+A flit is sent on a link only when its downstream VC holds a credit. The credit counter starts at
+\key{vc\_depth} and drops by one per flit sent. When the downstream router forwards the flit and
+frees its slot, a credit returns \key{credit\_latency} ticks later (by default the
+\key{link\_latency}). A slot is therefore reusable $L + c$ ticks after its flit was sent, where $L$
+is the link latency and $c$ the credit latency, and one VC carries at most
+$\min(1, \textit{vc\_depth}/(L+c))$ flits per tick (\cref{fig:noc-credits}). Body flits reach this
+bound. A head also waits \key{router\_latency} at each router. A \key{vc\_depth} smaller than a
+packet is wormhole switching: a blocked packet then holds buffers in several routers. A
+\key{vc\_depth} of at least every packet's flit count is virtual cut-through. A longer buffer
+residency, as in a router that holds a slot through switch allocation and traversal, is modelled
+with a larger \key{credit\_latency}.
+
+\paragraph{Unloaded latency.} A packet of $f$ flits that crosses $R$ routers, and so $R-1$ links,
+alone in the network, takes
+\[
+T = R\cdot\textit{router\_latency} + (R-1)\cdot\textit{link\_latency} + (f-1)
+\]
+ticks from the head's injection to the tail's ejection. Local links cost nothing. The $f-1$ term
+is the tail following the head one tick per flit, since a head leaves a router before its tail
+has arrived (cut-through). The formula holds while the credits never run out on the way, which
+needs $\textit{vc\_depth} \ge \min(f, L + c)$ at every link latency. The default depth of 4 meets
+it whenever $L + c \le 4$.
+
+\paragraph{Clock.} The network is a \code{ClockedObj} with \key{m\_clk\_period} 50 (from
+\file{Mesh.csv}). It steps on falling edges, so one tick is 100 time units, one core cycle as
+shipped. All latency keys are in ticks. Halving \key{m\_clk\_period} gives two ticks per core
+cycle.
+
+\paragraph{Link options.} \key{class\_link\_latency(vi)} gives each class its own link latency,
+one entry per class. \key{link\_model} \code{pipelined} (the default) lets a link accept one flit
+per tick. \code{serial} holds the link for its whole latency per flit and delivers the flit
+$\max(1, L-1)$ ticks after it was sent, which is the transfer model of the legacy mesh links.
+\key{half\_duplex} 1 makes the two links of a connection one resource: one flit at a time in either
+direction. The configured arbiter elects it over both routers' candidates.
+
+\section{Routing}\label{sec:noc-routing}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/noc-routing}\end{adjustbox}
+\caption{The four routing algorithms, with the ordering each one declares. Black: deterministic
+paths. Amber: adaptive choices by credits. Teal: the escape VC of \code{AdaptiveMinimal}.}
+\label{fig:noc-routing}
+\end{figure}
+
+A routing algorithm is a plug-in chosen by name with \key{routing}. Given the current router, the
+input port and VC, the destination router and the class, it returns the output port and a mask
+of the output VCs the packet may use. It may read the current router's credit counts and nothing
+else. \code{auto}, the default, selects \code{XY} on \code{grid2d} and \code{torus2d} and
+\code{Table} elsewhere. Four algorithms ship (\cref{fig:noc-routing}):
+
+\begin{description}
+\item[\code{Table}] any topology. Shortest paths found by breadth-first search from every
+  destination, ties to the lowest port index. \key{routing\_table[<router>](vi)} overrides single
+  entries as \code{dest,port} pairs, and a port the router does not have stops the run. The table
+  must pass the channel dependency check (\cref{sec:noc-deadlock}).
+\item[\code{XY}] \code{grid2d} and \code{torus2d}. Along X to the destination column, then along
+  Y. On a torus it takes the shorter way round each ring and applies the dateline rule: a leg that
+  crosses the wrap link uses VC 1, any other leg VC 0. A torus with \code{XY} therefore needs
+  \key{vcs\_per\_class} of at least 2.
+\item[\code{WestFirst}] \code{grid2d}. The turn model: a packet with a westward component goes
+  west first. Otherwise it picks, among the minimal outputs, the one whose VCs of its class hold
+  the most credits, ties to the lowest port.
+\item[\code{AdaptiveMinimal}] \code{grid2d}, with \key{escape\_vc} set and
+  \key{vcs\_per\_class} of at least 2. It picks the minimal output with the most credits on the
+  adaptive VCs (every VC but the escape VC). A packet that finds no adaptive credit is routed by
+  \code{XY} on the escape VC, and a packet that arrived over a link on the escape VC stays on it.
+  \code{torus2d} is accepted, but the escape VC ignores the dateline there, so the escape network
+  of a torus is not deadlock-free (\cref{sec:noc-limits}).
+\end{description}
+
+\paragraph{Ordering.} Two packets of one class from one source to one destination arrive in the
+order they were injected when the path and the VC are fixed by source, destination and class:
+\code{Table} and \code{XY} with \key{vcs\_per\_class} 1, and \code{XY} on a torus, where the
+dateline fixes the VC. These declare \code{PAIR\_PER\_CLASS}. The adaptive algorithms declare
+\code{NONE}. No algorithm orders packets of different classes. The directory presets set the
+system-level key \key{requires\_ordering(s),pair\_per\_class}, and the network refuses at start-up
+an algorithm or a VC count that cannot provide it. Multicast is not routed as such: it is one
+packet per destination.
+
+\section{Arbitration}\label{sec:noc-arbitration}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/noc-arbitration}\end{adjustbox}
+\caption{An election on the network: the allocator lists its candidates, and the arbiter returns
+the winner's index. The same four candidates under the two shipped policies.}
+\label{fig:noc-arbitration}
+\end{figure}
+
+Three allocators elect on the network: the injection of each local port, the VC allocation of each
+output VC, and the switch allocation of each output port (of each connection under
+\key{half\_duplex}). Each presents its candidates to an arbiter as a list of
+\code{Candidate \{index, owner, seq\}} records and calls
+\code{electIndex(tick, candidates)}, which returns the winner's \code{index}
+(\cref{fig:noc-arbitration}). \code{owner} is the message's owner, an endpoint id: the
+requesting core for its requests, supplies and fills. \code{seq} is the packet's network-wide
+injection number, so a lower \code{seq} is an older packet. A single candidate wins without an
+election. \key{arbiter\_type} selects the policy for all three:
+
+\begin{description}
+\item[\code{FCFSArbiter}] (default) the lowest \code{seq} wins, ties by the lowest index.
+\item[\code{RRArbiter}] a pointer rotates over the endpoint ids in ascending order. The first
+  owner after the pointer that has a candidate wins with its oldest candidate, and the pointer
+  rests on it. An owner without a candidate does not use a turn. It shares its rotation code with
+  the bus arbiter of the same name (\cref{sec:arbiters}).
+\end{description}
+
+The losers of a switch election are counted: each losing packet records the owner that beat it,
+which feeds the \col{NoC Ahead} columns (\cref{sec:noc-observe}). Under \code{FCFSArbiter} the
+older of two eligible packets goes first. Two packets that share a link therefore do not
+interleave while both have a flit ready with a credit. When the older one is blocked, the younger
+one's flits pass it. Under \code{RRArbiter} they interleave by owner. \code{TDMArbiter} and \code{PriorityArbiter} are refused on the network
+as deferred.
+
+\section{The worked example}\label{sec:noc-example}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/noc-example}\end{adjustbox}
+\caption{A GetS and its data on \code{MultiCoreSystem\_Grid} with the default timing, tick by
+tick. Each filled cell is a flit leaving a router. The latencies match the unloaded formula.}
+\label{fig:noc-example}
+\end{figure}
+
+On \code{MultiCoreSystem\_Grid}, L1 0 on router 0 sends a GetS to the LLC on router 3
+(\cref{fig:noc-example}). The request is one flit. \code{XY} sends it east to router 1, then
+south to router 3, then out of the LLC's local port. It waits \key{router\_latency} 2 at each of
+the three routers and crosses two links: $3\cdot 2 + 2\cdot 1 + 0 = 8$ ticks. The 72-byte data
+response is five flits and takes a different path, west to router 2 and then north to router 0,
+because \code{XY} goes along X first: $3\cdot 2 + 2\cdot 1 + 4 = 12$ ticks. Request and response
+use disjoint links. With the LLC on router 0 (\code{-p "interconnect.node\_map[10](i)=0"}) the same
+pair costs $1\cdot 2 + 0 + 0 = 2$ and $1\cdot 2 + 0 + 4 = 6$ ticks. The validation measures exactly
+these figures (\cref{sec:noc-validation}).
+
+\section{Message classes and deadlock freedom}\label{sec:noc-deadlock}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/noc-classes}\end{adjustbox}
+\caption{The classes of the directory protocols' messages and of the memory messages, and the
+consumption order that makes three classes deadlock-free.}
+\label{fig:noc-classes}
+\end{figure}
+
+A directory protocol has a chain of dependencies: a home answers a request with forwards or data,
+and a cache answers a forward with data (\cref{fig:noc-classes}). If a request and the forward it
+causes share buffers, a network full of requests can block the forwards that would drain it, and
+the system deadlocks. Three classes cut the chain. A cell of an FSM that consumes a class emits
+only higher classes, and the top class, RESPONSE, is consumed unconditionally (ADMIT-RF). Each
+class has its own buffers at every hop, so a full REQUEST network never blocks a FORWARD or a
+RESPONSE. The network checks both halves of the argument at start-up (\cref{fig:noc-deadlock}): the
+routing when it is built, the protocol once every controller exists.
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/noc-deadlock}\end{adjustbox}
+\caption{The two start-up checks. Left: a cycle in the channel dependency graph of
+\code{Table} routing on a ring. Right: the protocol-and-network check over the FSM cells.}
+\label{fig:noc-deadlock}
+\end{figure}
+
+\paragraph{Routing level.} For \code{Table} the network builds the channel dependency graph: one
+node per (link, VC), and an edge from one channel to the next whenever some route uses them in that
+order, with each hop's VC mask. A cycle stops the run and the message names the channels on it.
+\code{Table} never routes a packet on the escape VC, so an \key{escape\_vc} does not lift the
+refusal. \code{XY} and \code{WestFirst} on \code{grid2d}, \code{XY} on \code{torus2d} and
+\code{AdaptiveMinimal} on \code{grid2d} are deadlock-free by construction. The computed
+\code{Table} on a ring of four or more routers always has such a cycle and is refused at any VC
+count. A hand-written \key{routing\_table} that breaks the cycle passes the check.
+
+\paragraph{Protocol level.} Once every controller exists, the network reads each protocol's FSM
+table. For every cell with actions it takes the class of the message the event consumes and the
+classes of the messages the actions emit, classified exactly as the network classifies them. The
+handlers name these through \code{consumedBy(event)} and \code{emittedBy(action)}. A cell may
+emit only a class higher than the one it consumes, or RESPONSE from RESPONSE. Cells fed by the CPU,
+the memory bus or the controller itself are not constrained. The verdict is printed once:
+
+\begin{lstlisting}[style=plain]
+Protocol-network check (3 classes): 273 cells, 60 network emissions; edges REQUEST->FORWARD REQUEST->RESPONSE FORWARD->RESPONSE RESPONSE->RESPONSE; consumption order holds
+\end{lstlisting}
+
+A violation names the cell and exits with status 2. \key{deadlock\_check(s),warn} prints it and
+runs anyway, which the legacy two-class preset does. With two classes the directory tables give 36
+violations. Each is a cell that answers a message in its own class: an Inv answered by an InvAck,
+a PutS by a PutAck, or a GetS forwarded as a FwdGetS. A protocol without class
+annotations is reported and skipped. With memory on the network the check adds the memory
+controller: a read is answered by a fill (FORWARD to RESPONSE) and a write by an acknowledgement
+(RESPONSE to RESPONSE).
+
+\paragraph{When something wedges anyway.} With \env{OCTOPUS\_HANG\_DUMP}$=N$ the network watches
+itself: $N$ ticks without a flit moving while packets are in flight end the run. It then prints
+every occupied VC (packet, message id, class, owner, flits, output port, output VC and its credits)
+and every NI's queues, finalises the raw trace and exits with status 2. A routing deadlock reads as
+a ring of held VCs with zero credits. The controllers' watchdog runs the same dump.
+
+\section{LLC banks and memory on the network}\label{sec:noc-banking}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/noc-banking}\end{adjustbox}
+\caption{The home map and the memory map, and the four network legs of one LLC miss on
+\code{MultiCoreSystem\_Grid2B2M}.}
+\label{fig:noc-banking}
+\end{figure}
+
+\paragraph{LLC banks.} With \key{llc\_banks(i)} $N > 1$ the LLC is $N$ complete LLC controllers,
+configured as \code{llc\_controller[0]} to \code{llc\_controller[N-1]}. Each bank has its own
+directory FSM, MSHRs, write-back buffer, data array, processing queue, endpoint id, NI and local
+port. A
+static home map shared by every requester assigns each line to one bank
+(\cref{fig:noc-banking}):
+\[
+\textit{home} = \textit{home\_ids}\big[(\textit{line} \gg \textit{home\_interleave\_shift}) \bmod N\big],
+\qquad \textit{line} = \textit{addr}/\textit{block}.
+\]
+\key{home\_ids(vi)} and \key{home\_interleave\_shift(i)} are cache keys (absent means the single
+\key{m\_shared\_memory\_id}). Shift 0 interleaves consecutive lines, shift 6 interleaves 4\,KiB
+pages. Lines never move between banks and banks never exchange messages, so the protocol does not
+change. Capacity is per bank: a preset that banks the same LLC divides \code{cache\_size},
+\code{num\_mshr}, \code{pwb\_size} and \code{processing\_queue\_size} by $N$, as
+\code{MultiCoreSystem\_Grid2B} does. Without \code{memory\_on\_network} the banks share one memory
+bus, listed in \code{bus.m\_lower\_level\_ids} and arbitrated with its configured policy, and the
+memory answers the bank that asked.
+
+\paragraph{Memory controllers as endpoints.} \key{memory\_on\_network(i),1} makes every memory
+controller a network endpoint with its own id, NI and local port. A bank then reaches memory through a
+second endpoint, its memory port \key{mem\_port\_id}. The bank keeps its two interfaces, lower
+toward the L1s and upper toward memory, and the system gives it two NIs. The memory controller
+answers \code{from}, which is the memory port. Memory messages travel in the classes of
+\cref{tab:noc-classes}: a read in FORWARD, writes, fills and acknowledgements in RESPONSE. That is
+why the protocol check passes with the memory path included. \code{MainMemoryController} always
+accepts a write, whose number the banks' write-back buffers bound. It accepts a read only with room
+in its queue, and its responses wait in an unbounded ordered output queue instead of being refused.
+\code{MCsimInterface} queues every message it receives.
+
+\paragraph{Several controllers.} \key{mem\_ids(vi)} and \key{mem\_interleave\_shift(i)} on the
+banks are a second map, from a line to a memory controller, of the same form as the home map. The
+system builds one memory controller per id in the union of the banks' \key{mem\_ids}. Several
+controllers need \key{memory\_on\_network}. The same bits as the home map give each bank its own
+controllers. Different bits, as in \code{Grid2B2M}, let every bank use every controller.
+\key{main\_memory\_type(s),MCsim} builds one MCsim instance per controller. Each one sees the line
+address with the controller-select bits removed, so it decodes a dense address space. The number of
+controllers must then be a power of two.
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/noc-raw}\end{adjustbox}
+\caption{Read after write to memory: the bank keeps a written line until the controller
+acknowledges it, and a controller fills a read from a write it has not yet performed.}
+\label{fig:noc-raw}
+\end{figure}
+
+\paragraph{Read after write.} A read of a line observes every earlier write of that line. Reads
+and writes of different lines may reorder. The guarantee does not rest on network order, since a
+read and a write travel in different classes and may reach different controllers
+(\cref{fig:noc-raw}). A memory controller acknowledges a write when it accepts it, with a
+header-only \code{MEM\_WACK}. Until then the bank keeps the line and its data, counted in its
+\code{pwb\_size}, and fills a read of that line from its own copy without sending one. After the
+acknowledgement the controller's queue orders the line: \code{MainMemoryController} serves in
+arrival order, and \code{MCsimInterface} answers a read of a line whose write MCsim has not
+performed from that write. \env{OCTOPUS\_MEM\_HAZARD}$=1$ counts any read that overtakes an older
+write of its line, and \code{=fatal} stops at the first one.
+
+\paragraph{Accounting.} Memory packets are logged as \code{MEM\_BUS}, ENTER at injection and EXIT
+at ejection. The report's L2-DRAM bus stages then contain the network time between the memory port
+and the controller, and the event-path tiling still sums to the total
+(\cref{ch:request-end-to-end}).
+
+\section{The legacy single-switch NoC as a configuration}\label{sec:noc-legacy}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/noc-legacy}\end{adjustbox}
+\caption{\code{MultiCoreSystem\_NetNoC}: the legacy \code{NoC} of \cref{ch:interconnects} as a
+custom network. Single messages take exactly the legacy number of ticks.}
+\label{fig:noc-legacy}
+\end{figure}
+
+The legacy \code{NoC} is the degenerate case of the network: point-to-point links, each core
+linked to the LLC and to one switch, half duplex, a message held on a link for its whole latency.
+The legacy controller gives every connection two links, a request link and a data link. The network
+has one link per direction, shared by both classes, and under half duplex one per connection. \code{MultiCoreSystem\_NetNoC} sets the network up that way
+(\cref{fig:noc-legacy}). The legacy matrix becomes a \code{custom} graph with switch 200 as the
+only explicit router, \code{Table} routing, one flit per message, two classes, serial half-duplex
+links with the class latencies 2 and 5, \code{alternate} RX serving and the protocol check in
+\code{warn} mode.
+
+Every single-message path takes exactly its legacy number of ticks, and all ten EEMBC traces
+complete with average latencies within 0.2 cycles and finish cycles within $-0.5\,\%$ to
+$+0.1\,\%$ of the legacy \code{NoC}. The reports are not byte-identical, and worst cases differ:
+the request-bus worst case is on average 10.7 cycles higher. Three modelled differences cause
+it. An NI injects one flit per tick, where the legacy node sent on all its links in the same cycle.
+One input VC per class makes a message whose link is busy block the messages behind it, where the
+legacy node kept one queue per link. A data flit holds the shared link for 5 ticks, so a request
+on the same connection waits behind it, where the legacy request link was free. All three are
+modelled on purpose. The legacy
+\code{Mesh} and \code{NoC} classes remain selectable with \code{interconnect\_type Mesh} and
+\code{NoC}.
+
+\section{Network-only mode}\label{sec:noc-generators}
+
+\code{-s NetworkOnly} builds a network and one \code{TrafficGenerator} per endpoint, and no
+caches. A generator is an endpoint that injects synthetic packets and consumes what it receives at
+once, so it satisfies ADMIT-RF trivially. It is configured under \code{generator[<id>]} or
+\code{generator[*]}, with defaults in \file{configuration/TrafficGenerator.csv}
+(\cref{tab:noc-gen}). The run ends when every generator has used its budget and no packet is in
+flight. The generators are closed-loop: a refused packet is retried, not dropped, so above
+saturation the offered load limits itself. Saturation is therefore read from the accepted rate:
+the first offered rate whose accepted rate falls below 0.9 of it.
+
+\begin{table}[htbp]\centering\small
+\caption{Traffic generator keys.}\label{tab:noc-gen}
+\begin{tabularx}{\textwidth}{@{}llY@{}}
+\toprule key & default & meaning \\ \midrule
+\key{pattern} & uniform & \code{uniform}, \code{hotspot}, \code{transpose} (the endpoint at the router with swapped coordinates), \code{neighbour} (the next endpoint id), \code{none} \\
+\key{rate} & 50 & packets per 1000 ticks, from 0 to 1000 \\
+\key{payload\_bytes} & 64 & payload per packet, so the flit count follows \cref{sec:noc-packets}. 0 is a header-only packet \\
+\key{cls} & 2 & class to inject on: 0, 1 or 2 \\
+\key{hotspot\_id} & 0 & destination of the \code{hotspot} pattern \\
+\key{packets} & 1000 & packets to inject, $-1$ for no limit \\
+\key{cycles} & $-1$ & last injecting cycle, $-1$ for none \\
+\key{seed} & 1 & the generator's own random seed, combined with its id \\
+\key{start} & 0 & first injecting cycle \\
+\key{consume\_after} & 0 & cycles before the generator drains its RX, $-1$ for never (a stalled sink) \\
+\key{multicast} & 1 & destinations per message \\
+\key{untagged} & 0 & 1 leaves the message kind unknown (tests the classifier's fallback) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{What the network reports}\label{sec:noc-observe}
+
+\begin{figure}[htbp]\centering
+\begin{adjustbox}{max width=\textwidth}\input{figures/tikz/noc-observe}\end{adjustbox}
+\caption{What one packet leaves behind: a bus record from injection to ejection, one record per
+router it crosses, and the trackers added to its request's report row. Illustrated with the GetS
+of \cref{fig:noc-example} delayed four ticks at router 1 by an older write-back.}
+\label{fig:noc-observe}
+\end{figure}
+
+\paragraph{The report.} The NI stamps \code{REQ\_BUS} or \code{RESP\_BUS} EXIT at ejection, where
+the mesh stamps it. The \code{LatencyReport} bus columns therefore span a packet's whole traversal,
+and the event-path tiling of \cref{ch:request-end-to-end} holds. For a supply that goes to the
+requester and to the home, the requester's copy sets the stamp. With a \code{Network} the report
+gains five columns, accumulated over the request's coherence packets (\cref{fig:noc-observe}):
+\col{NoC Hops}, \col{NoC Wait}, \col{NoC Transfer}, \col{NoC Ahead} and \col{NoC Ahead Winner}.
+\col{NoC Transfer} is what the packets would take unloaded, \col{NoC Wait} the rest, and
+their sum is the packets' injection-to-ejection time. \code{Summary.csv} gains \col{Worst-case NoC
+Wait} and \col{Worst-case NoC Ahead}. With \key{memory\_on\_network} three more columns,
+\col{NoC Mem Hops}, \col{NoC Mem Wait} and \col{NoC Mem Ahead}, collect the request's memory read
+and fill. Reports of runs without a \code{Network} keep their columns.
+
+\paragraph{The raw trace.} With the trace on (\cref{ch:monitoring}) every router writes records
+under the Logger role \code{NOC} with \code{comp} = router id: ENTER when a head enters an input VC
+(flags: input port and VC), SERVICE when it wins VC allocation (output port and VC), EXIT when the
+tail leaves (output port and flit count). The bus records of a packet carry the destination id in
+their flags, which tells the copies of a multicast apart.
+
+\paragraph{The viewer.} On a network run the visualizer draws one lane per router and one array
+lane per LLC bank, outlines the selected request's router stays and joins them into its route, one
+chain per packet copy. A \emph{Network contention} grid under the lanes shows, per router and input
+port, the cycles packets stayed beyond the shortest stay of their kind there, which is time spent
+waiting for a VC, the switch or a credit.
+
+\paragraph{\code{NetworkStats.csv}.} At the end of a run, normal or not, the network writes
+\file{NetworkStats.csv} next to the reports, with the columns \code{section}, three keys and four
+values (\cref{tab:noc-stats}).
+
+\begin{table}[htbp]\centering\small
+\caption{Sections of \code{NetworkStats.csv}.}\label{tab:noc-stats}
+\begin{tabularx}{\textwidth}{@{}lY@{}}
+\toprule section & keys and values \\ \midrule
+\code{port} & router, port, port name: flits sent, ticks busy, switch-allocation attempts, losses \\
+\code{class} & class: packets, mean and maximum injection-to-ejection latency, maximum wait \\
+\code{classtime} & class: first injection tick, last ejection tick \\
+\code{endpoint} & endpoint: messages delivered to its RX, popped by it, pushes refused, packets received \\
+\code{received} & endpoint: packets, mean and maximum latency, owner of the first packet \\
+\code{ahead} & endpoint: the largest \col{NoC Ahead} among its packets and the owner that won most \\
+\code{epclass} & endpoint, class: packets received in that class \\
+\code{generator} & generator id: sent, received, retries, out-of-order deliveries \\
+\code{totals} & flits and packets injected and ejected and still in flight, flit-link traversals, ticks \\
+\code{config} & topology, routing, \code{flit\_bytes}, \code{vc\_depth}, \code{router\_latency}, \code{link\_latency} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Errors}\label{sec:noc-errors}
+
+Every network error prints \code{Network:} followed by what went wrong, with the router, port,
+packet and message id where they apply, runs the hang dump when it is enabled, and exits with
+status 2. At start-up the network refuses, with the key named: an invalid value of any key in
+\cref{tab:noc-keys}, an endpoint without a router, an asymmetric \code{custom} matrix, an unknown
+topology or routing name, a \code{routing\_table} entry naming a missing port, a torus with
+\code{XY} and one VC, an \key{escape\_vc} not below \key{vcs\_per\_class}, an ordering requirement
+the routing cannot meet, a cyclic channel dependency graph, the deferred real-time keys, and a
+protocol that fails the check. At run time these are fatal: a destination that is not an endpoint,
+an unclassifiable message, a routing result naming a missing port or an empty VC mask, a VC
+overflow, a credit counter above \key{vc\_depth}, and a delivery without an RX reservation. None of
+them can happen in a correct configuration. They exist so that an error in a new routing algorithm
+or protocol shows itself at once.
+
+\section{Configuration keys}\label{sec:noc-keys}
+
+\Cref{tab:noc-keys} lists the network keys with their defaults, under \code{interconnect.} in a
+system file. \Cref{tab:noc-syskeys} lists the system and controller keys the network features use.
+\Cref{app:config-keys} has every shipped file in full.
+
+\begin{longtable}{@{}p{0.29\textwidth}p{0.16\textwidth}p{0.49\textwidth}@{}}
+\caption{Network keys (\code{configuration/Interconnect/Network.csv}).}\label{tab:noc-keys}\\
+\toprule key & default & meaning \\ \midrule\endfirsthead
+\toprule key & default & meaning \\ \midrule\endhead
+\bottomrule\endlastfoot
+\multicolumn{3}{@{}l}{\textit{topology}}\\
+\key{topology(s)} & \code{custom} & \code{grid2d}, \code{torus2d}, \code{ring}, \code{star} or \code{custom} \\
+\key{component\_ids(vi)} & from \code{Mesh.csv} & the endpoint ids \\
+\key{dims(vi)} & 0 & $k_x,k_y$ for grids and tori, $k$ for a ring \\
+\key{node\_map[<id>](i)} & none & the router of an endpoint, on generated topologies \\
+\key{connection\_matrix[i](vi)} & from \code{Mesh.csv} & \code{custom}: node id, then its neighbours \\
+\key{router\_ids(vi)} & $-1$ & \code{custom}: the explicit routers. $-1$: every node that is not an endpoint \\
+\key{local\_ports(i)} & 0 & local ports per router. 0: one per endpoint \\
+\key{home\_ids(vi)} & $-1$ & the homes, for the classifier. $-1$: set by the system from the caches' home maps \\
+\multicolumn{3}{@{}l}{\textit{packets, buffers and timing}}\\
+\key{flit\_bytes(i)} & 16 & link width in bytes. 0: one flit per packet \\
+\key{header\_bytes(i)} & 8 & bytes charged for a packet header \\
+\key{num\_classes(i)} & 3 & 3: request, forward, response. 2: the legacy split by data \\
+\key{vcs\_per\_class(i)} & 1 & VCs per class per input port \\
+\key{vc\_depth(i)} & 4 & flits per VC \\
+\key{router\_latency(i)} & 2 & ticks from a head's arrival to its earliest VC allocation, at least 0 \\
+\key{link\_latency(i)} & 1 & ticks per link, at least 1. Local links cost 0 \\
+\key{class\_link\_latency(vi)} & $-1$ & one link latency per class. $-1$: \code{link\_latency} \\
+\key{credit\_latency(i)} & $-1$ & ticks for a credit to return. $-1$: \code{link\_latency} \\
+\key{link\_model(s)} & \code{pipelined} & \code{pipelined}: one flit per tick per link. \code{serial}: a flit holds the link for its latency \\
+\key{half\_duplex(i)} & 0 & 1: the two directions of a connection share one link \\
+\key{inject\_queue\_depth(i)} & 16 & packets per class at the NI. At least the number of caches \\
+\key{eject\_queue\_depth(i)} & 16 & messages per class in the endpoint's RX \\
+\key{rx\_serving(s)} & \code{priority} & \code{priority}: response, forward, request. \code{alternate}: the legacy rotation \\
+\key{m\_clk\_period(i)} & 50 & from \code{Mesh.csv}. One tick per two periods, one core cycle \\
+\multicolumn{3}{@{}l}{\textit{routing and allocation}}\\
+\key{routing(s)} & \code{auto} & \code{auto} (\code{XY} on grids and tori, else \code{Table}), \code{Table}, \code{XY}, \code{WestFirst}, \code{AdaptiveMinimal} \\
+\key{routing\_table[<router>](vi)} & none & \code{Table}: \code{dest,port} pairs overriding the computed table \\
+\key{escape\_vc(i)} & $-1$ & \code{AdaptiveMinimal}: the escape VC. $-1$: none \\
+\key{arbiter\_type(s)} & \code{FCFSArbiter} & injection, VC and switch allocation: \code{FCFSArbiter} or \code{RRArbiter} \\
+\key{deadlock\_check(s)} & \code{refuse} & the protocol-and-network check: \code{refuse} or \code{warn} \\
+\end{longtable}
+
+\begin{table}[htbp]\centering\small
+\caption{System and controller keys of the network features.}\label{tab:noc-syskeys}
+\begin{tabularx}{\textwidth}{@{}llY@{}}
+\toprule key & where & meaning \\ \midrule
+\key{interconnect\_type(s)} & system & \code{Network} selects this chapter's network in \code{MultiCoreSystem\_Mesh} \\
+\key{requires\_ordering(s)} & system & \code{pair\_per\_class} or \code{none}: what the protocol needs from the routing \\
+\key{llc\_banks(i)} & system & number of LLC banks, configured as \code{llc\_controller[k]} when above 1 \\
+\key{memory\_on\_network(i)} & system & 1: memory controllers and the banks' memory ports are endpoints \\
+\key{main\_memory\_type(s)} & system & \code{MainMemoryController} (default) or \code{MCsim}, one per memory controller \\
+\key{mcsim\_scheduler(s)} & system & the MCsim scheduler, default \code{FRFCFS} \\
+\key{home\_ids(vi)} & cache & the LLC banks. Absent or $-1$: \code{m\_shared\_memory\_id} \\
+\key{home\_interleave\_shift(i)} & cache & line bits skipped by the home map, default 0 \\
+\key{mem\_port\_id(i)} & LLC bank & the bank's memory-side endpoint \\
+\key{mem\_ids(vi)} & LLC bank & the memory controllers. Absent or $-1$: \code{m\_shared\_memory\_id} \\
+\key{mem\_interleave\_shift(i)} & LLC bank & line bits skipped by the memory map, default 0 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Validation}\label{sec:noc-validation}
+
+One runner builds the simulator and runs the network tests:
+
+\begin{lstlisting}[style=shell]
+bash test/network/run.sh all     # every test
+bash test/network/run.sh 4       # one step: 0..8, M2..M6, D
+bash test/network/run.sh reg     # the regression suite only
+\end{lstlisting}
+
+Each test prints \code{PASS}, \code{FAIL} or \code{XFAIL} with its id and writes a row to
+\file{test/network/out/results.csv}. A single step runs the regression suite first. The timing
+tests take their expected values from the formulas of this chapter, not from earlier runs, so a
+wrong engine cannot confirm itself. REG-MESH, REG-TDM, REG-MEMNET, MEM-OFF and S6 compare against
+committed references instead. The trace checks need a Python with numpy and duckdb. S4-ASAN,
+S5-ASAN, S5-XPLAT and S8-BOOKSIM run only where \code{wsl.exe} and the sanitizer build
+\file{build\_asan} or BookSim exist, and report XFAIL elsewhere. \Cref{tab:noc-tests} summarises what the suite establishes.
+
+\begin{longtable}{@{}p{0.24\textwidth}p{0.71\textwidth}@{}}
+\caption{What the test suite (\code{test/network/}) checks.}\label{tab:noc-tests}\\
+\toprule tests & what they establish \\ \midrule\endfirsthead
+\toprule tests & what they establish \\ \midrule\endhead
+\bottomrule\endlastfoot
+S1, S2, S3 (unit) & classifier, flit counts, every topology generator and port numbering, every routing algorithm, the channel dependency check (a ring under \code{Table} is refused), the ordering refusal, and both arbiters, whose network and bus entry points agree on 1000 random elections \\
+S4 unloaded & corner to corner on 2$\times$2 and 4$\times$4 grids, a torus and a star, for 1 and 5 flits: 8 and 12, 20 and 24, 8 and 12, 2 and 6 ticks, each equal to the formula \\
+S4 flow control & per-VC throughput 0.5, 1 and 1 flit per tick for \code{vc\_depth} 1, 2, 4, and 0.5 with \code{credit\_latency} 3. Wormhole blocking delays an unrelated packet with shallow VCs and not with deep ones. Half duplex halves a connection's throughput (404 against 204 ticks) \\
+S4 conservation & every run ends with flits injected equal to flits ejected, no credit above its initial value, and three reruns byte-identical \\
+S4 saturation & 4$\times$4, \code{XY}, 5-flit packets, uniform traffic saturates at an offered 110 packets per 1000 ticks per endpoint. Hotspot (20) and transpose (80) saturate earlier \\
+S4 ordering, faults & no reordering under \code{XY} and \code{Table}. Adaptive routing reorders (an expected failure that reports the count). Each fatal path exits with status 2 \\
+S5 system & directory MSI on \code{Grid}: all ten EEMBC traces complete, event-path tiling with no failure, byte-identical reruns, the placement figures of \cref{sec:noc-example}, and the hang dump on a deliberately wedged ring. Where WSL and the sanitizer build exist: identical Windows and Linux runs and a clean AddressSanitizer run \\
+S6 legacy & \code{MultiCoreSystem\_NetNoC} against the legacy \code{NoC} references: S6-IDENTITY (byte identity), S6-FALLBACK (the per-core \code{Summary.csv} deltas) and S6-NOC-ALIAS, all three XFAIL by the accepted-divergence file \file{test/network/ref/s6-accepted.txt}. The suite asserts no per-path figures. Those of \cref{fig:noc-legacy} come from \file{docs/NoC\_Implementation\_Report.md} \\
+S7 observability & router hops in the trace equal \col{NoC Hops}, \col{NoC Wait} plus \col{NoC Transfer} equals the network time of every request, and the contention example reports a wait of 4 and the right winner \\
+S8 BookSim & 4$\times$4 mesh, dimension-order routing, one VC, 4-flit buffers, 5-flit uniform traffic, with BookSim's buffer residency mapped onto \code{router\_latency} 3 and \code{credit\_latency} 4. The test passes when the saturation throughputs agree within 10\,\%. The recorded measurement is 3.5\,\% (0.288 and 0.279 flits per cycle per node) \\
+P2 protocol & three classes with an RX depth of 2 under both arbiters, \code{inject\_queue\_depth} 4 without a refused push (2 wedges and exits with status 2 as documented), ADMIT-RF on three controllers, the protocol check passing on three classes and refusing two, and every request reaching the bank the home map names \\
+MEM & memory on the network: existing presets unchanged when it is off, EEMBC complete with one and two controllers and with MCsim, no read-after-write overtake, every memory packet in its class, memory hops equal to the formula, and every read and write reaching the controller the map names \\
+D & directory MESI and MOESI on every grid preset, under both arbiters and with small queues: every run completes without a fault \\
+REG & REG-BUS, REG-MESH, REG-TDM and REG-MEMNET: the bus, legacy mesh, TDM and memory-on-network references stay byte-identical. REG-ENV: the environment check's sample run gives its known request count and worst DRAM latency. REG-HAZARD: no memory read overtakes an older write of its line \\
+\end{longtable}
+
+The saturation point of the shipped defaults is higher than BookSim's (0.48 against 0.28 flits per
+cycle per node with the same buffers), because an Octopus slot is freed the tick its flit is
+forwarded. That is the faster router the defaults describe. To compare with a router that holds a
+slot through switch allocation and traversal, raise \key{router\_latency} and
+\key{credit\_latency} as above.
+
+\section{Limitations}\label{sec:noc-limits}
+
+\begin{itemize}
+\item Only the directory protocols run on the network. Snooping needs an ordered broadcast, which
+  the network does not provide.
+\item No real-time arbitration: \code{TDMArbiter}, \code{PriorityArbiter}, \code{TDM\_XY},
+  \code{slot\_table} and \code{vc\_priority} are refused as deferred.
+\item On a ring of four or more routers the computed \code{Table} is refused at any VC count,
+  because \code{Table} has no dateline and no other algorithm supports rings. Only a hand-written
+  \key{routing\_table} that breaks the cycle runs.
+\item \code{AdaptiveMinimal} is for \code{grid2d}. On \code{torus2d} it is accepted, but its escape
+  VC follows \code{XY} without the dateline, so the escape network is not deadlock-free there. A fix
+  is planned.
+\item Injection follows age only among eligible packets. Under \code{FCFSArbiter} a younger packet
+  of another class leaves first when the older one finds no free VC with a credit. Under
+  \code{RRArbiter} the local port rotates over packet owners, so an endpoint's packets of different
+  classes may leave out of order. The directory FSMs tolerate the cross-class reordering the fabric
+  causes anyway.
+\item Under \code{RRArbiter} a candidate whose owner is not an endpoint id never wins an election
+  unless it is alone. No shipped preset produces such an owner.
+\item A local port carries one flit per tick in each direction, and \key{header\_bytes} is the same
+  for every class.
+\item Multicast is one packet per destination. There is no multicast tree.
+\item The NI cannot take back a message once pushed (\code{rollback} finds nothing).
+\item The legacy mesh keys \key{buffers\_max\_size}, \key{m\_request\_latency},
+  \key{m\_data\_latency} and \key{switch\_ids} are not read by the network. Use the queue depths, \key{class\_link\_latency}
+  and \key{router\_ids}.
+\item A read filled from a pending write costs no cycles, at the bank and at the controller.
+\item There is no power or area model.
+\end{itemize}
+
+\begin{wherebox}
+\begin{itemize}[nosep,leftmargin=1.2em]
+\item \file{header/Interconnect/Network/}, \file{src/Interconnect/Network/}: \code{Network} (the engine, statistics, hang dump), \code{NetworkInterface}, \code{Topology}, \code{Routing} (the algorithms, the channel dependency check), \code{Classifier}, \code{ProtocolCheck}, \code{TrafficGenerator}
+\item \file{header/Arbiters/Arbiter.h}: \code{Candidate} and \code{electIndex}
+\item \file{src/SystemConfigurations/MultiCoreSystem_Mesh.cpp}: wiring, LLC banks, memory on the network. \file{src/SystemConfigurations/NetworkOnly.cpp}: network-only mode
+\item \file{src/CacheControllers/CacheController.cpp}: transmit-side admission (\code{txNeed}, \code{txAdmit})
+\item \file{configuration/Interconnect/Network.csv}, \file{configuration/TrafficGenerator.csv}, the presets in \file{configuration/SystemConfigurations/}
+\item \file{test/network/}: the runner, the unit tests, the checks and the BookSim configuration
+\item \file{docs/NoC_Architecture_Spec.md}, \file{docs/NoC_Implementation_Report.md}: the specification and the measured record of each step
+\end{itemize}
+\end{wherebox}
+\endgroup

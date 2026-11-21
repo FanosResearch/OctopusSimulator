@@ -132,8 +132,8 @@ tables of a family are a matched pair.}\label{tab:families}
 snoop MSI & \file{MSI_splitBus_snooping} & \file{MSI_LLC} & \file{MultiCoreSystem_Snoop.csv} \\
 snoop MESI & \file{MESI_splitBus_snooping} & \file{MESI_LLC} & \file{MultiCoreSystem.csv} (the default) \\
 snoop MOESI & \file{MOESI_splitBus_snooping} & \file{MOESI_LLC} & no preset \\
-directory MSI & \file{MSI_directory} & \file{MSI_LLC_directory} & \file{MultiCoreSystem_Directory.csv} \\
-directory MESI, MOESI & \file{MESI_directory}, \file{MOESI_directory} & \file{MESI_LLC_directory}, \file{MOESI_LLC_directory} & no preset \\
+directory MSI & \file{MSI_directory_v3} & \file{MSI_LLC_directory} & \file{MultiCoreSystem_Directory.csv} \\
+directory MESI, MOESI & \file{MESI_directory_v2}, \file{MOESI_directory_v2} & \file{MESI_LLC_directory_v2}, \file{MOESI_LLC_directory_v2} & no preset \\
 predictable & \file{PMSI}, \file{PMESI}, \file{PMSI_asterisk}, \file{PMESI_asterisk}, \file{Pendulum} & their \file{_LLC} tables & research configurations \\
 \bottomrule
 \end{tabularx}
@@ -169,7 +169,7 @@ M & 1 & 1 & Hit/ & Hit/ & \ldots & Fault/ & Data2Req/I \\
 Selecting it is one override on top of the MSI preset:
 
 \begin{lstlisting}[style=shell]
-./build/Octopus_Simulator -s MultiCoreSystem \
+./build/Octopus_Simulator -s MultiCoreSystem -c MultiCoreSystem_Snoop \
   -p "workload_path(s)=BMs/eembc-traces/mi_pingpong/" \
   -p "cache_controller[*].fsm_filename(s)=MI_splitBus_snooping"
 \end{lstlisting}

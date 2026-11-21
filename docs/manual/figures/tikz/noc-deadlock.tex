@@ -1,0 +1,48 @@
+% The two start-up deadlock checks: the channel dependency graph of a routing
+% algorithm (Routing.cpp) and the protocol-and-network check of the FSM tables (ProtocolCheck.cpp).
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, x=1mm, y=1mm,
+  sr/.style={draw=octpurple, fill=octio, thick, minimum size=6mm, inner sep=0, font=\sffamily\scriptsize\bfseries},
+  ch/.style={draw=octink, fill=white, rounded corners=1.5pt, minimum width=11mm, minimum height=5mm, inner sep=0.5pt, font=\sffamily\tiny},
+  dep/.style={->, very thick, octred},
+  lk/.style={->, semithick, octquiet},
+  pth/.style={->, thick, octink, densely dashed},
+  lbl/.style={text=octquiet},
+  ttl/.style={font=\sffamily\small\bfseries, text=octink, anchor=west},
+  box/.style={draw=octrule, rounded corners=2pt, fill=octpaper, inner sep=3pt, align=left},
+  hd/.style={font=\sffamily\scriptsize\bfseries, anchor=west},
+  ok/.style={text=octteal, font=\sffamily\scriptsize\bfseries},
+  bad/.style={text=octred, font=\sffamily\scriptsize\bfseries}]
+  % ================= routing level =================
+  \node[ttl] at (0,14) {1. Routing level: the channel dependency graph};
+  \node[sr] (r0) at (8,0) {0}; \node[sr] (r1) at (32,0) {1};
+  \node[sr] (r2) at (32,-24) {2}; \node[sr] (r3) at (8,-24) {3};
+  \draw[lk] (r0) -- (r1); \draw[lk] (r1) -- (r2); \draw[lk] (r2) -- (r3); \draw[lk] (r3) -- (r0);
+  \node[lbl] at (20,7.5) {4-router ring, \code{Table}};
+  \draw[pth] ($(r0.south east)+(1,-1)$) -- ($(r1.south west)+(-1,-1)$) -- ($(r2.north west)+(-1,1)$);
+  \node[lbl, align=center] at (17.5,-12) {two-hop paths:\\0 to 2 via 1,\\1 to 3 via 2, ...};
+  % channels
+  \node[ch] (c01) at (60,0) {0$\to$1, vc 0};
+  \node[ch] (c12) at (80,-12) {1$\to$2, vc 0};
+  \node[ch] (c23) at (60,-24) {2$\to$3, vc 0};
+  \node[ch] (c30) at (40,-12) {3$\to$0, vc 0};
+  \draw[dep] (c01) to[bend left=15] (c12); \draw[dep] (c12) to[bend left=15] (c23);
+  \draw[dep] (c23) to[bend left=15] (c30); \draw[dep] (c30) to[bend left=15] (c01);
+  \node[lbl, align=center] at (60,-12) {nodes: (link, VC)\\edges: a path uses\\one, then the next};
+  \node[box, anchor=north west, text width=88mm] at (0,-32) {Built when the network is constructed, from every source and destination router, with each hop's \code{vc\_mask}. A cycle means a set of packets can each hold one channel and wait for the next. For \code{Table} a cycle is fatal and the message names it. \code{XY}, \code{WestFirst} and \code{AdaptiveMinimal} (through its \code{XY} escape VC) are deadlock-free by construction on \code{grid2d}. The computed \code{Table} on a ring of four or more routers has this cycle at any VC count, so it is refused. A hand-written \code{routing\_table} that breaks the cycle passes.};
+  % ================= protocol level =================
+  \node[ttl] at (96,14) {2. Protocol and network};
+  \node[box, anchor=north west, text width=64mm] at (96,9) {For every FSM cell with actions, of every controller on the network: the class the event consumes (\code{consumedBy}) and the classes its actions emit (\code{emittedBy}), each classified exactly as the network classifies messages.\\[0.6ex]
+    \textbf{Rule}: emitted class $>$ consumed class, or both RESPONSE.\\
+    Cells fed by the CPU, the memory bus or the controller itself are not constrained.};
+  \node[hd] at (96,-27) {cell};
+  \node[hd] at (121,-27) {consumes};
+  \node[hd] at (139,-27) {emits};
+  \draw[octrule] (96,-29.5) -- (162,-29.5);
+  \node[anchor=west] at (96,-33) {LLC (S, GetM)};          \node[anchor=west] at (121,-33) {REQUEST}; \node[anchor=west] at (139,-33) {Inv, data}; \node[ok] at (160,-33) {ok};
+  \node[anchor=west] at (96,-38) {L1 (S, Inv)};            \node[anchor=west] at (121,-38) {FORWARD}; \node[anchor=west] at (139,-38) {InvAck};    \node[ok] at (160,-38) {ok};
+  \node[anchor=west] at (96,-43) {LLC, last InvAck};       \node[anchor=west] at (121,-43) {RESPONSE}; \node[anchor=west] at (139,-43) {data};     \node[ok] at (160,-43) {ok};
+  \node[anchor=west] at (96,-48) {MC (read)};               \node[anchor=west] at (121,-48) {FORWARD}; \node[anchor=west] at (139,-48) {\code{FILL}};  \node[ok] at (160,-48) {ok};
+  \draw[octrule] (96,-50.5) -- (162,-50.5);
+  \node[anchor=west, text=octquiet] at (96,-54) {two classes: L1 (S, Inv)};  \node[anchor=west] at (139,-54) {class 0 $\to$ 0}; \node[bad] at (160,-54) {no};
+  \node[box, anchor=north west, text width=64mm] at (96,-59) {Shipped directory MSI with three classes: 273 cells, 60 emissions, edges REQUEST$\to$FORWARD, REQUEST$\to$RESPONSE, FORWARD$\to$RESPONSE and RESPONSE$\to$RESPONSE. The order holds. With two classes 36 cells violate it and the run stops with status 2, unless \code{deadlock\_check(s),warn}.};
+\end{tikzpicture}

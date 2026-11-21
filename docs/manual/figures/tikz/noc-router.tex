@@ -1,0 +1,82 @@
+% Router microarchitecture and the per-tick phase order of Network::step (Network.cpp).
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, x=1mm, y=1mm,
+  port/.style={draw=octrule, rounded corners=2pt, fill=octpaper, inner sep=0},
+  q/.style={draw=octink, fill=white, minimum height=3.2mm, minimum width=3.2mm, inner sep=0},
+  qh/.style={q, fill=octquiet!45},
+  ctl/.style={draw=octpurple, fill=octio, thick, rounded corners=2pt, minimum height=11mm, text width=25mm, align=center, inner sep=2pt},
+  cnt/.style={draw=octink, fill=octmem, minimum height=3.2mm, minimum width=5.5mm, inner sep=0, font=\sffamily\tiny},
+  arr/.style={->, thick, octink},
+  cred/.style={->, thick, octteal, densely dashed},
+  ctlarr/.style={->, octpurple, semithick},
+  lbl/.style={text=octquiet},
+  ph/.style={draw=octink, fill=octpaper, rounded corners=2pt, align=left, inner sep=2.5pt, anchor=north west},
+  ttl/.style={font=\sffamily\small\bfseries, text=octink, anchor=west}]
+  % ---------------- control plane ----------------
+  \node[ctl] (rc) at (30,30) {\textbf{RC} route computation\\\code{nextHop} gives \code{out\_port} and \code{vc\_mask}};
+  \node[ctl] (va) at (75,30) {\textbf{VA} VC allocation\\one arbiter per output VC};
+  \node[ctl] (sa) at (120,30) {\textbf{SA} switch allocation\\one arbiter per output port};
+  \draw[ctlarr] (rc) -- node[above, lbl, align=center] {once per\\packet} (va);
+  \draw[ctlarr] (va) -- node[above, lbl, align=center] {then once\\per flit} (sa);
+  % ---------------- input ports ----------------
+  \node[ttl] at (0,12) {input ports};
+  \foreach \nm/\yy/\src in {link port 0/8/from upstream, local port 2/-22/from the NI} {
+    \node[port, minimum width=42mm, minimum height=21mm, anchor=north west] at (0,\yy) {};
+    \node[lbl, anchor=north west] at (1,\yy-0.5) {\textbf{\nm} (\src)};
+    \foreach \c/\cn/\dy in {0/REQ/6, 1/FWD/11, 2/RSP/16} {
+      \node[lbl, anchor=west, font=\sffamily\tiny] at (1,\yy-\dy) {\cn};
+      \foreach \k in {0,1,2} \node[q] at (12+\k*3.4,\yy-\dy) {};
+      \node[qh] at (22.2,\yy-\dy) {};
+      \draw[arr] (23.8,\yy-\dy) -- (60,\yy-\dy);
+    }
+  }
+  \node[lbl, align=left, anchor=north west] at (0,-45) {one FIFO per \code{[class][vc]}, \code{vc\_depth} flits each\\(shown: 3 classes, 1 VC). Grey: the flit at the front.};
+  % ---------------- crossbar ----------------
+  \draw[octink, thick, fill=octmem] (60,8) rectangle (90,-43);
+  \node[font=\sffamily\scriptsize\bfseries] at (75,10.5) {crossbar};
+  \foreach \yy in {2,-3,-8,-28,-33,-38} \draw[octquiet] (60,\yy) -- (90,\yy);
+  \foreach \xx in {65,70,75,80,85} \draw[octquiet] (\xx,8) -- (\xx,-43);
+  \node[lbl, align=center, fill=octmem, inner sep=1pt] at (75,-18) {one flit per input port\\and per output port\\per tick};
+  % ---------------- output ports ----------------
+  \node[ttl] at (122,11.5) {output ports};
+  \node[port, minimum width=38mm, minimum height=21mm, anchor=north west] at (98,8) {};
+  \node[lbl, anchor=north west] at (99,7.5) {\textbf{link port 0} (downstream)};
+  \foreach \c/\cn/\dy in {0/REQ/6, 1/FWD/11, 2/RSP/16} {
+    \node[lbl, anchor=west, font=\sffamily\tiny] at (99,8-\dy) {\cn};
+    \node[cnt] at (113,8-\dy) {4};
+    \node[lbl, anchor=west, font=\sffamily\tiny] at (117,8-\dy) {credits, holder};
+    \draw[arr] (90,8-\dy) -- (98,8-\dy);
+  }
+  \node[port, minimum width=38mm, minimum height=21mm, anchor=north west] at (98,-22) {};
+  \node[lbl, anchor=north west] at (99,-22.5) {\textbf{local port 2} (to the NI)};
+  \foreach \c/\cn/\dy in {0/REQ/6, 1/FWD/11, 2/RSP/16} {
+    \node[lbl, anchor=west, font=\sffamily\tiny] at (99,-22-\dy) {\cn};
+    \node[cnt, fill=octctl] at (112,-22-\dy) {RX};
+    \node[lbl, anchor=west, font=\sffamily\tiny] at (115.2,-22-\dy) {RX slot per packet};
+    \draw[arr] (90,-22-\dy) -- (98,-22-\dy);
+  }
+  % links out
+  \draw[arr] (136,1) -- (144,1) node[right, lbl, align=left] {link,\\\code{link\_latency}};
+  \draw[arr] (136,-33) -- (144,-33) node[right, lbl, align=left] {RX queue\\of the class};
+  % credits
+  \draw[cred] (144,-9) -- (136,-9);
+  \node[lbl, anchor=north west, text=octteal, align=left] at (137,-10) {credit back after\\\code{credit\_latency}};
+  \draw[cred] (0,-3) -- (-8,-3);
+  \node[lbl, text=octteal, align=right, anchor=east] at (-8.5,-3) {credit\\upstream\\when a flit\\leaves};
+  \draw[cred] (0,-33) -- (-8,-33);
+  \node[lbl, text=octteal, align=right, anchor=east] at (-8.5,-33) {credit\\to the NI};
+  % control to data
+  \fill[octpurple] (42,2) circle (0.5);
+  \draw[ctlarr, densely dotted] (42,2) -- (42,14) -| (rc.south);
+  \draw[ctlarr, densely dotted] (va.south) |- (101,17) -- (101,8);
+  \draw[ctlarr, densely dotted] (sa.south) |- (84,13) -- (84,8);
+  % ---------------- phases ----------------
+  % every phase box has the same fixed height, text from the top
+  \def\phbox#1{\parbox[c][22mm][t]{28mm}{\raggedright #1}}
+  \node[ttl] at (-24,-56) {Each tick, over every router in ascending id and every port and VC in ascending index:};
+  \node[ph] (p1) at (-24,-60) {\phbox{\textbf{1 Injection}\\each local port takes one flit from its NIs, with the credits seen at the start of the tick}};
+  \node[ph] (p2) at (11,-60) {\phbox{\textbf{2 Arrivals}\\flits whose link time is due enter their VC. Due credits are added to the counters}};
+  \node[ph] (p3) at (46,-60) {\phbox{\textbf{3 Route}\\every head at a FIFO front without a route gets \code{nextHop}}};
+  \node[ph] (p4) at (81,-60) {\phbox{\textbf{4 VC allocation}\\heads that waited \code{router\_latency} compete. A local port also reserves the RX slot}};
+  \node[ph] (p5) at (116,-60) {\phbox{\textbf{5 Switch and link}\\one flit per output port, given a credit and a free link. A tail sent on a local port is ejected}};
+  \foreach \a/\b in {p1/p2, p2/p3, p3/p4, p4/p5} \draw[arr] (\a.east) -- (\b.west);
+\end{tikzpicture}

@@ -1,0 +1,55 @@
+% The three message classes (virtual networks) of the directory protocols, the memory messages,
+% and the consumption order that makes them deadlock-free.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, x=1mm, y=1mm,
+  act/.style={draw=octrule, fill=octmem, rounded corners=2pt, minimum width=24mm, minimum height=10mm, align=center, font=\sffamily\scriptsize\bfseries},
+  home/.style={act, fill=octctl, draw=octamber},
+  mcn/.style={act, fill=white, draw=octteal, thick},
+  rq/.style={->, thick, octink},
+  fw/.style={->, thick, octpurple, dashed},
+  rs/.style={->, very thick, octteal, double=white, double distance=0.5pt},
+  m/.style={font=\sffamily\scriptsize, inner sep=1pt},
+  lbl/.style={text=octquiet},
+  ttl/.style={font=\sffamily\small\bfseries, text=octink, anchor=west},
+  cbox/.style={draw=octink, minimum width=24mm, minimum height=8mm, align=center, font=\sffamily\scriptsize\bfseries},
+  box/.style={draw=octrule, rounded corners=2pt, fill=octpaper, inner sep=3pt, align=left}]
+  % ---------------- actors ----------------
+  \node[ttl] at (0,13) {Who sends what, in which class};
+  \node[act] (req) at (14,0) {L1 requester};
+  \node[home] (home) at (90,0) {home\\(LLC bank)};
+  \node[act] (own) at (14,-44) {L1 owner\\or sharer};
+  \node[mcn] (mc) at (90,-44) {memory\\controller};
+  % L1 requester <-> home
+  \draw[rq] ($(req.east)+(0,3)$) -- node[m, above] {GetS, GetM, PutS, PutM, PutE, PutO} ($(home.west)+(0,3)$);
+  \draw[fw] ($(home.west)+(0,0)$) -- node[m, pos=0.5, fill=white] {PutAck (no data)} ($(req.east)+(0,0)$);
+  \draw[rs] ($(home.west)+(0,-3.5)$) -- node[m, below=0.8mm] {data from the home} ($(req.east)+(0,-3.5)$);
+  % home <-> owner/sharer (diagonals, drawn left to right so the sloped labels sit outside the pair)
+  \draw[fw] ($(home.south west)+(0,0)$) -- coordinate[pos=0.5] (fwm) ($(own.north east)+(-3,0)$);
+  \draw[rs] ($(own.east)+(0,0)$) -- coordinate[pos=0.5] (rsm) ($(home.south)+(-6,0)$);
+  \node[m, text=octpurple, rotate=32, anchor=south] at ($(fwm)+(-1.2,1.6)$) {FwdGetS, FwdGetM, Inv};
+  \node[m, text=octteal, rotate=34, anchor=north] at ($(rsm)+(1.4,-2.0)$) {data to the home};
+  % owner/sharer -> requester
+  \draw[rs] (own.north) -- node[m, left=1.2mm, align=right, text=octteal] {data from\\the owner,\\InvAck from\\a sharer} (req.south);
+  % home <-> memory controller
+  \draw[fw] ($(home.south)+(0,0)$) -- node[m, left, pos=0.55] {\code{MEM\_READ}} ($(mc.north)+(0,0)$);
+  \draw[rs] ($(mc.north)+(6,0)$) -- node[m, right, align=left, pos=0.45] {\code{FILL},\\\code{MEM\_WACK}} ($(home.south)+(6,0)$);
+  \draw[rs] ($(home.east)+(0,0)$) -- ++(12,0) |- ($(mc.east)+(0,0)$);
+  \node[m, text=octteal, anchor=west] at (116,-22) {\code{MEM\_WRITE}};
+  % legend
+  \node[ttl] at (138,13) {Classes};
+  \draw[rq] (138,4) -- (148,4); \node[anchor=west] at (149,4) {\textbf{REQUEST}, class 0};
+  \draw[fw] (138,-2) -- (148,-2); \node[anchor=west] at (149,-2) {\textbf{FORWARD}, class 1};
+  \draw[rs] (138,-8) -- (148,-8); \node[anchor=west] at (149,-8) {\textbf{RESPONSE}, class 2};
+  \node[lbl, anchor=north west, text width=36mm, align=left] at (137,-13) {A home's acknowledgement without data travels with its forwards, so it cannot overtake an earlier Inv or Fwd to the same cache.\\[0.6ex] Memory messages are on the network only with \code{memory\_on\_network(i),1}.};
+  % ---------------- consumption order ----------------
+  \node[ttl] at (0,-58) {Why three classes cannot deadlock};
+  \node[cbox, fill=white] (c0) at (14,-76) {REQUEST};
+  \node[cbox, fill=octquiet!20] (c1) at (54,-76) {FORWARD};
+  \node[cbox, fill=octquiet!45] (c2) at (94,-76) {RESPONSE};
+  \draw[->, very thick] (c0) -- (c1);
+  \draw[->, very thick] (c1) -- (c2);
+  \node[lbl, align=center, anchor=north] at (34,-81) {forwards,\\memory reads};
+  \node[lbl, align=center, anchor=north] at (74,-81) {data, acks,\\fills};
+  \draw[->, very thick] (c0.north) to[out=20, in=160] node[above, lbl] {data} (c2.north);
+  \draw[->, very thick] (c2.east) to[out=20, in=-20, looseness=6] node[right, lbl, align=left] {data,\\acks} (c2.south east);
+  \node[box, anchor=north west, text width=46mm] at (126,-58) {A cell that consumes a class emits only higher classes. RESPONSE, the top class, may also emit itself: every endpoint consumes responses unconditionally (\mbox{ADMIT-RF}). Each class has its own buffers at every hop and its own RX queue, so a full REQUEST network never holds up the packets that drain it. With two classes a forward waits behind requests, and the check refuses the protocol.};
+\end{tikzpicture}

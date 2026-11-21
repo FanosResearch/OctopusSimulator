@@ -75,7 +75,7 @@ Verification & auditable CSV FSMs; undefined transitions halt the run; determini
 \begin{tabularx}{\textwidth}{@{}lY@{}}
 \toprule axis & ships with \\ \midrule
 coherence & snoop and directory MSI, MESI, MOESI as CSV FSMs with stable and transient states (\cref{ch:coherence-engine}); the predictable protocols listed below in research configurations \\
-interconnect & point-to-point, unified, split and triple bus, mesh, single-switch NoC (\cref{ch:interconnects}) \\
+interconnect & point-to-point, unified, split and triple bus, mesh, single-switch NoC (\cref{ch:interconnects}), flit-level multi-hop network on grids, tori and custom graphs (\cref{ch:noc}) \\
 arbitration & FCFS, round-robin, TDM on every shared lane and on the LLC port \\
 cache hierarchy & any depth, private or shared, non-blocking with MSHRs and write-back buffers, allocate-on-fill; LRU, FIFO, random replacement; way partitioning \\
 main memory & a fixed-latency model, or cycle-accurate DDR4 through MCsim with twenty schedulers (\cref{ch:main-memory}) \\

@@ -1,6 +1,6 @@
 # The Octopus reference manual
 
-`octopus-manual.pdf` is the book-form reference for the simulator: sixteen chapters and four
+`octopus-manual.pdf` is the book-form reference for the simulator: seventeen chapters and four
 appendices, every figure in `docs/imgs/` plus the ones drawn here, the configuration keys and
 the shipped FSM tables generated from the tree at build time. The PDF is committed so that
 nobody needs TeX to read it; rebuild it when the sources or the figures change.
@@ -26,7 +26,7 @@ not touch the SVGs.
 | path | what |
 |---|---|
 | `octopus-manual.tex`, `preamble.tex` | the driver and the style (fonts, palette, boxes, macros) |
-| `chapters/NN-*.tex`, `chapters/A-D-*.tex` | one file per chapter and appendix |
+| `chapters/NN-*.tex`, `chapters/A-D-*.tex` | one file per chapter and appendix (`08b-network-on-chip.tex` is chapter 9) |
 | `figures/svg/` | copies of the SVG figure series (the originals stay in `docs/imgs/`) |
 | `figures/pdf/` | their renders, committed |
 | `figures/paper/` | vector figures reused from the Octopus papers |
@@ -50,15 +50,16 @@ A change to one of these documents is a change to that chapter.
 | 5 The LLC datapath | `docs/Architecture.md` §4 (the LLC figure series) |
 | 6 The coherence engine | `docs/Architecture.md` §5, `docs/AddingAProtocol.md`, `Protocols_FSM/` |
 | 7 A request, end to end | `docs/Architecture.md` §6, `docs/Logger.md` §3–5 |
-| 8 Interconnects and arbitration | `docs/Architecture.md` §7, `docs/NoC_MultiHop_Plan.md`, `configuration/Interconnect/` |
-| 9 Main memory | `src/MCsim/README.md`, `header/MCsimInterface.h` |
-| 10 Configuration | `docs/Architecture.md` §8, `tutorial/02-configuration/`, `sweeps/README.md` |
-| 11 Monitoring | `docs/Logger.md`, `docs/Debugger.md`, `docs/Trace.md`, `docs/Visualizer.md` |
-| 12 Tasks and the demo | `docs/Tasks.md`, `demo/README.md` |
-| 13 Extending Octopus | `docs/Architecture.md` §10, `tutorial/03-extending-octopus/` |
-| 14 Integration modes | `docs/Architecture.md` §9, `README.md` (gem5), `gem5/`, `configuration/SystemConfigurations/MultiCoreSystem_gem5.csv`, `tutorial/04-gem5-and-fullsystem-stack/` |
-| 15 Hands-on tutorial | `tutorial/**/README.md`, `docs/TutorialExercises.md` |
-| 16 Evaluation | `REPRODUCIBILITY.md`, `results/README.md` (placeholder until the sweeps are re-run) |
+| 8 Interconnects and arbitration | `docs/Architecture.md` §7, `configuration/Interconnect/` |
+| 9 The Network-on-Chip | `docs/NoC_Architecture_Spec.md`, `docs/NoC_Implementation_Report.md`, `docs/NoC_Memory_Plan.md`, `docs/NoC_Test_Plan.md`, `configuration/Interconnect/Network.csv`, `configuration/TrafficGenerator.csv`, the `*Grid*`, `NetNoC` and `NetworkOnly` presets, `test/network/` |
+| 10 Main memory | `src/MCsim/README.md`, `header/MCsimInterface.h` |
+| 11 Configuration | `docs/Architecture.md` §8, `tutorial/02-configuration/`, `sweeps/README.md` |
+| 12 Monitoring | `docs/Logger.md`, `docs/Debugger.md`, `docs/Trace.md`, `docs/Visualizer.md` |
+| 13 Tasks and the demo | `docs/Tasks.md`, `demo/README.md` |
+| 14 Extending Octopus | `docs/Architecture.md` §10, `tutorial/03-extending-octopus/` |
+| 15 Integration modes | `docs/Architecture.md` §9, `README.md` (gem5), `gem5/`, `configuration/SystemConfigurations/MultiCoreSystem_gem5.csv`, `tutorial/04-gem5-and-fullsystem-stack/` |
+| 16 Hands-on tutorial | `tutorial/**/README.md`, `docs/TutorialExercises.md` |
+| 17 Evaluation | `REPRODUCIBILITY.md`, `results/README.md` (placeholder until the sweeps are re-run) |
 | A, B | generated from `configuration/**/*.csv` and `Protocols_FSM/*.csv` |
 | C | `run_octopus.sh`, `octoviz.sh`, `sweeps/`, `scripts/`, the `OCTOPUS_*` switches |
 | D | `docs/Logger.md` §7, `docs/Tasks.md`, `docs/Trace.md` |

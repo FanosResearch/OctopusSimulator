@@ -1,0 +1,58 @@
+% Credit-based flow control between two routers, and the unloaded latency of a packet.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, x=1mm, y=1mm,
+  rtr/.style={draw=octpurple, fill=octio, very thick, rounded corners=2pt},
+  q/.style={draw=octink, fill=white, minimum height=4.5mm, minimum width=4.5mm, inner sep=0},
+  qf/.style={q, fill=octquiet!45},
+  cnt/.style={draw=octink, fill=octmem, minimum height=6mm, minimum width=9mm, inner sep=0, font=\sffamily\small\bfseries},
+  arr/.style={->, thick, octink},
+  cred/.style={->, thick, octteal, densely dashed},
+  lbl/.style={text=octquiet},
+  box/.style={draw=octrule, rounded corners=2pt, fill=octpaper, inner sep=3pt, align=left},
+  ttl/.style={font=\sffamily\small\bfseries, text=octink, anchor=west},
+  hop/.style={draw=octpurple, fill=octio, thick, rounded corners=2pt, minimum width=27mm, minimum height=9mm, align=center, inner sep=1pt},
+  nib/.style={draw=octink, fill=octquiet!25, minimum width=8mm, minimum height=6mm, inner sep=0, font=\sffamily\scriptsize\bfseries}]
+  % ================= credit loop =================
+  \node[ttl] at (0,25) {1. The credit loop of one VC};
+  \draw[rtr] (0,18) rectangle (38,-6);   \node[font=\sffamily\small\bfseries, text=octpurple, anchor=north west] at (1,17) {router A};
+  \draw[rtr] (86,18) rectangle (150,-6); \node[font=\sffamily\small\bfseries, text=octpurple, anchor=north west] at (87,17) {router B};
+  % A: output VC credit counter
+  \node[cnt] (cA) at (28,8) {3};
+  \node[lbl, anchor=east, align=right] at (22,6) {credits of the\\output VC,\\$-1$ per flit sent};
+  % link
+  \draw[arr] (38,8) -- node[above, lbl] {flit, \code{link\_latency} $L$ ticks} (86,8);
+  \node[qf, minimum width=6mm] at (62,4) {};
+  % B: input VC
+  \foreach \k in {0,1,2,3} \node[q] (b\k) at (100+\k*4.5,8) {};
+  \node[qf] at (113.5,8) {};
+  \node[lbl, anchor=north] at (107,4.5) {input VC FIFO, \code{vc\_depth} = 4};
+  \draw[arr] (116,8) -- (146,8) node[midway, above, lbl, align=center] {forwarded (SA)\\slot freed};
+  % credit return
+  \draw[cred] (131,6) -- (131,-14) -- (28,-14) -- (cA.south);
+  \node[lbl, text=octteal, fill=white, inner sep=1pt] at (78,-14) {credit, \code{credit\_latency} $c$ ticks after the flit leaves B's FIFO};
+  % loop box
+  \node[box, anchor=north west, text width=64mm] at (0,-20) {\textbf{Credit loop}: a slot is reusable $L + c$ ticks after its flit was sent.\\
+    Per-VC throughput $\le \min\left(1, \dfrac{\textit{vc\_depth}}{L + c}\right)$ flits per tick.\\
+    Measured with \code{router\_latency} 0 and $L = c = 1$: 0.5, 1 and 1 flit per tick for depths 1, 2 and 4.};
+  \node[box, anchor=north west, text width=74mm] at (72,-20) {A flit is sent only when its downstream VC holds a credit. Credits return when B pops the flit, not when it arrives.
+    \code{vc\_depth} smaller than a packet is wormhole switching. \code{vc\_depth} $\ge$ every packet's flit count is virtual cut-through.
+    A local output port counts packets instead: one RX slot of the class, reserved at VC allocation.};
+  % ================= unloaded latency =================
+  \node[ttl] at (0,-58) {2. Unloaded latency of a packet of $f$ flits through $R$ routers};
+  \node[nib] (s) at (4,-70) {NI};
+  \node[hop] (h1) at (28,-70) {router 1\\\code{router\_latency}};
+  \node[hop] (h2) at (68,-70) {router 2\\\code{router\_latency}};
+  \node[lbl] (dots) at (92,-70) {$\cdots$};
+  \node[hop] (h3) at (116,-70) {router $R$\\\code{router\_latency}};
+  \node[nib] (d) at (146,-70) {NI};
+  \draw[arr] (s) -- node[below, lbl] {0} (h1);
+  \draw[arr] (h1) -- node[above, lbl] {link $L$} (h2);
+  \draw[arr] (h2) -- (dots);
+  \draw[arr] (dots) -- node[above, lbl] {link $L$} (h3);
+  \draw[arr] (h3) -- node[below, lbl] {0} (d);
+  \node[lbl, anchor=north west] at (0,-75.5) {local links cost nothing: an injected flit is in router 1 in the same tick};
+  \node[box, anchor=north west, text width=146mm] at (0,-82) {\textbf{Unloaded latency}, from the head's injection to the tail's ejection:\\[0.8ex]
+    \hspace*{30mm}\small$T = R\cdot\textit{router\_latency} + (R-1)\cdot\textit{link\_latency} + (f-1)$ ticks\scriptsize\\[0.8ex]
+    The $(f-1)$ term is the tail following the head one tick per flit (cut-through: the head leaves a router before its tail arrives).
+    The formula needs credits never to run out on the way: $\textit{vc\_depth} \ge \min(f, L + c)$.
+    Example, the 2$\times$2 grid corner to corner ($R = 3$, defaults 2 and 1): $3\cdot 2 + 2\cdot 1 + 0 = 8$ ticks for a request and $8 + 4 = 12$ for a 5-flit data message.};
+\end{tikzpicture}

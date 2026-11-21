@@ -72,7 +72,7 @@ bus\allowbreak{}[1].\allowbreak{}interconnect\_\allowbreak{}controller.\allowbre
 bus\allowbreak{}[0].\allowbreak{}interconnect\_\allowbreak{}controller.\allowbreak{}arbiter\_\allowbreak{}type\index[cfg]{bus[0].interconnect\_controller.arbiter\_type@\code{bus[0].interconnect\_controller.arbiter\_type}} & string & \texttt{FCFSArbiter} & Pinned: every directory validation was done under FCFS. The shared SplitBusController default is TDM (for snoop) and directory+TDM starves one core on aifirf01/cacheb01 -- an open bug rather than a config choice \\
 cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}shared\_\allowbreak{}memory\_\allowbreak{}id\index[cfg]{cache\_controller[*].m\_shared\_memory\_id@\code{cache\_controller[*].m\_shared\_memory\_id}} & int & \texttt{10} &  \\
 cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}protocol\_\allowbreak{}type\index[cfg]{cache\_controller[*].protocol\_type@\code{cache\_controller[*].protocol\_type}} & string & \texttt{DIRECTORY\_\allowbreak{}MSI} &  \\
-cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}fsm\_\allowbreak{}filename\index[cfg]{cache\_controller[*].fsm\_filename@\code{cache\_controller[*].fsm\_filename}} & string & \texttt{MSI\_\allowbreak{}directory} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}fsm\_\allowbreak{}filename\index[cfg]{cache\_controller[*].fsm\_filename@\code{cache\_controller[*].fsm\_filename}} & string & \texttt{MSI\_\allowbreak{}directory\_\allowbreak{}v3} &  \\
 cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}num\_\allowbreak{}mshr\index[cfg]{cache\_controller[*].num\_mshr@\code{cache\_controller[*].num\_mshr}} & int & \texttt{16} & L1 MSHR depth (max concurrent outstanding misses). -1 = unbounded \\
 cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}pwb\_\allowbreak{}size\index[cfg]{cache\_controller[*].m\_data\_handler.pwb\_size@\code{cache\_controller[*].m\_data\_handler.pwb\_size}} & int & \texttt{8} & L1 write-back buffer depth. -1 = unbounded \\
 cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}processing\_\allowbreak{}queue\_\allowbreak{}size\index[cfg]{cache\_controller[*].processing\_queue\_size@\code{cache\_controller[*].processing\_queue\_size}} & int & \texttt{16} & L1 processing-queue depth (bounds demand admission). -1 = unbounded \\
@@ -104,6 +104,270 @@ cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}
 llc\_\allowbreak{}controller.\allowbreak{}dprint.\allowbreak{}cond\_\allowbreak{}addr\index[cfg]{llc\_controller.dprint.cond\_addr@\code{llc\_controller.dprint.cond\_addr}} & string list & \texttt{} & Acceptable Addresses \\
 \end{longtable}
 
+\subsection*{\texttt{configuration/SystemConfigurations/MultiCoreSystem\_Grid.csv}}\label{cfg:configuration-systemconfigurations-multicoresystem-grid-csv}
+\begin{longtable}{@{}>{\ttfamily\raggedright\arraybackslash}p{0.33\textwidth}p{0.07\textwidth}>{\raggedright\arraybackslash}p{0.19\textwidth}>{\raggedright\arraybackslash}p{0.33\textwidth}@{}}
+\toprule \normalfont key & type & value & meaning \\ \midrule \endfirsthead
+\toprule \normalfont key & type & value & meaning \\ \midrule \endhead
+\bottomrule \endfoot
+workload\_\allowbreak{}path\index[cfg]{workload\_path@\code{workload\_path}} & string & \texttt{BMs/\allowbreak{}Test\allowbreak{}BM/\allowbreak{}} & Absolute path is recommended \\
+num\_\allowbreak{}cores\index[cfg]{num\_cores@\code{num\_cores}} & int & \texttt{4} &  \\
+cache\_\allowbreak{}controller\_\allowbreak{}type\index[cfg]{cache\_controller\_type@\code{cache\_controller\_type}} & string & \texttt{Cache\allowbreak{}Controller\allowbreak{}Directory} & Type should match the name of the class \\
+requires\_\allowbreak{}ordering\index[cfg]{requires\_ordering@\code{requires\_ordering}} & string & \texttt{pair\_\allowbreak{}per\_\allowbreak{}class} & the directory protocol needs same-class same-pair order (spec s14.1) \\
+interconnect\_\allowbreak{}type\index[cfg]{interconnect\_type@\code{interconnect\_type}} & string & \texttt{Network} &  \\
+interconnect.\allowbreak{}topology\index[cfg]{interconnect.topology@\code{interconnect.topology}} & string & \texttt{grid2d} &  \\
+interconnect.\allowbreak{}dims\index[cfg]{interconnect.dims@\code{interconnect.dims}} & int list & \texttt{2,\allowbreak{} 2} &  \\
+interconnect.\allowbreak{}component\_\allowbreak{}ids\index[cfg]{interconnect.component\_ids@\code{interconnect.component\_ids}} & int list & \texttt{0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3,\allowbreak{} 10} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[0]\index[cfg]{interconnect.node\_map[0]@\code{interconnect.node\_map[0]}} & int & \texttt{0} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[1]\index[cfg]{interconnect.node\_map[1]@\code{interconnect.node\_map[1]}} & int & \texttt{1} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[2]\index[cfg]{interconnect.node\_map[2]@\code{interconnect.node\_map[2]}} & int & \texttt{2} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[3]\index[cfg]{interconnect.node\_map[3]@\code{interconnect.node\_map[3]}} & int & \texttt{3} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[10]\index[cfg]{interconnect.node\_map[10]@\code{interconnect.node\_map[10]}} & int & \texttt{3} & the LLC shares router 3 with L1 3 (its own local port) \\
+interconnect.\allowbreak{}routing\index[cfg]{interconnect.routing@\code{interconnect.routing}} & string & \texttt{XY} &  \\
+interconnect.\allowbreak{}num\_\allowbreak{}classes\index[cfg]{interconnect.num\_classes@\code{interconnect.num\_classes}} & int & \texttt{3} & request / forward / response virtual networks (spec s6.3); the directory FSMs tolerate the cross-class reordering since P2-THREE-CLASS \\
+interconnect.\allowbreak{}inject\_\allowbreak{}queue\_\allowbreak{}depth\index[cfg]{interconnect.inject\_queue\_depth@\code{interconnect.inject\_queue\_depth}} & int & \texttt{32} &  \\
+interconnect.\allowbreak{}eject\_\allowbreak{}queue\_\allowbreak{}depth\index[cfg]{interconnect.eject\_queue\_depth@\code{interconnect.eject\_queue\_depth}} & int & \texttt{32} &  \\
+interconnect.\allowbreak{}buffers\_\allowbreak{}max\_\allowbreak{}size\index[cfg]{interconnect.buffers\_max\_size@\code{interconnect.buffers\_max\_size}} & int & \texttt{32} & legacy key (kept for the s17.2 mapping) \\
+bus.\allowbreak{}buffers\_\allowbreak{}max\_\allowbreak{}size\index[cfg]{bus.buffers\_max\_size@\code{bus.buffers\_max\_size}} & int & \texttt{32} &  \\
+bus.\allowbreak{}m\_\allowbreak{}lower\_\allowbreak{}level\_\allowbreak{}ids\index[cfg]{bus.m\_lower\_level\_ids@\code{bus.m\_lower\_level\_ids}} & int list & \texttt{10} & LLC ID \\
+bus.\allowbreak{}upper\_\allowbreak{}level\_\allowbreak{}cache\_\allowbreak{}ids\index[cfg]{bus.upper\_level\_cache\_ids@\code{bus.upper\_level\_cache\_ids}} & int list & \texttt{100} & Main memory ID \\
+bus.\allowbreak{}controller\_\allowbreak{}type\index[cfg]{bus.controller\_type@\code{bus.controller\_type}} & string & \texttt{Point2Point} &  \\
+bus.\allowbreak{}interconnect\_\allowbreak{}controller.\allowbreak{}candidates\_\allowbreak{}id\index[cfg]{bus.interconnect\_controller.candidates\_id@\code{bus.interconnect\_controller.candidates\_id}} & int list & \texttt{0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3,\allowbreak{} 10} & Candidates are the l1 ids and llc id \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}shared\_\allowbreak{}memory\_\allowbreak{}id\index[cfg]{cache\_controller[*].m\_shared\_memory\_id@\code{cache\_controller[*].m\_shared\_memory\_id}} & int & \texttt{10} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}protocol\_\allowbreak{}type\index[cfg]{cache\_controller[*].protocol\_type@\code{cache\_controller[*].protocol\_type}} & string & \texttt{DIRECTORY\_\allowbreak{}MSI} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}fsm\_\allowbreak{}filename\index[cfg]{cache\_controller[*].fsm\_filename@\code{cache\_controller[*].fsm\_filename}} & string & \texttt{MSI\_\allowbreak{}directory\_\allowbreak{}v3} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}processing\_\allowbreak{}queue\_\allowbreak{}size\index[cfg]{cache\_controller[*].processing\_queue\_size@\code{cache\_controller[*].processing\_queue\_size}} & int & \texttt{16} & L1 processing-queue depth (bounds demand admission). -1 = unbounded \\
+cache\_\allowbreak{}controller\allowbreak{}[0].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[0].m\_id@\code{cache\_controller[0].m\_id}} & int & \texttt{0} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[1].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[1].m\_id@\code{cache\_controller[1].m\_id}} & int & \texttt{1} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[2].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[2].m\_id@\code{cache\_controller[2].m\_id}} & int & \texttt{2} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[3].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[3].m\_id@\code{cache\_controller[3].m\_id}} & int & \texttt{3} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}id\index[cfg]{llc\_controller.m\_id@\code{llc\_controller.m\_id}} & int & \texttt{10} & LLC \\
+llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}shared\_\allowbreak{}memory\_\allowbreak{}id\index[cfg]{llc\_controller.m\_shared\_memory\_id@\code{llc\_controller.m\_shared\_memory\_id}} & int & \texttt{100} & Id of the main memory \\
+llc\_\allowbreak{}controller.\allowbreak{}protocol\_\allowbreak{}type\index[cfg]{llc\_controller.protocol\_type@\code{llc\_controller.protocol\_type}} & string & \texttt{DIRECTORY\_\allowbreak{}LLC\_\allowbreak{}MSI} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}fsm\_\allowbreak{}filename\index[cfg]{llc\_controller.fsm\_filename@\code{llc\_controller.fsm\_filename}} & string & \texttt{MSI\_\allowbreak{}LLC\_\allowbreak{}directory} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}num\_\allowbreak{}mshr\index[cfg]{llc\_controller.num\_mshr@\code{llc\_controller.num\_mshr}} & int & \texttt{64} & LLC MSHR depth: larger than L1 (fans in all cores). -1 = unbounded \\
+llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}pwb\_\allowbreak{}size\index[cfg]{llc\_controller.m\_data\_handler.pwb\_size@\code{llc\_controller.m\_data\_handler.pwb\_size}} & int & \texttt{32} & LLC write-back buffer depth: larger than L1. -1 = unbounded \\
+llc\_\allowbreak{}controller.\allowbreak{}processing\_\allowbreak{}queue\_\allowbreak{}size\index[cfg]{llc\_controller.processing\_queue\_size@\code{llc\_controller.processing\_queue\_size}} & int & \texttt{32} & LLC processing-queue depth: larger than L1. -1 = unbounded \\
+llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}cache\_\allowbreak{}size\index[cfg]{llc\_controller.m\_data\_handler.cache\_size@\code{llc\_controller.m\_data\_handler.cache\_size}} & int & \texttt{32768} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}m\_\allowbreak{}ways\_\allowbreak{}count\index[cfg]{llc\_controller.m\_data\_handler.m\_ways\_count@\code{llc\_controller.m\_data\_handler.m\_ways\_count}} & int & \texttt{2} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}access\_\allowbreak{}latency\index[cfg]{llc\_controller.m\_data\_handler.m\_data\_access\_latency@\code{llc\_controller.m\_data\_handler.m\_data\_access\_latency}} & int & \texttt{10} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}arbiter\_\allowbreak{}type\index[cfg]{llc\_controller.arbiter\_type@\code{llc\_controller.arbiter\_type}} & string & \texttt{FCFSArbiter} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}arbiter\_\allowbreak{}candidates\_\allowbreak{}ids\index[cfg]{llc\_controller.arbiter\_candidates\_ids@\code{llc\_controller.arbiter\_candidates\_ids}} & int list & \texttt{0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3} & Candidates are the l1 ids \\
+m\_\allowbreak{}main\_\allowbreak{}memory.\allowbreak{}m\_\allowbreak{}llc\_\allowbreak{}id\index[cfg]{m\_main\_memory.m\_llc\_id@\code{m\_main\_memory.m\_llc\_id}} & int & \texttt{10} &  \\
+m\_\allowbreak{}main\_\allowbreak{}memory.\allowbreak{}m\_\allowbreak{}id\index[cfg]{m\_main\_memory.m\_id@\code{m\_main\_memory.m\_id}} & int & \texttt{100} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[2].\allowbreak{}dprint.\allowbreak{}enable\index[cfg]{cache\_controller[2].dprint.enable@\code{cache\_controller[2].dprint.enable}} & int & \texttt{0} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}dprint.\allowbreak{}enable\index[cfg]{llc\_controller.dprint.enable@\code{llc\_controller.dprint.enable}} & int & \texttt{0} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}target\index[cfg]{cache\_controller[*].dprint.target@\code{cache\_controller[*].dprint.target}} & string & \texttt{} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}dprint.\allowbreak{}target\index[cfg]{llc\_controller.dprint.target@\code{llc\_controller.dprint.target}} & string & \texttt{BMs/\allowbreak{}test\allowbreak{}DPrint/\allowbreak{}dprint.csv} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}addr\_\allowbreak{}filter\index[cfg]{cache\_controller[*].dprint.addr\_filter@\code{cache\_controller[*].dprint.addr\_filter}} & string & \texttt{0x\allowbreak{}FFFFFFFF\allowbreak{}FFFFFFC0} & filter in hexdecimal \\
+llc\_\allowbreak{}controller.\allowbreak{}dprint.\allowbreak{}addr\_\allowbreak{}filter\index[cfg]{llc\_controller.dprint.addr\_filter@\code{llc\_controller.dprint.addr\_filter}} & string & \texttt{0x\allowbreak{}FFFFFFFF\allowbreak{}FFFFFFC0} & filter in hexdecimal \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}cond\_\allowbreak{}addr\index[cfg]{cache\_controller[*].dprint.cond\_addr@\code{cache\_controller[*].dprint.cond\_addr}} & string list & \texttt{} & Acceptable Addresses \\
+llc\_\allowbreak{}controller.\allowbreak{}dprint.\allowbreak{}cond\_\allowbreak{}addr\index[cfg]{llc\_controller.dprint.cond\_addr@\code{llc\_controller.dprint.cond\_addr}} & string list & \texttt{} & Acceptable Addresses \\
+cache\_\allowbreak{}controller\allowbreak{}[2].\allowbreak{}dprint.\allowbreak{}cond\_\allowbreak{}msg\_\allowbreak{}id\index[cfg]{cache\_controller[2].dprint.cond\_msg\_id@\code{cache\_controller[2].dprint.cond\_msg\_id}} & int list & \texttt{245788} &  \\
+\end{longtable}
+
+\subsection*{\texttt{configuration/SystemConfigurations/MultiCoreSystem\_Grid2B.csv}}\label{cfg:configuration-systemconfigurations-multicoresystem-grid2b-csv}
+\begin{longtable}{@{}>{\ttfamily\raggedright\arraybackslash}p{0.33\textwidth}p{0.07\textwidth}>{\raggedright\arraybackslash}p{0.19\textwidth}>{\raggedright\arraybackslash}p{0.33\textwidth}@{}}
+\toprule \normalfont key & type & value & meaning \\ \midrule \endfirsthead
+\toprule \normalfont key & type & value & meaning \\ \midrule \endhead
+\bottomrule \endfoot
+workload\_\allowbreak{}path\index[cfg]{workload\_path@\code{workload\_path}} & string & \texttt{BMs/\allowbreak{}Test\allowbreak{}BM/\allowbreak{}} & Absolute path is recommended \\
+num\_\allowbreak{}cores\index[cfg]{num\_cores@\code{num\_cores}} & int & \texttt{4} &  \\
+cache\_\allowbreak{}controller\_\allowbreak{}type\index[cfg]{cache\_controller\_type@\code{cache\_controller\_type}} & string & \texttt{Cache\allowbreak{}Controller\allowbreak{}Directory} & Type should match the name of the class \\
+requires\_\allowbreak{}ordering\index[cfg]{requires\_ordering@\code{requires\_ordering}} & string & \texttt{pair\_\allowbreak{}per\_\allowbreak{}class} &  \\
+llc\_\allowbreak{}banks\index[cfg]{llc\_banks@\code{llc\_banks}} & int & \texttt{2} &  \\
+interconnect\_\allowbreak{}type\index[cfg]{interconnect\_type@\code{interconnect\_type}} & string & \texttt{Network} &  \\
+interconnect.\allowbreak{}topology\index[cfg]{interconnect.topology@\code{interconnect.topology}} & string & \texttt{grid2d} &  \\
+interconnect.\allowbreak{}dims\index[cfg]{interconnect.dims@\code{interconnect.dims}} & int list & \texttt{2,\allowbreak{} 2} &  \\
+interconnect.\allowbreak{}component\_\allowbreak{}ids\index[cfg]{interconnect.component\_ids@\code{interconnect.component\_ids}} & int list & \texttt{0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3,\allowbreak{} 10,\allowbreak{} 11} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[0]\index[cfg]{interconnect.node\_map[0]@\code{interconnect.node\_map[0]}} & int & \texttt{0} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[1]\index[cfg]{interconnect.node\_map[1]@\code{interconnect.node\_map[1]}} & int & \texttt{1} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[2]\index[cfg]{interconnect.node\_map[2]@\code{interconnect.node\_map[2]}} & int & \texttt{2} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[3]\index[cfg]{interconnect.node\_map[3]@\code{interconnect.node\_map[3]}} & int & \texttt{3} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[10]\index[cfg]{interconnect.node\_map[10]@\code{interconnect.node\_map[10]}} & int & \texttt{0} & bank 10 shares router 0 with L1 0 \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[11]\index[cfg]{interconnect.node\_map[11]@\code{interconnect.node\_map[11]}} & int & \texttt{3} & bank 11 shares router 3 with L1 3 \\
+interconnect.\allowbreak{}routing\index[cfg]{interconnect.routing@\code{interconnect.routing}} & string & \texttt{XY} &  \\
+interconnect.\allowbreak{}num\_\allowbreak{}classes\index[cfg]{interconnect.num\_classes@\code{interconnect.num\_classes}} & int & \texttt{3} &  \\
+interconnect.\allowbreak{}inject\_\allowbreak{}queue\_\allowbreak{}depth\index[cfg]{interconnect.inject\_queue\_depth@\code{interconnect.inject\_queue\_depth}} & int & \texttt{32} &  \\
+interconnect.\allowbreak{}eject\_\allowbreak{}queue\_\allowbreak{}depth\index[cfg]{interconnect.eject\_queue\_depth@\code{interconnect.eject\_queue\_depth}} & int & \texttt{32} &  \\
+interconnect.\allowbreak{}buffers\_\allowbreak{}max\_\allowbreak{}size\index[cfg]{interconnect.buffers\_max\_size@\code{interconnect.buffers\_max\_size}} & int & \texttt{32} &  \\
+bus.\allowbreak{}buffers\_\allowbreak{}max\_\allowbreak{}size\index[cfg]{bus.buffers\_max\_size@\code{bus.buffers\_max\_size}} & int & \texttt{32} &  \\
+bus.\allowbreak{}m\_\allowbreak{}lower\_\allowbreak{}level\_\allowbreak{}ids\index[cfg]{bus.m\_lower\_level\_ids@\code{bus.m\_lower\_level\_ids}} & int list & \texttt{10,\allowbreak{} 11} & the banks share the memory bus \\
+bus.\allowbreak{}upper\_\allowbreak{}level\_\allowbreak{}cache\_\allowbreak{}ids\index[cfg]{bus.upper\_level\_cache\_ids@\code{bus.upper\_level\_cache\_ids}} & int list & \texttt{100} & Main memory ID \\
+bus.\allowbreak{}controller\_\allowbreak{}type\index[cfg]{bus.controller\_type@\code{bus.controller\_type}} & string & \texttt{Point2Point} &  \\
+bus.\allowbreak{}interconnect\_\allowbreak{}controller.\allowbreak{}candidates\_\allowbreak{}id\index[cfg]{bus.interconnect\_controller.candidates\_id@\code{bus.interconnect\_controller.candidates\_id}} & int list & \texttt{0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3,\allowbreak{} 10,\allowbreak{} 11} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}shared\_\allowbreak{}memory\_\allowbreak{}id\index[cfg]{cache\_controller[*].m\_shared\_memory\_id@\code{cache\_controller[*].m\_shared\_memory\_id}} & int & \texttt{10} & the first home (kept for the single-home code paths) \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}home\_\allowbreak{}ids\index[cfg]{cache\_controller[*].home\_ids@\code{cache\_controller[*].home\_ids}} & int list & \texttt{10,\allowbreak{} 11} & the LLC banks \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}home\_\allowbreak{}interleave\_\allowbreak{}shift\index[cfg]{cache\_controller[*].home\_interleave\_shift@\code{cache\_controller[*].home\_interleave\_shift}} & int & \texttt{0} & 0 = consecutive lines alternate between the banks; 6 = 4 KiB pages \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}protocol\_\allowbreak{}type\index[cfg]{cache\_controller[*].protocol\_type@\code{cache\_controller[*].protocol\_type}} & string & \texttt{DIRECTORY\_\allowbreak{}MSI} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}fsm\_\allowbreak{}filename\index[cfg]{cache\_controller[*].fsm\_filename@\code{cache\_controller[*].fsm\_filename}} & string & \texttt{MSI\_\allowbreak{}directory\_\allowbreak{}v3} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}processing\_\allowbreak{}queue\_\allowbreak{}size\index[cfg]{cache\_controller[*].processing\_queue\_size@\code{cache\_controller[*].processing\_queue\_size}} & int & \texttt{16} & L1 processing-queue depth (bounds demand admission). -1 = unbounded \\
+cache\_\allowbreak{}controller\allowbreak{}[0].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[0].m\_id@\code{cache\_controller[0].m\_id}} & int & \texttt{0} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[1].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[1].m\_id@\code{cache\_controller[1].m\_id}} & int & \texttt{1} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[2].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[2].m\_id@\code{cache\_controller[2].m\_id}} & int & \texttt{2} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[3].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[3].m\_id@\code{cache\_controller[3].m\_id}} & int & \texttt{3} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[0].\allowbreak{}m\_\allowbreak{}id\index[cfg]{llc\_controller[0].m\_id@\code{llc\_controller[0].m\_id}} & int & \texttt{10} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[1].\allowbreak{}m\_\allowbreak{}id\index[cfg]{llc\_controller[1].m\_id@\code{llc\_controller[1].m\_id}} & int & \texttt{11} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}shared\_\allowbreak{}memory\_\allowbreak{}id\index[cfg]{llc\_controller[*].m\_shared\_memory\_id@\code{llc\_controller[*].m\_shared\_memory\_id}} & int & \texttt{100} & Id of the main memory \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}protocol\_\allowbreak{}type\index[cfg]{llc\_controller[*].protocol\_type@\code{llc\_controller[*].protocol\_type}} & string & \texttt{DIRECTORY\_\allowbreak{}LLC\_\allowbreak{}MSI} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}fsm\_\allowbreak{}filename\index[cfg]{llc\_controller[*].fsm\_filename@\code{llc\_controller[*].fsm\_filename}} & string & \texttt{MSI\_\allowbreak{}LLC\_\allowbreak{}directory} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}num\_\allowbreak{}mshr\index[cfg]{llc\_controller[*].num\_mshr@\code{llc\_controller[*].num\_mshr}} & int & \texttt{32} & half of the single LLC's 64: the two banks together are the same LLC \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}pwb\_\allowbreak{}size\index[cfg]{llc\_controller[*].m\_data\_handler.pwb\_size@\code{llc\_controller[*].m\_data\_handler.pwb\_size}} & int & \texttt{16} & half of 32 \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}processing\_\allowbreak{}queue\_\allowbreak{}size\index[cfg]{llc\_controller[*].processing\_queue\_size@\code{llc\_controller[*].processing\_queue\_size}} & int & \texttt{16} & half of 32 \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}cache\_\allowbreak{}size\index[cfg]{llc\_controller[*].m\_data\_handler.cache\_size@\code{llc\_controller[*].m\_data\_handler.cache\_size}} & int & \texttt{16384} & half of 32768 \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}m\_\allowbreak{}ways\_\allowbreak{}count\index[cfg]{llc\_controller[*].m\_data\_handler.m\_ways\_count@\code{llc\_controller[*].m\_data\_handler.m\_ways\_count}} & int & \texttt{2} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}access\_\allowbreak{}latency\index[cfg]{llc\_controller[*].m\_data\_handler.m\_data\_access\_latency@\code{llc\_controller[*].m\_data\_handler.m\_data\_access\_latency}} & int & \texttt{10} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}arbiter\_\allowbreak{}type\index[cfg]{llc\_controller[*].arbiter\_type@\code{llc\_controller[*].arbiter\_type}} & string & \texttt{FCFSArbiter} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}arbiter\_\allowbreak{}candidates\_\allowbreak{}ids\index[cfg]{llc\_controller[*].arbiter\_candidates\_ids@\code{llc\_controller[*].arbiter\_candidates\_ids}} & int list & \texttt{0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3} & Candidates are the l1 ids \\
+m\_\allowbreak{}main\_\allowbreak{}memory.\allowbreak{}m\_\allowbreak{}llc\_\allowbreak{}id\index[cfg]{m\_main\_memory.m\_llc\_id@\code{m\_main\_memory.m\_llc\_id}} & int & \texttt{10} & fallback only: the memory answers the bank that asked \\
+m\_\allowbreak{}main\_\allowbreak{}memory.\allowbreak{}m\_\allowbreak{}id\index[cfg]{m\_main\_memory.m\_id@\code{m\_main\_memory.m\_id}} & int & \texttt{100} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}enable\index[cfg]{cache\_controller[*].dprint.enable@\code{cache\_controller[*].dprint.enable}} & int & \texttt{0} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}enable\index[cfg]{llc\_controller[*].dprint.enable@\code{llc\_controller[*].dprint.enable}} & int & \texttt{0} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}target\index[cfg]{cache\_controller[*].dprint.target@\code{cache\_controller[*].dprint.target}} & string & \texttt{} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}target\index[cfg]{llc\_controller[*].dprint.target@\code{llc\_controller[*].dprint.target}} & string & \texttt{BMs/\allowbreak{}test\allowbreak{}DPrint/\allowbreak{}dprint.csv} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}addr\_\allowbreak{}filter\index[cfg]{cache\_controller[*].dprint.addr\_filter@\code{cache\_controller[*].dprint.addr\_filter}} & string & \texttt{0x\allowbreak{}FFFFFFFF\allowbreak{}FFFFFFC0} & filter in hexdecimal \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}addr\_\allowbreak{}filter\index[cfg]{llc\_controller[*].dprint.addr\_filter@\code{llc\_controller[*].dprint.addr\_filter}} & string & \texttt{0x\allowbreak{}FFFFFFFF\allowbreak{}FFFFFFC0} & filter in hexdecimal \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}cond\_\allowbreak{}addr\index[cfg]{cache\_controller[*].dprint.cond\_addr@\code{cache\_controller[*].dprint.cond\_addr}} & string list & \texttt{} & Acceptable Addresses \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}cond\_\allowbreak{}addr\index[cfg]{llc\_controller[*].dprint.cond\_addr@\code{llc\_controller[*].dprint.cond\_addr}} & string list & \texttt{} & Acceptable Addresses \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}cond\_\allowbreak{}msg\_\allowbreak{}id\index[cfg]{cache\_controller[*].dprint.cond\_msg\_id@\code{cache\_controller[*].dprint.cond\_msg\_id}} & int list & \texttt{} &  \\
+\end{longtable}
+
+\subsection*{\texttt{configuration/SystemConfigurations/MultiCoreSystem\_Grid2B2M.csv}}\label{cfg:configuration-systemconfigurations-multicoresystem-grid2b2m-csv}
+\begin{longtable}{@{}>{\ttfamily\raggedright\arraybackslash}p{0.33\textwidth}p{0.07\textwidth}>{\raggedright\arraybackslash}p{0.19\textwidth}>{\raggedright\arraybackslash}p{0.33\textwidth}@{}}
+\toprule \normalfont key & type & value & meaning \\ \midrule \endfirsthead
+\toprule \normalfont key & type & value & meaning \\ \midrule \endhead
+\bottomrule \endfoot
+workload\_\allowbreak{}path\index[cfg]{workload\_path@\code{workload\_path}} & string & \texttt{BMs/\allowbreak{}Test\allowbreak{}BM/\allowbreak{}} & Absolute path is recommended \\
+num\_\allowbreak{}cores\index[cfg]{num\_cores@\code{num\_cores}} & int & \texttt{4} &  \\
+cache\_\allowbreak{}controller\_\allowbreak{}type\index[cfg]{cache\_controller\_type@\code{cache\_controller\_type}} & string & \texttt{Cache\allowbreak{}Controller\allowbreak{}Directory} & Type should match the name of the class \\
+requires\_\allowbreak{}ordering\index[cfg]{requires\_ordering@\code{requires\_ordering}} & string & \texttt{pair\_\allowbreak{}per\_\allowbreak{}class} &  \\
+llc\_\allowbreak{}banks\index[cfg]{llc\_banks@\code{llc\_banks}} & int & \texttt{2} &  \\
+memory\_\allowbreak{}on\_\allowbreak{}network\index[cfg]{memory\_on\_network@\code{memory\_on\_network}} & int & \texttt{1} & memory controllers are network endpoints (spec s25) \\
+interconnect\_\allowbreak{}type\index[cfg]{interconnect\_type@\code{interconnect\_type}} & string & \texttt{Network} &  \\
+interconnect.\allowbreak{}topology\index[cfg]{interconnect.topology@\code{interconnect.topology}} & string & \texttt{grid2d} &  \\
+interconnect.\allowbreak{}dims\index[cfg]{interconnect.dims@\code{interconnect.dims}} & int list & \texttt{2,\allowbreak{} 2} &  \\
+interconnect.\allowbreak{}component\_\allowbreak{}ids\index[cfg]{interconnect.component\_ids@\code{interconnect.component\_ids}} & int list & \texttt{0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3,\allowbreak{} 10,\allowbreak{} 11,\allowbreak{} 110,\allowbreak{} 111,\allowbreak{} 100,\allowbreak{} 101} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[0]\index[cfg]{interconnect.node\_map[0]@\code{interconnect.node\_map[0]}} & int & \texttt{0} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[1]\index[cfg]{interconnect.node\_map[1]@\code{interconnect.node\_map[1]}} & int & \texttt{1} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[2]\index[cfg]{interconnect.node\_map[2]@\code{interconnect.node\_map[2]}} & int & \texttt{2} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[3]\index[cfg]{interconnect.node\_map[3]@\code{interconnect.node\_map[3]}} & int & \texttt{3} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[10]\index[cfg]{interconnect.node\_map[10]@\code{interconnect.node\_map[10]}} & int & \texttt{0} & bank 10 shares router 0 with L1 0 \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[11]\index[cfg]{interconnect.node\_map[11]@\code{interconnect.node\_map[11]}} & int & \texttt{3} & bank 11 shares router 3 with L1 3 \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[110]\index[cfg]{interconnect.node\_map[110]@\code{interconnect.node\_map[110]}} & int & \texttt{0} & memory port of bank 10 \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[111]\index[cfg]{interconnect.node\_map[111]@\code{interconnect.node\_map[111]}} & int & \texttt{3} & memory port of bank 11 \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[100]\index[cfg]{interconnect.node\_map[100]@\code{interconnect.node\_map[100]}} & int & \texttt{1} & the memory controller \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[101]\index[cfg]{interconnect.node\_map[101]@\code{interconnect.node\_map[101]}} & int & \texttt{2} & the second memory controller \\
+interconnect.\allowbreak{}routing\index[cfg]{interconnect.routing@\code{interconnect.routing}} & string & \texttt{XY} &  \\
+interconnect.\allowbreak{}num\_\allowbreak{}classes\index[cfg]{interconnect.num\_classes@\code{interconnect.num\_classes}} & int & \texttt{3} &  \\
+interconnect.\allowbreak{}inject\_\allowbreak{}queue\_\allowbreak{}depth\index[cfg]{interconnect.inject\_queue\_depth@\code{interconnect.inject\_queue\_depth}} & int & \texttt{32} &  \\
+interconnect.\allowbreak{}eject\_\allowbreak{}queue\_\allowbreak{}depth\index[cfg]{interconnect.eject\_queue\_depth@\code{interconnect.eject\_queue\_depth}} & int & \texttt{32} &  \\
+interconnect.\allowbreak{}buffers\_\allowbreak{}max\_\allowbreak{}size\index[cfg]{interconnect.buffers\_max\_size@\code{interconnect.buffers\_max\_size}} & int & \texttt{32} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}shared\_\allowbreak{}memory\_\allowbreak{}id\index[cfg]{cache\_controller[*].m\_shared\_memory\_id@\code{cache\_controller[*].m\_shared\_memory\_id}} & int & \texttt{10} & the first home (kept for the single-home code paths) \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}home\_\allowbreak{}ids\index[cfg]{cache\_controller[*].home\_ids@\code{cache\_controller[*].home\_ids}} & int list & \texttt{10,\allowbreak{} 11} & the LLC banks \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}home\_\allowbreak{}interleave\_\allowbreak{}shift\index[cfg]{cache\_controller[*].home\_interleave\_shift@\code{cache\_controller[*].home\_interleave\_shift}} & int & \texttt{0} & 0 = consecutive lines alternate between the banks; 6 = 4 KiB pages \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}protocol\_\allowbreak{}type\index[cfg]{cache\_controller[*].protocol\_type@\code{cache\_controller[*].protocol\_type}} & string & \texttt{DIRECTORY\_\allowbreak{}MSI} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}fsm\_\allowbreak{}filename\index[cfg]{cache\_controller[*].fsm\_filename@\code{cache\_controller[*].fsm\_filename}} & string & \texttt{MSI\_\allowbreak{}directory\_\allowbreak{}v3} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}processing\_\allowbreak{}queue\_\allowbreak{}size\index[cfg]{cache\_controller[*].processing\_queue\_size@\code{cache\_controller[*].processing\_queue\_size}} & int & \texttt{16} & L1 processing-queue depth (bounds demand admission). -1 = unbounded \\
+cache\_\allowbreak{}controller\allowbreak{}[0].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[0].m\_id@\code{cache\_controller[0].m\_id}} & int & \texttt{0} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[1].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[1].m\_id@\code{cache\_controller[1].m\_id}} & int & \texttt{1} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[2].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[2].m\_id@\code{cache\_controller[2].m\_id}} & int & \texttt{2} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[3].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[3].m\_id@\code{cache\_controller[3].m\_id}} & int & \texttt{3} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[0].\allowbreak{}m\_\allowbreak{}id\index[cfg]{llc\_controller[0].m\_id@\code{llc\_controller[0].m\_id}} & int & \texttt{10} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[1].\allowbreak{}m\_\allowbreak{}id\index[cfg]{llc\_controller[1].m\_id@\code{llc\_controller[1].m\_id}} & int & \texttt{11} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[0].\allowbreak{}mem\_\allowbreak{}port\_\allowbreak{}id\index[cfg]{llc\_controller[0].mem\_port\_id@\code{llc\_controller[0].mem\_port\_id}} & int & \texttt{110} & memory-side endpoint of bank 10 \\
+llc\_\allowbreak{}controller\allowbreak{}[1].\allowbreak{}mem\_\allowbreak{}port\_\allowbreak{}id\index[cfg]{llc\_controller[1].mem\_port\_id@\code{llc\_controller[1].mem\_port\_id}} & int & \texttt{111} & memory-side endpoint of bank 11 \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}mem\_\allowbreak{}ids\index[cfg]{llc\_controller[*].mem\_ids@\code{llc\_controller[*].mem\_ids}} & int list & \texttt{100,\allowbreak{} 101} & the memory controllers (spec s25.4) \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}mem\_\allowbreak{}interleave\_\allowbreak{}shift\index[cfg]{llc\_controller[*].mem\_interleave\_shift@\code{llc\_controller[*].mem\_interleave\_shift}} & int & \texttt{6} & 4 KiB pages alternate between the controllers \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}shared\_\allowbreak{}memory\_\allowbreak{}id\index[cfg]{llc\_controller[*].m\_shared\_memory\_id@\code{llc\_controller[*].m\_shared\_memory\_id}} & int & \texttt{100} & Id of the main memory \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}protocol\_\allowbreak{}type\index[cfg]{llc\_controller[*].protocol\_type@\code{llc\_controller[*].protocol\_type}} & string & \texttt{DIRECTORY\_\allowbreak{}LLC\_\allowbreak{}MSI} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}fsm\_\allowbreak{}filename\index[cfg]{llc\_controller[*].fsm\_filename@\code{llc\_controller[*].fsm\_filename}} & string & \texttt{MSI\_\allowbreak{}LLC\_\allowbreak{}directory} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}num\_\allowbreak{}mshr\index[cfg]{llc\_controller[*].num\_mshr@\code{llc\_controller[*].num\_mshr}} & int & \texttt{32} & half of the single LLC's 64: the two banks together are the same LLC \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}pwb\_\allowbreak{}size\index[cfg]{llc\_controller[*].m\_data\_handler.pwb\_size@\code{llc\_controller[*].m\_data\_handler.pwb\_size}} & int & \texttt{16} & half of 32 \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}processing\_\allowbreak{}queue\_\allowbreak{}size\index[cfg]{llc\_controller[*].processing\_queue\_size@\code{llc\_controller[*].processing\_queue\_size}} & int & \texttt{16} & half of 32 \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}cache\_\allowbreak{}size\index[cfg]{llc\_controller[*].m\_data\_handler.cache\_size@\code{llc\_controller[*].m\_data\_handler.cache\_size}} & int & \texttt{16384} & half of 32768 \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}m\_\allowbreak{}ways\_\allowbreak{}count\index[cfg]{llc\_controller[*].m\_data\_handler.m\_ways\_count@\code{llc\_controller[*].m\_data\_handler.m\_ways\_count}} & int & \texttt{2} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}access\_\allowbreak{}latency\index[cfg]{llc\_controller[*].m\_data\_handler.m\_data\_access\_latency@\code{llc\_controller[*].m\_data\_handler.m\_data\_access\_latency}} & int & \texttt{10} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}arbiter\_\allowbreak{}type\index[cfg]{llc\_controller[*].arbiter\_type@\code{llc\_controller[*].arbiter\_type}} & string & \texttt{FCFSArbiter} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}arbiter\_\allowbreak{}candidates\_\allowbreak{}ids\index[cfg]{llc\_controller[*].arbiter\_candidates\_ids@\code{llc\_controller[*].arbiter\_candidates\_ids}} & int list & \texttt{0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3} & Candidates are the l1 ids \\
+m\_\allowbreak{}main\_\allowbreak{}memory.\allowbreak{}m\_\allowbreak{}llc\_\allowbreak{}id\index[cfg]{m\_main\_memory.m\_llc\_id@\code{m\_main\_memory.m\_llc\_id}} & int & \texttt{10} & fallback only: the memory answers the bank that asked \\
+m\_\allowbreak{}main\_\allowbreak{}memory.\allowbreak{}m\_\allowbreak{}id\index[cfg]{m\_main\_memory.m\_id@\code{m\_main\_memory.m\_id}} & int & \texttt{100} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}enable\index[cfg]{cache\_controller[*].dprint.enable@\code{cache\_controller[*].dprint.enable}} & int & \texttt{0} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}enable\index[cfg]{llc\_controller[*].dprint.enable@\code{llc\_controller[*].dprint.enable}} & int & \texttt{0} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}target\index[cfg]{cache\_controller[*].dprint.target@\code{cache\_controller[*].dprint.target}} & string & \texttt{} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}target\index[cfg]{llc\_controller[*].dprint.target@\code{llc\_controller[*].dprint.target}} & string & \texttt{BMs/\allowbreak{}test\allowbreak{}DPrint/\allowbreak{}dprint.csv} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}addr\_\allowbreak{}filter\index[cfg]{cache\_controller[*].dprint.addr\_filter@\code{cache\_controller[*].dprint.addr\_filter}} & string & \texttt{0x\allowbreak{}FFFFFFFF\allowbreak{}FFFFFFC0} & filter in hexdecimal \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}addr\_\allowbreak{}filter\index[cfg]{llc\_controller[*].dprint.addr\_filter@\code{llc\_controller[*].dprint.addr\_filter}} & string & \texttt{0x\allowbreak{}FFFFFFFF\allowbreak{}FFFFFFC0} & filter in hexdecimal \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}cond\_\allowbreak{}addr\index[cfg]{cache\_controller[*].dprint.cond\_addr@\code{cache\_controller[*].dprint.cond\_addr}} & string list & \texttt{} & Acceptable Addresses \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}cond\_\allowbreak{}addr\index[cfg]{llc\_controller[*].dprint.cond\_addr@\code{llc\_controller[*].dprint.cond\_addr}} & string list & \texttt{} & Acceptable Addresses \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}cond\_\allowbreak{}msg\_\allowbreak{}id\index[cfg]{cache\_controller[*].dprint.cond\_msg\_id@\code{cache\_controller[*].dprint.cond\_msg\_id}} & int list & \texttt{} &  \\
+\end{longtable}
+
+\subsection*{\texttt{configuration/SystemConfigurations/MultiCoreSystem\_Grid2BM.csv}}\label{cfg:configuration-systemconfigurations-multicoresystem-grid2bm-csv}
+\begin{longtable}{@{}>{\ttfamily\raggedright\arraybackslash}p{0.33\textwidth}p{0.07\textwidth}>{\raggedright\arraybackslash}p{0.19\textwidth}>{\raggedright\arraybackslash}p{0.33\textwidth}@{}}
+\toprule \normalfont key & type & value & meaning \\ \midrule \endfirsthead
+\toprule \normalfont key & type & value & meaning \\ \midrule \endhead
+\bottomrule \endfoot
+workload\_\allowbreak{}path\index[cfg]{workload\_path@\code{workload\_path}} & string & \texttt{BMs/\allowbreak{}Test\allowbreak{}BM/\allowbreak{}} & Absolute path is recommended \\
+num\_\allowbreak{}cores\index[cfg]{num\_cores@\code{num\_cores}} & int & \texttt{4} &  \\
+cache\_\allowbreak{}controller\_\allowbreak{}type\index[cfg]{cache\_controller\_type@\code{cache\_controller\_type}} & string & \texttt{Cache\allowbreak{}Controller\allowbreak{}Directory} & Type should match the name of the class \\
+requires\_\allowbreak{}ordering\index[cfg]{requires\_ordering@\code{requires\_ordering}} & string & \texttt{pair\_\allowbreak{}per\_\allowbreak{}class} &  \\
+llc\_\allowbreak{}banks\index[cfg]{llc\_banks@\code{llc\_banks}} & int & \texttt{2} &  \\
+memory\_\allowbreak{}on\_\allowbreak{}network\index[cfg]{memory\_on\_network@\code{memory\_on\_network}} & int & \texttt{1} & memory controllers are network endpoints (spec s25) \\
+interconnect\_\allowbreak{}type\index[cfg]{interconnect\_type@\code{interconnect\_type}} & string & \texttt{Network} &  \\
+interconnect.\allowbreak{}topology\index[cfg]{interconnect.topology@\code{interconnect.topology}} & string & \texttt{grid2d} &  \\
+interconnect.\allowbreak{}dims\index[cfg]{interconnect.dims@\code{interconnect.dims}} & int list & \texttt{2,\allowbreak{} 2} &  \\
+interconnect.\allowbreak{}component\_\allowbreak{}ids\index[cfg]{interconnect.component\_ids@\code{interconnect.component\_ids}} & int list & \texttt{0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3,\allowbreak{} 10,\allowbreak{} 11,\allowbreak{} 110,\allowbreak{} 111,\allowbreak{} 100} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[0]\index[cfg]{interconnect.node\_map[0]@\code{interconnect.node\_map[0]}} & int & \texttt{0} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[1]\index[cfg]{interconnect.node\_map[1]@\code{interconnect.node\_map[1]}} & int & \texttt{1} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[2]\index[cfg]{interconnect.node\_map[2]@\code{interconnect.node\_map[2]}} & int & \texttt{2} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[3]\index[cfg]{interconnect.node\_map[3]@\code{interconnect.node\_map[3]}} & int & \texttt{3} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[10]\index[cfg]{interconnect.node\_map[10]@\code{interconnect.node\_map[10]}} & int & \texttt{0} & bank 10 shares router 0 with L1 0 \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[11]\index[cfg]{interconnect.node\_map[11]@\code{interconnect.node\_map[11]}} & int & \texttt{3} & bank 11 shares router 3 with L1 3 \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[110]\index[cfg]{interconnect.node\_map[110]@\code{interconnect.node\_map[110]}} & int & \texttt{0} & memory port of bank 10 \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[111]\index[cfg]{interconnect.node\_map[111]@\code{interconnect.node\_map[111]}} & int & \texttt{3} & memory port of bank 11 \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[100]\index[cfg]{interconnect.node\_map[100]@\code{interconnect.node\_map[100]}} & int & \texttt{1} & the memory controller \\
+interconnect.\allowbreak{}routing\index[cfg]{interconnect.routing@\code{interconnect.routing}} & string & \texttt{XY} &  \\
+interconnect.\allowbreak{}num\_\allowbreak{}classes\index[cfg]{interconnect.num\_classes@\code{interconnect.num\_classes}} & int & \texttt{3} &  \\
+interconnect.\allowbreak{}inject\_\allowbreak{}queue\_\allowbreak{}depth\index[cfg]{interconnect.inject\_queue\_depth@\code{interconnect.inject\_queue\_depth}} & int & \texttt{32} &  \\
+interconnect.\allowbreak{}eject\_\allowbreak{}queue\_\allowbreak{}depth\index[cfg]{interconnect.eject\_queue\_depth@\code{interconnect.eject\_queue\_depth}} & int & \texttt{32} &  \\
+interconnect.\allowbreak{}buffers\_\allowbreak{}max\_\allowbreak{}size\index[cfg]{interconnect.buffers\_max\_size@\code{interconnect.buffers\_max\_size}} & int & \texttt{32} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}shared\_\allowbreak{}memory\_\allowbreak{}id\index[cfg]{cache\_controller[*].m\_shared\_memory\_id@\code{cache\_controller[*].m\_shared\_memory\_id}} & int & \texttt{10} & the first home (kept for the single-home code paths) \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}home\_\allowbreak{}ids\index[cfg]{cache\_controller[*].home\_ids@\code{cache\_controller[*].home\_ids}} & int list & \texttt{10,\allowbreak{} 11} & the LLC banks \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}home\_\allowbreak{}interleave\_\allowbreak{}shift\index[cfg]{cache\_controller[*].home\_interleave\_shift@\code{cache\_controller[*].home\_interleave\_shift}} & int & \texttt{0} & 0 = consecutive lines alternate between the banks; 6 = 4 KiB pages \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}protocol\_\allowbreak{}type\index[cfg]{cache\_controller[*].protocol\_type@\code{cache\_controller[*].protocol\_type}} & string & \texttt{DIRECTORY\_\allowbreak{}MSI} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}fsm\_\allowbreak{}filename\index[cfg]{cache\_controller[*].fsm\_filename@\code{cache\_controller[*].fsm\_filename}} & string & \texttt{MSI\_\allowbreak{}directory\_\allowbreak{}v3} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}processing\_\allowbreak{}queue\_\allowbreak{}size\index[cfg]{cache\_controller[*].processing\_queue\_size@\code{cache\_controller[*].processing\_queue\_size}} & int & \texttt{16} & L1 processing-queue depth (bounds demand admission). -1 = unbounded \\
+cache\_\allowbreak{}controller\allowbreak{}[0].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[0].m\_id@\code{cache\_controller[0].m\_id}} & int & \texttt{0} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[1].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[1].m\_id@\code{cache\_controller[1].m\_id}} & int & \texttt{1} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[2].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[2].m\_id@\code{cache\_controller[2].m\_id}} & int & \texttt{2} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[3].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[3].m\_id@\code{cache\_controller[3].m\_id}} & int & \texttt{3} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[0].\allowbreak{}m\_\allowbreak{}id\index[cfg]{llc\_controller[0].m\_id@\code{llc\_controller[0].m\_id}} & int & \texttt{10} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[1].\allowbreak{}m\_\allowbreak{}id\index[cfg]{llc\_controller[1].m\_id@\code{llc\_controller[1].m\_id}} & int & \texttt{11} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[0].\allowbreak{}mem\_\allowbreak{}port\_\allowbreak{}id\index[cfg]{llc\_controller[0].mem\_port\_id@\code{llc\_controller[0].mem\_port\_id}} & int & \texttt{110} & memory-side endpoint of bank 10 \\
+llc\_\allowbreak{}controller\allowbreak{}[1].\allowbreak{}mem\_\allowbreak{}port\_\allowbreak{}id\index[cfg]{llc\_controller[1].mem\_port\_id@\code{llc\_controller[1].mem\_port\_id}} & int & \texttt{111} & memory-side endpoint of bank 11 \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}shared\_\allowbreak{}memory\_\allowbreak{}id\index[cfg]{llc\_controller[*].m\_shared\_memory\_id@\code{llc\_controller[*].m\_shared\_memory\_id}} & int & \texttt{100} & Id of the main memory \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}protocol\_\allowbreak{}type\index[cfg]{llc\_controller[*].protocol\_type@\code{llc\_controller[*].protocol\_type}} & string & \texttt{DIRECTORY\_\allowbreak{}LLC\_\allowbreak{}MSI} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}fsm\_\allowbreak{}filename\index[cfg]{llc\_controller[*].fsm\_filename@\code{llc\_controller[*].fsm\_filename}} & string & \texttt{MSI\_\allowbreak{}LLC\_\allowbreak{}directory} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}num\_\allowbreak{}mshr\index[cfg]{llc\_controller[*].num\_mshr@\code{llc\_controller[*].num\_mshr}} & int & \texttt{32} & half of the single LLC's 64: the two banks together are the same LLC \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}pwb\_\allowbreak{}size\index[cfg]{llc\_controller[*].m\_data\_handler.pwb\_size@\code{llc\_controller[*].m\_data\_handler.pwb\_size}} & int & \texttt{16} & half of 32 \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}processing\_\allowbreak{}queue\_\allowbreak{}size\index[cfg]{llc\_controller[*].processing\_queue\_size@\code{llc\_controller[*].processing\_queue\_size}} & int & \texttt{16} & half of 32 \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}cache\_\allowbreak{}size\index[cfg]{llc\_controller[*].m\_data\_handler.cache\_size@\code{llc\_controller[*].m\_data\_handler.cache\_size}} & int & \texttt{16384} & half of 32768 \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}m\_\allowbreak{}ways\_\allowbreak{}count\index[cfg]{llc\_controller[*].m\_data\_handler.m\_ways\_count@\code{llc\_controller[*].m\_data\_handler.m\_ways\_count}} & int & \texttt{2} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}access\_\allowbreak{}latency\index[cfg]{llc\_controller[*].m\_data\_handler.m\_data\_access\_latency@\code{llc\_controller[*].m\_data\_handler.m\_data\_access\_latency}} & int & \texttt{10} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}arbiter\_\allowbreak{}type\index[cfg]{llc\_controller[*].arbiter\_type@\code{llc\_controller[*].arbiter\_type}} & string & \texttt{FCFSArbiter} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}arbiter\_\allowbreak{}candidates\_\allowbreak{}ids\index[cfg]{llc\_controller[*].arbiter\_candidates\_ids@\code{llc\_controller[*].arbiter\_candidates\_ids}} & int list & \texttt{0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3} & Candidates are the l1 ids \\
+m\_\allowbreak{}main\_\allowbreak{}memory.\allowbreak{}m\_\allowbreak{}llc\_\allowbreak{}id\index[cfg]{m\_main\_memory.m\_llc\_id@\code{m\_main\_memory.m\_llc\_id}} & int & \texttt{10} & fallback only: the memory answers the bank that asked \\
+m\_\allowbreak{}main\_\allowbreak{}memory.\allowbreak{}m\_\allowbreak{}id\index[cfg]{m\_main\_memory.m\_id@\code{m\_main\_memory.m\_id}} & int & \texttt{100} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}enable\index[cfg]{cache\_controller[*].dprint.enable@\code{cache\_controller[*].dprint.enable}} & int & \texttt{0} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}enable\index[cfg]{llc\_controller[*].dprint.enable@\code{llc\_controller[*].dprint.enable}} & int & \texttt{0} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}target\index[cfg]{cache\_controller[*].dprint.target@\code{cache\_controller[*].dprint.target}} & string & \texttt{} &  \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}target\index[cfg]{llc\_controller[*].dprint.target@\code{llc\_controller[*].dprint.target}} & string & \texttt{BMs/\allowbreak{}test\allowbreak{}DPrint/\allowbreak{}dprint.csv} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}addr\_\allowbreak{}filter\index[cfg]{cache\_controller[*].dprint.addr\_filter@\code{cache\_controller[*].dprint.addr\_filter}} & string & \texttt{0x\allowbreak{}FFFFFFFF\allowbreak{}FFFFFFC0} & filter in hexdecimal \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}addr\_\allowbreak{}filter\index[cfg]{llc\_controller[*].dprint.addr\_filter@\code{llc\_controller[*].dprint.addr\_filter}} & string & \texttt{0x\allowbreak{}FFFFFFFF\allowbreak{}FFFFFFC0} & filter in hexdecimal \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}cond\_\allowbreak{}addr\index[cfg]{cache\_controller[*].dprint.cond\_addr@\code{cache\_controller[*].dprint.cond\_addr}} & string list & \texttt{} & Acceptable Addresses \\
+llc\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}cond\_\allowbreak{}addr\index[cfg]{llc\_controller[*].dprint.cond\_addr@\code{llc\_controller[*].dprint.cond\_addr}} & string list & \texttt{} & Acceptable Addresses \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}cond\_\allowbreak{}msg\_\allowbreak{}id\index[cfg]{cache\_controller[*].dprint.cond\_msg\_id@\code{cache\_controller[*].dprint.cond\_msg\_id}} & int list & \texttt{} &  \\
+\end{longtable}
+
 \subsection*{\texttt{configuration/SystemConfigurations/MultiCoreSystem\_Mesh.csv}}\label{cfg:configuration-systemconfigurations-multicoresystem-mesh-csv}
 \begin{longtable}{@{}>{\ttfamily\raggedright\arraybackslash}p{0.33\textwidth}p{0.07\textwidth}>{\raggedright\arraybackslash}p{0.19\textwidth}>{\raggedright\arraybackslash}p{0.33\textwidth}@{}}
 \toprule \normalfont key & type & value & meaning \\ \midrule \endfirsthead
@@ -121,7 +385,78 @@ bus.\allowbreak{}controller\_\allowbreak{}type\index[cfg]{bus.controller\_type@\
 bus.\allowbreak{}interconnect\_\allowbreak{}controller.\allowbreak{}candidates\_\allowbreak{}id\index[cfg]{bus.interconnect\_controller.candidates\_id@\code{bus.interconnect\_controller.candidates\_id}} & int list & \texttt{0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3,\allowbreak{} 10} & Candidates are the l1 ids and llc id \\
 cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}shared\_\allowbreak{}memory\_\allowbreak{}id\index[cfg]{cache\_controller[*].m\_shared\_memory\_id@\code{cache\_controller[*].m\_shared\_memory\_id}} & int & \texttt{10} &  \\
 cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}protocol\_\allowbreak{}type\index[cfg]{cache\_controller[*].protocol\_type@\code{cache\_controller[*].protocol\_type}} & string & \texttt{DIRECTORY\_\allowbreak{}MSI} &  \\
-cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}fsm\_\allowbreak{}filename\index[cfg]{cache\_controller[*].fsm\_filename@\code{cache\_controller[*].fsm\_filename}} & string & \texttt{MSI\_\allowbreak{}directory} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}fsm\_\allowbreak{}filename\index[cfg]{cache\_controller[*].fsm\_filename@\code{cache\_controller[*].fsm\_filename}} & string & \texttt{MSI\_\allowbreak{}directory\_\allowbreak{}v3} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}processing\_\allowbreak{}queue\_\allowbreak{}size\index[cfg]{cache\_controller[*].processing\_queue\_size@\code{cache\_controller[*].processing\_queue\_size}} & int & \texttt{16} & L1 processing-queue depth (bounds demand admission). -1 = unbounded \\
+cache\_\allowbreak{}controller\allowbreak{}[0].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[0].m\_id@\code{cache\_controller[0].m\_id}} & int & \texttt{0} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[1].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[1].m\_id@\code{cache\_controller[1].m\_id}} & int & \texttt{1} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[2].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[2].m\_id@\code{cache\_controller[2].m\_id}} & int & \texttt{2} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[3].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[3].m\_id@\code{cache\_controller[3].m\_id}} & int & \texttt{3} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}id\index[cfg]{llc\_controller.m\_id@\code{llc\_controller.m\_id}} & int & \texttt{10} & LLC \\
+llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}shared\_\allowbreak{}memory\_\allowbreak{}id\index[cfg]{llc\_controller.m\_shared\_memory\_id@\code{llc\_controller.m\_shared\_memory\_id}} & int & \texttt{100} & Id of the main memory \\
+llc\_\allowbreak{}controller.\allowbreak{}protocol\_\allowbreak{}type\index[cfg]{llc\_controller.protocol\_type@\code{llc\_controller.protocol\_type}} & string & \texttt{DIRECTORY\_\allowbreak{}LLC\_\allowbreak{}MSI} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}fsm\_\allowbreak{}filename\index[cfg]{llc\_controller.fsm\_filename@\code{llc\_controller.fsm\_filename}} & string & \texttt{MSI\_\allowbreak{}LLC\_\allowbreak{}directory} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}num\_\allowbreak{}mshr\index[cfg]{llc\_controller.num\_mshr@\code{llc\_controller.num\_mshr}} & int & \texttt{64} & LLC MSHR depth: larger than L1 (fans in all cores). -1 = unbounded \\
+llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}pwb\_\allowbreak{}size\index[cfg]{llc\_controller.m\_data\_handler.pwb\_size@\code{llc\_controller.m\_data\_handler.pwb\_size}} & int & \texttt{32} & LLC write-back buffer depth: larger than L1. -1 = unbounded \\
+llc\_\allowbreak{}controller.\allowbreak{}processing\_\allowbreak{}queue\_\allowbreak{}size\index[cfg]{llc\_controller.processing\_queue\_size@\code{llc\_controller.processing\_queue\_size}} & int & \texttt{32} & LLC processing-queue depth: larger than L1. -1 = unbounded \\
+llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}cache\_\allowbreak{}size\index[cfg]{llc\_controller.m\_data\_handler.cache\_size@\code{llc\_controller.m\_data\_handler.cache\_size}} & int & \texttt{32768} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}m\_\allowbreak{}ways\_\allowbreak{}count\index[cfg]{llc\_controller.m\_data\_handler.m\_ways\_count@\code{llc\_controller.m\_data\_handler.m\_ways\_count}} & int & \texttt{2} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}handler.\allowbreak{}m\_\allowbreak{}data\_\allowbreak{}access\_\allowbreak{}latency\index[cfg]{llc\_controller.m\_data\_handler.m\_data\_access\_latency@\code{llc\_controller.m\_data\_handler.m\_data\_access\_latency}} & int & \texttt{10} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}arbiter\_\allowbreak{}type\index[cfg]{llc\_controller.arbiter\_type@\code{llc\_controller.arbiter\_type}} & string & \texttt{FCFSArbiter} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}arbiter\_\allowbreak{}candidates\_\allowbreak{}ids\index[cfg]{llc\_controller.arbiter\_candidates\_ids@\code{llc\_controller.arbiter\_candidates\_ids}} & int list & \texttt{0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3} & Candidates are the l1 ids \\
+m\_\allowbreak{}main\_\allowbreak{}memory.\allowbreak{}m\_\allowbreak{}llc\_\allowbreak{}id\index[cfg]{m\_main\_memory.m\_llc\_id@\code{m\_main\_memory.m\_llc\_id}} & int & \texttt{10} &  \\
+m\_\allowbreak{}main\_\allowbreak{}memory.\allowbreak{}m\_\allowbreak{}id\index[cfg]{m\_main\_memory.m\_id@\code{m\_main\_memory.m\_id}} & int & \texttt{100} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[2].\allowbreak{}dprint.\allowbreak{}enable\index[cfg]{cache\_controller[2].dprint.enable@\code{cache\_controller[2].dprint.enable}} & int & \texttt{0} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}dprint.\allowbreak{}enable\index[cfg]{llc\_controller.dprint.enable@\code{llc\_controller.dprint.enable}} & int & \texttt{0} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}target\index[cfg]{cache\_controller[*].dprint.target@\code{cache\_controller[*].dprint.target}} & string & \texttt{} &  \\
+llc\_\allowbreak{}controller.\allowbreak{}dprint.\allowbreak{}target\index[cfg]{llc\_controller.dprint.target@\code{llc\_controller.dprint.target}} & string & \texttt{BMs/\allowbreak{}test\allowbreak{}DPrint/\allowbreak{}dprint.csv} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}addr\_\allowbreak{}filter\index[cfg]{cache\_controller[*].dprint.addr\_filter@\code{cache\_controller[*].dprint.addr\_filter}} & string & \texttt{0x\allowbreak{}FFFFFFFF\allowbreak{}FFFFFFC0} & filter in hexdecimal \\
+llc\_\allowbreak{}controller.\allowbreak{}dprint.\allowbreak{}addr\_\allowbreak{}filter\index[cfg]{llc\_controller.dprint.addr\_filter@\code{llc\_controller.dprint.addr\_filter}} & string & \texttt{0x\allowbreak{}FFFFFFFF\allowbreak{}FFFFFFC0} & filter in hexdecimal \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}cond\_\allowbreak{}addr\index[cfg]{cache\_controller[*].dprint.cond\_addr@\code{cache\_controller[*].dprint.cond\_addr}} & string list & \texttt{} & Acceptable Addresses \\
+llc\_\allowbreak{}controller.\allowbreak{}dprint.\allowbreak{}cond\_\allowbreak{}addr\index[cfg]{llc\_controller.dprint.cond\_addr@\code{llc\_controller.dprint.cond\_addr}} & string list & \texttt{} & Acceptable Addresses \\
+cache\_\allowbreak{}controller\allowbreak{}[2].\allowbreak{}dprint.\allowbreak{}cond\_\allowbreak{}msg\_\allowbreak{}id\index[cfg]{cache\_controller[2].dprint.cond\_msg\_id@\code{cache\_controller[2].dprint.cond\_msg\_id}} & int list & \texttt{245788} &  \\
+\end{longtable}
+
+\subsection*{\texttt{configuration/SystemConfigurations/MultiCoreSystem\_NetNoC.csv}}\label{cfg:configuration-systemconfigurations-multicoresystem-netnoc-csv}
+\begin{longtable}{@{}>{\ttfamily\raggedright\arraybackslash}p{0.33\textwidth}p{0.07\textwidth}>{\raggedright\arraybackslash}p{0.19\textwidth}>{\raggedright\arraybackslash}p{0.33\textwidth}@{}}
+\toprule \normalfont key & type & value & meaning \\ \midrule \endfirsthead
+\toprule \normalfont key & type & value & meaning \\ \midrule \endhead
+\bottomrule \endfoot
+workload\_\allowbreak{}path\index[cfg]{workload\_path@\code{workload\_path}} & string & \texttt{BMs/\allowbreak{}Test\allowbreak{}BM/\allowbreak{}} & Absolute path is recommended \\
+num\_\allowbreak{}cores\index[cfg]{num\_cores@\code{num\_cores}} & int & \texttt{4} &  \\
+cache\_\allowbreak{}controller\_\allowbreak{}type\index[cfg]{cache\_controller\_type@\code{cache\_controller\_type}} & string & \texttt{Cache\allowbreak{}Controller\allowbreak{}Directory} & Type should match the name of the class \\
+requires\_\allowbreak{}ordering\index[cfg]{requires\_ordering@\code{requires\_ordering}} & string & \texttt{pair\_\allowbreak{}per\_\allowbreak{}class} &  \\
+interconnect\_\allowbreak{}type\index[cfg]{interconnect\_type@\code{interconnect\_type}} & string & \texttt{Network} &  \\
+interconnect.\allowbreak{}topology\index[cfg]{interconnect.topology@\code{interconnect.topology}} & string & \texttt{custom} &  \\
+interconnect.\allowbreak{}component\_\allowbreak{}ids\index[cfg]{interconnect.component\_ids@\code{interconnect.component\_ids}} & int list & \texttt{0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3,\allowbreak{} 10} &  \\
+interconnect.\allowbreak{}router\_\allowbreak{}ids\index[cfg]{interconnect.router\_ids@\code{interconnect.router\_ids}} & int list & \texttt{200} & the legacy switch: an explicit router; endpoint nodes get implicit zero-latency routers \\
+interconnect.\allowbreak{}connection\_\allowbreak{}matrix\allowbreak{}[0]\index[cfg]{interconnect.connection\_matrix[0]@\code{interconnect.connection\_matrix[0]}} & int list & \texttt{0,\allowbreak{} 200,\allowbreak{} 10} &  \\
+interconnect.\allowbreak{}connection\_\allowbreak{}matrix\allowbreak{}[1]\index[cfg]{interconnect.connection\_matrix[1]@\code{interconnect.connection\_matrix[1]}} & int list & \texttt{1,\allowbreak{} 200,\allowbreak{} 10} &  \\
+interconnect.\allowbreak{}connection\_\allowbreak{}matrix\allowbreak{}[2]\index[cfg]{interconnect.connection\_matrix[2]@\code{interconnect.connection\_matrix[2]}} & int list & \texttt{2,\allowbreak{} 200,\allowbreak{} 10} &  \\
+interconnect.\allowbreak{}connection\_\allowbreak{}matrix\allowbreak{}[3]\index[cfg]{interconnect.connection\_matrix[3]@\code{interconnect.connection\_matrix[3]}} & int list & \texttt{3,\allowbreak{} 200,\allowbreak{} 10} &  \\
+interconnect.\allowbreak{}connection\_\allowbreak{}matrix\allowbreak{}[4]\index[cfg]{interconnect.connection\_matrix[4]@\code{interconnect.connection\_matrix[4]}} & int list & \texttt{10,\allowbreak{} 0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3} &  \\
+interconnect.\allowbreak{}connection\_\allowbreak{}matrix\allowbreak{}[5]\index[cfg]{interconnect.connection\_matrix[5]@\code{interconnect.connection\_matrix[5]}} & int list & \texttt{200,\allowbreak{} 0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3} &  \\
+interconnect.\allowbreak{}routing\index[cfg]{interconnect.routing@\code{interconnect.routing}} & string & \texttt{Table} &  \\
+interconnect.\allowbreak{}flit\_\allowbreak{}bytes\index[cfg]{interconnect.flit\_bytes@\code{interconnect.flit\_bytes}} & int & \texttt{0} & one flit per message \\
+interconnect.\allowbreak{}router\_\allowbreak{}latency\index[cfg]{interconnect.router\_latency@\code{interconnect.router\_latency}} & int & \texttt{1} & the switch's store-and-forward cycle \\
+interconnect.\allowbreak{}vcs\_\allowbreak{}per\_\allowbreak{}class\index[cfg]{interconnect.vcs\_per\_class@\code{interconnect.vcs\_per\_class}} & int & \texttt{1} &  \\
+interconnect.\allowbreak{}vc\_\allowbreak{}depth\index[cfg]{interconnect.vc\_depth@\code{interconnect.vc\_depth}} & int & \texttt{32} & the legacy RX depth (buffers\_max\_size) in messages \\
+interconnect.\allowbreak{}num\_\allowbreak{}classes\index[cfg]{interconnect.num\_classes@\code{interconnect.num\_classes}} & int & \texttt{2} & legacy request/data split \\
+interconnect.\allowbreak{}half\_\allowbreak{}duplex\index[cfg]{interconnect.half\_duplex@\code{interconnect.half\_duplex}} & int & \texttt{1} &  \\
+interconnect.\allowbreak{}rx\_\allowbreak{}serving\index[cfg]{interconnect.rx\_serving@\code{interconnect.rx\_serving}} & string & \texttt{alternate} &  \\
+interconnect.\allowbreak{}link\_\allowbreak{}model\index[cfg]{interconnect.link\_model@\code{interconnect.link\_model}} & string & \texttt{serial} &  \\
+interconnect.\allowbreak{}class\_\allowbreak{}link\_\allowbreak{}latency\index[cfg]{interconnect.class\_link\_latency@\code{interconnect.class\_link\_latency}} & int list & \texttt{2,\allowbreak{} 5} & MeshController m\_request\_latency / m\_data\_latency \\
+interconnect.\allowbreak{}deadlock\_\allowbreak{}check\index[cfg]{interconnect.deadlock\_check@\code{interconnect.deadlock\_check}} & string & \texttt{warn} & two classes carry the legacy ordering the FSMs assume; the check reports instead of refusing (spec s14.3) \\
+interconnect.\allowbreak{}inject\_\allowbreak{}queue\_\allowbreak{}depth\index[cfg]{interconnect.inject\_queue\_depth@\code{interconnect.inject\_queue\_depth}} & int & \texttt{1024} & the legacy TX buffers were effectively unbounded \\
+interconnect.\allowbreak{}eject\_\allowbreak{}queue\_\allowbreak{}depth\index[cfg]{interconnect.eject\_queue\_depth@\code{interconnect.eject\_queue\_depth}} & int & \texttt{32} &  \\
+interconnect.\allowbreak{}buffers\_\allowbreak{}max\_\allowbreak{}size\index[cfg]{interconnect.buffers\_max\_size@\code{interconnect.buffers\_max\_size}} & int & \texttt{32} &  \\
+bus.\allowbreak{}buffers\_\allowbreak{}max\_\allowbreak{}size\index[cfg]{bus.buffers\_max\_size@\code{bus.buffers\_max\_size}} & int & \texttt{32} &  \\
+bus.\allowbreak{}m\_\allowbreak{}lower\_\allowbreak{}level\_\allowbreak{}ids\index[cfg]{bus.m\_lower\_level\_ids@\code{bus.m\_lower\_level\_ids}} & int list & \texttt{10} & LLC ID \\
+bus.\allowbreak{}upper\_\allowbreak{}level\_\allowbreak{}cache\_\allowbreak{}ids\index[cfg]{bus.upper\_level\_cache\_ids@\code{bus.upper\_level\_cache\_ids}} & int list & \texttt{100} & Main memory ID \\
+bus.\allowbreak{}controller\_\allowbreak{}type\index[cfg]{bus.controller\_type@\code{bus.controller\_type}} & string & \texttt{Point2Point} &  \\
+bus.\allowbreak{}interconnect\_\allowbreak{}controller.\allowbreak{}candidates\_\allowbreak{}id\index[cfg]{bus.interconnect\_controller.candidates\_id@\code{bus.interconnect\_controller.candidates\_id}} & int list & \texttt{0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3,\allowbreak{} 10} & Candidates are the l1 ids and llc id \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}m\_\allowbreak{}shared\_\allowbreak{}memory\_\allowbreak{}id\index[cfg]{cache\_controller[*].m\_shared\_memory\_id@\code{cache\_controller[*].m\_shared\_memory\_id}} & int & \texttt{10} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}protocol\_\allowbreak{}type\index[cfg]{cache\_controller[*].protocol\_type@\code{cache\_controller[*].protocol\_type}} & string & \texttt{DIRECTORY\_\allowbreak{}MSI} &  \\
+cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}fsm\_\allowbreak{}filename\index[cfg]{cache\_controller[*].fsm\_filename@\code{cache\_controller[*].fsm\_filename}} & string & \texttt{MSI\_\allowbreak{}directory\_\allowbreak{}v3} &  \\
 cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}processing\_\allowbreak{}queue\_\allowbreak{}size\index[cfg]{cache\_controller[*].processing\_queue\_size@\code{cache\_controller[*].processing\_queue\_size}} & int & \texttt{16} & L1 processing-queue depth (bounds demand admission). -1 = unbounded \\
 cache\_\allowbreak{}controller\allowbreak{}[0].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[0].m\_id@\code{cache\_controller[0].m\_id}} & int & \texttt{0} &  \\
 cache\_\allowbreak{}controller\allowbreak{}[1].\allowbreak{}m\_\allowbreak{}id\index[cfg]{cache\_controller[1].m\_id@\code{cache\_controller[1].m\_id}} & int & \texttt{1} &  \\
@@ -282,6 +617,41 @@ cache\_\allowbreak{}controller\allowbreak{}[*].\allowbreak{}dprint.\allowbreak{}
 llc\_\allowbreak{}controller.\allowbreak{}dprint.\allowbreak{}cond\_\allowbreak{}addr\index[cfg]{llc\_controller.dprint.cond\_addr@\code{llc\_controller.dprint.cond\_addr}} & string list & \texttt{} & Acceptable Addresses \\
 \end{longtable}
 
+\subsection*{\texttt{configuration/SystemConfigurations/NetworkOnly.csv}}\label{cfg:configuration-systemconfigurations-networkonly-csv}
+\begin{longtable}{@{}>{\ttfamily\raggedright\arraybackslash}p{0.33\textwidth}p{0.07\textwidth}>{\raggedright\arraybackslash}p{0.19\textwidth}>{\raggedright\arraybackslash}p{0.33\textwidth}@{}}
+\toprule \normalfont key & type & value & meaning \\ \midrule \endfirsthead
+\toprule \normalfont key & type & value & meaning \\ \midrule \endhead
+\bottomrule \endfoot
+interconnect.\allowbreak{}topology\index[cfg]{interconnect.topology@\code{interconnect.topology}} & string & \texttt{grid2d} &  \\
+interconnect.\allowbreak{}dims\index[cfg]{interconnect.dims@\code{interconnect.dims}} & int list & \texttt{4,\allowbreak{} 4} &  \\
+interconnect.\allowbreak{}routing\index[cfg]{interconnect.routing@\code{interconnect.routing}} & string & \texttt{XY} &  \\
+interconnect.\allowbreak{}component\_\allowbreak{}ids\index[cfg]{interconnect.component\_ids@\code{interconnect.component\_ids}} & int list & \texttt{0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3,\allowbreak{} 4,\allowbreak{} 5,\allowbreak{} 6,\allowbreak{} 7,\allowbreak{} 8,\allowbreak{} 9,\allowbreak{} 10,\allowbreak{} 11,\allowbreak{} 12,\allowbreak{} 13,\allowbreak{} 14,\allowbreak{} 15} &  \\
+interconnect.\allowbreak{}buffers\_\allowbreak{}max\_\allowbreak{}size\index[cfg]{interconnect.buffers\_max\_size@\code{interconnect.buffers\_max\_size}} & int & \texttt{16} &  \\
+interconnect.\allowbreak{}m\_\allowbreak{}clk\_\allowbreak{}period\index[cfg]{interconnect.m\_clk\_period@\code{interconnect.m\_clk\_period}} & int & \texttt{50} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[0]\index[cfg]{interconnect.node\_map[0]@\code{interconnect.node\_map[0]}} & int & \texttt{0} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[1]\index[cfg]{interconnect.node\_map[1]@\code{interconnect.node\_map[1]}} & int & \texttt{1} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[2]\index[cfg]{interconnect.node\_map[2]@\code{interconnect.node\_map[2]}} & int & \texttt{2} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[3]\index[cfg]{interconnect.node\_map[3]@\code{interconnect.node\_map[3]}} & int & \texttt{3} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[4]\index[cfg]{interconnect.node\_map[4]@\code{interconnect.node\_map[4]}} & int & \texttt{4} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[5]\index[cfg]{interconnect.node\_map[5]@\code{interconnect.node\_map[5]}} & int & \texttt{5} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[6]\index[cfg]{interconnect.node\_map[6]@\code{interconnect.node\_map[6]}} & int & \texttt{6} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[7]\index[cfg]{interconnect.node\_map[7]@\code{interconnect.node\_map[7]}} & int & \texttt{7} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[8]\index[cfg]{interconnect.node\_map[8]@\code{interconnect.node\_map[8]}} & int & \texttt{8} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[9]\index[cfg]{interconnect.node\_map[9]@\code{interconnect.node\_map[9]}} & int & \texttt{9} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[10]\index[cfg]{interconnect.node\_map[10]@\code{interconnect.node\_map[10]}} & int & \texttt{10} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[11]\index[cfg]{interconnect.node\_map[11]@\code{interconnect.node\_map[11]}} & int & \texttt{11} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[12]\index[cfg]{interconnect.node\_map[12]@\code{interconnect.node\_map[12]}} & int & \texttt{12} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[13]\index[cfg]{interconnect.node\_map[13]@\code{interconnect.node\_map[13]}} & int & \texttt{13} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[14]\index[cfg]{interconnect.node\_map[14]@\code{interconnect.node\_map[14]}} & int & \texttt{14} &  \\
+interconnect.\allowbreak{}node\_\allowbreak{}map\allowbreak{}[15]\index[cfg]{interconnect.node\_map[15]@\code{interconnect.node\_map[15]}} & int & \texttt{15} &  \\
+generator\allowbreak{}[*].\allowbreak{}pattern\index[cfg]{generator[*].pattern@\code{generator[*].pattern}} & string & \texttt{uniform} &  \\
+generator\allowbreak{}[*].\allowbreak{}rate\index[cfg]{generator[*].rate@\code{generator[*].rate}} & int & \texttt{50} &  \\
+generator\allowbreak{}[*].\allowbreak{}payload\_\allowbreak{}bytes\index[cfg]{generator[*].payload\_bytes@\code{generator[*].payload\_bytes}} & int & \texttt{64} &  \\
+generator\allowbreak{}[*].\allowbreak{}cls\index[cfg]{generator[*].cls@\code{generator[*].cls}} & int & \texttt{2} &  \\
+generator\allowbreak{}[*].\allowbreak{}packets\index[cfg]{generator[*].packets@\code{generator[*].packets}} & int & \texttt{1000} &  \\
+generator\allowbreak{}[*].\allowbreak{}seed\index[cfg]{generator[*].seed@\code{generator[*].seed}} & int & \texttt{1} &  \\
+\end{longtable}
+
 \subsection*{\texttt{configuration/CacheControllers/BaseController.csv}}\label{cfg:configuration-cachecontrollers-basecontroller-csv}
 \begin{longtable}{@{}>{\ttfamily\raggedright\arraybackslash}p{0.33\textwidth}p{0.07\textwidth}>{\raggedright\arraybackslash}p{0.19\textwidth}>{\raggedright\arraybackslash}p{0.33\textwidth}@{}}
 \toprule \normalfont key & type & value & meaning \\ \midrule \endfirsthead
@@ -387,6 +757,37 @@ connection\_\allowbreak{}matrix\allowbreak{}[4]\index[cfg]{connection\_matrix[4]
 m\_\allowbreak{}request\_\allowbreak{}latency\index[cfg]{m\_request\_latency@\code{m\_request\_latency}} & int & \texttt{2} &  \\
 m\_\allowbreak{}data\_\allowbreak{}latency\index[cfg]{m\_data\_latency@\code{m\_data\_latency}} & int & \texttt{5} &  \\
 arbiter\_\allowbreak{}type\index[cfg]{arbiter\_type@\code{arbiter\_type}} & string & \texttt{FCFSArbiter} & Type should match the name of the arbiter class \\
+\end{longtable}
+
+\subsection*{\texttt{configuration/Interconnect/Network.csv}}\label{cfg:configuration-interconnect-network-csv}
+\noindent\emph{Extends} \texttt{Mesh}; every key below overrides or adds to it.
+\begin{longtable}{@{}>{\ttfamily\raggedright\arraybackslash}p{0.33\textwidth}p{0.07\textwidth}>{\raggedright\arraybackslash}p{0.19\textwidth}>{\raggedright\arraybackslash}p{0.33\textwidth}@{}}
+\toprule \normalfont key & type & value & meaning \\ \midrule \endfirsthead
+\toprule \normalfont key & type & value & meaning \\ \midrule \endhead
+\bottomrule \endfoot
+topology\index[cfg]{topology@\code{topology}} & string & \texttt{custom} & custom | grid2d | torus2d | ring | star (docs/NoC\_Architecture\_Spec.md s4) \\
+dims\index[cfg]{dims@\code{dims}} & int list & \texttt{0} & grid2d/torus2d: kx \\
+home\_\allowbreak{}ids\index[cfg]{home\_ids@\code{home\_ids}} & int list & \texttt{-1} & LLC / directory home ids for the classifier; -1 = none (the system sets them) \\
+router\_\allowbreak{}ids\index[cfg]{router\_ids@\code{router\_ids}} & int list & \texttt{-1} & custom: explicit router ids; -1 = every non-endpoint node \\
+class\_\allowbreak{}link\_\allowbreak{}latency\index[cfg]{class\_link\_latency@\code{class\_link\_latency}} & int list & \texttt{-1} & per-class link latency; -1 = use link\_latency \\
+local\_\allowbreak{}ports\index[cfg]{local\_ports@\code{local\_ports}} & int & \texttt{0} & 0 = one local port per attached endpoint \\
+flit\_\allowbreak{}bytes\index[cfg]{flit\_bytes@\code{flit\_bytes}} & int & \texttt{16} & link width; 0 = one flit per packet \\
+header\_\allowbreak{}bytes\index[cfg]{header\_bytes@\code{header\_bytes}} & int & \texttt{8} & bytes charged for a packet header \\
+num\_\allowbreak{}classes\index[cfg]{num\_classes@\code{num\_classes}} & int & \texttt{3} & virtual networks: 3 = request/forward/response \\
+vcs\_\allowbreak{}per\_\allowbreak{}class\index[cfg]{vcs\_per\_class@\code{vcs\_per\_class}} & int & \texttt{1} &  \\
+vc\_\allowbreak{}depth\index[cfg]{vc\_depth@\code{vc\_depth}} & int & \texttt{4} & flits per VC \\
+router\_\allowbreak{}latency\index[cfg]{router\_latency@\code{router\_latency}} & int & \texttt{2} & ticks \\
+link\_\allowbreak{}latency\index[cfg]{link\_latency@\code{link\_latency}} & int & \texttt{1} & ticks per link between routers; local links cost 0 \\
+credit\_\allowbreak{}latency\index[cfg]{credit\_latency@\code{credit\_latency}} & int & \texttt{-1} & ticks; -1 = same as link\_latency \\
+half\_\allowbreak{}duplex\index[cfg]{half\_duplex@\code{half\_duplex}} & int & \texttt{0} & 1 = the two directions of a connection share one occupancy (legacy) \\
+link\_\allowbreak{}model\index[cfg]{link\_model@\code{link\_model}} & string & \texttt{pipelined} & pipelined: one flit per tick per link; serial: a flit holds the link for its latency (legacy transfer model) \\
+inject\_\allowbreak{}queue\_\allowbreak{}depth\index[cfg]{inject\_queue\_depth@\code{inject\_queue\_depth}} & int & \texttt{16} & packets per class at the NI \\
+eject\_\allowbreak{}queue\_\allowbreak{}depth\index[cfg]{eject\_queue\_depth@\code{eject\_queue\_depth}} & int & \texttt{16} & messages per class at the NI (the endpoint RX) \\
+rx\_\allowbreak{}serving\index[cfg]{rx\_serving@\code{rx\_serving}} & string & \texttt{priority} & priority (response \\
+routing\index[cfg]{routing@\code{routing}} & string & \texttt{auto} & auto (XY on grids \\
+escape\_\allowbreak{}vc\index[cfg]{escape\_vc@\code{escape\_vc}} & int & \texttt{-1} & AdaptiveMinimal: VC reserved for the escape route; -1 = none \\
+arbiter\_\allowbreak{}type\index[cfg]{arbiter\_type@\code{arbiter\_type}} & string & \texttt{FCFSArbiter} & VC and switch allocation: FCFSArbiter | RRArbiter \\
+deadlock\_\allowbreak{}check\index[cfg]{deadlock\_check@\code{deadlock\_check}} & string & \texttt{refuse} & protocol-and-network check at construction (spec s14.3): refuse | warn \\
 \end{longtable}
 
 \subsection*{\texttt{configuration/Interconnect/NoC.csv}}\label{cfg:configuration-interconnect-noc-csv}
@@ -531,5 +932,25 @@ m\_\allowbreak{}id\index[cfg]{m\_id@\code{m\_id}} & int & \texttt{100} &  \\
 m\_\allowbreak{}llc\_\allowbreak{}id\index[cfg]{m\_llc\_id@\code{m\_llc\_id}} & int & \texttt{10} &  \\
 m\_\allowbreak{}memory\_\allowbreak{}latency\index[cfg]{m\_memory\_latency@\code{m\_memory\_latency}} & int & \texttt{250} & Latency in cycles \\
 processing\_\allowbreak{}queue\_\allowbreak{}size\index[cfg]{processing\_queue\_size@\code{processing\_queue\_size}} & int & \texttt{32} & Request buffer depth. -1 = unbounded (legacy behavior) \\
+\end{longtable}
+
+\subsection*{\texttt{configuration/TrafficGenerator.csv}}\label{cfg:configuration-trafficgenerator-csv}
+\begin{longtable}{@{}>{\ttfamily\raggedright\arraybackslash}p{0.33\textwidth}p{0.07\textwidth}>{\raggedright\arraybackslash}p{0.19\textwidth}>{\raggedright\arraybackslash}p{0.33\textwidth}@{}}
+\toprule \normalfont key & type & value & meaning \\ \midrule \endfirsthead
+\toprule \normalfont key & type & value & meaning \\ \midrule \endhead
+\bottomrule \endfoot
+m\_\allowbreak{}clk\_\allowbreak{}period\index[cfg]{m\_clk\_period@\code{m\_clk\_period}} & int & \texttt{100} & one generator cycle = one network tick (both step once per 100 ns) \\
+pattern\index[cfg]{pattern@\code{pattern}} & string & \texttt{uniform} & uniform | hotspot | transpose | neighbour | none \\
+rate\index[cfg]{rate@\code{rate}} & int & \texttt{50} & packets per 1000 ticks \\
+payload\_\allowbreak{}bytes\index[cfg]{payload\_bytes@\code{payload\_bytes}} & int & \texttt{64} & 0 = a request-sized packet (header only) \\
+cls\index[cfg]{cls@\code{cls}} & int & \texttt{2} & class to inject on (0 request \\
+hotspot\_\allowbreak{}id\index[cfg]{hotspot\_id@\code{hotspot\_id}} & int & \texttt{0} & destination for the hotspot pattern \\
+packets\index[cfg]{packets@\code{packets}} & int & \texttt{1000} & packets to inject; -1 = until cycles \\
+cycles\index[cfg]{cycles@\code{cycles}} & int & \texttt{-1} & cycle limit; -1 = none \\
+seed\index[cfg]{seed@\code{seed}} & int & \texttt{1} & the generator's PRNG seed (combined with its id) \\
+consume\_\allowbreak{}after\index[cfg]{consume\_after@\code{consume\_after}} & int & \texttt{0} & cycles before the generator starts consuming its RX; -1 = never (a stalled sink) \\
+multicast\index[cfg]{multicast@\code{multicast}} & int & \texttt{1} & destinations per message \\
+untagged\index[cfg]{untagged@\code{untagged}} & int & \texttt{0} & 1 = leave Message::kind unknown (classifier fallback / fatal paths) \\
+start\index[cfg]{start@\code{start}} & int & \texttt{0} & first cycle at which the generator injects \\
 \end{longtable}
 

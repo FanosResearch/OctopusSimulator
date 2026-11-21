@@ -4,8 +4,28 @@ Status: draft 2, 2026-10-09. Draft 1 was reviewed the same day; the seventeen fi
 review's improvements are folded in (change list in §22). Real-time arbitration (TDM slot tables,
 priority VCs) is **deferred** until the infrastructure is built; §12 keeps only the hooks. Companion to
 `docs/NoC_MultiHop_Plan.md` (the why and the phasing); this document is the what, at the level an
-implementer codes from and a reviewer checks against. Nothing in it is implemented. Normative
+implementer codes from and a reviewer checks against. It is implemented on branch `network`, and
+where the text and the code differed the text now follows the code (revision note below). Normative
 statements use **shall**; everything else is explanation.
+
+**Revision 2026-11-13.** Aligned with the code on `network`. What changed:
+
+- One tick is one core cycle as shipped, not two (§2, §21).
+- The worked example takes 8 and 12 ticks, which are 8 and 12 core cycles. The legacy `NoC` takes
+  1 and 4 ticks for the same pair (§21).
+- The per-tick engine has five phases. Ejection happens inside switch traversal (§13.2). Phases
+  apply their decisions as they go, so the order of iteration is part of the definition (§13.2).
+- The `router_latency` gate is applied at VC allocation (§8.2, §11.2).
+- Age-order injection holds only under `FCFSArbiter` (§7.2, §11.1).
+- The legacy keys `buffers_max_size`, `m_request_latency`, `m_data_latency` and `switch_ids` are not
+  read (§4.4, §17.2).
+- `rollback` always returns false (§3.1).
+- Traffic generators: no `trace` pattern, a `none` pattern, and the keys `cycles`, `start`,
+  `consume_after`, `multicast` and `untagged` (§18).
+- Classifier: `K_PUTE`, `K_PUTO`, `K_MEM_READ`, `K_MEM_WACK` and the MOESI ack count (§6.3).
+- Defaults: `credit_latency` is -1 and `routing` is `auto` (§4.2, §4.3).
+- The legacy `NoC` class is not removed and the alias is not introduced (§3.3, §17.1, §19).
+- Rings have no usable routing at four routers or more (§10.2, §14.3).
 
 Contents
 
@@ -69,7 +89,7 @@ and flit-level power, Phase 3 items in the plan. Memory controllers on the netwo
 | class | request, forward or response; one virtual network each |
 | VC | virtual channel: one flit FIFO at an input port, belonging to one class |
 | credit | permission to send one flit into a specific downstream VC, or one packet into an RX queue |
-| tick | one step of the network clock; two ticks per core cycle in the shipped configuration |
+| tick | one step of the network clock; one tick is one core cycle in the shipped configuration (§13.1) |
 | R | the number of routers a packet traverses, including the first and the last |
 | NI | network interface: the endpoint side of the network, implementing `CommunicationInterface` |
 
@@ -87,7 +107,7 @@ The NI implements the existing interface and nothing else; its visible behaviour
 | `canAcceptRX(type)` | true when the RX queue for that type's class has an unreserved free slot. |
 | `txResponseFreeSlots()` | free slots in the response-class injection queue. |
 | `txFreeSlots(type)` | free slots in the injection queue a push of that type would use: REQUEST the request class, SERVICE_REQUEST the forward class (the request class with two classes), DATA_RESPONSE the response class. The controllers' transmit-side admission reads it (§14.2). |
-| `rollback(addr, mask, out)` | unchanged semantics: searches the injection queues, as `MeshInterface::rollback` does. |
+| `rollback(addr, mask, out)` | always returns `false`. The NI cannot take back a message once it is pushed. This matches `MeshInterface::rollback`, whose search is commented out. |
 
 Multicast: a `to` list with several destinations is split into one packet per destination at
 injection, in the order of the list, as today. The message is accepted or refused atomically for
@@ -108,9 +128,10 @@ destination, the controllers only test membership).
 `MultiCoreSystem_Mesh` selects the interconnect by `interconnect_type(s)`: `Mesh` and `NoC` today.
 The new network is `interconnect_type(s),Network`, class `Network`, a `ClockedObj` and
 `Configurable` like `Mesh`, exposing `getInterfaceFor(id)` and `getLowerLevelIds()` with the same
-signatures so the system class needs no other change. The legacy `NoC` class remains selectable
-until the degenerate-configuration acceptance (§17) has passed, after which `NoC` becomes an
-alias of `Network` with the legacy keys mapped (§17.2).
+signatures so the system class needs no other change. The legacy `Mesh` and `NoC` classes remain
+selectable. The plan was to make `NoC` an alias of `Network` once the degenerate configuration
+(§17) was accepted. The user accepted a documented divergence instead, so the alias was never
+introduced (§17.1).
 
 Two values the network needs from the system level: the home ids (§4.1, `home_ids`, defaulting to
 the set of `cache_controller[*].m_shared_memory_id` values) and the protocol's ordering
@@ -147,7 +168,7 @@ existing convention: `(i)` int, `(s)` string, `(vi)` int list, `(vs)` string lis
 | `router_latency` | i | 2 | ticks from a head's arrival at an input VC to its earliest switch traversal | ≥ 0 |
 | `link_latency` | i | 1 | ticks per link traversal between routers; local links cost 0 | ≥ 1 |
 | `class_link_latency` | vi | — | optional per-class link latency, index = class; overrides `link_latency`; used by the degenerate mapping (§17) and available generally | each ≥ 1 |
-| `credit_latency` | i | = `link_latency` | ticks for a credit to return; it is also where a longer buffer residency is modelled (a router that holds a slot through switch allocation and traversal, as BookSim's does, returns its credit later: §20, S8-BOOKSIM) | ≥ 0 |
+| `credit_latency` | i | -1 | ticks for a credit to return. `-1` means "use `link_latency`" (the global key, not a `class_link_latency` entry). `0` returns the credit in the same tick the flit leaves. It is also where a longer buffer residency is modelled (a router that holds a slot through switch allocation and traversal, as BookSim's does, returns its credit later: §20, S8-BOOKSIM) | ≥ 0 |
 | `half_duplex` | i | 0 | `1`: the two links of a physical connection share one occupancy, so only one flit is in flight on the connection in either direction (legacy behaviour, §17) | 0 or 1 |
 | `link_model` | s | `pipelined` | `pipelined`: a link accepts one flit per tick and delivers it `link_latency` ticks later (a wire pipeline); `serial`: a flit holds the link for its whole latency and is at the far side `link_latency − 1` ticks after it was sent (the transfer counts the sending tick, as the legacy `MeshController::Link` does), so a link carries one flit per `link_latency` ticks and a message crosses a direct link in `link_latency − 1` ticks (the legacy transfer model, §17; `link_latency ≥ 2`) | |
 | `inject_queue_depth` | i | 16 | per class, packets, at the NI | ≥ 1 |
@@ -158,17 +179,19 @@ existing convention: `(i)` int, `(s)` string, `(vi)` int list, `(vs)` string lis
 
 | key | type | default | meaning |
 |---|---|---|---|
-| `routing` | s | `XY` for grids, `Table` otherwise | `Table`, `XY`, `WestFirst`, `AdaptiveMinimal` |
+| `routing` | s | `auto` | `auto`, `Table`, `XY`, `WestFirst`, `AdaptiveMinimal`. `auto` is resolved at construction: `XY` on `grid2d` and `torus2d`, `Table` on every other topology. A `torus2d` therefore needs `vcs_per_class ≥ 2` even with the default (§10.2) |
 | `routing_table[<router>]` | vi | computed | `Table`: `dest,port,dest,port,...`; absent entries computed by BFS |
 | `escape_vc` | i | -1 | VC index reserved for the escape routing function under `AdaptiveMinimal`; -1 = none |
-| `arbiter_type` | s | `FCFSArbiter` | policy for VC and switch allocation: `FCFSArbiter`, `RRArbiter` (real-time policies deferred, §12) |
+| `arbiter_type` | s | `FCFSArbiter` | policy for injection, VC allocation and switch allocation: `FCFSArbiter`, `RRArbiter` (real-time policies deferred, §12) |
 | `deadlock_check` | s | `refuse` | the protocol-and-network check of §14.3: `refuse` aborts on a violation, `warn` prints it and runs |
 
 `requires_ordering(s)` is a system-level key (§3.3), not an interconnect key.
 
-### 4.4 Legacy keys (accepted, mapped)
+### 4.4 Legacy keys (not read)
 
-`m_request_latency`, `m_data_latency`, `buffers_max_size`, `switch_ids`: see §17.2.
+`Network` reads none of the legacy mesh keys. `buffers_max_size` reaches it through `Mesh.csv` and
+is ignored. `m_request_latency`, `m_data_latency` and `switch_ids` are not read either. Use the
+network keys instead (§17.2).
 
 ### 4.5 Validation at construction
 
@@ -242,9 +265,9 @@ is both head and tail.
 
 | class | index | members | classifier |
 |---|---|---|---|
-| REQUEST | 0 | GetS, GetM, PutS, PutM | `kind` ∈ {K_GETS, K_GETM, K_PUTS, K_PUTM, K_DEMAND}; fallback: `data == NULL` and the destination is in `home_ids` |
-| FORWARD | 1 | FwdGetS, FwdGetM, Inv, and a home's PutAck | `kind` ∈ {K_FWD, K_INV}, or K_ACK without data from a home; fallback: `data == NULL` and the source is in `home_ids` |
-| RESPONSE | 2 | data, InvAck, fills, supplies | `kind` ∈ {K_RESP, K_SUPPLY, K_SUPPLY_DEFERRED, K_FILL, K_FILL_ROLLBACK, K_WB_DATA, K_MEM_READ, K_MEM_WRITE, K_EVICT}, K_ACK otherwise; fallback: `data != NULL` |
+| REQUEST | 0 | GetS, GetM, PutS, PutM, PutE, PutO | `kind` ∈ {K_GETS, K_GETM, K_PUTS, K_PUTM, K_PUTE, K_PUTO, K_DEMAND}; fallback: `data == NULL` and the destination is in `home_ids` |
+| FORWARD | 1 | FwdGetS, FwdGetM, Inv, a home's PutAck, the MOESI ack count, a bank's memory read | `kind` ∈ {K_FWD, K_INV, K_MEM_READ}, or K_ACK without data from a home (the PutAck, and the MOESI home's ack count sent to an owner that asked for M); fallback: `data == NULL` and the source or the owner is in `home_ids` |
+| RESPONSE | 2 | data, InvAck, fills, supplies, memory writes and their acknowledgements | `kind` ∈ {K_RESP, K_SUPPLY, K_SUPPLY_DEFERRED, K_FILL, K_FILL_ROLLBACK, K_WB_DATA, K_MEM_WRITE, K_MEM_WACK, K_EVICT}, K_ACK otherwise; fallback: `data != NULL` |
 
 A home's PutAck rides the FORWARD class deliberately. The shipped directory L1 FSM handles a
 home's Inv or Fwd followed by its PutAck to the same cache (SI_a, MI_a, II_a) but not the
@@ -287,15 +310,22 @@ shared local port (§5.2) these counters belong to the port and the sharing NIs 
 
 ### 7.2 Injection
 
-Each tick the local port goes to the **oldest** candidate across the classes (by injection
-sequence, through the port's arbiter): a started packet whose next flit has a credit, or the head
-packet of a class's injection queue when a VC of its class on the local input port is free and
-has a credit; subsequent flits follow one per tick while credits allow. At most one flit per tick
-per local port. Age order rather than class priority, so that an endpoint never reorders its own
-messages: with class priority an InvAck (RESPONSE) overtook the same cache's earlier PutS
-(REQUEST) while the port was busy, and the home saw the acknowledgement before the PutS (found by
-the three-class EEMBC runs, implementation report P2-THREE-CLASS). The fabric can still reorder
-across classes downstream, which is what the protocol rows of P2-THREE-CLASS are for. A packet, once started, is not interleaved with another
+Each tick the local port's arbiter (`arbiter_type`) elects one candidate across all classes: a
+started packet whose next flit has a credit, or the head packet of a class's injection queue when
+a VC of its class on the local input port is free and has a credit. Subsequent flits follow one
+per tick while credits allow. At most one flit per tick per local port. A lone candidate wins
+without an election.
+
+Under `FCFSArbiter` the winner is the **oldest** candidate by injection sequence. That is age
+order rather than class priority, so an endpoint never reorders its own messages: with class
+priority an InvAck (RESPONSE) overtook the same cache's earlier PutS (REQUEST) while the port was
+busy, and the home saw the acknowledgement before the PutS (found by the three-class EEMBC runs,
+implementation report P2-THREE-CLASS). Under `RRArbiter` the age guarantee does not hold. The
+election rotates over `msg.owner` (§11.1), and one endpoint's packets carry different owners (an
+L1's own requests carry its id, its supplies carry the requester's). So packets of different
+classes from one endpoint can leave out of injection order. Within a class the queue is FIFO under
+both arbiters. The fabric can also reorder across classes downstream, which is what the protocol
+rows of P2-THREE-CLASS are for. A packet, once started, is not interleaved with another
 packet on the same VC (wormhole). Local links have zero latency: a flit sent in the injection
 phase is in the router's VC in the same tick (§13.2).
 
@@ -351,9 +381,11 @@ output port a switch-allocation arbiter; per output VC an allocation arbiter.
 Per packet: **RC** route computation when the head is at the FIFO front, **VA** virtual-channel
 allocation (claims one free output VC of the packet's class on the computed output port, within
 the route's `vc_mask`, §10.1), then per flit **SA** switch allocation (wins the output port for this
-tick) and **LT** link traversal. RC and VA happen once per packet; SA and LT once per flit. A
-packet's head may begin SA no earlier than `router_latency` ticks after its arrival at the input
-VC. Body and tail flits of a packet that has won VA are eligible for SA from the tick they arrive,
+tick) and **LT** link traversal. RC and VA happen once per packet; SA and LT once per flit. The
+`router_latency` gate is applied at VA: a head may not win VA until `router_latency` ticks after
+its arrival at the input VC (§11.2). SA has no gate of its own. Because VA runs before SA in the
+same tick (§13.2), the head can win VA and SA in that tick, so its earliest SA is also
+`router_latency` ticks after arrival. Implicit routers (§5.1) apply no gate. Body and tail flits of a packet that has won VA are eligible for SA from the tick they arrive,
 subject to credits and the switch arbiter, and leave in FIFO order behind the head. Cut-through
 follows: a head leaves while its tail is still upstream.
 
@@ -420,10 +452,18 @@ the VC (dateline rules, escape channels); `~0` means any VC of the class.
 
 | name | topologies | definition | ordering |
 |---|---|---|---|
-| `Table` | any | static next hop per (router, dest); computed by BFS shortest path at init with ties broken by lowest port index, or loaded from `routing_table`; `vc_mask = ~0` | PAIR_PER_CLASS with `vcs_per_class = 1` |
+| `Table` | any, if its channel dependency graph is acyclic (§14.3) | static next hop per (router, dest); computed by BFS shortest path at init with ties broken by lowest port index, or loaded from `routing_table`; `vc_mask = ~0` (with `escape_vc` set: every VC but that one, or only that one for a packet whose input VC index is `escape_vc`) | PAIR_PER_CLASS with `vcs_per_class = 1` |
 | `XY` | grid2d, torus2d | route along X to the destination column, then along Y; at the destination router, the local port. On `torus2d` the shorter direction around each ring is taken and the **dateline rule** applies: a packet that has crossed, or will cross, the wrap link of the current dimension gets `vc_mask = 0b10` (VC 1), others `0b01`; construction refuses `torus2d` + `XY` with one VC | PAIR_PER_CLASS with `vcs_per_class = 1` on grid2d; on torus2d the dateline keeps a pair's packets on one VC, so PAIR_PER_CLASS holds with 2 VCs |
 | `WestFirst` | grid2d | turn model: a packet with a westward component goes west first; otherwise, among the minimal outputs allowed by the turn rules, the one whose output VCs of the class hold the most credits, ties by lowest port index; adaptive | NONE |
 | `AdaptiveMinimal` | grid2d, torus2d | among minimal outputs, the one with the most credits, ties by lowest port index, `vc_mask` = all VCs except `escape_vc`; a packet that finds no credit on any adaptive VC is routed by `XY` with `vc_mask = 1 << escape_vc`, and a packet that arrives over a link on the escape VC stays on it (the VC a packet was injected on at its local port carries no meaning) | NONE |
+
+`XY`, `WestFirst` and `AdaptiveMinimal` refuse any topology that is not a grid (`AdaptiveMinimal`
+builds on `XY`). On a `ring` only `Table` is left, and `auto` selects it. A ring of three routers
+works, because every route is one hop. On a ring of four or more routers the computed
+shortest-path table always closes a cycle of channel dependencies, so construction refuses it
+(§14.3). `Table` has no dateline, and `escape_vc` does not help it (§14.3). A ring of four or more
+routers therefore has no usable ring routing today. The only way past the check is a hand-written
+`routing_table` that never crosses one of the connections, which uses the ring as a line.
 
 ### 10.3 Multicast
 
@@ -445,7 +485,10 @@ and the arbiter returns the winning `index`. A new virtual on `Arbiter`,
 | arbiter | rule |
 |---|---|
 | `FCFSArbiter` | lowest `seq` |
-| `RRArbiter` | rotate a pointer over endpoint ids; the first id in rotation order that has a candidate wins with its lowest-`seq` candidate; the pointer advances past the winner |
+| `RRArbiter` | rotate a pointer over the endpoint ids in ascending order; the first id in rotation order that owns a candidate wins with its lowest-`seq` candidate; the pointer rests on the winner, so the next election starts after it. Age order across owners is not kept (§7.2) |
+
+The arbiter is used for injection (§7.2), VC allocation and switch allocation. A lone candidate
+wins without calling it.
 
 `TDMArbiter` and a `PriorityArbiter` get their `electIndex` in the deferred real-time phase (§12);
 the `owner` field is carried in every `Candidate` from day one so that they need no change to the
@@ -458,7 +501,8 @@ rotation state so that an RR arbiter used on a link and on a router behaves the 
 
 Per output VC, per tick: candidates are the input VCs whose current packet has computed this output
 port, whose class matches, whose `vc_mask` admits this VC, that hold no output VC yet, and whose
-head is at least `router_latency` ticks old. One winner per output VC per tick. A free output VC is
+head is at least `router_latency` ticks old (0 at an implicit router). This is the only place the
+`router_latency` gate is applied (§8.2). One winner per output VC per tick. A free output VC is
 one with no packet holding it; on a local port, VA additionally requires one packet credit for the
 destination (§8.4) and consumes it.
 
@@ -506,10 +550,11 @@ one core cycle as shipped, and that halving `m_clk_period` gives two ticks per c
 
 ### 13.2 Per-tick algorithm
 
-The controller executes the following phases in order, over all routers in ascending id, all ports
-in ascending index and all VCs in ascending (class, vc); decisions within a phase use the state as
-it was at the start of the phase (compute, then apply), so results do not depend on iteration
-order:
+The controller executes five phases in order, over all routers in ascending index, all ports in
+ascending index and all VCs in ascending (class, vc). Each phase applies a decision as soon as it
+makes it, so later decisions in the same phase see it: an input VC that wins one output VC no
+longer competes for the next, and an input port that has sent a flit sends no other. The fixed
+iteration order is therefore part of the definition, and it keeps the run deterministic (§16).
 
 1. **Injection** from the NIs (§7.2), using the credits visible at the start of the tick. A flit
    injected now is in its router's VC for the rest of this tick.
@@ -517,11 +562,12 @@ order:
    Credits whose return tick is now increment their counters.
 3. **Route computation.** Every current packet whose head is at the FIFO front and has no route
    gets `nextHop`.
-4. **VC allocation** (§11.2).
-5. **Switch allocation and link traversal** (§11.3). Flits popped here schedule a credit return to
-   the upstream side at `tick + credit_latency`.
-6. **Ejection.** Tails that arrived at a local port complete their packet; `pushMessage2RX` is
-   called and shall succeed (§7.3).
+4. **VC allocation** (§11.2), with the `router_latency` gate.
+5. **Switch allocation, link traversal and ejection** (§11.3). Flits popped here schedule a credit
+   return to the upstream side at `tick + credit_latency`, or return it at once when
+   `credit_latency = 0`. When the flit sent is a tail on a local output port, the packet is ejected
+   in the same step: `pushMessage2RX` is called and shall succeed (§7.3). There is no separate
+   ejection phase.
 
 Unloaded latency of a packet of `f` flits traversing `R` routers (so `R − 1` links) is therefore
 
@@ -579,7 +625,11 @@ the watchdog reports.
 - **Routing-level** (`Table` only; `XY` and `WestFirst` are free by construction and
   `AdaptiveMinimal` by its escape VC): build the channel dependency graph whose nodes are (link, VC)
   and whose edges are the transitions the table can produce for any destination; a cycle rejects
-  the table unless `escape_vc` is set, in which case the escape VC's own graph must be acyclic.
+  the table. `escape_vc` does not rescue it. `Table` has no escape routing function: the escape VC
+  only narrows the VC mask, every packet follows the same table paths on whichever VC it holds, and
+  the cycle stays in the graph that is checked. On a
+  `ring` of four or more routers the computed table always has such a cycle (§10.2). The refusal
+  message still suggests setting `escape_vc`, which does not help with `Table`.
 - **Protocol-level** (`Network::checkProtocols`, `src/Interconnect/Network/ProtocolCheck.cpp`):
   at construction, after every controller exists, read each protocol's FSM table and, for every
   cell with actions, the class of the message the event consumes and the classes of the messages
@@ -690,16 +740,24 @@ node that sends several messages in one cycle (the LLC's invalidations and data)
 over consecutive ticks; a message to a busy link also blocks the messages behind it in the local
 input VC (one VC per class), where the legacy kept one queue per link. If the files are not
 identical, the fallback acceptance is identical per-core worst cases and totals within one tick,
-documented in the manual, and the decision to accept it is the user's. The legacy class is removed
-only after acceptance.
+documented in the manual, and the decision to accept it is the user's.
+
+Outcome: the files are not identical, and the user accepted the divergence on 2026-10-10 as a
+documented modelling difference (`test/network/ref/s6-accepted.txt`; S6-IDENTITY and S6-FALLBACK
+report XFAIL). Single-message paths take exactly their legacy number of ticks. The legacy `NoC`
+and `Mesh` classes are **not** removed and stay selectable through `interconnect_type(s),NoC` and
+`Mesh`. The `NoC` alias of §3.3 is not introduced (S6-NOC-ALIAS is XFAIL).
 
 ### 17.2 Legacy key mapping
 
-| legacy | mapped to |
+The network does not map legacy keys. None of them is read and none warns (§4.4). The table gives
+the network key that plays each legacy key's role, which `MultiCoreSystem_NetNoC.csv` sets by hand.
+
+| legacy (not read) | set instead |
 |---|---|
-| `buffers_max_size` | `inject_queue_depth` and `eject_queue_depth` |
-| `m_request_latency` / `m_data_latency` | `class_link_latency` entries 0 and 1 when `num_classes = 2`; elsewhere ignored with a warning that `link_latency` and `flit_bytes` are in effect |
-| `switch_ids` | routers in a `custom` matrix |
+| `buffers_max_size` | `inject_queue_depth`, `eject_queue_depth` and, for the per-hop depth, `vc_depth` |
+| `m_request_latency` / `m_data_latency` | `class_link_latency` entries 0 and 1 with `num_classes = 2` |
+| `switch_ids` | `router_ids` in a `custom` matrix |
 
 ## 18. Traffic generators (network-only mode)
 
@@ -707,19 +765,28 @@ For validation and for network studies without caches, a `TrafficGenerator` endp
 `CommunicationInterface` on the NI side and nothing else. Configuration under
 `generator[<endpoint id>]`:
 
-| key | type | meaning |
-|---|---|---|
-| `pattern` | s | `uniform`, `hotspot`, `transpose`, `neighbour`, `trace` |
-| `rate` | i | injection rate in packets per 1000 ticks |
-| `payload_bytes` | i | payload size, so flit count follows §6.2 |
-| `cls` | i | class to inject on |
-| `hotspot_id` | i | destination for `hotspot` |
-| `packets` | i | number to inject, `-1` = until the run's cycle limit |
-| `seed` | i | the generator's own deterministic PRNG seed |
+| key | type | default | meaning |
+|---|---|---|---|
+| `pattern` | s | `uniform` | `uniform`, `hotspot`, `transpose` (the endpoint at the router with swapped coordinates, on grids and tori), `neighbour` (the next endpoint id, cyclically), `none` (injects nothing). There is no `trace` pattern |
+| `rate` | i | 50 | injection rate in packets per 1000 ticks, 0 to 1000 |
+| `payload_bytes` | i | 64 | payload size, so flit count follows §6.2; 0 is a header-only packet |
+| `cls` | i | 2 | class to inject on (0, 1 or 2) |
+| `hotspot_id` | i | 0 | destination for `hotspot` |
+| `packets` | i | 1000 | number to inject, `-1` = no limit (then `cycles` ends injection) |
+| `cycles` | i | -1 | last injecting cycle, `-1` = none |
+| `start` | i | 0 | first injecting cycle |
+| `seed` | i | 1 | the generator's own deterministic PRNG seed, combined with its id |
+| `consume_after` | i | 0 | cycles before the generator drains its RX; `-1` = never (a stalled sink) |
+| `multicast` | i | 1 | destinations per message (≥ 1) |
+| `untagged` | i | 0 | `1` leaves the message kind unknown, to exercise the classifier's fallback and fatal paths |
 
-Generators consume what they receive immediately (they satisfy `ADMIT-RF` trivially) and record
-per-packet latency into `NetworkStats.csv`. A system preset `NetworkOnly.csv` instantiates
-generators on every local port and no caches.
+The defaults live in `configuration/TrafficGenerator.csv`; keys are set per generator
+(`generator[<id>]`) or for all (`generator[*]`). Generators consume what they receive immediately
+unless `consume_after` says otherwise (by default they satisfy `ADMIT-RF` trivially). A refused
+push is retried, never dropped. Packet latencies reach `NetworkStats.csv` through the per-class
+and per-endpoint rows. Each generator adds one row with its sent, received, retry and out-of-order
+counts. A system preset `NetworkOnly.csv` instantiates one generator on every endpoint and no
+caches.
 
 ## 19. Code structure
 
@@ -745,8 +812,8 @@ configuration/SystemConfigurations/NetworkOnly.csv
 test/network/                   §20
 ```
 
-The legacy `Mesh`, `MeshController`, `MeshInterface`, `NoC*` files are untouched by Phase 1 and
-deleted after §17.1 passes.
+The legacy `Mesh`, `MeshController`, `MeshInterface`, `NoC*` files are untouched by Phase 1. They
+were to be deleted after §17.1 passed. The divergence was accepted instead, so they stay (§17.1).
 
 ## 20. Validation
 
@@ -783,13 +850,16 @@ routers 0..3, one each; LLC id 10 on router 3 with L1 3, each on its own local p
 
 L1 0 issues a GetS. Injection at router 0, class REQUEST, 1 flit. `XY`: X first, 0 → 1, then Y,
 1 → 3, then the LLC's local port. Three routers, two links, one flit: `3·2 + 2·1 + 0 = 8 ticks` =
-4 core cycles from injection to ejection into the LLC's request RX. The data response, 72 bytes,
-5 flits, does not retrace that path: `XY` from (1,1) to (0,0) goes along X first, 3 → 2, then
-along Y, 2 → 0, then local: `3·2 + 2·1 + 4 = 12 ticks` = 6 core cycles. Request and response use
-disjoint links, which matters for contention. Under the legacy single-switch NoC the same pair
-costs `2 + 5 = 7` ticks whatever the placement; on the grid, an LLC on router 0 would cost
-`1·2 + 0 + 0 = 2` and `1·2 + 0 + 4 = 6` ticks, and an LLC on router 3 costs the figures above.
-That placement sensitivity is the first result the plan asks for.
+8 core cycles from injection to ejection into the LLC's request RX (one tick is one core cycle,
+§13.1). The data response, 72 bytes, 5 flits, does not retrace that path: `XY` from (1,1) to (0,0)
+goes along X first, 3 → 2, then along Y, 2 → 0, then local: `3·2 + 2·1 + 4 = 12 ticks` = 12 core
+cycles. Request and response use disjoint links, which matters for contention. Under the legacy
+single-switch NoC each L1 has a direct link to the LLC, and a serial link delivers a message
+`latency − 1` ticks after it is sent (§4.2). With the legacy latencies 2 and 5 the same pair takes
+1 and 4 ticks, whatever the core. `MultiCoreSystem_NetNoC` reproduces exactly these figures. On
+the grid, an LLC on router 0 would cost `1·2 + 0 + 0 = 2` and `1·2 + 0 + 4 = 6` ticks, and an LLC
+on router 3 costs the figures above. That placement sensitivity is the first result the plan asks
+for.
 
 If L1 1 is sending a 5-flit write-back along 1 → 3 at the same time, the GetS's head arriving at
 router 1 competes with the write-back's body flits for the output port towards 3 (different class,

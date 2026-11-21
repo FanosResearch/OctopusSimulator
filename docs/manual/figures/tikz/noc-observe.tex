@@ -1,0 +1,47 @@
+% What the network records for one packet: raw-trace records per router (Logger role NOC), the
+% bus records at the NI, and the trackers written into the LatencyReport at ejection.
+% Illustration: the GetS of the worked example, delayed 4 ticks at R1 by an older write-back.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, x=1mm, y=1mm,
+  lane/.style={draw=octrule!50, fill=octpaper},
+  stay/.style={draw=octpurple, fill=octio, thick},
+  lost/.style={draw=octred, fill=octred!20, thick},
+  busi/.style={draw=octink, fill=octquiet!25, thick},
+  mk/.style={circle, fill=octink, inner sep=0, minimum size=1.6mm},
+  rowl/.style={anchor=east, font=\sffamily\scriptsize\bfseries, align=right},
+  lbl/.style={text=octquiet},
+  ttl/.style={font=\sffamily\small\bfseries, text=octink, anchor=west},
+  box/.style={draw=octrule, rounded corners=2pt, fill=octpaper, inner sep=3pt, align=left}]
+  \def\tk{8}
+  % axis
+  \foreach \t in {0,...,12} { \node[lbl] at (30+\t*\tk, 6) {\t}; \draw[octrule!25] (30+\t*\tk,3) -- (30+\t*\tk,-36); }
+  \node[lbl, anchor=east] at (25,6) {tick};
+  % lanes
+  \foreach \nm/\yy in {{\code{REQ\_BUS}}/0, {\code{NOC} R0}/-9, {\code{NOC} R1}/-18, {\code{NOC} R3}/-27} {
+    \draw[lane] (28,\yy+3) rectangle (30+12*\tk+4,\yy-3); \node[rowl] at (25,\yy) {\nm};
+  }
+  % bus record: inject (ENTER, trace only) to eject (EXIT, trace and report)
+  \draw[busi] (30,2) rectangle (30+12*\tk,-2);
+  \node at (30+6*\tk,0) {packet: ENTER at injection, EXIT at ejection};
+  % router stays: ENTER .. EXIT, SERVICE marked
+  \draw[stay] (30,-7) rectangle (30+2*\tk,-11);                  \node[mk] at (30+2*\tk,-9) {};
+  \draw[stay] (30+3*\tk,-16) rectangle (30+5*\tk,-20);           \node[mk] at (30+5*\tk,-18) {};
+  \draw[lost] (30+5*\tk,-16) rectangle (30+9*\tk,-20);
+  \node[text=octred] at (30+7*\tk,-18) {loses SA 4 times};
+  \draw[stay] (30+10*\tk,-25) rectangle (30+12*\tk,-29);         \node[mk] at (30+12*\tk,-27) {};
+  \node[lbl, anchor=west] at (30+2*\tk+1,-9) {EXIT};
+  \node[lbl, anchor=west] at (30+9*\tk+1,-18) {EXIT};
+  \node[lbl, anchor=east] at (30+10*\tk-1,-27) {ENTER};
+  % legend
+  \node[mk] at (31,-40) {}; \node[lbl, anchor=west] at (33,-40) {SERVICE: the head wins VC allocation};
+  \draw[lost] (88,-41.5) rectangle (94,-38.5); \node[lbl, anchor=west] at (95,-40) {ready but beaten at switch allocation};
+  % trackers
+  \node[ttl] at (0,-50) {Written at ejection into the request's \code{LatencyReport} row};
+  \node[box, anchor=north west, text width=160mm] at (0,-54) {\begin{tabular}{@{}p{30mm}p{124mm}@{}}
+    \col{NoC Hops} = 3 & routers entered, summed over the request's packets\\
+    \col{NoC Transfer} = 8 & what the packets would take unloaded: $\textit{router\_latency}$ per router, link ticks, and $f-1$\\
+    \col{NoC Wait} = 4 & the rest of injection-to-ejection: waiting for a VC, the switch or a credit. Wait + Transfer = 12\\
+    \col{NoC Ahead} = 4 & flits of other packets that won a switch election this packet's flit lost\\
+    \col{NoC Ahead Winner} = 1 & the owner that won most often ($-1$ if never beaten)\\
+  \end{tabular}\\[0.4ex]
+  With \code{memory\_on\_network} the memory packets of a request go to \col{NoC Mem Hops}, \col{NoC Mem Wait} and \col{NoC Mem Ahead} instead, and log as \code{MEM\_BUS}.};
+\end{tikzpicture}

@@ -1,0 +1,34 @@
+% The read-after-write rule to memory: an LLC bank keeps every line it writes until the memory
+% controller acknowledges the write, and fills a read of that line from its own copy meanwhile.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, x=1mm, y=1mm,
+  hdr/.style={draw=octamber, fill=octctl, rounded corners=2pt, minimum width=30mm, minimum height=8mm, align=center, font=\sffamily\scriptsize\bfseries},
+  mch/.style={hdr, draw=octteal, fill=white, thick},
+  life/.style={octquiet, thick, densely dashed},
+  wr/.style={->, very thick, octteal},
+  ack/.style={->, thick, octteal, densely dotted},
+  rd/.style={->, thick, octpurple, dashed},
+  note/.style={draw=octrule, fill=octpaper, rounded corners=1.5pt, align=left, inner sep=2pt, text width=46mm},
+  held/.style={fill=octamber!35, draw=octamber},
+  lbl/.style={text=octquiet},
+  m/.style={fill=white, inner sep=1pt}]
+  \node[hdr] (b) at (57,0) {LLC bank\\(pending-write table)};
+  \node[mch] (mc) at (127,0) {memory controller};
+  \draw[life] (57,-4) -- (57,-78); \draw[life] (127,-4) -- (127,-78);
+  % time arrow
+  \draw[->, octquiet] (0,-6) -- (0,-76) node[midway, left, rotate=90, anchor=south] {time};
+  % write
+  \draw[held] (55.5,-10) rectangle (58.5,-44);
+  \draw[wr] (57,-10) -- node[m, sloped, above] {\code{MEM\_WRITE} X, data (RESPONSE)} (127,-20);
+  \node[note, anchor=east] at (54,-12) {evicts dirty line X: the write leaves, X and its data stay in the table (counted in \code{pwb\_size})};
+  % read while held
+  \node[note, anchor=east] at (54,-31) {a miss on X now is filled from the table (\code{FILL\_ROLLBACK}): no read is sent};
+  % ack
+  \draw[ack] (127,-22) -- node[m, sloped, above] {\code{MEM\_WACK}, header only, id 0 (RESPONSE)} (57,-44);
+  \node[note, anchor=west, text width=36mm] at (130,-22) {acknowledges on \emph{acceptance}: from here the controller's queue orders X};
+  \node[note, anchor=east] at (54,-46) {acknowledgement: X leaves the table};
+  % later read
+  \draw[rd] (57,-56) -- node[m, sloped, above] {\code{MEM\_READ} X (FORWARD)} (127,-62);
+  \draw[wr] (127,-66) -- node[m, sloped, below] {\code{FILL} X (RESPONSE)} (57,-74);
+  \node[note, anchor=west, text width=36mm] at (130,-63) {\code{MainMemoryController} serves in arrival order, so the write comes first. \code{MCsimInterface} answers a read of a line whose write MCsim has not performed from that write.};
+  \node[lbl, anchor=north west, text width=160mm] at (0,-82) {The guarantee does not rest on network order: reads and writes travel in different classes and may reach different controllers. Reads and writes of different lines may reorder. \code{OCTOPUS\_MEM\_HAZARD=1} counts any read that overtakes an older write of its line (\code{=fatal} stops at the first).};
+\end{tikzpicture}

@@ -34,9 +34,13 @@ the directories under \file{src/MCsim/system/}: FCFS, FR-FCFS (and its batched a
 variants), BLISS, PAR-BS, MEDUSA, ORP, RTMem, ROC, RankReOrder, ReOrder, Round, PipeCAS, and the
 predictable controllers AMC, DCmc, MAG, MCMC, PMC and RROF. Each is a \code{system.ini} that
 names the request-queue structure, the command generator and the command scheduler; a new
-controller is on average about 130 lines. MCsim stamps no DRAM events: the \col{DRAM} column
-becomes the whole \code{bus[1]} round trip and \col{L2-DRAM Bus} the admit-to-leave hand-off.
-Writes are fire-and-forget. Selecting it:
+controller is on average about 130 lines. The interface stamps \stamp{DRAM.ENTER} when MCsim
+accepts a request, or when it fills a read from a pending write, and \stamp{DRAM.EXIT} when the
+fill is handed to \code{bus[1]}. The \col{DRAM} column is then the time inside MCsim, including
+its own queues, and \col{L2-DRAM Bus} the two bus legs plus the wait in the interface's queue
+before MCsim accepts the request.
+While MCsim holds a write it has not performed, a read of the same line does not enter MCsim. The
+interface answers it at once with a fill. Selecting it:
 
 \begin{lstlisting}[style=shell]
 -p "main_memory_type(s)=MCsim" -p "mcsim_scheduler(s)=FRFCFS"
@@ -46,6 +50,17 @@ MCsim is cycle-accurate and correspondingly slower --- five to ten times on EEMB
 prohibitive on the SPLASH giants, which is why the memory axis of the sweeps is EEMBC-only. Use
 \code{FRFCFS} unless the scheduler is the subject: the \code{Round} and \code{ORP} schedulers
 wedge on the shipped workloads.
+
+\paragraph{Writes are acknowledged.} Both models answer a write with a header-only
+\code{MEM\_WACK} (no data, request id 0) as soon as they accept it into their queue. From then on
+the controller's queue orders the line. \code{MainMemoryController} always accepts a write, while
+a read waits for room in its queue. Until the acknowledgement arrives the LLC keeps the written line
+and its data, and the entry counts against its \key{pwb\_size}. A read of that line that the LLC
+would send to memory is filled from this copy instead, so a read never overtakes an earlier write of
+its line. On \code{bus[1]} the acknowledgement takes no data slot: the bus delivers it on a side
+channel without waiting for one. On the network it is a header-only RESPONSE packet
+(\cref{sec:noc-banking}). \env{OCTOPUS\_MEM\_HAZARD}$=1$ counts reads that overtake an older
+write of their line.
 
 \section{Clocks at the boundary}
 

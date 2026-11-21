@@ -16,7 +16,7 @@ FSM_DIR = os.path.join(REPO, "Protocols_FSM")
 OUT_DIR = os.path.join(MANUAL, "generated")
 
 FSMS = ["MSI_splitBus_snooping", "MSI_LLC", "MESI_splitBus_snooping", "MESI_LLC",
-        "MOESI_splitBus_snooping", "MOESI_LLC", "MSI_directory", "MSI_LLC_directory"]
+        "MOESI_splitBus_snooping", "MOESI_LLC", "MSI_directory_v3", "MSI_LLC_directory"]
 
 
 def tex(s):

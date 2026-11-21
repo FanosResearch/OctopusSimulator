@@ -2,7 +2,7 @@
 
 \whatyoufind{The three-part model every interconnect is built from; the bus family that the
 shipped systems use, with its lanes, latencies and back-pressure; the three arbiters and the
-one rule they share; the mesh and the single-switch NoC, with what they do and do not model
+one rule they share; the legacy mesh and single-switch NoC, with what they do and do not model
 today; and where each of these is a plug-in.}
 
 \section{Topology, controller, interfaces}
@@ -105,11 +105,11 @@ controller's factory (\cref{ch:extending}).
 
 \section{Mesh and NoC}
 
-\code{MultiCoreSystem\_Mesh.csv} replaces the bus with a \code{Mesh}: one node per entry of
-\key{component\_ids}, and \key{connection\_matrix[i]} listing node $i$'s neighbours, the first
-entry being the node itself. As shipped (\file{configuration/Interconnect/Mesh.csv}) the matrix
-is the complete graph on the four L1s and the LLC (\cref{fig:topologies} middle), so every pair
-has a direct link:
+\code{MultiCoreSystem\_Mesh} replaces the bus with a point-to-point interconnect, and the key
+\key{interconnect\_type} chooses which one. \code{Mesh} has one node per entry of \key{component\_ids}, and
+\key{connection\_matrix[i]} lists node $i$'s neighbours, the first entry being the node itself. As
+shipped (\file{configuration/Interconnect/Mesh.csv}) the matrix is the complete graph on the four
+L1s and the LLC (\cref{fig:topologies} middle), so every pair has a direct link:
 
 \begin{lstlisting}[style=csv]
 component_ids(vi),0,1,2,3,10
@@ -120,29 +120,24 @@ connection_matrix[3](vi),3,0,1,2,10
 connection_matrix[4](vi),10,0,1,2,3    # the LLC links to every L1
 \end{lstlisting}
 
-A different shape is a different matrix, no code: a ring is each node listing its two
-neighbours. Each link each link carries requests and data on separate channels with
-their own latencies (2 and 5 ticks) and its own arbiter (FCFS by default), half-duplex, one
-message in flight per latency window. It is the natural home of the directory protocol, which
-sends point-to-point and never broadcasts; directory MSI runs the whole EEMBC suite on it.
+Each link carries requests and data on separate channels with their own latencies (2 and 5
+ticks) and its own arbiter (FCFS by default). It is half duplex, with one message in flight per
+latency window. \code{NoC} adds \emph{switch} nodes (\key{switch\_ids}, 200 as shipped) that forward
+what they receive in the same cycle from a static next-hop table (\cref{fig:topologies} right), so a
+message crosses at most one switch. Both are the natural home of the directory protocols, which
+send point-to-point and never broadcast.
 
-The \code{NoC} is the mesh plus \emph{switch} nodes (\key{switch\_ids}, 200 as shipped). A
-switch is an interface that forwards whatever it receives in the same cycle, with no latency or
-arbitration of its own, from a static per-source next-hop table built at construction: every
-direct neighbour maps to itself, and everything a neighbouring switch lists maps to that
-switch. As shipped (\cref{fig:topologies} right) the L1s link to the LLC directly and to each
-other through the switch. A message can cross at most one switch, because a switch's own table
-knows only its direct neighbours.
+For anything beyond these two shapes set \key{interconnect\_type} to \code{Network}: the flit-level
+network of \cref{ch:noc}, with routers, virtual channels, credits, pluggable routing, LLC banks and
+memory controllers on the network. It reproduces the single-switch \code{NoC} as one of its
+configurations (\cref{sec:noc-legacy}).
 
-\begin{notebox}[What the NoC does not model yet]
-Three things are worth knowing before measuring on it. A destination the routing table does not
-know is dropped silently and \code{pushMessage} returns true; the TX-side capacity check
-compares the \emph{number of per-link queues}, a constant, against the limit, so there is no
-back-pressure on that side and congestion exits instead of stalling; and a hop is logged as one
-opaque bus event, so the report's bus columns and the visualizer cannot see the path. A
-multi-hop network with pluggable routing, per-hop credits and virtual networks per message
-class is designed in \file{docs/NoC_MultiHop_Plan.md}; the current single-switch NoC becomes
-its degenerate case.
+\begin{notebox}[Limits of the legacy Mesh and NoC]
+The two classes are kept for compatibility and do not model contention inside a switch. A
+destination the \code{NoC} routing table does not know is dropped silently. The transmit-side
+capacity check compares the number of per-link queues, a constant, against the limit, so there is
+no back-pressure on that side. The report folds the whole route into its two bus columns and records
+no hop count. The \code{Network} has none of these limits.
 \end{notebox}
 
 \begin{wherebox}

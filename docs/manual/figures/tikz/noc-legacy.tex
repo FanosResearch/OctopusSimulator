@@ -1,0 +1,39 @@
+% The legacy single-switch NoC expressed as a network (MultiCoreSystem_NetNoC.csv).
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, x=1mm, y=1mm,
+  imp/.style={draw=octrule, fill=octmem, rounded corners=1.5pt, minimum width=11mm, minimum height=6mm, inner sep=0.5pt, align=center, font=\sffamily\scriptsize\bfseries},
+  llc/.style={imp, fill=octctl, draw=octamber},
+  sw/.style={draw=octpurple, fill=octio, very thick, minimum size=10mm, inner sep=0, align=center, font=\sffamily\scriptsize\bfseries},
+  hd/.style={<->, semithick, octink},
+  hdl/.style={{Latex[length=2.2mm,width=1.6mm]}-{Latex[length=2.2mm,width=1.6mm]}, semithick, octink, densely dashed, shorten <=0.4mm, shorten >=0.4mm},
+  lbl/.style={text=octquiet},
+  ttl/.style={font=\sffamily\small\bfseries, text=octink, anchor=west},
+  box/.style={draw=octrule, rounded corners=2pt, fill=octpaper, inner sep=3pt, align=left}]
+  \node[ttl] at (0,14) {\code{MultiCoreSystem\_NetNoC}: the legacy NoC on the network engine};
+  \node[sw] (s) at (36,-38) {200\\[-0.4ex]\mdseries\tiny router};
+  \foreach \i/\x in {0/6,1/26,2/46,3/66} \node[imp] (c\i) at (\x,-18) {L1 \i};
+  \node[llc] (l) at (36,2) {LLC 10};
+  \foreach \i in {0,1,2,3} \draw[hd] (c\i) -- (s);
+  \foreach \i in {0,1,2,3} \draw[hdl] (c\i) -- (l);
+  \node[lbl, anchor=north west, text width=80mm] at (0,-48) {Each box is an endpoint on an implicit router of its own (no \code{router\_latency}). Solid: through the explicit router 200 (\code{router\_latency 1}). Dashed: direct links to the LLC. Every connection is one half-duplex link, shared by requests (2 ticks) and data (5 ticks) and held for the whole latency (\code{link\_model serial}). The legacy \code{NoC} had a separate request link and data link per connection.};
+  % recipe
+  \node[box, anchor=north west, text width=70mm] at (86,9) {\textbf{The keys that reproduce it}\\[0.4ex]
+    \code{topology custom}, the legacy \code{connection\_matrix}, \code{router\_ids 200}\\
+    \code{routing Table}\\
+    \code{flit\_bytes 0} (one flit per message)\\
+    \code{router\_latency 1}\\
+    \code{num\_classes 2} (request, data)\\
+    \code{class\_link\_latency 2,5}\\
+    \code{link\_model serial}, \code{half\_duplex 1}\\
+    \code{vc\_depth 32}, \code{rx\_serving alternate}\\
+    \code{inject\_queue\_depth 1024}\\
+    \code{deadlock\_check warn}};
+  % path costs
+  \node[ttl] at (86,-37) {One message, ticks};
+  \node[box, anchor=north west, text width=70mm] at (86,-41) {\begin{tabular}{@{}lcc@{}}
+    path & \code{NoC} & \code{Network} \\
+    L1 to LLC, request & 1 & 1\\
+    L1 to LLC, data & 4 & 4\\
+    L1 to L1 through 200, request & 3 & 3\\
+    L1 to L1 through 200, data & 9 & 9\\
+  \end{tabular}};
+\end{tikzpicture}

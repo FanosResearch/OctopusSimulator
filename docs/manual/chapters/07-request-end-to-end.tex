@@ -118,9 +118,10 @@ report column (the \code{ARRAY} lane of the visualizer shows it).
 
 \paragraph{L2-DRAM Bus and DRAM depend on the memory model.} With \code{MainMemoryController}
 the DRAM stamps exist and \col{L2-DRAM Bus} is the two memory-bus legs either side of the DRAM
-service. MCsim stamps no DRAM events, so there \col{L2-DRAM Bus} becomes ``LLC admit
-$\rightarrow$ read leaves on \code{bus[1]}'' and \col{DRAM} becomes the whole \code{bus[1]} round
-trip, return leg included. Nothing of the round trip is lost, but the split moves.
+service. \code{MCsimInterface} stamps \stamp{DRAM.ENTER} when MCsim accepts the read and
+\stamp{DRAM.EXIT} when the fill is handed to \code{bus[1]}. There \col{DRAM} is the time inside
+MCsim, and \col{L2-DRAM Bus} also holds the wait in the interface's queue before MCsim accepts
+the read.
 
 \paragraph{A cache-to-cache supply substitutes the responder.} When the LLC never emits because
 the line's owner answered on the bus, the last \stamp{L1.SERVICE}/\stamp{L1.EXIT} strictly before

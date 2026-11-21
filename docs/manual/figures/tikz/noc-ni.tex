@@ -1,0 +1,67 @@
+% The network interface between a controller and its router: transmit-side admission (ADMIT-TX),
+% injection, ejection with the RX reservation, RX serving, and the endpoint admission property.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, x=1mm, y=1mm,
+  ctl/.style={draw=octamber, fill=octctl, rounded corners=2pt, thick},
+  nib/.style={draw=octink, fill=octquiet!12, rounded corners=2pt, thick},
+  rtr/.style={draw=octpurple, fill=octio, rounded corners=2pt, very thick},
+  stp/.style={draw=octrule, fill=white, rounded corners=1.5pt, text width=35mm, align=left, inner sep=2pt, anchor=north west},
+  q/.style={draw=octink, fill=white, minimum height=3.2mm, minimum width=3.2mm, inner sep=0},
+  qf/.style={q, fill=octquiet!45},
+  qr/.style={q, fill=octamber!40},
+  arr/.style={->, thick, octink},
+  lbl/.style={text=octquiet},
+  ttl/.style={font=\sffamily\small\bfseries, text=octink, anchor=west},
+  box/.style={draw=octrule, rounded corners=2pt, fill=octpaper, inner sep=3pt, align=left}]
+  % frames
+  \draw[ctl] (0,6) rectangle (41,-68);  \node[font=\sffamily\small\bfseries, anchor=north west] at (1,5) {controller};
+  \draw[nib] (47,6) rectangle (128,-68); \node[font=\sffamily\small\bfseries, anchor=north west] at (48,5) {network interface (NI)};
+  \draw[rtr] (134,6) rectangle (165,-68); \node[font=\sffamily\small\bfseries, anchor=north west, text=octpurple] at (135,5) {router};
+  % ---------------- transmit ----------------
+  \node[stp] (a1) at (2,-1) {\textbf{ADMIT-TX}: pop a message only if the injection queues its transition will use have room (\code{txFreeSlots}), then reserve them};
+  \node[stp] (a2) at (2,-24) {run the actions: each push uses a reserved slot and never fails};
+  \draw[arr] (a1) -- (a2);
+  \node[lbl, anchor=west] at (48,-1) {\textbf{transmit}};
+  \node[stp, text width=27mm] (p1) at (49,-4.5) {\code{pushMessage}: stamp \code{from}, one packet per destination, class per packet. All or nothing.};
+  \draw[arr] (a2.east) -- (44,-29) |- (p1.west);
+  \node[lbl, anchor=west] at (81,-1) {per class, \code{inject\_queue\_depth}};
+  \foreach \c/\yy in {REQ/-6, FWD/-11, RSP/-16} {
+    \node[lbl, anchor=east, font=\sffamily\tiny, inner sep=0.5pt] at (93.2,\yy) {\c};
+    \foreach \k in {0,1,2} \node[q] at (95+\k*3.4,\yy) {};
+    \node[qr] at (105.2,\yy) {};
+    \node[qf] at (108.6,\yy) {};
+    \draw[arr] (110.4,\yy) -- (117.2,-11);
+    \draw[arr] (p1.east |- 0,-11) -- (87.2,\yy);
+  }
+  \node[lbl, align=left, anchor=north west, text width=25mm] at (85,-19.5) {amber: reserved by an admitted transition\\grey: oldest packet};
+  \node[draw=octink, fill=white, circle, inner sep=0.8pt, font=\sffamily\tiny\bfseries] (arb) at (119,-11) {arb};
+  \node[lbl, align=center, anchor=north] at (119,-14) {oldest\\eligible\\packet};
+  \draw[arr] (arb.east) -- node[above, lbl, pos=0.3] {1 flit} (134,-11);
+  \node[lbl, align=left, anchor=north west, text width=28mm] at (135,-7) {local input port: \code{[class][vc]} FIFOs, \code{vc\_depth} credits each};
+  % ---------------- receive ----------------
+  \node[lbl, anchor=west] at (48,-37) {\textbf{receive}};
+  \node[lbl, anchor=west] at (80,-40) {RX per class, \code{eject\_queue\_depth}};
+  \foreach \c/\yy in {RSP/-44, FWD/-49, REQ/-54} {
+    \node[lbl, anchor=west, font=\sffamily\tiny] at (107,\yy) {\c};
+    \node[qf] at (89,\yy) {}; \foreach \k in {1,2} \node[q] at (89+\k*3.4,\yy) {};
+    \node[qr] at (99.2,\yy) {}; \node[q] at (102.6,\yy) {};
+  }
+  \node[lbl, align=left, anchor=north west, text width=40mm] at (86,-57) {grey: next to serve\\amber: reserved for a packet in flight};
+  \draw[arr] (134,-49) -- node[above, lbl, pos=0.62] {tail ejected} (113,-49);
+  \node[lbl, align=left, anchor=north west, text width=28mm] at (135,-39) {local output port: VA needs a free RX slot of the class and reserves it};
+  \node[stp, text width=25mm] (srv) at (49,-41) {\code{peekMessage}, \code{rx\_serving priority}: RESPONSE, then FORWARD, then REQUEST};
+  \draw[arr] (87.3,-49) -- (srv.east |- 0,-49);
+  \node[stp] (a3) at (2,-41) {\textbf{ADMIT-RF}: responses and forwards are always admitted to the processing queue. Requests wait for room.};
+  \draw[arr] (srv.west |- 0,-49) -- (a3.east |- 0,-49);
+  % ---------------- table ----------------
+  \node[ttl] at (0,-74) {Slots one transition reserves (\code{CacheController::txNeed})};
+  \node[box, anchor=north west, text width=160mm] at (0,-78) {\begin{tabular}{@{}p{26mm}p{48mm}p{70mm}@{}}
+    \textbf{at} & \textbf{message popped} & \textbf{slots reserved}\\
+    home (LLC bank) & demand request (GetS, GetM), hit or miss & 1 response and $\textit{caches}-1$ forwards (MOESI: \textit{caches}), plus 1 forward toward memory, reserved on every demand\\
+    & PutS, PutM, PutE, PutO & 1 forward (the PutAck)\\
+    & replacement & \textit{caches} forwards (one Inv each), plus 1 response toward memory\\
+    & data from an L1 & 1 response toward memory (a possible write-back)\\
+    cache (L1) & demand request (hits included) or replacement & 1 request\\
+    & anything from the home without data & 2 responses (data to the requester and to the home)\\
+  \end{tabular}\\[0.5ex]
+  A refused message stays in the processing queue and is retried, like a full MSHR. The smallest workable \code{inject\_queue\_depth} is the number of caches (a replacement's fan-out). Buses report unlimited room, so admission never refuses on them.};
+\end{tikzpicture}

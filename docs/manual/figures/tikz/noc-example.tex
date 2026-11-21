@@ -1,0 +1,49 @@
+% The worked example on the 2x2 grid of MultiCoreSystem_Grid (router_latency 2, link_latency 1,
+% credit_latency 1, vc_depth 4, XY): a GetS from L1 0 to the LLC on router 3, then the 5-flit data
+% response back. Cells mark the tick a flit leaves a router (switch allocation and link traversal).
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, x=1mm, y=1mm,
+  cl/.style={draw=octrule!60, minimum width=9mm, minimum height=6mm, inner sep=0},
+  wt/.style={cl, fill=octquiet!18, text=octquiet},
+  hd/.style={cl, fill=octink, text=white, font=\sffamily\scriptsize\bfseries},
+  bd/.style={cl, fill=octteal!35, font=\sffamily\scriptsize\bfseries},
+  tl/.style={cl, fill=octteal!75, text=white, font=\sffamily\scriptsize\bfseries},
+  rowl/.style={anchor=east, font=\sffamily\scriptsize\bfseries, align=right},
+  hop/.style={->, octamber, thick},
+  lbl/.style={text=octquiet},
+  ttl/.style={font=\sffamily\small\bfseries, text=octink, anchor=west}]
+  % ---------- axis ----------
+  \foreach \t in {0,...,12} \node[lbl] at (32+\t*9, 6) {\t};
+  \node[lbl, anchor=east] at (27,6) {tick};
+  % ================= request =================
+  \node[ttl] at (0,13) {GetS, 1 flit: L1 0 on R0 to the LLC on R3, route R0 $\to$ R1 $\to$ R3};
+  \foreach \nm/\yy in {R0 (inject)/0, R1/-7, R3 (eject)/-14} \node[rowl] at (27,\yy) {\nm};
+  \foreach \t in {0,...,12} \foreach \yy in {0,-7,-14} \node[cl] at (32+\t*9,\yy) {};
+  \foreach \t/\yy in {0/0, 1/0, 3/-7, 4/-7, 6/-14, 7/-14} \node[wt] at (32+\t*9,\yy) {rl};
+  \node[hd] at (32+2*9,0) {H/T};  \node[hd] at (32+5*9,-7) {H/T};  \node[hd] at (32+8*9,-14) {H/T};
+  \draw[hop] (32+2*9+3,-3) -- (32+3*9-3,-4);
+  \draw[hop] (32+5*9+3,-10) -- (32+6*9-3,-11);
+  \node[anchor=west, text=octink, align=left] at (32+12*9+6,-7) {ejected at 8:\\$3\cdot 2 + 2\cdot 1 + 0$};
+  % ================= response =================
+  \node[ttl] at (0,-25) {Data, 5 flits: the LLC on R3 to L1 0 on R0, route R3 $\to$ R2 $\to$ R0 (X first)};
+  \foreach \nm/\yy in {R3 (inject)/-38, R2/-45, R0 (eject)/-52} \node[rowl] at (27,\yy) {\nm};
+  \node[rowl, font=\sffamily\scriptsize, text=octquiet] at (27,-31) {NI injects};
+  \foreach \t in {0,...,12} \foreach \yy in {-31,-38,-45,-52} \node[cl] at (32+\t*9,\yy) {};
+  \foreach \t/\f in {0/H, 1/1, 2/2, 3/3, 4/T} \node[cl, text=octink] at (32+\t*9,-31) {\f};
+  \foreach \t/\yy in {0/-38, 1/-38, 3/-45, 4/-45, 6/-52, 7/-52} \node[wt] at (32+\t*9,\yy) {rl};
+  \foreach \row/\ts in {-38/2, -45/5, -52/8} {
+    \node[hd] at (32+\ts*9,\row) {H};
+    \foreach \k in {1,2,3} \node[bd] at (32+\ts*9+\k*9,\row) {\k};
+    \node[tl] at (32+\ts*9+4*9,\row) {T};
+  }
+  \draw[hop] (32+2*9+3,-41) -- (32+3*9-3,-42);
+  \draw[hop] (32+5*9+3,-48) -- (32+6*9-3,-49);
+  \node[anchor=west, text=octink, align=left] at (32+12*9+6,-45) {tail ejected at 12:\\$3\cdot 2 + 2\cdot 1 + 4$};
+  % legend
+  \begin{scope}[shift={(32,-62)}]
+    \node[wt, minimum width=6mm] at (0,0) {rl}; \node[lbl, anchor=west] at (4,0) {head waits \code{router\_latency} before VC allocation};
+    \node[hd, minimum width=6mm] at (76,0) {H}; \node[lbl, anchor=west] at (80,0) {head};
+    \node[bd, minimum width=6mm] at (93,0) {1}; \node[lbl, anchor=west] at (97,0) {body};
+    \node[tl, minimum width=6mm] at (110,0) {T}; \node[lbl, anchor=west] at (114,0) {tail};
+    \node[lbl, anchor=north west, text width=130mm] at (-30,-5) {A filled cell is the tick a flit wins switch allocation and leaves the router. It arrives one tick later at the next router (amber), where a body flit can leave in the tick it arrives. On the last router the flit leaves through the local port: that is ejection. Credits never run out here, because a slot freed at tick $t$ is usable again at $t+2$ and \code{vc\_depth} is 4.};
+  \end{scope}
+\end{tikzpicture}

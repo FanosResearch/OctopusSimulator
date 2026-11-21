@@ -1,0 +1,111 @@
+% System view of the flit-level network: the 2x2 preset MultiCoreSystem_Grid2B2M (L1s, two LLC
+% banks with their memory ports, two memory controllers) and how a 4x4 grid generalises it.
+% Port numbers are the ones Topology.cpp assigns: link ports east, west, north, south (absent
+% ones skipped), then the local ports in ascending endpoint id.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, x=1mm, y=1mm,
+  rtr/.style={draw=octpurple, fill=octio, very thick, minimum width=13mm, minimum height=13mm, inner sep=0, align=center, font=\sffamily\scriptsize\bfseries},
+  ni/.style={draw=octink, fill=octquiet!25, minimum width=4mm, minimum height=3.6mm, inner sep=0, font=\sffamily\tiny\bfseries},
+  ep/.style={draw=octrule, fill=octmem, rounded corners=1.5pt, minimum width=13mm, minimum height=4.4mm, inner sep=0.5pt, font=\sffamily\scriptsize\bfseries},
+  bank/.style={ep, fill=octctl, draw=octamber},
+  mport/.style={ep, fill=octctl, draw=octamber, densely dashed},
+  mc/.style={ep, fill=white, draw=octteal, thick},
+  wire/.style={octink, semithick, ->},
+  loc/.style={octink, thin},
+  pnum/.style={font=\sffamily\tiny\bfseries, text=octpurple, inner sep=0.6pt},
+  ttl/.style={font=\sffamily\small\bfseries, text=octink},
+  sub/.style={font=\sffamily\scriptsize, text=octquiet, align=left},
+  srtr/.style={draw=octpurple, fill=octio, thick, minimum size=6mm, inner sep=0, font=\sffamily\scriptsize\bfseries}]
+  % ================= left: the 2x2 grid =================
+  \node[ttl, anchor=west] at (-27, 17) {2$\times$2 \code{grid2d}, preset \code{MultiCoreSystem\_Grid2B2M}};
+  \node[rtr] (R0) at (0,0)    {R0\\[-0.3ex]\mdseries (0,0)};
+  \node[rtr] (R1) at (40,0)   {R1\\[-0.3ex]\mdseries (1,0)};
+  \node[rtr] (R2) at (0,-38)  {R2\\[-0.3ex]\mdseries (0,1)};
+  \node[rtr] (R3) at (40,-38) {R3\\[-0.3ex]\mdseries (1,1)};
+  % links: one per direction
+  \draw[wire] ($(R0.east)+(0,2)$) -- ($(R1.west)+(0,2)$);
+  \draw[wire] ($(R1.west)+(0,-2)$) -- ($(R0.east)+(0,-2)$);
+  \draw[wire] ($(R2.east)+(0,2)$) -- ($(R3.west)+(0,2)$);
+  \draw[wire] ($(R3.west)+(0,-2)$) -- ($(R2.east)+(0,-2)$);
+  \draw[wire] ($(R0.south)+(-2,0)$) -- ($(R2.north)+(-2,0)$);
+  \draw[wire] ($(R2.north)+(2,0)$) -- ($(R0.south)+(2,0)$);
+  \draw[wire] ($(R1.south)+(-2,0)$) -- ($(R3.north)+(-2,0)$);
+  \draw[wire] ($(R3.north)+(2,0)$) -- ($(R1.south)+(2,0)$);
+  \node[text=octquiet, align=center] at (20,-19) {two links per\\connection,\\one per direction};
+  % link port numbers at each router
+  \node[pnum, anchor=south west] at ($(R0.east)+(0.3,3)$) {0 E};
+  \node[pnum, anchor=south east] at ($(R1.west)+(-0.3,3)$) {W 0};
+  \node[pnum, anchor=north west] at ($(R0.south)+(3,-0.3)$) {1 S};
+  \node[pnum, anchor=south west] at ($(R2.north)+(3,0.3)$) {1 N};
+  \node[pnum, anchor=north west] at ($(R1.south)+(3,-0.3)$) {1 S};
+  \node[pnum, anchor=south west] at ($(R3.north)+(3,0.3)$) {1 N};
+  \node[pnum, anchor=south west] at ($(R2.east)+(0.3,3)$) {0 E};
+  \node[pnum, anchor=south east] at ($(R3.west)+(-0.3,3)$) {W 0};
+  % endpoints of R0 (west side): L1 0, bank 10, memory port 110 -> local ports 2, 3, 4
+  \foreach \e/\st/\yy/\pp in {L1 0/ep/4/2, LLC 10/bank/-0.5/3, port 110/mport/-5/4} {
+    \node[ni] at (-11,\yy) {NI};
+    \node[\st, anchor=east] at (-14,\yy) {\e};
+    \draw[loc] (-9,\yy) -- (-6.5,\yy) node[pnum, pos=0.5, above] {\pp};
+  }
+  % endpoints of R2 (west side): L1 2, memory controller 101 -> 2, 3
+  \foreach \e/\st/\yy/\pp in {L1 2/ep/-35.5/2, MC 101/mc/-40.5/3} {
+    \node[ni] at (-11,\yy) {NI};
+    \node[\st, anchor=east] at (-14,\yy) {\e};
+    \draw[loc] (-9,\yy) -- (-6.5,\yy) node[pnum, pos=0.5, above] {\pp};
+  }
+  % endpoints of R1 (east side): L1 1, memory controller 100 -> 2, 3
+  \foreach \e/\st/\yy/\pp in {L1 1/ep/2.5/2, MC 100/mc/-2.5/3} {
+    \node[ni] at (51,\yy) {NI};
+    \node[\st, anchor=west] at (54,\yy) {\e};
+    \draw[loc] (46.5,\yy) -- (49,\yy) node[pnum, pos=0.5, above] {\pp};
+  }
+  % endpoints of R3 (east side): L1 3, bank 11, memory port 111 -> 2, 3, 4
+  \foreach \e/\st/\yy/\pp in {L1 3/ep/-34/2, LLC 11/bank/-38.5/3, port 111/mport/-43/4} {
+    \node[ni] at (51,\yy) {NI};
+    \node[\st, anchor=west] at (54,\yy) {\e};
+    \draw[loc] (46.5,\yy) -- (49,\yy) node[pnum, pos=0.5, above] {\pp};
+  }
+  % legend
+  \begin{scope}[shift={(-27,-54)}]
+    \node[ep, minimum width=9mm, anchor=west] at (0,0) {L1};     \node[sub, anchor=west] at (10,0) {cache};
+    \node[bank, minimum width=9mm, anchor=west] at (30,0) {LLC}; \node[sub, anchor=west] at (40,0) {LLC bank, a home};
+    \node[mport, minimum width=9mm, anchor=west] at (0,-6) {port}; \node[sub, anchor=west] at (10,-6) {an LLC bank's memory port};
+    \node[mc, minimum width=9mm, anchor=west] at (48,-6) {MC};   \node[sub, anchor=west] at (58,-6) {memory controller};
+    \node[ni, anchor=west] at (2.5,-12) {NI}; \node[sub, anchor=west] at (10,-12) {network interface, one per endpoint};
+    \node[rtr, minimum width=5mm, minimum height=4mm, anchor=west] at (60,-12) {}; \node[sub, anchor=west] at (66,-12) {router};
+    \node[pnum, anchor=west] at (3.5,-18) {3};
+    \node[sub, anchor=north west, text width=72mm] at (10,-15.6) {port number at that router: link ports first (E, W, N, S, absent ones skipped), then one local port per endpoint in ascending id};
+  \end{scope}
+  % ================= right: 4x4 generalisation =================
+  \begin{scope}[shift={(92,4)}]
+    \node[ttl, anchor=west] at (-9, 13) {4$\times$4 \code{grid2d}};
+    \foreach \yy in {0,1,2,3} \foreach \xx in {0,1,2,3} {
+      \pgfmathtruncatemacro{\rr}{\yy*4+\xx}
+      \node[srtr] (s\rr) at (\xx*12, -\yy*12) {\rr};
+    }
+    \foreach \yy in {0,1,2,3} \foreach \xx in {0,1,2} {
+      \pgfmathtruncatemacro{\aa}{\yy*4+\xx}\pgfmathtruncatemacro{\bb}{\yy*4+\xx+1}
+      \draw[octink, semithick] (s\aa) -- (s\bb);
+    }
+    \foreach \yy in {0,1,2} \foreach \xx in {0,1,2,3} {
+      \pgfmathtruncatemacro{\aa}{\yy*4+\xx}\pgfmathtruncatemacro{\bb}{\yy*4+\xx+4}
+      \draw[octink, semithick] (s\aa) -- (s\bb);
+    }
+    % axes
+    \draw[->, octquiet] (-6,6) -- (41,6) node[right] {$x$};
+    \draw[->, octquiet] (-6,6) -- (-6,-41) node[below] {$y$};
+    \foreach \xx in {0,1,2,3} \node[text=octquiet] at (\xx*12, 8.3) {\xx};
+    \foreach \yy in {0,1,2,3} \node[text=octquiet] at (-8.3, -\yy*12) {\yy};
+    % port numbers of two routers
+    \node[pnum, anchor=west] at ($(s5.east)+(0.2,1.6)$) {0};
+    \node[pnum, anchor=east] at ($(s5.west)+(-0.2,1.6)$) {1};
+    \node[pnum, anchor=south] at ($(s5.north)+(1.8,0.2)$) {2};
+    \node[pnum, anchor=north] at ($(s5.south)+(1.8,-0.2)$) {3};
+    \node[pnum, anchor=west] at ($(s0.east)+(0.2,1.6)$) {0};
+    \node[pnum, anchor=north] at ($(s0.south)+(1.8,-0.2)$) {1};
+    \node[sub, anchor=north west, text width=60mm] at (-9,-46) {routers row-major: $r = y\cdot k_x + x$\\[0.3ex]
+      corner (0): E\,0, S\,1, local from 2\\
+      edge (1): E\,0, W\,1, S\,2, local from 3\\
+      interior (5): E\,0, W\,1, N\,2, S\,3, local from 4\\[0.3ex]
+      keys: \code{dims(vi),4,4}, one\\\code{node\_map[<id>](i)} per endpoint};
+  \end{scope}
+\end{tikzpicture}

@@ -1,0 +1,56 @@
+% LLC banking and memory controllers as network endpoints: the two address maps and the
+% endpoints of MultiCoreSystem_Grid2B2M, with the network legs of one LLC miss.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, x=1mm, y=1mm,
+  ln/.style={draw=octink, minimum width=5mm, minimum height=5mm, inner sep=0, font=\sffamily\tiny},
+  bA/.style={ln, fill=octctl},
+  bB/.style={ln, fill=octamber!45},
+  mA/.style={ln, fill=white},
+  mB/.style={ln, fill=octteal!30},
+  rtr/.style={draw=octpurple, fill=octio, very thick, minimum size=9mm, inner sep=0, font=\sffamily\scriptsize\bfseries},
+  ep/.style={draw=octrule, fill=octmem, rounded corners=1.5pt, minimum width=11mm, minimum height=4.2mm, inner sep=0.5pt, font=\sffamily\tiny\bfseries},
+  bank/.style={ep, fill=octctl, draw=octamber},
+  mport/.style={ep, fill=octctl, draw=octamber, densely dashed},
+  mc/.style={ep, fill=white, draw=octteal, thick},
+  leg/.style={->, very thick, octink},
+  lbl/.style={text=octquiet},
+  ttl/.style={font=\sffamily\small\bfseries, text=octink, anchor=west},
+  box/.style={draw=octrule, rounded corners=2pt, fill=octpaper, inner sep=3pt, align=left}]
+  % ================= address maps =================
+  \node[ttl] at (0,14) {Two static address maps};
+  \node[box, anchor=north west, text width=80mm] at (0,9) {With $\textit{line} = \textit{addr}/\textit{block}$:\\[0.6ex]
+    \textbf{home of a line}, the same map at every requester\\
+    \hspace*{3mm}\code{home\_ids[(line >{}> home\_interleave\_shift) mod N]}\\[0.6ex]
+    \textbf{memory controller of a line}, a map on each LLC bank\\
+    \hspace*{3mm}\code{mem\_ids[(line >{}> mem\_interleave\_shift) mod M]}};
+  \node[lbl, anchor=west] at (0,-19) {lines};
+  \foreach \i in {0,...,7} {
+    \pgfmathtruncatemacro{\odd}{mod(\i,2)}
+    \ifnum\odd=0 \node[bA] at (12+\i*5.2,-19) {\i}; \else \node[bB] at (12+\i*5.2,-19) {\i}; \fi
+  }
+  \node[lbl, anchor=west] at (54,-19) {home shift 0:};
+  \node[lbl, anchor=west] at (54,-22.5) {banks 10, 11, 10, 11, ...};
+  \node[lbl, anchor=west] at (0,-28) {pages};
+  \foreach \i/\t in {0/0..63, 1/64..127, 2/128..191, 3/192..255} {
+    \pgfmathtruncatemacro{\odd}{mod(\i,2)}
+    \ifnum\odd=0 \node[mA, minimum width=10mm] at (14.5+\i*10.4,-28) {\t}; \else \node[mB, minimum width=10mm] at (14.5+\i*10.4,-28) {\t}; \fi
+  }
+  \node[lbl, anchor=west] at (54,-28) {memory shift 6: 4 KiB};
+  \node[lbl, anchor=west] at (54,-31.5) {pages to 100, 101, ...};
+  \node[lbl, anchor=north west, text width=80mm] at (0,-36) {Shipped in \code{MultiCoreSystem\_Grid2B2M}: two banks interleaved by line, two controllers by page, so every bank talks to both controllers. Lines never move and banks never exchange messages. With one bank this is the single LLC of the other presets.};
+  % ================= endpoints of Grid2B2M =================
+  \node[ttl] at (90,14) {Endpoints of \code{MultiCoreSystem\_Grid2B2M}};
+  \node[rtr] (R0) at (112,0) {R0}; \node[rtr] (R1) at (148,0) {R1};
+  \node[rtr] (R2) at (112,-34) {R2}; \node[rtr] (R3) at (148,-34) {R3};
+  \foreach \a/\b in {R0/R1, R0/R2, R1/R3, R2/R3} \draw[octquiet, thick] (\a) -- (\b);
+  \node[ep, anchor=east] (l0) at (105,5) {L1 0};   \node[bank, anchor=east] (b10) at (105,0) {bank 10}; \node[mport, anchor=east] (p110) at (105,-5) {port 110};
+  \node[ep, anchor=west] (l1) at (155,2.5) {L1 1};   \node[mc, anchor=west] (m100) at (155,-2.5) {MC 100};
+  \node[ep, anchor=east] (l2) at (105,-31.5) {L1 2}; \node[mc, anchor=east] (m101) at (105,-36.5) {MC 101};
+  \node[ep, anchor=west] (l3) at (155,-29) {L1 3}; \node[bank, anchor=west] (b11) at (155,-34) {bank 11}; \node[mport, anchor=west] (p111) at (155,-39) {port 111};
+  \foreach \e/\r in {l0/R0, b10/R0, p110/R0, l1/R1, m100/R1, l2/R2, m101/R2, l3/R3, b11/R3, p111/R3} \draw[octink, thin] (\e) -- (\r);
+  % one miss: legs along the links (XY)
+  \draw[leg] (145,-6) -- node[left, text=octink] {1 GetS} (145,-28);
+  \draw[leg, octteal] (151,-28) -- node[right, text=octteal, align=left] {4 data} (151,-6);
+  \draw[leg, octpurple, dashed] (141,-37) -- node[below, text=octpurple] {2 \code{MEM\_READ}} (119,-37);
+  \draw[leg, octteal] (119,-31) -- node[above, text=octteal] {3 \code{FILL}} (141,-31);
+  \node[box, anchor=north west, text width=74mm] at (90,-46) {Line 0x11c0 (line 71, page 1) is homed at bank 11 and kept by controller 101. A miss from L1 1 crosses the grid four times: GetS to bank 11, the read from port 111 to MC 101, the fill back, the data to L1 1. A bank is two endpoints: its id faces the L1s and its memory port (\code{mem\_port\_id}) faces memory.};
+\end{tikzpicture}

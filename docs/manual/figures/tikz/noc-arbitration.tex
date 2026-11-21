@@ -1,0 +1,47 @@
+% Arbitration on the network: where electIndex is called, the Candidate record, and the two
+% policies (FCFSArbiter, RRArbiter) on one example.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, x=1mm, y=1mm,
+  site/.style={draw=octpurple, fill=octio, thick, rounded corners=2pt, text width=40mm, align=left, inner sep=2.5pt, anchor=north west},
+  cell/.style={draw=octrule, minimum height=5mm, minimum width=13mm, inner sep=0},
+  hcell/.style={cell, fill=octquiet!25, font=\sffamily\scriptsize\bfseries},
+  own/.style={circle, draw=octink, fill=white, minimum size=6mm, inner sep=0, font=\sffamily\scriptsize\bfseries},
+  owc/.style={own, fill=octquiet!35},
+  arr/.style={->, thick, octink},
+  lbl/.style={text=octquiet},
+  ttl/.style={font=\sffamily\small\bfseries, text=octink, anchor=west},
+  win/.style={draw=octteal, very thick, rounded corners=1pt}]
+  % ---- call sites ----
+  \node[ttl] at (0,8) {Where an arbiter elects};
+  \node[site] (s1) at (0,2) {\textbf{Injection}, one arbiter per local port: started packets and queue heads of every class and every NI on the port};
+  \node[site] (s2) at (0,-14) {\textbf{VC allocation}, one arbiter per output VC: routed heads that waited \code{router\_latency}};
+  \node[site] (s3) at (0,-30) {\textbf{Switch allocation}, one arbiter per output port (per connection with \code{half\_duplex}): flits holding an output VC and a credit};
+  % ---- candidates ----
+  \node[ttl] at (52,8) {\code{Candidate \{index, owner, seq\}}};
+  \foreach \c/\t [count=\i from 0] in {index/index, owner/owner, seq/seq} \node[hcell] at (58+\i*13, 0) {\t};
+  \foreach \ix/\ow/\sq [count=\r from 1] in {0/2/41, 1/0/57, 2/2/38, 3/10/60} {
+    \node[cell] at (58, -\r*5) {\ix}; \node[cell] at (71, -\r*5) {\ow}; \node[cell] at (84, -\r*5) {\sq};
+  }
+  \node[lbl, align=left, anchor=north west, text width=45mm] at (51.5,-24) {\code{owner} = \code{msg.owner}, an endpoint id (the requesting core for its requests, supplies and fills).\\\code{seq} = the packet's network-wide injection number: lower is older.};
+  \foreach \st in {s1,s2,s3} \draw[arr] (\st.east) -- (51.2, -7.5);
+  \draw[arr] (91,-7.5) -- (100,-7.5) node[right, lbl, align=left] {\code{electIndex(tick, candidates)}\\returns the winner's \code{index}};
+  % ---- FCFS ----
+  \node[ttl] at (100,8) {};
+  \node[ttl] at (100,-21) {\code{FCFSArbiter}};
+  \node[lbl, align=left, anchor=north west, text width=60mm] at (100,-25) {lowest \code{seq} wins, ties by lowest \code{index}:\\winner \textbf{index 2} (seq 38).};
+  \draw[win] (51.5,-17.5) rectangle (90.5,-12.5);
+  \node[text=octteal, font=\sffamily\tiny\bfseries, anchor=west] at (91,-15) {FCFS};
+  % ---- RR ----
+  \node[ttl] at (100,-37) {\code{RRArbiter}};
+  \foreach \o/\a [count=\i from 0] in {0/90, 1/18, 2/-54, 3/-126, 10/162} {
+    \ifnum\i=4 \node[owc] (o\i) at ($(113,-57)+(\a:11)$) {\o}; \else
+    \ifnum\i=0 \node[owc] (o\i) at ($(113,-57)+(\a:11)$) {\o}; \else
+    \ifnum\i=2 \node[owc] (o\i) at ($(113,-57)+(\a:11)$) {\o}; \else
+    \node[own] (o\i) at ($(113,-57)+(\a:11)$) {\o}; \fi\fi\fi
+  }
+  \draw[->, octquiet, thick] (o2) to[bend left=30] node[pos=0.5, below, lbl] {skip} (o3);
+  \draw[->, octteal, very thick] (o3) to[bend left=30] node[pos=0.5, left, text=octteal, font=\sffamily\tiny\bfseries] {wins} (o4);
+  \node[lbl, anchor=north] at (113,-73) {owner ids in rotation (grey: has a candidate)};
+  \node[lbl, align=left, anchor=north west, text width=40mm] at (128,-42) {pointer was on owner 2 (the last winner). It advances: owner 3 has no candidate and is skipped, owner 10 has one: winner \textbf{index 3} (seq 60). The pointer rests on 10. An owner's own candidates go oldest first.};
+  \draw[win, densely dashed] (51.5,-22.5) rectangle (90.5,-17.6);
+  \node[text=octteal, font=\sffamily\tiny\bfseries, anchor=west] at (91,-20) {RR};
+\end{tikzpicture}

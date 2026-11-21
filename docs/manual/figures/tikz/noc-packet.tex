@@ -1,0 +1,57 @@
+% From a message to flits, to a class (virtual network), to a virtual channel of the local input
+% port. Numbers are the shipped defaults: header_bytes 8, flit_bytes 16, 64-byte lines.
+\begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, x=1mm, y=1mm,
+  hdr/.style={draw=octink, fill=octquiet!35, minimum height=5mm, inner sep=0, anchor=west},
+  pay/.style={draw=octink, fill=octmem, minimum height=5mm, inner sep=0, anchor=west},
+  flt/.style={draw=octink, fill=white, minimum height=5mm, minimum width=13.6mm, inner sep=0, anchor=west, font=\sffamily\scriptsize\bfseries},
+  hflt/.style={flt, fill=octquiet!35},
+  q/.style={draw=octink, fill=white, minimum height=4mm, minimum width=4mm, inner sep=0},
+  box/.style={draw=octrule, rounded corners=2pt, fill=octpaper, inner sep=3pt, align=left},
+  cls/.style={draw=octink, minimum width=20mm, minimum height=5mm, inner sep=1pt, font=\sffamily\scriptsize\bfseries},
+  lbl/.style={text=octquiet},
+  ttl/.style={font=\sffamily\small\bfseries, text=octink, anchor=west},
+  arr/.style={->, thick, octink}]
+  % ---------- row 1: bytes to flits ----------
+  \node[ttl] at (0, 10) {1. A message becomes a packet of flits};
+  \node[lbl, anchor=west] at (0, 3.5) {data message (a 64-byte line)};
+  \node[hdr, minimum width=7.2mm] at (0,-2) {8};
+  \node[pay, minimum width=57.6mm] at (7.2,-2) {payload \code{data\_size} = 64 bytes};
+  \draw[decorate, decoration={brace, amplitude=3pt, mirror}] (0,-5) -- (64.8,-5) node[midway, below=2pt, lbl] {\code{header\_bytes} + payload = 72 bytes};
+  \node[hflt] at (0, -18) {head};
+  \foreach \i in {1,2,3} \node[flt] at (\i*14.4, -18) {body};
+  \node[flt] at (57.6, -18) {tail};
+  \draw[decorate, decoration={brace, amplitude=3pt, mirror}] (0,-21) -- (13.6,-21) node[midway, below=2pt, lbl, anchor=north west, xshift=-7mm] {\code{flit\_bytes} = 16};
+  \node[lbl, anchor=west] at (72.5, -18) {$\lceil 72/16 \rceil = 5$ flits};
+  \node[lbl, anchor=west] at (0, -32) {request, forward or acknowledgement (no data)};
+  \node[hdr, minimum width=7.2mm] at (0,-38) {8};
+  \draw[arr] (8.5,-38) -- (16.5,-38);
+  \node[hflt, minimum width=19mm] at (17,-38) {head = tail};
+  \node[lbl, anchor=west] at (38, -38) {$\lceil 8/16 \rceil = 1$ flit};
+  % formula
+  \node[box, anchor=north west, text width=63mm] at (99, 7) {\textbf{Flit count} (\code{flitCount} in \code{NetTypes.h})\\[0.6ex]
+    $\textit{payload} = \textit{data\_size}$ if the message carries data, else 0\\[0.8ex]
+    \hspace*{8mm}$f = \left\lceil \dfrac{\textit{header\_bytes} + \textit{payload}}{\textit{flit\_bytes}} \right\rceil$\\[0.8ex]
+    With \code{flit\_bytes = 0} every packet is one flit: the message-level model.\\[0.6ex]
+    The head flit carries the route. Body and tail flits follow it in order and are never interleaved with another packet on the same VC (wormhole).};
+  % ---------- row 2: class and VC ----------
+  \node[ttl] at (0, -47) {2. The packet joins the queue of its class, then a VC of that class};
+  \node[box, anchor=north west, text width=33mm] (cl) at (0,-56) {\textbf{Classifier}\\by \code{Message::kind}, then fallback rules on \code{data}, \code{from}, \code{to} and the home ids};
+  \node[cls, fill=white] (c0) at (56,-58) {0 REQUEST};
+  \node[cls, fill=octquiet!20] (c1) at (56,-66) {1 FORWARD};
+  \node[cls, fill=octquiet!45] (c2) at (56,-74) {2 RESPONSE};
+  \foreach \c in {c0,c1,c2} \draw[arr] (cl.east) -- (\c.west);
+  \node[lbl, anchor=south] at (82,-55.5) {NI injection queues};
+  \foreach \yy in {-58, -66, -74} \foreach \k in {0,1,2,3} \node[q] at (76+\k*4.2, \yy) {};
+  \foreach \c/\yy in {c0/-58, c1/-66, c2/-74} \draw[arr] (\c.east) -- (73.8, \yy);
+  \node[lbl, anchor=north, align=center] at (82,-77) {\code{inject\_queue\_depth}\\packets per class};
+  \draw[arr] (91,-66) -- (104,-66) node[midway, above, lbl] {1 flit};
+  \node[lbl, anchor=south, align=center] at (132,-55.5) {local input port of the router};
+  \foreach \c/\yy in {0/-57, 1/-65, 2/-73} {
+    \foreach \v/\dy in {0/0, 1/-3.4} {
+      \foreach \k in {0,1,2,3} \node[q, minimum height=3mm, minimum width=3.4mm] at (126+\k*3.6, \yy+\dy) {};
+      \node[lbl, anchor=east, font=\sffamily\tiny] at (124, \yy+\dy) {class \c, vc \v};
+    }
+  }
+  \node[lbl, anchor=north, align=center] at (132,-77) {\code{[class][vc]} FIFOs\\\code{vc\_depth} flits each};
+  \node[box, anchor=north west, text width=158mm] at (0,-87) {Each tick the local port sends one flit, chosen by the port's arbiter among every class (oldest first under \code{FCFSArbiter}). A new packet takes the lowest-index free VC of its class that its first route admits (\code{vc\_mask}) and that holds a credit. The drawing shows \code{vcs\_per\_class} 2. The shipped default is 1.};
+\end{tikzpicture}
