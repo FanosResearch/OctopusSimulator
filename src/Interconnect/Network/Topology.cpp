@@ -71,6 +71,12 @@ namespace octopus { namespace net
         size_t i = 2 * dim + (dir < 0 ? 1 : 0);
         return i < dp.size() ? dp[i] : -1;
     }
+    bool Topology::portDir(int r, int p, int &dim, int &dir) const
+    {
+        const auto &dp = m_routers[r].dir_port;
+        for (size_t i = 0; i < dp.size(); i++) if (dp[i] == p) { dim = (int)i / 2; dir = (i % 2) ? -1 : +1; return true; }
+        return false;
+    }
     int Topology::attr(int r, const std::string &key, int dflt) const
     {
         auto it = m_routers[r].attrs.find(key);

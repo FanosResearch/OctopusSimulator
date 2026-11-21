@@ -48,6 +48,10 @@ namespace octopus { namespace net
         virtual Route nextHop(const RouteContext &) const = 0;
         virtual Ordering ordering() const = 0;
         virtual bool needsEscapeVC() const { return false; }
+        // called once when a packet is created, after its source and destination routers are set:
+        // an oblivious algorithm draws its per-packet choice here (Packet::route_aux), from a hash
+        // of the packet's sequence number and the routing seed, so runs stay deterministic
+        virtual void onInject(Packet &) const {}
         // true if the VC a packet uses is a function of (source, destination, class), so that
         // several VCs per class still keep a pair's packets in order (a dateline does this)
         virtual bool fixesVCPerPair() const { return false; }
@@ -68,8 +72,10 @@ namespace octopus { namespace net
     {
         int vcs_per_class = 1;
         int escape_vc = -1;
+        uint64_t seed = 1;                                 // routing_seed: oblivious algorithms' per-packet draws
         std::map<int, std::vector<int>> routing_table;     // router id -> dest,port,dest,port,...
         std::map<int, std::vector<int>> routing_via;       // router id -> dest,neighbour,... (port-order independent)
+        std::map<int, std::vector<int>> link_weight;       // router id -> neighbour,weight,... (Table: shortest weighted paths)
     };
 
     // Factory keyed by name: Table, XY, WestFirst, AdaptiveMinimal. ConfigError on an unknown

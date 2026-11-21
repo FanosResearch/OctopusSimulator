@@ -26,12 +26,28 @@ namespace octopus { namespace net
         m_untagged = std::get<int>(parameters.at(STRINGIFY(untagged)).value);
         m_start = std::get<int>(parameters.at(STRINGIFY(start)).value);
         if (m_multicast < 1) throw ConfigError("generator multicast must be >= 1");
-        if (m_pattern != "uniform" && m_pattern != "hotspot" && m_pattern != "transpose" && m_pattern != "neighbour" && m_pattern != "none")
+        if (m_pattern != "uniform" && m_pattern != "hotspot" && m_pattern != "neighbour" && m_pattern != "none" && !isPermutation(m_pattern))
             throw ConfigError("generator " + std::to_string(id) + ": unknown pattern '" + m_pattern + "'");
+        m_injection = parameters.count("injection") ? std::get<std::string>(parameters.at("injection").value) : "bernoulli";
+        if (m_injection != "bernoulli" && m_injection != "onoff") throw ConfigError("generator injection must be bernoulli or onoff, got " + m_injection);
+        if (m_injection == "onoff")
+        {
+            m_on_to_off = std::get<int>(parameters.at("on_to_off").value);
+            m_off_to_on = std::get<int>(parameters.at("off_to_on").value);
+            if (m_on_to_off < 0 || m_on_to_off > 1000 || m_off_to_on < 0 || m_off_to_on > 1000)
+                throw ConfigError("generator on_to_off and off_to_on are per-1000 probabilities, 0..1000");
+        }
         if (m_rate < 0 || m_rate > 1000) throw ConfigError("generator rate is packets per 1000 ticks, 0..1000");
         m_rng.seed((uint64_t)m_seed * 1000003ull + (uint64_t)id);
         ClockManager::getClockManager()->registerCLKTrigger(this);
-        if (m_pattern == "none" || m_rate == 0 || m_packets == 0) { m_done = true; ClockManager::getClockManager()->stopClock(this); }
+        // a permutation pattern whose partner is this endpoint itself (or no endpoint) sends nothing;
+        // transpose keeps its historical fallback to the first other endpoint
+        bool no_partner = isPermutation(m_pattern) && m_pattern != "transpose" && m_transpose < 0;
+        if (m_pattern == "none" || m_rate == 0 || m_packets == 0 || no_partner) { m_done = true; ClockManager::getClockManager()->stopClock(this); }
+    }
+    bool TrafficGenerator::isPermutation(const std::string &p)
+    {
+        return p == "transpose" || p == "bitcomp" || p == "bitrev" || p == "shuffle" || p == "tornado" || p == "randperm";
     }
 
     int TrafficGenerator::pickDestination()
@@ -39,6 +55,7 @@ namespace octopus { namespace net
         if (m_others.empty()) return -1;
         if (m_pattern == "hotspot") return m_hotspot == m_id ? m_others[0] : m_hotspot;
         if (m_pattern == "transpose") return m_transpose >= 0 ? m_transpose : m_others[0];
+        if (isPermutation(m_pattern)) return m_transpose;
         if (m_pattern == "neighbour")
         {
             auto it = std::upper_bound(m_others.begin(), m_others.end(), m_id);
@@ -82,7 +99,17 @@ namespace octopus { namespace net
         }
         else if ((long)m_cycle >= m_start && (m_packets < 0 || (int)m_sent < m_packets) && (m_cycles < 0 || (long)m_cycle <= m_cycles))
         {
-            if ((int)(m_rng() % 1000) < m_rate)
+            bool inject_now;
+            if (m_injection == "onoff")
+            {
+                // a two-state Markov source: switch state with the given per-1000 probability, then
+                // inject with probability rate while on
+                if (m_on) { if ((int)(m_rng() % 1000) < m_on_to_off) m_on = false; }
+                else if ((int)(m_rng() % 1000) < m_off_to_on) m_on = true;
+                inject_now = m_on && (int)(m_rng() % 1000) < m_rate;
+            }
+            else inject_now = (int)(m_rng() % 1000) < m_rate;
+            if (inject_now)
             {
                 int dst = pickDestination();
                 if (dst >= 0)

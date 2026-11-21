@@ -4,6 +4,7 @@
 #include "Topology.h"
 #include "TopologyBuilder.h"
 #include <map>
+#include <set>
 #include <vector>
 using namespace octopus;
 using namespace octopus::net;
@@ -137,10 +138,10 @@ TEST("T3-FLAGS")
 TEST("T1-REGISTRY")
 {
     auto names = TopologyRegistry::builtin().names();
-    CHECK(names == std::vector<std::string>({"custom", "grid2d", "torus2d", "ring", "star"}));
+    CHECK(names == std::vector<std::string>({"custom", "grid2d", "torus2d", "ring", "star", "mesh3d", "torus3d"}));
     Configurable::ParametersMap empty; KeyView v(empty);
     std::string e = errOf([&] { TopologyRegistry::builtin().create("hypercube", v, {}, 0); });
-    CHECK(e.find("unknown topology 'hypercube' (custom, grid2d, torus2d, ring, star)") != std::string::npos);
+    CHECK(e.find("unknown topology 'hypercube' (custom, grid2d, torus2d, ring, star, mesh3d, torus3d)") != std::string::npos);
 }
 
 // T5: the dependency check explores every candidate output
@@ -200,4 +201,169 @@ TEST("T5-ADAPTIVE-FALLBACK")
     c.router = 1; c.in_port = g.dirPort(1, 0, -1); c.in_vc = 1;
     Route st = am->nextHop(c);
     CHECK_EQ(st.vc_mask, 2u); CHECK_EQ(st.alt_port, -1);
+}
+
+// ---------------------------------------------------------------- T4: features on the plug-ins
+static int hopsTo(const RoutingAlgorithm &a, const Topology &t, int s, int d) { return (int)a.path(t, s, d).size() - 1; }
+static int latticeDistance(const Lattice &L, int a, int b)
+{
+    auto x = L.coord(a), y = L.coord(b); int h = 0;
+    for (int d = 0; d < L.rank(); d++) { int k = L.dims[d], v = std::abs(x[d] - y[d]); h += L.wrap[d] ? std::min(v, k - v) : v; }
+    return h;
+}
+TEST("T4-LATTICE3D")
+{
+    Topology m = buildLattice3D(4, 3, 2, {}, 0, false);
+    checkLattice(m);
+    // an interior router has all six ports, in the order east, west, north, south, up, down
+    Topology c = buildLattice3D(3, 3, 3, {}, 0, false);
+    int mid = c.lattice()->index({1, 1, 1});
+    std::vector<std::string> names; for (int p = 0; p < c.linkPorts(mid); p++) names.push_back(c.portName(mid, p));
+    CHECK(names == std::vector<std::string>({"east", "west", "north", "south", "up", "down"}));
+    checkLattice(buildLattice3D(3, 3, 3, {}, 0, true));
+    checkLattice(buildLattice3D(4, 3, 5, {}, 0, true));
+    CHECK(errOf([] { buildLattice3D(3, 2, 3, {}, 0, true); }).find("torus3d needs dims >= 3,3,3") != std::string::npos);
+    RoutingParams p1; p1.vcs_per_class = 1; RoutingParams p2; p2.vcs_per_class = 2;
+    auto xy = createRouting("XY", m, p1);
+    for (int s = 0; s < m.routers(); s++) for (int d = 0; d < m.routers(); d++) if (s != d) CHECK_EQ(hopsTo(*xy, m, s, d), latticeDistance(*m.lattice(), s, d));
+    std::string cyc;
+    CHECK(channelDependencyAcyclic(m, *xy, 1, &cyc));
+    Topology t = buildLattice3D(3, 3, 3, {}, 0, true);
+    auto xyt = createRouting("XY", t, p2);
+    for (int s = 0; s < t.routers(); s++) for (int d = 0; d < t.routers(); d++) if (s != d) CHECK_EQ(hopsTo(*xyt, t, s, d), latticeDistance(*t.lattice(), s, d));
+    CHECK(channelDependencyAcyclic(t, *xyt, 2, &cyc));
+    CHECK(errOf([&] { createRouting("XY", t, p1); }).find("torus3d with XY needs vcs_per_class >= 2") != std::string::npos);
+    RoutingParams pa; pa.vcs_per_class = 2; pa.escape_vc = 1;
+    CHECK(createRouting("AdaptiveMinimal", m, pa)->deadlockFreeOn(m));
+    RoutingParams pt; pt.vcs_per_class = 3; pt.escape_vc = 1;
+    CHECK(createRouting("AdaptiveMinimal", t, pt)->deadlockFreeOn(t));
+}
+TEST("T4-RING-XY")
+{
+    RoutingParams p1; p1.vcs_per_class = 1; RoutingParams p2; p2.vcs_per_class = 2;
+    for (int k = 3; k <= 9; k++)
+    {
+        Topology r = Topology::ring(k, {}, 0);
+        auto xy = createRouting("XY", r, p2);
+        for (int s = 0; s < k; s++) for (int d = 0; d < k; d++) if (s != d) CHECK_EQ(hopsTo(*xy, r, s, d), latticeDistance(*r.lattice(), s, d));
+        std::string cyc; CHECK(channelDependencyAcyclic(r, *xy, 2, &cyc));
+        CHECK(xy->fixesVCPerPair());
+        CHECK(errOf([&] { createRouting("XY", r, p1); }).find("ring with XY needs vcs_per_class >= 2") != std::string::npos);
+    }
+}
+TEST("T4-TURN-MODELS")
+{
+    RoutingParams p1; p1.vcs_per_class = 1; RoutingParams p2; p2.vcs_per_class = 2;
+    for (const char *name : {"WestFirst", "NorthLast", "NegativeFirst", "OddEven"})
+        for (auto dims : std::vector<std::pair<int, int>>{{4, 4}, {5, 3}, {6, 6}, {2, 7}})
+        {
+            Topology g = Topology::grid2d(dims.first, dims.second, {}, 0);
+            for (auto *pp : {&p1, &p2})
+            {
+                auto a = createRouting(name, g, *pp);
+                std::string cyc;
+                if (!channelDependencyAcyclic(g, *a, pp->vcs_per_class, &cyc)) octest::fail(std::string(name) + " has a dependency cycle: " + cyc);
+                // in every state reachable from the source there is a candidate, and every candidate is minimal
+                for (int s = 0; s < g.routers(); s++) for (int d = 0; d < g.routers(); d++)
+                {
+                    if (s == d) continue;
+                    std::vector<int> todo{s}; std::vector<bool> seen(g.routers(), false); seen[s] = true;
+                    while (!todo.empty())
+                    {
+                        int r = todo.back(); todo.pop_back();
+                        if (r == d) continue;
+                        RouteContext c; c.router = r; c.dst_router = d; c.src_router = s;
+                        auto cands = a->candidates(c);
+                        CHECK(!cands.empty());
+                        for (auto &rt : cands)
+                        {
+                            CHECK(!g.isLocalPort(r, rt.out_port));
+                            int n = g.link(r, rt.out_port).router;
+                            CHECK_EQ(latticeDistance(*g.lattice(), n, d), latticeDistance(*g.lattice(), r, d) - 1);
+                            if (!seen[n]) { seen[n] = true; todo.push_back(n); }
+                        }
+                    }
+                }
+                for (int s = 0; s < g.routers(); s++) for (int d = 0; d < g.routers(); d++) if (s != d) CHECK_EQ(hopsTo(*a, g, s, d), latticeDistance(*g.lattice(), s, d));
+            }
+            CHECK(errOf([&] { createRouting(name, Topology::grid2d(3, 3, {}, 0, true), p2); }).find("needs a grid2d topology") != std::string::npos);
+        }
+}
+TEST("T4-WEIGHTED-TABLE")
+{
+    // 2x2 grid: 0 -> 3 has two shortest paths, via 1 (east, port 0) and via 2 (south, port 1)
+    Topology g = Topology::grid2d(2, 2, {}, 0);
+    auto plain = createRouting("Table", g, {});
+    CHECK(routeIds(g, *plain, 0, 3) == std::vector<int>({0, 1, 3}));
+    RoutingParams w; w.link_weight[0] = {1, 5};                     // make 0 -> 1 expensive
+    auto wt = createRouting("Table", g, w);
+    CHECK(routeIds(g, *wt, 0, 3) == std::vector<int>({0, 2, 3}));
+    CHECK(routeIds(g, *wt, 0, 1) == std::vector<int>({0, 2, 3, 1})); // 3 hops of weight 1 beat one of 5
+    RoutingParams bad; bad.link_weight[0] = {3, 2};
+    CHECK(errOf([&] { createRouting("Table", g, bad); }).find("not a neighbour") != std::string::npos);
+    RoutingParams zero; zero.link_weight[0] = {1, 0};
+    CHECK(errOf([&] { createRouting("Table", g, zero); }).find(">= 1") != std::string::npos);
+    // all weights 1 give the same table as the BFS
+    RoutingParams ones; for (int r = 0; r < 4; r++) for (int p = 0; p < g.linkPorts(r); p++) { ones.link_weight[r].push_back(g.link(r, p).router); ones.link_weight[r].push_back(1); }
+    auto one = createRouting("Table", g, ones);
+    for (int s = 0; s < 4; s++) for (int d = 0; d < 4; d++) if (s != d) CHECK(routeIds(g, *one, s, d) == routeIds(g, *plain, s, d));
+}
+
+// walk one packet with its per-packet state; the VC taken at each hop is the lowest the mask allows
+static std::vector<int> walk(const RoutingAlgorithm &a, const Topology &t, uint64_t seq, int s, int d)
+{
+    Packet p; p.seq = seq; p.src_router = s; p.dst_router = d; p.dst_endpoint = -1;
+    a.onInject(p);
+    std::vector<int> seq_r{s}; int r = s, in_port = -1, in_vc = 0;
+    for (int guard = 0; guard < 4 * t.routers() + 8; guard++)
+    {
+        RouteContext c; c.router = r; c.in_port = in_port; c.in_vc = in_vc; c.dst_router = d; c.src_router = s; c.packet = &p;
+        Route rt = a.nextHop(c);
+        if (rt.out_port < 0 || t.isLocalPort(r, rt.out_port) || rt.out_port >= t.linkPorts(r)) return seq_r;   // arrived (no endpoint in this walk)
+        int vc = 0; while (!(rt.vc_mask & (1u << vc))) vc++;
+        auto f = t.link(r, rt.out_port); r = f.router; in_port = f.port; in_vc = vc; seq_r.push_back(r);
+    }
+    octest::fail("walk did not reach the destination");
+    return seq_r;
+}
+TEST("T4-OBLIVIOUS")
+{
+    RoutingParams p2; p2.vcs_per_class = 2; RoutingParams p4; p4.vcs_per_class = 4;
+    std::vector<Topology> ts = {Topology::grid2d(4, 4, {}, 0), buildLattice3D(3, 3, 2, {}, 0, false)};
+    for (const char *name : {"O1TURN", "Valiant", "ROMM"})
+        for (auto &t : ts)
+        {
+            if (std::string(name) == "O1TURN" && t.lattice()->rank() != 2) { CHECK(!errOf([&] { createRouting(name, t, p2); }).empty()); continue; }
+            for (auto *pp : {&p2, &p4})
+            {
+                auto a = createRouting(name, t, *pp);
+                std::string cyc;
+                if (!channelDependencyAcyclic(t, *a, pp->vcs_per_class, &cyc)) octest::fail(std::string(name) + " has a dependency cycle: " + cyc);
+                std::set<std::vector<int>> distinct;
+                for (int s = 0; s < t.routers(); s++) for (int d = 0; d < t.routers(); d++)
+                {
+                    if (s == d) continue;
+                    for (uint64_t q = 1; q <= 6; q++)
+                    {
+                        auto path = walk(*a, t, q * 7919 + s * 31 + d, s, d);
+                        CHECK_EQ(path.back(), d);
+                        int hops = (int)path.size() - 1, dist = latticeDistance(*t.lattice(), s, d);
+                        if (std::string(name) != "Valiant") CHECK_EQ(hops, dist);            // O1TURN and ROMM are minimal
+                        else CHECK(hops >= dist);
+                        if (s == 0 && d == t.routers() - 1) distinct.insert(path);
+                    }
+                }
+                CHECK(distinct.size() >= 2);                                               // the draw does vary the path
+            }
+        }
+    Topology tor = Topology::grid2d(4, 4, {}, 0, true);
+    CHECK(errOf([&] { createRouting("Valiant", tor, p2); }).find("without wrap links") != std::string::npos);
+    Topology g = Topology::grid2d(4, 4, {}, 0); RoutingParams p1; p1.vcs_per_class = 1;
+    CHECK(errOf([&] { createRouting("ROMM", g, p1); }).find("vcs_per_class >= 2") != std::string::npos);
+    // the draw is a function of the packet and the seed only
+    RoutingParams s7 = p2; s7.seed = 7;
+    auto v1 = createRouting("Valiant", g, p2), v2 = createRouting("Valiant", g, p2), v7 = createRouting("Valiant", g, s7);
+    int same = 0, diff = 0;
+    for (uint64_t q = 1; q <= 50; q++) { CHECK(walk(*v1, g, q, 0, 15) == walk(*v2, g, q, 0, 15)); (walk(*v1, g, q, 0, 15) == walk(*v7, g, q, 0, 15) ? same : diff)++; }
+    CHECK(diff > 0);
 }

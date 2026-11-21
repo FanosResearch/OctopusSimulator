@@ -58,8 +58,55 @@ namespace octopus { namespace net
         return t;
     }
 
+    // 3-D mesh / torus: routers x fastest, then y, then z; ports east, west, north, south (as on
+    // a grid), then up (z - 1) and down (z + 1), absent directions skipped on a mesh
+    Topology buildLattice3D(int kx, int ky, int kz, const std::map<int, int> &node_map, int local_ports, bool torus)
+    {
+        std::string name = torus ? "torus3d" : "mesh3d";
+        if (kx < 1 || ky < 1 || kz < 1) throw ConfigError("dims must be >= 1,1,1");
+        if (torus && (kx < 3 || ky < 3 || kz < 3)) throw ConfigError("torus3d needs dims >= 3,3,3 (a wrap link must differ from the direct link)");
+        Topology t; t.setKindName(name);
+        for (int r = 0; r < kx * ky * kz; r++) t.addRouter(r);
+        Lattice l; l.dims = {kx, ky, kz}; l.wrap = {torus, torus, torus}; t.setLattice(l);
+        struct Dir { int dim, dir; const char *name; };
+        const Dir dirs[6] = {{0, +1, "east"}, {0, -1, "west"}, {1, -1, "north"}, {1, +1, "south"}, {2, -1, "up"}, {2, +1, "down"}};
+        for (int r = 0; r < t.routers(); r++)
+        {
+            auto c = l.coord(r);
+            for (const Dir &d : dirs)
+            {
+                auto n = c; n[d.dim] += d.dir;
+                bool wrap = n[d.dim] < 0 || n[d.dim] >= l.dims[d.dim];
+                if (wrap && !torus) continue;
+                n[d.dim] = (n[d.dim] + l.dims[d.dim]) % l.dims[d.dim];
+                t.addPort(r, l.index(n), std::string(d.name) + (wrap ? "(wrap)" : ""), d.dim, d.dir);
+            }
+        }
+        attachMap(t, node_map);
+        t.finalize(local_ports);
+        return t;
+    }
+
     namespace
     {
+        class Lattice3DBuilder : public TopologyBuilder
+        {
+            bool m_torus;
+        public:
+            explicit Lattice3DBuilder(bool torus) : m_torus(torus) {}
+            std::string name() const override { return m_torus ? "torus3d" : "mesh3d"; }
+            std::vector<KeySpec> keys() const override
+            {
+                return {{"dims", "vi", "0", "kx,ky,kz"}, {"node_map[<id>]", "i", "none", "the router of an endpoint"}};
+            }
+            Topology build(const KeyView &cfg, const std::vector<int> &endpoints, int local_ports) const override
+            {
+                std::vector<int> dims = cfg.getvi("dims");
+                std::map<int, int> node_map = cfg.nodeMap(endpoints);
+                if (dims.size() < 3) throw ConfigError("dims needs kx,ky,kz for " + name());
+                return buildLattice3D(dims[0], dims[1], dims[2], node_map, local_ports, m_torus);
+            }
+        };
         class GridBuilder : public TopologyBuilder
         {
             bool m_torus;
@@ -97,4 +144,6 @@ namespace octopus { namespace net
     std::unique_ptr<TopologyBuilder> makeGrid2DBuilder() { return std::make_unique<GridBuilder>(false); }
     std::unique_ptr<TopologyBuilder> makeTorus2DBuilder() { return std::make_unique<GridBuilder>(true); }
     std::unique_ptr<TopologyBuilder> makeRingBuilder() { return std::make_unique<RingBuilder>(); }
+    std::unique_ptr<TopologyBuilder> makeMesh3DBuilder() { return std::make_unique<Lattice3DBuilder>(false); }
+    std::unique_ptr<TopologyBuilder> makeTorus3DBuilder() { return std::make_unique<Lattice3DBuilder>(true); }
 }}

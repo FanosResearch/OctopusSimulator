@@ -7,6 +7,7 @@
 #include <deque>
 #include <functional>
 #include <set>
+#include <iostream>
 #include <sstream>
 #include <tuple>
 
@@ -53,11 +54,65 @@ namespace octopus { namespace net
         const Topology &m_t;
         std::vector<std::vector<int>> m_next;    // [router][dst_router] -> out port (link port or first local port)
         int m_escape_vc, m_vcs;
+        int m_ties = 0;                          // weighted: (router, destination) pairs with several equal-cost ports
+        // Shortest weighted paths (link_weight[<router>](vi): neighbour,weight,...; default weight 1):
+        // Dijkstra from every destination over reversed links; next hop = the lowest port on a
+        // shortest path.
+        void weighted(const Topology &t, const RoutingParams &p)
+        {
+            int R = t.routers();
+            std::vector<std::vector<long>> w(R);
+            for (int r = 0; r < R; r++) w[r].assign(t.linkPorts(r), 1);
+            for (auto &kv : p.link_weight)
+            {
+                int r = t.routerIndex(kv.first);
+                if (r < 0) throw ConfigError("link_weight[" + std::to_string(kv.first) + "]: not a router id");
+                if (kv.second.size() % 2) throw ConfigError("link_weight[" + std::to_string(kv.first) + "]: expects neighbour,weight pairs");
+                for (size_t i = 0; i + 1 < kv.second.size(); i += 2)
+                {
+                    int n = t.routerIndex(kv.second[i]), wt = kv.second[i + 1], port = n < 0 ? -1 : portTowards(t, r, n);
+                    if (port < 0) throw ConfigError("link_weight[" + std::to_string(kv.first) + "]: " + std::to_string(kv.second[i]) + " is not a neighbour of router " + std::to_string(kv.first));
+                    if (wt < 1) throw ConfigError("link_weight[" + std::to_string(kv.first) + "]: weights must be >= 1");
+                    for (int q = 0; q < t.linkPorts(r); q++) if (t.link(r, q).router == n) w[r][q] = wt;
+                }
+            }
+            const long INF = (long)1 << 60;
+            for (int d = 0; d < R; d++)
+            {
+                std::vector<long> dist(R, INF); dist[d] = 0;
+                std::set<std::pair<long, int>> pq{{0, d}};
+                while (!pq.empty())
+                {
+                    int r = pq.begin()->second; pq.erase(pq.begin());
+                    // every router n with a link n -> r relaxes through it
+                    for (int q = 0; q < t.linkPorts(r); q++)
+                    {
+                        auto back = t.link(r, q); int n = back.router;
+                        long nd = dist[r] + w[n][back.port];
+                        if (nd < dist[n]) { pq.erase({dist[n], n}); dist[n] = nd; pq.insert({nd, n}); }
+                    }
+                }
+                for (int r = 0; r < R; r++)
+                {
+                    if (r == d) { m_next[r][d] = t.linkPorts(r); continue; }
+                    if (dist[r] >= INF) throw ConfigError("Table: router " + std::to_string(t.routerId(d)) + " is unreachable from router " + std::to_string(t.routerId(r)));
+                    int best = -1, ties = 0;
+                    for (int q = 0; q < t.linkPorts(r); q++)
+                        if (w[r][q] + dist[t.link(r, q).router] == dist[r]) { if (best < 0) best = q; ties++; }
+                    m_next[r][d] = best;
+                    if (ties > 1) m_ties++;
+                }
+            }
+            std::cout << "Table: weighted shortest paths; " << m_ties << " (router, destination) pairs chose between equal-cost ports by lowest port index (state preferences with routing_via)" << std::endl;
+        }
     public:
+        int equalCostTies() const { return m_ties; }
         TableRouting(const Topology &t, const RoutingParams &p) : m_t(t), m_escape_vc(p.escape_vc), m_vcs(p.vcs_per_class)
         {
             int R = t.routers();
             m_next.assign(R, std::vector<int>(R, -1));
+            if (!p.link_weight.empty()) { weighted(t, p); }
+            else
             // BFS from every destination over reversed links: next hop toward dst is the
             // neighbour with distance-1, ties by lowest port index
             for (int d = 0; d < R; d++)
@@ -185,8 +240,132 @@ namespace octopus { namespace net
         std::string name() const override { return "XY"; }
     };
 
-    // ------------------------------------------------------------------ WestFirst (2-D lattice without wraps)
-    class WestFirstRouting : public XYRouting
+    // ------------------------------------------------------------------ oblivious two-set routing
+    // O1TURN, Valiant and ROMM choose once per packet (Packet::route_aux, drawn in onInject from a
+    // hash of the packet's sequence number and routing_seed). They run on a lattice without wrap
+    // links and split each class's VCs into two sets, A = [0, vcs/2) and B = [vcs/2, vcs): each
+    // set carries dimension-order routes only, and a packet moves from A to B at most once, so
+    // the channel dependency graph is acyclic.
+    static uint64_t splitmix(uint64_t x)
+    {
+        x += 0x9E3779B97F4A7C15ull; x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
+        x = (x ^ (x >> 27)) * 0x94D049BB133111EBull; return x ^ (x >> 31);
+    }
+    class TwoSetRouting : public XYRouting
+    {
+    protected:
+        std::string m_name; uint64_t m_seed; uint32_t m_A, m_B;
+        uint64_t draw(const Packet &p) const { return splitmix(p.seq * 0x100000001B3ull ^ m_seed); }
+        bool overLink(const RouteContext &c) const { return c.in_port >= 0 && !m_t.isLocalPort(c.router, c.in_port); }
+        bool inB(int vc) const { return (m_B >> vc) & 1u; }
+        // the next dimension-order step from r toward target, dimensions in order (reverse = last
+        // dimension first); -1 at the target
+        int step(int r, int target, bool reverse) const
+        {
+            auto h = m_l.coord(r), g = m_l.coord(target);
+            for (int i = 0; i < m_l.rank(); i++)
+            {
+                int d = reverse ? m_l.rank() - 1 - i : i;
+                if (h[d] != g[d]) return portForStep(r, d, g[d] > h[d] ? 1 : -1);
+            }
+            return -1;
+        }
+        Route make(int port, uint32_t mask) const { Route rt; rt.out_port = port; rt.vc_mask = mask; return rt; }
+        Route local(const RouteContext &c) const { return make(localOut(c), allVCs(m_vcs)); }
+    public:
+        TwoSetRouting(const Topology &t, const RoutingParams &p, const std::string &name) : XYRouting(t, p), m_name(name), m_seed(p.seed)
+        {
+            if (m_l.anyWrap()) throw ConfigError(name + " routing needs a lattice without wrap links (grid2d, mesh3d)");
+            if (m_vcs < 2) throw ConfigError(name + " routing needs vcs_per_class >= 2 (two VC sets)");
+            m_A = allVCs(m_vcs / 2); m_B = allVCs(m_vcs) & ~m_A;
+        }
+        Ordering ordering() const override { return Ordering::NONE; }
+        bool fixesVCPerPair() const override { return false; }
+        bool deadlockFreeOn(const Topology &) const override { return true; }   // by construction (see above)
+        std::string name() const override { return m_name; }
+    };
+    // O1TURN (Seo et al., ISCA 2005): each packet takes XY (set A) or YX (set B) with equal probability.
+    class O1TurnRouting : public TwoSetRouting
+    {
+        Route orderRoute(const RouteContext &c, int o) const
+        {
+            int p = step(c.router, c.dst_router, o == 1);
+            return p < 0 ? local(c) : make(p, o == 0 ? m_A : m_B);
+        }
+    public:
+        O1TurnRouting(const Topology &t, const RoutingParams &p) : TwoSetRouting(t, p, "O1TURN")
+        {
+            if (m_l.rank() != 2) throw ConfigError("O1TURN routing needs a 2-D lattice (grid2d)");
+        }
+        void onInject(Packet &p) const override { p.route_aux = (int)(draw(p) & 1u); }
+        Route nextHop(const RouteContext &c) const override
+        {
+            int o = c.packet && c.packet->route_aux >= 0 ? c.packet->route_aux : (overLink(c) && inB(c.in_vc) ? 1 : 0);
+            return orderRoute(c, o);
+        }
+        std::vector<Route> candidates(const RouteContext &c) const override
+        {
+            if (overLink(c)) return {orderRoute(c, inB(c.in_vc) ? 1 : 0)};
+            return {orderRoute(c, 0), orderRoute(c, 1)};
+        }
+    };
+    // Valiant (1982): dimension order to a random intermediate router on set A, then dimension
+    // order to the destination on set B. ROMM (Nesson and Johnsson, 1995): the same with the
+    // intermediate drawn inside the minimal box of source and destination, so paths stay minimal.
+    class TwoPhaseRouting : public TwoSetRouting
+    {
+        bool m_minimal;
+        bool phase2(const RouteContext &c) const
+        {
+            if (overLink(c) && inB(c.in_vc)) return true;
+            return c.packet ? c.router == c.packet->route_aux : false;
+        }
+        Route toDst(const RouteContext &c) const { int p = step(c.router, c.dst_router, false); return p < 0 ? local(c) : make(p, m_B); }
+    public:
+        TwoPhaseRouting(const Topology &t, const RoutingParams &p, bool minimal) : TwoSetRouting(t, p, minimal ? "ROMM" : "Valiant"), m_minimal(minimal) {}
+        void onInject(Packet &p) const override
+        {
+            uint64_t h = draw(p);
+            if (!m_minimal) { p.route_aux = (int)(h % (uint64_t)m_t.routers()); return; }
+            auto s = m_l.coord(p.src_router), d = m_l.coord(p.dst_router), i = s;
+            for (int k = 0; k < m_l.rank(); k++)
+            {
+                int lo = std::min(s[k], d[k]), hi = std::max(s[k], d[k]);
+                i[k] = lo + (int)(h % (uint64_t)(hi - lo + 1)); h = splitmix(h);
+            }
+            p.route_aux = m_l.index(i);
+        }
+        Route nextHop(const RouteContext &c) const override
+        {
+            if (!c.packet) return toDst(c);                       // no per-packet state: the direct route
+            if (phase2(c)) return toDst(c);
+            int p = step(c.router, c.packet->route_aux, false);
+            return p < 0 ? toDst(c) : make(p, m_A);
+        }
+        std::vector<Route> candidates(const RouteContext &c) const override
+        {
+            if (overLink(c) && inB(c.in_vc)) return {toDst(c)};
+            // phase 1 toward any intermediate: the dimension-order continuations of the arrival
+            // direction (or every direction at the source), on set A; or the switch to phase 2 here
+            std::vector<Route> out{toDst(c)};
+            int dim = -1, dir = 0, ind = 0, indir = 0;
+            if (overLink(c) && m_t.portDir(c.router, c.in_port, ind, indir)) { dim = ind; dir = -indir; }
+            for (int d = 0; d < m_l.rank(); d++) for (int s : {+1, -1})
+            {
+                if (dim >= 0 && (d < dim || (d == dim && s != dir))) continue;
+                int p = m_t.dirPort(c.router, d, s);
+                if (p >= 0) out.push_back(make(p, m_A));
+            }
+            return out;
+        }
+    };
+
+    // ------------------------------------------------------------------ turn models (2-D lattice without wraps)
+    // A turn model allows a set of minimal outputs at each hop; the head takes the one whose VCs
+    // of its class hold the most credits, ties to the lowest port. Directions: dimension 0 is x
+    // (east +1, west -1), dimension 1 is y growing downwards (south +1, north -1). Each model
+    // forbids enough turns to break every cycle, so it is deadlock-free with any VC count.
+    class TurnModelRouting : public XYRouting
     {
         int sumCredits(const RouteContext &c, int port) const
         {
@@ -194,42 +373,123 @@ namespace octopus { namespace net
             int s = 0; for (int v = 0; v < c.here->vcsPerClass(); v++) s += c.here->credits(port, c.cls, v);
             return s;
         }
-    public:
-        WestFirstRouting(const Topology &t, const RoutingParams &p) : XYRouting(t, p)
+    protected:
+        std::string m_name;
+        int east(int r) const { return portForStep(r, 0, +1); }
+        int west(int r) const { return portForStep(r, 0, -1); }
+        int ystep(int r, int dy) const { return portForStep(r, 1, dy > 0 ? 1 : -1); }
+        // the allowed minimal outputs; dx, dy != (0, 0)
+        virtual std::vector<int> allowed(const RouteContext &c, const std::vector<int> &here, const std::vector<int> &dst) const = 0;
+        std::vector<int> ports(const RouteContext &c) const
         {
-            if (m_l.rank() != 2 || m_l.anyWrap()) throw ConfigError("WestFirst routing needs a grid2d topology");
+            auto here = m_l.coord(c.router), dst = m_l.coord(c.dst_router);
+            if (here == dst) return {};
+            std::vector<int> a = allowed(c, here, dst);
+            std::sort(a.begin(), a.end());
+            if (a.empty()) throw ConfigError(m_name + ": no allowed output at router " + std::to_string(m_t.routerId(c.router)));
+            return a;
+        }
+    public:
+        TurnModelRouting(const Topology &t, const RoutingParams &p, const std::string &name) : XYRouting(t, p), m_name(name)
+        {
+            if (m_l.rank() != 2 || m_l.anyWrap()) throw ConfigError(name + " routing needs a grid2d topology");
         }
         bool fixesVCPerPair() const override { return false; }
         std::vector<Route> candidates(const RouteContext &c) const override
         {
-            auto here = m_l.coord(c.router), dst = m_l.coord(c.dst_router);
-            int dx = dst[0] - here[0], dy = dst[1] - here[1];
             Route rt; rt.vc_mask = allVCs(m_vcs);
-            if (dx == 0 && dy == 0) { rt.out_port = localOut(c); return {rt}; }
-            if (dx < 0) { rt.out_port = portForStep(c.router, 0, -1); return {rt}; }
+            auto a = ports(c);
+            if (a.empty()) { rt.out_port = localOut(c); return {rt}; }
             std::vector<Route> out;
-            if (dx > 0) { rt.out_port = portForStep(c.router, 0, +1); out.push_back(rt); }
-            if (dy != 0) { rt.out_port = portForStep(c.router, 1, dy > 0 ? 1 : -1); out.push_back(rt); }
+            for (int p : a) { rt.out_port = p; out.push_back(rt); }
             return out;
         }
         Route nextHop(const RouteContext &c) const override
         {
             Route rt; rt.vc_mask = allVCs(m_vcs);
-            auto here = m_l.coord(c.router), dst = m_l.coord(c.dst_router);
-            int dx = dst[0] - here[0], dy = dst[1] - here[1];
-            if (dx == 0 && dy == 0) { rt.out_port = localOut(c); return rt; }
-            if (dx < 0) { rt.out_port = portForStep(c.router, 0, -1); return rt; }   // west first, always
-            // allowed minimal outputs: east if dx > 0, north/south if dy != 0; pick the most credits, ties lowest port
-            std::vector<int> cand;
-            if (dx > 0) cand.push_back(portForStep(c.router, 0, +1));
-            if (dy != 0) cand.push_back(portForStep(c.router, 1, dy > 0 ? 1 : -1));
-            std::sort(cand.begin(), cand.end());
-            int best = cand[0], bestc = sumCredits(c, cand[0]);
-            for (size_t i = 1; i < cand.size(); i++) { int cr = sumCredits(c, cand[i]); if (cr > bestc) { best = cand[i]; bestc = cr; } }
+            auto a = ports(c);
+            if (a.empty()) { rt.out_port = localOut(c); return rt; }
+            int best = a[0], bestc = sumCredits(c, a[0]);
+            for (size_t i = 1; i < a.size(); i++) { int cr = sumCredits(c, a[i]); if (cr > bestc) { best = a[i]; bestc = cr; } }
             rt.out_port = best; return rt;
         }
         Ordering ordering() const override { return Ordering::NONE; }
-        std::string name() const override { return "WestFirst"; }
+        std::string name() const override { return m_name; }
+    };
+    // West-first: all westward hops first; then any minimal mix of east, north and south.
+    class WestFirstRouting : public TurnModelRouting
+    {
+    public:
+        WestFirstRouting(const Topology &t, const RoutingParams &p) : TurnModelRouting(t, p, "WestFirst") {}
+        std::vector<int> allowed(const RouteContext &c, const std::vector<int> &h, const std::vector<int> &d) const override
+        {
+            int dx = d[0] - h[0], dy = d[1] - h[1];
+            if (dx < 0) return {west(c.router)};
+            std::vector<int> a;
+            if (dx > 0) a.push_back(east(c.router));
+            if (dy != 0) a.push_back(ystep(c.router, dy));
+            return a;
+        }
+    };
+    // North-last: northward hops last, and no turn after them.
+    class NorthLastRouting : public TurnModelRouting
+    {
+    public:
+        NorthLastRouting(const Topology &t, const RoutingParams &p) : TurnModelRouting(t, p, "NorthLast") {}
+        std::vector<int> allowed(const RouteContext &c, const std::vector<int> &h, const std::vector<int> &d) const override
+        {
+            int dx = d[0] - h[0], dy = d[1] - h[1];
+            if (dy < 0) return dx != 0 ? std::vector<int>{dx > 0 ? east(c.router) : west(c.router)} : std::vector<int>{ystep(c.router, dy)};
+            std::vector<int> a;
+            if (dx != 0) a.push_back(dx > 0 ? east(c.router) : west(c.router));
+            if (dy > 0) a.push_back(ystep(c.router, dy));
+            return a;
+        }
+    };
+    // Negative-first: the negative directions (west, north) first, adaptively; then the
+    // positive ones (east, south), adaptively.
+    class NegativeFirstRouting : public TurnModelRouting
+    {
+    public:
+        NegativeFirstRouting(const Topology &t, const RoutingParams &p) : TurnModelRouting(t, p, "NegativeFirst") {}
+        std::vector<int> allowed(const RouteContext &c, const std::vector<int> &h, const std::vector<int> &d) const override
+        {
+            int dx = d[0] - h[0], dy = d[1] - h[1];
+            std::vector<int> a;
+            if (dx < 0 || dy < 0)
+            {
+                if (dx < 0) a.push_back(west(c.router));
+                if (dy < 0) a.push_back(ystep(c.router, dy));
+                return a;
+            }
+            if (dx > 0) a.push_back(east(c.router));
+            if (dy > 0) a.push_back(ystep(c.router, dy));
+            return a;
+        }
+    };
+    // Odd-even (Chiu, IEEE TPDS 2000): no east-to-north/south turn in an even column, no
+    // north/south-to-west turn in an odd column. The minimal routing function of the paper.
+    class OddEvenRouting : public TurnModelRouting
+    {
+    public:
+        OddEvenRouting(const Topology &t, const RoutingParams &p) : TurnModelRouting(t, p, "OddEven") {}
+        std::vector<int> allowed(const RouteContext &c, const std::vector<int> &h, const std::vector<int> &d) const override
+        {
+            int dx = d[0] - h[0], dy = d[1] - h[1];
+            int sx = m_l.coord(c.src_router)[0];
+            std::vector<int> a;
+            if (dx == 0) return {ystep(c.router, dy)};
+            if (dx > 0)
+            {
+                if (dy == 0) return {east(c.router)};
+                if (h[0] % 2 == 1 || h[0] == sx) a.push_back(ystep(c.router, dy));
+                if (d[0] % 2 == 1 || dx != 1) a.push_back(east(c.router));
+                return a;
+            }
+            a.push_back(west(c.router));
+            if (h[0] % 2 == 0 && dy != 0) a.push_back(ystep(c.router, dy));
+            return a;
+        }
     };
 
     // ------------------------------------------------------------------ AdaptiveMinimal
@@ -330,9 +590,15 @@ namespace octopus { namespace net
         if (name == "Table") return std::make_unique<TableRouting>(t, p);
         if (name == "XY") return std::make_unique<XYRouting>(t, p);
         if (name == "WestFirst") return std::make_unique<WestFirstRouting>(t, p);
+        if (name == "NorthLast") return std::make_unique<NorthLastRouting>(t, p);
+        if (name == "NegativeFirst") return std::make_unique<NegativeFirstRouting>(t, p);
+        if (name == "OddEven") return std::make_unique<OddEvenRouting>(t, p);
+        if (name == "O1TURN") return std::make_unique<O1TurnRouting>(t, p);
+        if (name == "Valiant") return std::make_unique<TwoPhaseRouting>(t, p, false);
+        if (name == "ROMM") return std::make_unique<TwoPhaseRouting>(t, p, true);
         if (name == "AdaptiveMinimal") return std::make_unique<AdaptiveMinimalRouting>(t, p);
         if (name == "TDM_XY") throw ConfigError("routing TDM_XY is deferred (docs/NoC_Architecture_Spec.md s12)");
-        throw ConfigError("unknown routing algorithm '" + name + "' (Table, XY, WestFirst, AdaptiveMinimal)");
+        throw ConfigError("unknown routing algorithm '" + name + "' (Table, XY, WestFirst, NorthLast, NegativeFirst, OddEven, O1TURN, Valiant, ROMM, AdaptiveMinimal)");
     }
 
     // ------------------------------------------------------------------ deadlock check
@@ -402,7 +668,6 @@ namespace octopus { namespace net
             while (!todo.empty())
             {
                 St st = todo.back(); todo.pop_back();
-                if (st.router == d) continue;
                 RouteContext c; c.router = st.router; c.in_port = st.in_port; c.in_vc = st.in_vc; c.dst_router = d; c.src_router = s;
                 for (const Route &rt : r.candidates(c))
                 {
@@ -411,6 +676,7 @@ namespace octopus { namespace net
                     {
                         int port = opts[k].first; uint32_t mask = opts[k].second & all;
                         if (k == 1 && port < 0) continue;
+                        if (st.router == d && port == t.linkPorts(st.router)) continue;    // the (possibly virtual) local port
                         checkPorts(t, r.name(), st.router, port, d);
                         if (t.isLocalPort(st.router, port)) continue;
                         auto f = t.link(st.router, port);

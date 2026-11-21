@@ -28,6 +28,9 @@ namespace octopus { namespace net
     {
         int flit_bytes = 16, header_bytes = 8, num_classes = 3, vcs_per_class = 1, vc_depth = 4;
         int router_latency = 2, link_latency = 1, credit_latency = 1;
+        int switch_latency = 0;                       // ticks from a head's VC grant to its earliest switch allocation
+        std::string sa_allocator = "output_first";    // output_first | input_first (separable switch allocators)
+        std::map<int, int> router_latency_at;         // router id -> router_latency override
         std::vector<int> class_link_latency;          // empty = use link_latency
         bool half_duplex = false;
         std::string link_model = "pipelined";         // pipelined: one flit per tick per link; serial: a flit holds the link for its latency
@@ -95,6 +98,7 @@ namespace octopus { namespace net
             int alt_port = -1;         // the fallback route (Route::alt), granted only if VA picks it
             uint32_t alt_mask = 0;
             uint64_t head_arrival = 0;
+            uint64_t va_tick = 0;      // the tick the head won its output VC
         };
         struct OutVC { int credits = 0; uint64_t holder = 0; int holder_ep = -1; std::unique_ptr<Arbiter> va; };   // holder_ep: the injecting endpoint (local ports only)
         struct OutPort
@@ -108,6 +112,8 @@ namespace octopus { namespace net
             std::vector<std::vector<std::vector<VCState>>> in;   // [port][cls][vc]
             std::vector<OutPort> out;                            // [port]
             std::vector<uint64_t> in_last_sent;                  // [port] tick a flit last left this input port
+            std::vector<std::unique_ptr<Arbiter>> in_sa;         // [port] input arbiters (sa_allocator input_first)
+            std::vector<int> lat;                                // [router] pipeline latency at VA and at SA, see routerLatency
         };
         // the upstream side of a local input port: credits and holders per [cls][vc], shared by
         // the endpoints on that port (spec §7.1, §5.2)
@@ -136,6 +142,9 @@ namespace octopus { namespace net
         void buildTopology();
         void buildRouters();
         std::unique_ptr<Arbiter> makeArbiter();
+        int routerLatency(int r) const;                          // 0 at implicit routers
+        int switchLatency(int r) const;
+        void inputFirstChoice(std::vector<std::vector<int>> &choice);   // sa_allocator input_first: [router][port] -> chosen VC index
         void step();
         void phaseInject();
         void phaseArrivals();

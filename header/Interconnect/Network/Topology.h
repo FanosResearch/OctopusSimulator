@@ -81,6 +81,8 @@ namespace octopus { namespace net
         const Lattice *lattice() const { return m_lattice.get(); }   // null: not a lattice
         // the link port of router r one step in dimension `dim` (dir +1 or -1); -1 if none
         int  dirPort(int r, int dim, int dir) const;
+        // the lattice direction of link port p of router r; false if it has none
+        bool portDir(int r, int p, int &dim, int &dir) const;
         int  attr(int r, const std::string &key, int dflt = -1) const;
         // custom matrices give every endpoint node an implicit router: it stands for the endpoint's
         // own link ports and adds no pipeline latency (spec s5.1)

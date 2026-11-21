@@ -44,6 +44,7 @@ namespace octopus { namespace net
         int      src_router = -1, dst_router = -1;
         int      flits = 1;
         int      next_flit = 0;    // flits already injected
+        int      route_aux = -1;   // per-packet routing state, set by RoutingAlgorithm::onInject (an intermediate router, an order)
         uint64_t t_inject = 0;
         // per-hop statistics (spec §15.3)
         int      hops = 0;

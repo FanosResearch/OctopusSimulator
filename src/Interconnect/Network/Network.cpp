@@ -73,6 +73,10 @@ namespace octopus { namespace net
         c.inject_depth = geti("inject_queue_depth"); c.eject_depth = geti("eject_queue_depth");
         c.rx_serving = gets("rx_serving"); c.routing = gets("routing"); c.escape_vc = geti("escape_vc"); c.arbiter_type = gets("arbiter_type");
         if (has("deadlock_check")) c.deadlock_check = gets("deadlock_check");
+        if (has("switch_latency")) c.switch_latency = geti("switch_latency");
+        if (has("sa_allocator")) c.sa_allocator = gets("sa_allocator");
+        for (auto &kv : parameters)
+            if (kv.first.rfind("router_latency[", 0) == 0) c.router_latency_at[std::atoi(kv.first.c_str() + 15)] = std::get<int>(kv.second.value);
         m_home_ids = optvi("home_ids");
 
         auto bad = [](const std::string &m) { throw ConfigError(m); };
@@ -82,6 +86,9 @@ namespace octopus { namespace net
         if (c.vcs_per_class < 1) bad("vcs_per_class must be >= 1");
         if (c.vc_depth < 1) bad("vc_depth must be >= 1");
         if (c.router_latency < 0) bad("router_latency must be >= 0");
+        for (auto &kv : c.router_latency_at) if (kv.second < 0) bad("router_latency[" + std::to_string(kv.first) + "] must be >= 0");
+        if (c.switch_latency < 0) bad("switch_latency must be >= 0");
+        if (c.sa_allocator != "output_first" && c.sa_allocator != "input_first") bad("sa_allocator must be output_first or input_first, got " + c.sa_allocator);
         if (c.link_latency < 1) bad("link_latency must be >= 1");
         if (c.credit_latency < 0) bad("credit_latency must be >= 0");
         if (!c.class_link_latency.empty())
@@ -100,7 +107,14 @@ namespace octopus { namespace net
         for (auto &kv : parameters)
             if (kv.first.rfind("slot_table[", 0) == 0 || kv.first.rfind("vc_priority[", 0) == 0)
                 bad("key " + kv.first + " belongs to the deferred real-time phase (docs/NoC_Architecture_Spec.md s12)");
-        if (c.routing == "auto") c.routing = (c.topology == "grid2d" || c.topology == "torus2d") ? "XY" : "Table";
+        if (c.routing == "auto")
+        {
+            // XY (dimension order, with the dateline on wrapped dimensions) on every lattice where it
+            // applies; a ring needs two VCs for its dateline, else Table
+            const std::string &t = c.topology;
+            bool lattice = t == "grid2d" || t == "torus2d" || t == "mesh3d" || t == "torus3d";
+            c.routing = (lattice || (t == "ring" && c.vcs_per_class >= 2)) ? "XY" : "Table";
+        }
         m_class_stats.assign(c.num_classes, ClassStats{});
     }
 
@@ -113,11 +127,17 @@ namespace octopus { namespace net
         m_topo = std::make_unique<Topology>(TopologyRegistry::builtin().create(m_cfg.topology, KeyView(parameters), m_component_ids, m_cfg.local_ports));
 
         RoutingParams rp; rp.vcs_per_class = m_cfg.vcs_per_class; rp.escape_vc = m_cfg.escape_vc;
+        if (parameters.count("routing_seed")) rp.seed = (uint64_t)std::get<int>(parameters.at("routing_seed").value);
         for (auto &kv : parameters)
             if (kv.first.rfind("routing_table[", 0) == 0)
             {
                 int rid = std::atoi(kv.first.c_str() + 14);
                 rp.routing_table[rid] = std::get<std::vector<int>>(kv.second.value);
+            }
+            else if (kv.first.rfind("link_weight[", 0) == 0)
+            {
+                int rid = std::atoi(kv.first.c_str() + 12);
+                rp.link_weight[rid] = std::get<std::vector<int>>(kv.second.value);
             }
             else if (kv.first.rfind("routing_via[", 0) == 0)
             {
@@ -135,6 +155,49 @@ namespace octopus { namespace net
         m_classifier = std::make_unique<Classifier>(m_cfg.num_classes, homes);
     }
 
+    int Network::routerLatency(int r) const
+    {
+        if (m_topo->implicitRouter(r)) return 0;
+        auto it = m_cfg.router_latency_at.find(m_topo->routerId(r));
+        return it == m_cfg.router_latency_at.end() ? m_cfg.router_latency : it->second;
+    }
+    int Network::switchLatency(int r) const { return m_topo->implicitRouter(r) ? 0 : m_cfg.switch_latency; }
+
+    // sa_allocator input_first (a separable input-first allocator): each input port first picks
+    // one of its ready VCs with its own arbiter; the output arbiters then see one request per
+    // input. A VC is ready when its front flit belongs to the packet holding an output VC, that
+    // VC has a credit (or the output is local), the SA stage delay has passed and the output link
+    // is free.
+    void Network::inputFirstChoice(std::vector<std::vector<int>> &choice)
+    {
+        const Topology &t = *m_topo;
+        choice.assign(t.routers(), {});
+        for (int r = 0; r < t.routers(); r++)
+        {
+            RouterState &R = m_routers[r];
+            choice[r].assign(t.ports(r), -1);
+            for (int q = 0; q < t.ports(r); q++)
+            {
+                if (R.in_last_sent[q] == m_tick) continue;
+                std::vector<Candidate> cands; std::vector<int> idx;
+                for (int c = 0; c < m_cfg.num_classes; c++) for (int w = 0; w < m_cfg.vcs_per_class; w++)
+                {
+                    VCState &v = R.in[q][c][w];
+                    if (!v.routed || v.out_vc < 0 || v.fifo.empty() || v.fifo.front().seq != v.cur) continue;
+                    if (!t.isLocalPort(r, v.out_port) && R.out[v.out_port].vcs[c][v.out_vc].credits <= 0) continue;
+                    if (v.fifo.front().head && m_tick < v.va_tick + (uint64_t)switchLatency(r)) continue;
+                    auto bz = m_link_busy.find(linkKey(r, v.out_port));
+                    if (bz != m_link_busy.end() && bz->second >= m_tick) continue;
+                    Packet &pk = m_packets.at(v.cur);
+                    cands.push_back({(int)idx.size(), (int)pk.msg.owner, pk.seq}); idx.push_back(c * m_cfg.vcs_per_class + w);
+                }
+                if (cands.empty()) continue;
+                int k = cands.size() == 1 ? 0 : R.in_sa[q]->electIndex(m_tick, cands);
+                if (k >= 0) choice[r][q] = idx[k];
+            }
+        }
+    }
+
     std::unique_ptr<Arbiter> Network::makeArbiter()
     {
         if (m_cfg.arbiter_type == "RRArbiter") return std::make_unique<RRArbiter>(&m_owner_ids, 1);
@@ -146,6 +209,8 @@ namespace octopus { namespace net
         const Topology &t = *m_topo;
         m_owner_ids = t.endpoints(); std::sort(m_owner_ids.begin(), m_owner_ids.end());
         m_lower_ids = m_component_ids;
+        for (auto &kv : m_cfg.router_latency_at)
+            if (t.routerIndex(kv.first) < 0) throw ConfigError("router_latency[" + std::to_string(kv.first) + "]: not a router id");
         m_routers.resize(t.routers());
         for (int r = 0; r < t.routers(); r++)
         {
@@ -153,6 +218,7 @@ namespace octopus { namespace net
             int P = t.ports(r);
             R.in.assign(P, std::vector<std::vector<VCState>>(m_cfg.num_classes, std::vector<VCState>(m_cfg.vcs_per_class)));
             R.in_last_sent.assign(P, 0);
+            if (m_cfg.sa_allocator == "input_first") for (int q = 0; q < P; q++) R.in_sa.push_back(makeArbiter());
             R.out.resize(P);
             for (int p = 0; p < P; p++)
             {
@@ -230,6 +296,7 @@ namespace octopus { namespace net
         if (p.src_router < 0)
             fatal("message injected by " + std::to_string(src_endpoint) + " which is not an endpoint: " + Classifier::describe(msg, dst_endpoint));
         p.flits = flitCount(msg, m_cfg.flit_bytes, m_cfg.header_bytes);
+        m_routing->onInject(p);
         return seq;
     }
 
@@ -389,7 +456,7 @@ namespace octopus { namespace net
                         fatal("routing " + m_cfg.routing + " returned a bad fallback route at router " + std::to_string(t.routerId(r)) + " for packet " + std::to_string(p.seq));
                     v.alt_port = rt.alt_port; v.alt_mask = rt.alt_mask & allVCs(m_cfg.vcs_per_class);
                 }
-                p.hops++; p.pipe += t.implicitRouter(r) ? 0 : m_cfg.router_latency;
+                p.hops++; p.pipe += routerLatency(r) + switchLatency(r);
             }
         }
     }
@@ -420,7 +487,7 @@ namespace octopus { namespace net
                         if (!v.routed || v.out_vc >= 0) continue;
                         int want = pass == 0 ? v.out_port : v.alt_port; uint32_t mask = pass == 0 ? v.vc_mask : v.alt_mask;
                         if (want != p || !(mask & (1u << ov))) continue;
-                        if (m_tick < v.head_arrival + (uint64_t)(t.implicitRouter(r) ? 0 : m_cfg.router_latency)) continue;   // implicit routers add no latency
+                        if (m_tick < v.head_arrival + (uint64_t)routerLatency(r)) continue;   // implicit routers add no latency
                         Packet &pk = m_packets.at(v.cur);
                         if (local && !m_nis.at(pk.dst_endpoint)->canReserve(c)) continue;
                         cands.push_back({(int)who.size(), (int)pk.msg.owner, pk.seq}); who.push_back(&v);
@@ -430,7 +497,7 @@ namespace octopus { namespace net
                     if (w < 0) continue;
                     VCState &v = *who[w];
                     if (pass == 1) { v.out_port = v.alt_port; v.vc_mask = v.alt_mask; }
-                    v.out_vc = ov; o.holder = v.cur;
+                    v.out_vc = ov; o.holder = v.cur; v.va_tick = m_tick;
                     Logger::getLogger()->trace(m_packets.at(v.cur).msg, Logger::Role::NOC, (uint32_t)t.routerId(r), Logger::Phase::SERVICE, (uint16_t)((p << 8) | ov));
                     if (local) m_nis.at(m_packets.at(v.cur).dst_endpoint)->reserve(c);
                 }
@@ -443,6 +510,9 @@ namespace octopus { namespace net
     void Network::phaseSwitch()
     {
         const Topology &t = *m_topo;
+        std::vector<std::vector<int>> choice;                    // input_first: the one VC each input offers
+        bool input_first = m_cfg.sa_allocator == "input_first";
+        if (input_first) inputFirstChoice(choice);
         for (auto &unit : m_sa_units)
         {
             int r0 = unit[0].first, p0 = unit[0].second;
@@ -463,6 +533,8 @@ namespace octopus { namespace net
                         VCState &v = R.in[q][c][w];
                         if (!v.routed || v.out_port != p || v.out_vc < 0 || v.fifo.empty() || v.fifo.front().seq != v.cur) continue;
                         if (!local && R.out[p].vcs[c][v.out_vc].credits <= 0) continue;
+                        if (v.fifo.front().head && m_tick < v.va_tick + (uint64_t)switchLatency(r)) continue;   // the SA stage after VA
+                        if (input_first && choice[r][q] != c * m_cfg.vcs_per_class + w) continue;
                         Packet &pk = m_packets.at(v.cur);
                         cands.push_back({(int)who.size(), (int)pk.msg.owner, pk.seq}); who.push_back({r, q, c, w});
                     }

@@ -19,7 +19,9 @@ namespace octopus { namespace net
     {
     public:
         // others: the other endpoint ids (destinations for uniform/neighbour); transpose_dst: the
-        // destination for the transpose pattern (-1 = none)
+        // destination of a permutation pattern (transpose, bitcomp, bitrev, shuffle, tornado,
+        // randperm), computed by the system from the topology (-1 = none)
+        static bool isPermutation(const std::string &pattern);
         TrafficGenerator(ParametersMap map, int id, CommunicationInterface *ni, const std::vector<int> &others, int transpose_dst,
                          std::string pname = "", std::string config_path = std::string(CONFIGURATION_PATH),
                          std::string name = STRINGIFY(TrafficGenerator));
@@ -44,6 +46,7 @@ namespace octopus { namespace net
         std::mt19937_64 m_rng;
         uint64_t m_cycle = 0, m_sent = 0, m_received = 0, m_retries = 0, m_next_id = 0;
         bool m_pending = false; Message m_pending_msg;
+        std::string m_injection; int m_on_to_off = 0, m_off_to_on = 0; bool m_on = false;   // on/off bursty injection
         bool m_done = false;
     };
 }}
