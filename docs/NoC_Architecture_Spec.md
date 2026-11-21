@@ -27,6 +27,29 @@ statements use **shall**; everything else is explanation.
 - The legacy `NoC` class is not removed and the alias is not introduced (§3.3, §17.1, §19).
 - Rings have no usable routing at four routers or more (§10.2, §14.3).
 
+**Revision 2026-11-21.** Topologies as plug-ins and the features built on them
+(`docs/NoC_Topology_Plugin_Plan.md`, steps T0 to T5). What changed:
+
+- Topologies are builders in a registry. `mesh3d` and `torus3d` are new. A lattice capability
+  (n-D coordinates, wraps, the port of each direction) replaces the closed topology enum (§4.1, §5).
+- `custom` link ports follow row order. `routing_via[<router>]` states a route by neighbour, and
+  `MultiCoreSystem_NetNoC` uses it for its L1-to-L1 routes through switch 200 (§4.3, §5.1).
+- `XY` is dimension-order routing on any lattice, with a dateline on every wrapped dimension. A
+  ring routes with `XY` and two VCs, and `auto` selects it there (§4.3, §10.2). The revision of
+  2026-11-13 said rings of four routers or more had no usable routing. That no longer holds.
+- New algorithms: `NorthLast`, `NegativeFirst`, `OddEven`, `O1TURN`, `Valiant`, `ROMM`, and a
+  weighted `Table` from `link_weight` (§10.2).
+- `AdaptiveMinimal` grants its escape route as a fallback in a second VC-allocation pass (Duato).
+  On wrapped lattices it uses two escape VCs with a dateline, and construction checks the escape
+  network (§10.2, §14.3). It runs on grids, tori and 3-D lattices.
+- `RoutingAlgorithm` gains `candidates()`, `onInject()`, `fixesVCPerPair()`, `deadlockCycle()` and
+  the fallback fields of `Route`. The channel dependency check explores every candidate (§10.1,
+  §14.3).
+- Router options: `switch_latency`, a per-router `router_latency[<router id>]`, and
+  `sa_allocator` (§4.2, §11.3, §13.2).
+- Traffic generators: patterns `bitcomp`, `bitrev`, `shuffle`, `tornado`, `randperm`, and on/off
+  injection (§18).
+
 Contents
 
 1. Scope and goals
@@ -147,10 +170,10 @@ existing convention: `(i)` int, `(s)` string, `(vi)` int list, `(vs)` string lis
 
 | key | type | default | meaning |
 |---|---|---|---|
-| `topology` | s | `custom` | `custom`, `grid2d`, `torus2d`, `ring`, `star` |
+| `topology` | s | `custom` | the name of a registered builder (§5.1): `custom`, `grid2d`, `torus2d`, `ring`, `star`, `mesh3d`, `torus3d`. An unknown name is refused with the list of registered names |
 | `component_ids` | vi | — | endpoint ids (unchanged) |
 | `connection_matrix[i]` | vi | — | `custom` only: node id then its neighbours (unchanged); nodes that are not in `component_ids` are routers |
-| `dims` | vi | — | `grid2d`/`torus2d`: `k_x,k_y`; `ring`: `k` |
+| `dims` | vi | — | `grid2d`/`torus2d`: `k_x,k_y`; `mesh3d`/`torus3d`: `k_x,k_y,k_z`; `ring`: `k` |
 | `node_map[<endpoint id>]` | i | — | generated topologies: the router an endpoint attaches to; every endpoint shall be mapped |
 | `router_ids` | vi | derived | `custom` only: which ids in the matrix are routers; defaults to the ids absent from `component_ids` |
 | `home_ids` | vi | derived | ids of the LLC / directory homes, for the classifier (§6.3); defaults to the system's `m_shared_memory_id` values |
@@ -165,7 +188,9 @@ existing convention: `(i)` int, `(s)` string, `(vi)` int list, `(vs)` string lis
 | `num_classes` | i | 3 | virtual networks (§6.3); `2` selects the legacy request/data split | 2 or 3 |
 | `vcs_per_class` | i | 1 | VCs per class per input port | ≥ 1 |
 | `vc_depth` | i | 4 | flits per VC | ≥ 1 |
-| `router_latency` | i | 2 | ticks from a head's arrival at an input VC to its earliest switch traversal | ≥ 0 |
+| `router_latency` | i | 2 | ticks from a head's arrival at an input VC to its earliest VC allocation (§8.2) | ≥ 0 |
+| `router_latency[<router id>]` | i | — | overrides `router_latency` at one router; an id that is not a router is refused. Implicit routers (§5.1) stay at 0 | ≥ 0 |
+| `switch_latency` | i | 0 | ticks from a head's VC grant to its earliest switch allocation: a separate SA stage after VA (§8.2). Body and tail flits are not gated. Implicit routers stay at 0 | ≥ 0 |
 | `link_latency` | i | 1 | ticks per link traversal between routers; local links cost 0 | ≥ 1 |
 | `class_link_latency` | vi | — | optional per-class link latency, index = class; overrides `link_latency`; used by the degenerate mapping (§17) and available generally | each ≥ 1 |
 | `credit_latency` | i | -1 | ticks for a credit to return. `-1` means "use `link_latency`" (the global key, not a `class_link_latency` entry). `0` returns the credit in the same tick the flit leaves. It is also where a longer buffer residency is modelled (a router that holds a slot through switch allocation and traversal, as BookSim's does, returns its credit later: §20, S8-BOOKSIM) | ≥ 0 |
@@ -179,10 +204,14 @@ existing convention: `(i)` int, `(s)` string, `(vi)` int list, `(vs)` string lis
 
 | key | type | default | meaning |
 |---|---|---|---|
-| `routing` | s | `auto` | `auto`, `Table`, `XY`, `WestFirst`, `AdaptiveMinimal`. `auto` is resolved at construction: `XY` on `grid2d` and `torus2d`, `Table` on every other topology. A `torus2d` therefore needs `vcs_per_class ≥ 2` even with the default (§10.2) |
-| `routing_table[<router>]` | vi | computed | `Table`: `dest,port,dest,port,...`; absent entries computed by BFS |
-| `escape_vc` | i | -1 | VC index reserved for the escape routing function under `AdaptiveMinimal`; -1 = none |
+| `routing` | s | `auto` | `auto`, `Table`, `XY`, `WestFirst`, `NorthLast`, `NegativeFirst`, `OddEven`, `O1TURN`, `Valiant`, `ROMM`, `AdaptiveMinimal` (§10.2). `auto` is resolved at construction: `XY` on `grid2d`, `torus2d`, `mesh3d` and `torus3d`, and on a `ring` with `vcs_per_class ≥ 2`; `Table` on every other topology. A torus therefore needs `vcs_per_class ≥ 2` even with the default, and a ring with one VC gets `Table`, which construction refuses on four routers or more (§14.3) |
+| `routing_table[<router>]` | vi | computed | `Table`: `dest,port,dest,port,...` by router id and port index; applied last, over the computed table and `routing_via` |
+| `routing_via[<router>]` | vi | — | `Table`: `dest,neighbour,dest,neighbour,...` by router id; the route to `dest` leaves through the link to `neighbour`. Independent of port numbering, so it is the preferred way to state a route. A neighbour that is not linked to the router is refused |
+| `link_weight[<router>]` | vi | — | `Table`: `neighbour,weight,...`; weights ≥ 1, default 1. When any is given, `Table` computes shortest weighted paths (Dijkstra) instead of hop counts and prints the number of (router, destination) pairs that had several equal-cost ports |
+| `routing_seed` | i | 1 | `O1TURN`, `Valiant`, `ROMM`: the seed of the per-packet draw (§10.1) |
+| `escape_vc` | i | -1 | `AdaptiveMinimal`: the escape VC; on a wrapped lattice also `escape_vc + 1` (§10.2); -1 = none |
 | `arbiter_type` | s | `FCFSArbiter` | policy for injection, VC allocation and switch allocation: `FCFSArbiter`, `RRArbiter` (real-time policies deferred, §12) |
+| `sa_allocator` | s | `output_first` | switch allocation (§11.3): `output_first` (each output port elects among every eligible input VC) or `input_first` (each input port first picks one VC, then the outputs elect) |
 | `deadlock_check` | s | `refuse` | the protocol-and-network check of §14.3: `refuse` aborts on a violation, `warn` prints it and runs |
 
 `requires_ordering(s)` is a system-level key (§3.3), not an interconnect key.
@@ -197,8 +226,10 @@ network keys instead (§17.2).
 
 The network shall refuse to start, with a message naming the key, when: an endpoint has no router;
 a `custom` matrix is not symmetric; any constraint in §4.2 is violated; `escape_vc` ≥
-`vcs_per_class`; a `routing_table` names a port the router does not have; `requires_ordering` demands what `routing` and `vcs_per_class` cannot provide (§14.1); `torus2d`
-is combined with `XY` and `vcs_per_class = 1` (§10.2); or the `Table` deadlock check fails (§14.3).
+`vcs_per_class`; a `routing_table` names a port the router does not have; a `routing_via` or
+`link_weight` entry names a router that is not a neighbour; `requires_ordering` demands what `routing` and `vcs_per_class` cannot provide (§14.1); a
+routing algorithm meets a topology or VC count it does not support (§10.2, for example a wrapped
+lattice with `XY` and `vcs_per_class = 1`); or the routing deadlock check fails (§14.3).
 
 ## 5. Topology
 
@@ -210,13 +241,35 @@ local ports last. Each link between routers is unidirectional and has an owner r
 each end. Every physical connection in a `custom` matrix becomes two links; with `half_duplex = 1`
 the two links share one occupancy.
 
+**Builders.** Each topology is a `TopologyBuilder` (`header/Interconnect/Network/TopologyBuilder.h`)
+with a `name()`, the `keys()` it reads, and `build(keys, endpoint_ids, local_ports)`. The builders
+live in `src/Interconnect/Network/topologies/` and are registered explicitly in
+`registerBuiltinTopologies` (`Builtin.cpp`), in the order `custom`, `grid2d`, `torus2d`, `ring`,
+`star`, `mesh3d`, `torus3d`. The network code is a static library, so there is no
+self-registration. A builder uses the construction API of `Topology`: `addRouter(id)`,
+`addPort(r, to, name)` (or with a lattice dimension and direction), `setLattice`, `setImplicit`,
+`setAttr`, `attachAt(r, endpoint)` and `finalize(local_ports)`. Routers are indexed in the order
+they are added and link ports in the order `addPort` is called. `finalize` pairs the k-th port
+`r → n` with the k-th port `n → r`, refuses a link without a reverse, and numbers the local ports.
+
+**Capabilities.** Routing reads capabilities, never a topology name. `lattice()` returns, for a
+lattice, its dimensions (`dims`, dimension 0 varying fastest, `r = c0 + d0·(c1 + d1·(c2 + …))`) and
+a wrap flag per dimension. It is null otherwise. `dirPort(r, dim, dir)` is the link port one step
+in a dimension (or -1), and `portDir(r, p)` its inverse. `attr(r, key)` holds per-router metadata
+for other shapes, and `implicitRouter(r)` marks the zero-latency routers of `custom`.
+
 Coordinates: `grid2d` and `torus2d` number routers row-major, `r = y·k_x + x`; ports are ordered
-`east, west, north, south, local…` with absent directions skipped at edges. `ring` orders
-`clockwise, counter-clockwise, local…`. `custom` orders ports by the neighbour's position in the
-node's matrix row; every endpoint node of a matrix gets an **implicit router** of its own id,
-which stands for the endpoint's link ports and adds no `router_latency` (only explicit routers,
-the matrix nodes that are not endpoints, are pipeline stages). `star` is one router whose ports
-are all local.
+`east, west, north, south, local…` with absent directions skipped at edges (dimension 0 is x,
+dimension 1 is y, north is y − 1). `mesh3d` and `torus3d` number routers `r = x + k_x·(y + k_y·z)`
+and order ports `east, west, north, south, up, down, local…`, where up is z − 1 and down is z + 1.
+A mesh skips absent directions. Tori need every dimension ≥ 3 so that a wrap link differs from a
+direct link. `ring` is a one-dimensional wrapped lattice of `k ≥ 3` routers, ports
+`clockwise, counter-clockwise, local…`. `custom` orders a node's link ports by the order its own
+matrix row names its neighbours (a neighbour named twice gets one port). Routing intent is stated
+with `routing_via`, not with port numbers. Every endpoint node of a matrix gets an **implicit
+router** of its own id, which stands for the endpoint's link ports and adds no `router_latency`
+or `switch_latency` (only explicit routers, the matrix nodes that are not endpoints, are pipeline
+stages). `star` is one router whose ports are all local.
 
 ### 5.2 Endpoint attachment
 
@@ -230,8 +283,10 @@ modelling option, never a default.
 
 ### 5.3 Construction output
 
-The topology object exposes: `routers()`, `ports(r)`, `link(r, p) → (r', p')`, `coord(r)`,
-`routerOf(endpoint)`, `localPort(endpoint)`, `endpointsAt(r)`, `endpointsAtPort(r, p)`. Routing
+The topology object exposes: `routers()`, `ports(r)`, `linkPorts(r)`, `isLocalPort(r, p)`,
+`link(r, p) → (r', p')`, `routerId(r)`, `routerIndex(id)`, `routerOf(endpoint)`,
+`localPort(endpoint)`, `endpointsAt(r)`, `endpointsAtPort(r, p)`, `portName(r, p)`, `kindName()`,
+and the capabilities `lattice()`, `dirPort`, `portDir`, `attr` and `implicitRouter`. Routing
 functions and the deadlock checker use only this interface.
 
 ## 6. Packets, flits and classes
@@ -383,9 +438,12 @@ allocation (claims one free output VC of the packet's class on the computed outp
 the route's `vc_mask`, §10.1), then per flit **SA** switch allocation (wins the output port for this
 tick) and **LT** link traversal. RC and VA happen once per packet; SA and LT once per flit. The
 `router_latency` gate is applied at VA: a head may not win VA until `router_latency` ticks after
-its arrival at the input VC (§11.2). SA has no gate of its own. Because VA runs before SA in the
-same tick (§13.2), the head can win VA and SA in that tick, so its earliest SA is also
-`router_latency` ticks after arrival. Implicit routers (§5.1) apply no gate. Body and tail flits of a packet that has won VA are eligible for SA from the tick they arrive,
+its arrival at the input VC (§11.2). The head's SA is gated by `switch_latency`: it may not win SA
+until `switch_latency` ticks after the tick it won VA. With the default 0, and because VA runs
+before SA in the same tick (§13.2), the head can win VA and SA in that tick, so its earliest SA is
+`router_latency` ticks after arrival. In general it is `router_latency + switch_latency` ticks
+after arrival. `router_latency[<router id>]` sets the first gate per router. Implicit routers
+(§5.1) apply neither gate. Body and tail flits of a packet that has won VA are eligible for SA from the tick they arrive,
 subject to credits and the switch arbiter, and leave in FIFO order behind the head. Cut-through
 follows: a head leaves while its tail is still upstream.
 
@@ -428,42 +486,74 @@ classes because classes map to distinct RX queues.
 ### 10.1 Interface
 
 ```cpp
-struct RouteContext { int router; int in_port; int in_vc; int dst_router; int cls; const Packet &p;
-                      const Router &here; };            // `here` exposes credit counts only
-struct Route        { int out_port; uint32_t vc_mask; }; // bit i set = output VC i of the class allowed
+struct RouteContext { int router, in_port, in_vc, dst_router, cls, src_router;
+                      const Packet *packet;              // null in the deadlock check and in path()
+                      const RouterView *here; };         // credit counts only; may be null
+struct Route        { int out_port; uint32_t vc_mask;    // bit i set = output VC i of the class allowed
+                      int alt_port = -1; uint32_t alt_mask = 0; };   // a fallback for VC allocation
 class RoutingAlgorithm {
 public:
-    virtual ~RoutingAlgorithm() {}
     virtual Route    nextHop(const RouteContext &) const = 0;
     virtual Ordering ordering() const = 0;                          // NONE or PAIR_PER_CLASS
-    virtual bool     needsEscapeVC() const { return false; }
-    virtual bool     deadlockFreeOn(const Topology &) const = 0;    // for Table: run the checker
+    virtual bool     needsEscapeVC() const { return false; }        // true: VA runs a second pass for alt
+    virtual void     onInject(Packet &) const {}                    // draws Packet::route_aux
+    virtual bool     fixesVCPerPair() const { return false; }       // the VC is a function of (src, dst, class)
+    virtual std::vector<Route> candidates(const RouteContext &) const;   // default: { nextHop }
+    virtual bool     deadlockFreeOn(const Topology &) const = 0;
+    virtual std::string deadlockCycle(const Topology &, int vcs_per_class) const;   // for the message
     virtual std::string name() const = 0;
 };
 ```
 
-Registration: a factory keyed by name, one line per algorithm, the same pattern as
-`SplitBusController`'s arbiter factory. `nextHop` shall be a pure function of its arguments and the
-immutable topology; the only mutable state it may read is the current router's credit counts
+Registration: `createRouting(name, topology, params)`, one line per algorithm, the same pattern as
+`SplitBusController`'s arbiter factory. A constructor refuses, with `ConfigError`, a topology or VC
+count it does not support. `nextHop` shall be a pure function of its arguments, the immutable
+topology and the packet. The only mutable state it may read is the current router's credit counts
 through `here`, so that determinism holds (§16). `vc_mask` is how a routing function constrains
-the VC (dateline rules, escape channels); `~0` means any VC of the class.
+the VC (dateline rules, escape channels, VC sets). `~0` means any VC of the class.
+
+- **Per-packet state.** `onInject` is called once when a packet is created, after its source and
+  destination routers are set. An oblivious algorithm draws its choice there into
+  `Packet::route_aux` (an intermediate router, or a dimension order), from a hash (splitmix64) of
+  the packet's `seq` and `routing_seed`. The draw depends on nothing else, so runs stay
+  deterministic.
+- **Fallback.** `alt_port`/`alt_mask` name a second route that VC allocation may grant when the
+  primary cannot be granted (§11.2). Only algorithms with `needsEscapeVC()` get the second pass.
+- **Candidates.** `candidates` lists every output the algorithm may use at this hop, whatever the
+  credits: every allowed port of a turn model, both orders of `O1TURN` at the source, every
+  phase-1 continuation of `Valiant`. The channel dependency check (§14.3) explores these.
+- **Ordering.** `fixesVCPerPair` is true when the VC a packet uses is a function of (source,
+  destination, class), so several VCs per class still keep a pair in order (a dateline does this).
+  `checkOrderingRequirement` uses it instead of a topology or routing name (§14.1).
 
 ### 10.2 Shipped algorithms
 
-| name | topologies | definition | ordering |
-|---|---|---|---|
-| `Table` | any, if its channel dependency graph is acyclic (§14.3) | static next hop per (router, dest); computed by BFS shortest path at init with ties broken by lowest port index, or loaded from `routing_table`; `vc_mask = ~0` (with `escape_vc` set: every VC but that one, or only that one for a packet whose input VC index is `escape_vc`) | PAIR_PER_CLASS with `vcs_per_class = 1` |
-| `XY` | grid2d, torus2d | route along X to the destination column, then along Y; at the destination router, the local port. On `torus2d` the shorter direction around each ring is taken and the **dateline rule** applies: a packet that has crossed, or will cross, the wrap link of the current dimension gets `vc_mask = 0b10` (VC 1), others `0b01`; construction refuses `torus2d` + `XY` with one VC | PAIR_PER_CLASS with `vcs_per_class = 1` on grid2d; on torus2d the dateline keeps a pair's packets on one VC, so PAIR_PER_CLASS holds with 2 VCs |
-| `WestFirst` | grid2d | turn model: a packet with a westward component goes west first; otherwise, among the minimal outputs allowed by the turn rules, the one whose output VCs of the class hold the most credits, ties by lowest port index; adaptive | NONE |
-| `AdaptiveMinimal` | grid2d, torus2d | among minimal outputs, the one with the most credits, ties by lowest port index, `vc_mask` = all VCs except `escape_vc`; a packet that finds no credit on any adaptive VC is routed by `XY` with `vc_mask = 1 << escape_vc`, and a packet that arrives over a link on the escape VC stays on it (the VC a packet was injected on at its local port carries no meaning) | NONE |
+The turn models, `XY`, the oblivious algorithms and `AdaptiveMinimal` read the lattice capability
+(§5.1) and refuse a topology without one. A head of a turn model or of `AdaptiveMinimal` that has
+a choice takes the allowed output whose VCs of its class hold the most credits, ties to the lowest
+port index.
 
-`XY`, `WestFirst` and `AdaptiveMinimal` refuse any topology that is not a grid (`AdaptiveMinimal`
-builds on `XY`). On a `ring` only `Table` is left, and `auto` selects it. A ring of three routers
-works, because every route is one hop. On a ring of four or more routers the computed
-shortest-path table always closes a cycle of channel dependencies, so construction refuses it
-(§14.3). `Table` has no dateline, and `escape_vc` does not help it (§14.3). A ring of four or more
-routers therefore has no usable ring routing today. The only way past the check is a hand-written
-`routing_table` that never crosses one of the connections, which uses the ring as a line.
+| name | topologies and VCs | definition | ordering |
+|---|---|---|---|
+| `Table` | any, if its channel dependency graph is acyclic (§14.3) | static next hop per (router, destination router). Computed by BFS from every destination, ties to the lowest port index; with any `link_weight`, by Dijkstra over the weights, ties again to the lowest port, and the number of tied (router, destination) pairs is printed. Then `routing_via` entries, then `routing_table` entries override cells. `vc_mask = ~0` (with `escape_vc` set: every VC but that one, or only that one for a packet whose input VC is `escape_vc`) | PAIR_PER_CLASS |
+| `XY` | any lattice: grid2d, torus2d, ring, mesh3d, torus3d; a wrapped lattice needs `vcs_per_class ≥ 2` | dimension-order routing: dimension 0 to the destination coordinate, then dimension 1, then 2; at the destination router, the local port. On a wrapped dimension the shorter way round, the positive direction on a tie, and the **dateline rule**: the leg in a dimension uses VC 1 if the shorter way from the source's coordinate to the destination's crosses the wrap link, else VC 0. The rule is a function of (source, destination), so a pair keeps one path and one VC. Only VCs 0 and 1 are used | PAIR_PER_CLASS; `fixesVCPerPair` on a wrapped lattice |
+| `WestFirst` | grid2d | turn model: all westward hops first, then any minimal mix of east, north and south | NONE |
+| `NorthLast` | grid2d | turn model: northward hops last, with no turn after them; before them any minimal mix of east or west and south | NONE |
+| `NegativeFirst` | grid2d | turn model: the negative directions (west, north) first, adaptively among them; then the positive ones (east, south), adaptively | NONE |
+| `OddEven` | grid2d | Chiu's minimal odd-even routing function: no east-to-north or east-to-south turn in an even column, no north-to-west or south-to-west turn in an odd column (column = x coordinate) | NONE |
+| `O1TURN` | a 2-D lattice without wraps (grid2d); `vcs_per_class ≥ 2` | each packet takes XY on VC set A or YX on VC set B, with equal probability, drawn at injection | NONE |
+| `Valiant` | a lattice without wraps (grid2d, mesh3d); `vcs_per_class ≥ 2` | dimension order to an intermediate router drawn uniformly among all routers, on set A, then dimension order to the destination on set B. Not minimal | NONE |
+| `ROMM` | as `Valiant` | as `Valiant`, with the intermediate drawn per dimension inside the minimal box of source and destination, so paths are minimal | NONE |
+| `AdaptiveMinimal` | any lattice; `escape_vc ≥ 0`, `vcs_per_class ≥ 2`; on a wrapped lattice `vcs_per_class ≥ 3` and `escape_vc + 1 < vcs_per_class` | minimal adaptive routing with an escape network (Duato). The minimal outputs are one per dimension still to cover (the shorter way on a wrapped dimension). The primary route is the one with the most credits on the adaptive VCs (every VC but the escape VCs), with the escape route as its fallback (`alt`). A head that sees no adaptive credit on any minimal output gets the escape route as its primary. A packet that arrived over a link on an escape VC stays on the escape network. The escape route is dimension order on `escape_vc`; on a wrapped dimension a hop whose remaining leg still crosses the wrap link uses `escape_vc + 1` (a memoryless dateline) | NONE |
+
+VC sets: `O1TURN`, `Valiant` and `ROMM` split each class's VCs into A = `[0, vcs/2)` and
+B = `[vcs/2, vcs)`. Each set carries dimension-order routes only, and a packet moves from A to B
+at most once (O1TURN never moves), so their channel dependency graph is acyclic. A packet that
+arrived over a link on a B VC is in its last phase.
+
+A ring now has `XY` with two VCs, which `auto` selects. A ring routed by `Table` closes a cycle of
+channel dependencies at four routers or more, at any VC count, and is refused (§14.3). A ring of
+three routers works with `Table` because every route is one hop.
 
 ### 10.3 Multicast
 
@@ -506,6 +596,11 @@ head is at least `router_latency` ticks old (0 at an implicit router). This is t
 one with no packet holding it; on a local port, VA additionally requires one packet credit for the
 destination (§8.4) and consumes it.
 
+For an algorithm with `needsEscapeVC()` VA runs twice per tick. Pass 0 grants primary routes over
+all routers. Pass 1 offers each head still without an output VC its fallback route (`alt_port`,
+`alt_mask`, §10.1) under the same rules. A head granted there takes the fallback as its route.
+This is Duato's condition: a waiting head can always use the escape network.
+
 ### 11.3 Switch allocation
 
 Per output port, per tick: candidates are the input VCs holding an output VC on this port whose
@@ -517,6 +612,15 @@ at most one flit leaves per tick (one crossbar input). Under `half_duplex` the t
 connection are one arbitration unit: the candidates of both routers' output ports compete in one
 election (by age, then by the lower router index), as the legacy link arbitrated between its two
 endpoints; otherwise each output port is its own unit.
+
+A head flit is a candidate only once `switch_latency` ticks have passed since it won VA (§8.2).
+`sa_allocator` selects the allocator. `output_first` (the default) is the rule above: every
+eligible input VC is a candidate at its output port, and an input port that has sent a flit in
+this tick drops out of later elections. `input_first` is a separable input-first allocator: at the
+start of the phase each input port that has not sent this tick picks one of its ready VCs with its
+own arbiter (of `arbiter_type`), where ready means the front flit belongs to the packet holding an
+output VC, that VC has a credit (or the output is local), the SA stage delay has passed and the
+output link is free. The output arbiters then see at most one candidate per input port.
 
 ## 12. Real-time arbitration (deferred)
 
@@ -562,8 +666,10 @@ iteration order is therefore part of the definition, and it keeps the run determ
    Credits whose return tick is now increment their counters.
 3. **Route computation.** Every current packet whose head is at the FIFO front and has no route
    gets `nextHop`.
-4. **VC allocation** (§11.2), with the `router_latency` gate.
-5. **Switch allocation, link traversal and ejection** (§11.3). Flits popped here schedule a credit
+4. **VC allocation** (§11.2), with the `router_latency` gate, and a second pass for fallback
+   routes when the algorithm has an escape network.
+5. **Switch allocation, link traversal and ejection** (§11.3), with the `switch_latency` gate on
+   heads. Flits popped here schedule a credit
    return to the upstream side at `tick + credit_latency`, or return it at once when
    `credit_latency = 0`. When the flit sent is a tail on a local output port, the packet is ejected
    in the same step: `pushMessage2RX` is called and shall succeed (§7.3). There is no separate
@@ -572,10 +678,12 @@ iteration order is therefore part of the definition, and it keeps the run determ
 Unloaded latency of a packet of `f` flits traversing `R` routers (so `R − 1` links) is therefore
 
 ```
-R · router_latency + (R − 1) · link_latency + (f − 1)   ticks
+R · (router_latency + switch_latency) + (R − 1) · link_latency + (f − 1)   ticks
 ```
 
-from the head's injection to the tail's ejection, with local links costing nothing and provided
+from the head's injection to the tail's ejection. With per-router overrides the first term is the
+sum over the routers crossed of `router_latency[r] + switch_latency`, and an implicit router adds
+0 to it. Local links cost nothing. The formula holds provided
 the credits never run out on the way, which for `link_latency > 1` needs
 `vc_depth ≥ min(f, link_latency + credit_latency)`; §20 asserts exactly that. With `router_latency = 0`, `link_latency = 1` and one flit, a packet crosses one
 router per tick.
@@ -587,11 +695,13 @@ router per tick.
 `Ordering::PAIR_PER_CLASS` means: two packets of the same class from the same source endpoint to the
 same destination endpoint are ejected in injection order. It holds when the path and the VC are a
 deterministic function of (source, destination, class), because every VC is a FIFO: that is
-`Table` and `XY` with `vcs_per_class = 1`, and `XY` on `torus2d` with the dateline rule. It does
-not hold across classes, across adaptively chosen VCs, or under adaptive routing. Protocol presets
-declare `requires_ordering`; the directory presets declare `pair_per_class`. Construction shall
-refuse a combination where the routing algorithm's `ordering()` is weaker than required, or where
-`vcs_per_class > 1` without the dateline rule fixing the VC.
+`Table` and `XY` with `vcs_per_class = 1`, and `XY` on any wrapped lattice (torus2d, torus3d,
+ring) with the dateline rule. It does not hold across classes, across adaptively chosen VCs, under
+adaptive routing, or under the oblivious algorithms, whose path varies per packet. Protocol
+presets declare `requires_ordering`; the directory presets declare `pair_per_class`. Construction
+shall refuse a combination where the routing algorithm's `ordering()` is weaker than required, or
+where `vcs_per_class > 1` and the algorithm's `fixesVCPerPair()` is false. Algorithms declaring
+PAIR_PER_CLASS: `Table`, `XY`. All others declare NONE.
 
 ### 14.2 The endpoint admission property
 
@@ -622,14 +732,26 @@ the watchdog reports.
 
 ### 14.3 Deadlock checks
 
-- **Routing-level** (`Table` only; `XY` and `WestFirst` are free by construction and
-  `AdaptiveMinimal` by its escape VC): build the channel dependency graph whose nodes are (link, VC)
-  and whose edges are the transitions the table can produce for any destination; a cycle rejects
-  the table. `escape_vc` does not rescue it. `Table` has no escape routing function: the escape VC
-  only narrows the VC mask, every packet follows the same table paths on whichever VC it holds, and
-  the cycle stays in the graph that is checked. On a
-  `ring` of four or more routers the computed table always has such a cycle (§10.2). The refusal
-  message still suggests setting `escape_vc`, which does not help with `Table`.
+- **Routing-level.** At construction the network calls `deadlockFreeOn` and refuses the routing
+  if it returns false, with the cycle from `deadlockCycle` in the message.
+  - The channel dependency check (`channelDependencyAcyclic`) builds a graph whose nodes are
+    (router, output link port, VC) and whose edges are the transitions some packet can make. For
+    every source and destination router it explores every state (router, input port, input VC)
+    reachable from the source, following every route in `candidates()` (primary and fallback)
+    with every VC its mask allows. It does not stop at the destination router unless the route
+    there is the local port, so a phase-1 `Valiant` path that passes through its destination is
+    followed. A cycle rejects the routing and the message names its channels.
+  - `Table` runs this check in `deadlockFreeOn`. `escape_vc` does not rescue it: `Table` has no
+    escape routing function, the escape VC only narrows the VC mask, and the cycle stays in the
+    graph. On a `ring` of four or more routers the computed table always has a cycle (§10.2). The
+    refusal message suggests a deadlock-free algorithm or `routing_via` / `routing_table` entries
+    that break the cycle.
+  - `AdaptiveMinimal` checks its escape network (`escapeDependencyAcyclic`): a packet may enter it
+    at any router and then follows the escape route to its destination, so the graph is built
+    from every (entry router, destination) pair. The single-escape-VC version on a torus fails
+    this check. The dateline version passes.
+  - `XY`, the turn models and the oblivious algorithms return true by construction. The unit tests
+    (step T) run the full candidate check on each of them over several grid shapes and VC counts.
 - **Protocol-level** (`Network::checkProtocols`, `src/Interconnect/Network/ProtocolCheck.cpp`):
   at construction, after every controller exists, read each protocol's FSM table and, for every
   cell with actions, the class of the message the event consumes and the classes of the messages
@@ -767,8 +889,12 @@ For validation and for network studies without caches, a `TrafficGenerator` endp
 
 | key | type | default | meaning |
 |---|---|---|---|
-| `pattern` | s | `uniform` | `uniform`, `hotspot`, `transpose` (the endpoint at the router with swapped coordinates, on grids and tori), `neighbour` (the next endpoint id, cyclically), `none` (injects nothing). There is no `trace` pattern |
-| `rate` | i | 50 | injection rate in packets per 1000 ticks, 0 to 1000 |
+| `pattern` | s | `uniform` | `uniform`, `hotspot`, `neighbour` (the next endpoint id, cyclically), `none` (injects nothing), or one of the permutations below. There is no `trace` pattern |
+| `rate` | i | 50 | injection rate in packets per 1000 ticks, 0 to 1000; under `onoff`, the rate while on |
+| `injection` | s | `bernoulli` | `bernoulli`: each tick a packet with probability `rate`/1000. `onoff`: a two-state Markov source that starts off; each tick it first switches state with probability `on_to_off`/1000 (when on) or `off_to_on`/1000 (when off), then, if on, injects with probability `rate`/1000 |
+| `on_to_off` | i | 100 | `onoff`: per-1000 probability per tick of switching off, 0 to 1000 |
+| `off_to_on` | i | 100 | `onoff`: per-1000 probability per tick of switching on, 0 to 1000 |
+| `perm_seed` | i | 1 | `randperm`: the seed of the permutation |
 | `payload_bytes` | i | 64 | payload size, so flit count follows §6.2; 0 is a header-only packet |
 | `cls` | i | 2 | class to inject on (0, 1 or 2) |
 | `hotspot_id` | i | 0 | destination for `hotspot` |
@@ -779,6 +905,23 @@ For validation and for network studies without caches, a `TrafficGenerator` endp
 | `consume_after` | i | 0 | cycles before the generator drains its RX; `-1` = never (a stalled sink) |
 | `multicast` | i | 1 | destinations per message (≥ 1) |
 | `untagged` | i | 0 | `1` leaves the message kind unknown, to exercise the classifier's fallback and fatal paths |
+
+**Permutation patterns.** The system (`NetworkOnly.cpp`) computes each generator's partner once,
+from the topology, and the generator sends every packet there. Let `N` be the number of endpoints
+and `i` an endpoint's index among the endpoint ids in ascending order.
+
+| pattern | partner |
+|---|---|
+| `transpose` | the first endpoint at the router with swapped coordinates (x, y) → (y, x), on a 2-D lattice. Without one (a non-square grid, a non-2-D topology, an empty router) the generator falls back to the first other endpoint |
+| `bitcomp` | index `~i` (all `log2 N` bits complemented). Needs `N` a power of two |
+| `bitrev` | index `i` with its `log2 N` bits reversed. Needs `N` a power of two |
+| `shuffle` | index `i` rotated left by one bit. Needs `N` a power of two |
+| `tornado` | on a lattice, the first endpoint at the router whose coordinate in every dimension is `c' = (c + ⌈k/2⌉ − 1) mod k`. On any other topology index `(i + ⌈N/2⌉ − 1) mod N` |
+| `randperm` | index `perm[i]`, where `perm` is one Fisher-Yates permutation of `0..N−1` over `std::mt19937` seeded with `perm_seed` (the same for every generator while `perm_seed` is) |
+
+A bit pattern with `N` not a power of two is refused at construction. A permutation other than
+`transpose` whose partner is the endpoint itself, or no endpoint, makes that generator send
+nothing.
 
 The defaults live in `configuration/TrafficGenerator.csv`; keys are set per generator
 (`generator[<id>]`) or for all (`generator[*]`). Generators consume what they receive immediately
@@ -841,6 +984,16 @@ runnable by one script, in this order:
 8. **Protocol runs.** Directory MSI, EEMBC 10/10, on `MultiCoreSystem_Grid` (2×2) and on a 4×4 grid
    with L1s and LLC banks at the corners; `[EVENT-PATH]` tiling 100 percent; `NoC Wait + NoC
    Transfer` equals the network time for every request.
+9. **Topologies and routing** (step T, `bash test/network/run.sh T`). Unit tests: port order on
+   every builder and on `custom` row order, `routing_via`, the registry, lattice ports, the
+   dependency check over candidates for every algorithm, the escape-network check, the fallback
+   route, 3-D lattices, ring `XY`, weighted `Table` and the oblivious draws. System tests: unloaded
+   latency on a ring, `mesh3d` and `torus3d` equal to the formula of §13.2 (T4-UNLOADED); `auto`
+   on rings (T4-AUTO-RING); loaded runs complete with conservation for every new topology and
+   algorithm, `input_first`, the new patterns and on/off injection (T4-SOAK, T4-SOAK-2);
+   `switch_latency`, `router_latency[<id>]` and `input_first` against the formula
+   (T4-ROUTER-OPTIONS); every endpoint hears from exactly its partner under each permutation
+   (T4-PATTERNS); the one-escape-VC torus `AdaptiveMinimal` refused (T5-ADAPT-TORUS-REFUSED).
 
 ## 21. Worked example
 

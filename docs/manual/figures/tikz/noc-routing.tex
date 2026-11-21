@@ -1,4 +1,5 @@
-% The routing algorithms of Routing.cpp and the ordering each one declares.
+% Four of the routing algorithms of Routing.cpp and the ordering each one declares
+% (the full list is the table tab:noc-routing in chapter 9).
 \begin{tikzpicture}[font=\sffamily\scriptsize, >=Latex, x=1mm, y=1mm,
   sr/.style={draw=octpurple, fill=octio, semithick, minimum size=4.2mm, inner sep=0, font=\sffamily\tiny},
   srs/.style={sr, fill=octink, text=white, font=\sffamily\tiny\bfseries},
@@ -20,7 +21,7 @@
     \draw[pth] (2.4,-30) -- (7.6,-30); \draw[pth] (12.4,-30) -- (17.6,-30); \draw[pth] (22.4,-30) -- (27.6,-30);
     \draw[pth] (30,-27.6) -- (30,-22.4); \draw[pth] (30,-17.6) -- (30,-12.4); \draw[pth] (30,-7.6) -- (30,-2.4);
     \node[srs] at (0,-30) {12}; \node[srs] at (30,0) {3};
-    \node[lbl] at (-3,-39.5) {X to the destination column, then Y. Deterministic, deadlock-free by construction. \code{grid2d} and \code{torus2d}.};
+    \node[lbl] at (-3,-39.5) {X to the destination column, then Y (then Z on a 3-D lattice). Deterministic, deadlock-free by construction. Any lattice.};
     \node[ord, text=octteal] at (-3,-36.5) {ordering: pair per class};
   \end{scope}
   % ================= WestFirst =================
@@ -34,7 +35,7 @@
     \draw[alt] (2.4,-29) -- (7.6,-29); \draw[alt] (10,-27.6) -- (10,-22.4); \draw[alt] (12.4,-20) -- (17.6,-20);
     \draw[alt] (20,-17.6) -- (20,-12.4); \draw[alt] (22.4,-10) -- (27.6,-10); \draw[alt] (30,-7.6) -- (30,-2.4);
     \node[srs] at (0,-30) {12}; \node[srs] at (30,0) {3};
-    \node[lbl] at (-3,-39.5) {Black: 3 to 12 turns west first. Amber: 12 to 3 picks, at each router, the minimal output (E or N) with the most credits. \code{grid2d} only.};
+    \node[lbl] at (-3,-39.5) {Black: 3 to 12 turns west first. Amber: 12 to 3 picks, at each router, the minimal output (E or N) with the most credits. \code{NorthLast}, \code{NegativeFirst} and \code{OddEven} work alike with other turn rules. \code{grid2d} only.};
     \node[ord, text=octred] at (-3,-36.5) {ordering: none (adaptive)};
   \end{scope}
   % ================= AdaptiveMinimal =================
@@ -46,7 +47,7 @@
     \draw[alt] (12.4,-10) -- (17.6,-10);
     \draw[esc] (22.4,-10) -- (27.6,-10); \draw[esc] (30,-7.6) -- (30,-2.4);
     \node[srs] at (0,-30) {12}; \node[srs] at (30,0) {3};
-    \node[lbl] at (-3,-39.5) {Amber: any minimal output, most credits on the adaptive VCs. Teal: no adaptive credit, so \code{XY} on \code{escape\_vc}, kept to the end. Needs \code{vcs\_per\_class} $\ge 2$. \code{grid2d} only for now.};
+    \node[lbl] at (-3,-39.5) {Amber: any minimal output, most credits on the adaptive VCs. Teal: the adaptive VC was not granted, so the escape route, \code{XY} on \code{escape\_vc}, kept to the end. Needs \code{vcs\_per\_class} $\ge 2$, $\ge 3$ with wraps. Any lattice.};
     \node[ord, text=octred] at (-3,-36.5) {ordering: none (adaptive)};
   \end{scope}
   % ================= Table =================
@@ -57,12 +58,12 @@
     \node[sr, minimum size=5mm] (e) at (30,-7) {E};
     \foreach \u/\v in {a/b, a/c, b/d, c/d, b/e, d/e} \draw[octquiet] (\u) -- (\v);
     \draw[pth] (c) -- (d); \draw[pth] (d) -- (e);
-    \node[lbl] at (-3,-24) {Shortest paths by breadth-first search from every destination. Ties go to the lowest port index. \code{routing\_table[<router>]} overrides cells as \code{dest,port} pairs. Any topology, refused if its channel dependency graph has a cycle.};
+    \node[lbl] at (-3,-24) {Shortest paths by hops, or by \code{link\_weight}. Ties go to the lowest port index. \code{routing\_via} (\code{dest,neighbour}) and \code{routing\_table} (\code{dest,port}) override cells. Any topology, refused if its channel dependency graph has a cycle.};
     \node[ord, text=octteal] at (-3,-21) {ordering: pair per class};
   \end{scope}
   % ================= torus dateline =================
   \begin{scope}[shift={(55,-76)}]
-    \node[ttl] at (-3,9) {\code{XY} on \code{torus2d}};
+    \node[ttl] at (-3,9) {\code{XY} with wraps};
     \foreach \xx in {0,1,2,3} \node[sr, minimum size=5mm] (t\xx) at (\xx*10,-4) {\xx};
     \foreach \xx/\nx in {0/1,1/2,2/3} \draw[octquiet] (t\xx) -- (t\nx);
     \draw[octquiet] (t3.north) to[out=60, in=120, looseness=0.5] (t0.north);
@@ -71,7 +72,7 @@
     \node[text=octink, anchor=west] at (-3,-13.5) {1 to 2: VC 0};
     \draw[alt] (t3.south) to[out=-60, in=-120, looseness=0.45] (t0.south);
     \node[text=octamber, anchor=west] at (17,-13.5) {3 to 0 wraps: VC 1};
-    \node[lbl] at (-3,-24) {The shorter way round each ring. A leg that crosses the wrap link uses VC 1, others VC 0 (the dateline rule), chosen from source and destination. Needs \code{vcs\_per\_class} $\ge 2$ and dims $\ge 3$.};
+    \node[lbl] at (-3,-24) {Torus or ring: the shorter way round each wrapped dimension. A leg that crosses the wrap link uses VC 1, others VC 0 (the dateline rule), chosen from source and destination. Needs \code{vcs\_per\_class} $\ge 2$.};
     \node[ord, text=octteal] at (-3,-21) {ordering: pair per class};
   \end{scope}
   % ================= summary =================
@@ -79,7 +80,7 @@
     \node[ttl] at (-3,9) {What a protocol can rely on};
     \node[lbl, text width=48mm, text=octink] at (-3,4) {\code{requires\_ordering(s),}\\\code{pair\_per\_class}, set by the directory presets, accepts only an algorithm that keeps two packets of one class from one source to one destination in order:\\[0.6ex]
       \code{Table} or \code{XY}, \code{vcs\_per\_class} 1\\
-      \code{XY} on \code{torus2d} (the dateline fixes the VC)\\[0.6ex]
-      Anything else is refused at start-up. No algorithm orders packets of different classes.};
+      \code{XY} on a torus or a ring (the dateline fixes the VC)\\[0.6ex]
+      Anything else is refused at start-up, including the turn models, \code{O1TURN}, \code{Valiant} and \code{ROMM}. No algorithm orders packets of different classes.};
   \end{scope}
 \end{tikzpicture}

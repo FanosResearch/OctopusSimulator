@@ -22,6 +22,8 @@ a coherence protocol or variant & write or edit a CSV FSM, L1 and LLC tables as 
 an arbiter & subclass \code{Arbiter}, implement \code{elect()}, add the file to \code{src/Arbiters/CMakeLists.txt}, register the name in the controller's factory & yes \\
 a replacement policy & subclass \code{ReplacementPolicy} (\code{update}, \code{getReplacementCandidate}); honour the way mask & yes \\
 an interconnect topology & subclass \code{InterconnectTopology} and \code{InterconnectController}; the controllers on either side see only interfaces & yes \\
+a network topology & a \code{TopologyBuilder} in \file{src/Interconnect/Network/topologies/}, one line in \code{registerBuiltinTopologies}, a CMake entry, its keys in \file{Network.csv} (\cref{sec:extend-noc}) & yes \\
+a network routing algorithm & a \code{RoutingAlgorithm} subclass and one line in \code{createRouting} (\cref{sec:extend-noc}) & yes \\
 a memory controller & a scheduler directory under \code{src/MCsim/system/}, selected by \code{mcsim\_scheduler}; about 130 lines on average & yes (MCsim) \\
 a system shape & a class beside \code{MultiCoreSystem} in \code{src/SystemConfigurations/} plus a CSV of the same name & yes \\
 a parameter & a key in the component's CSV, read from \code{parameters} in its constructor; overridable with \code{-p} at once & yes \\
@@ -107,14 +109,77 @@ to snoop on behalf of the L1. The cheapest correct answer is an inclusive L2 tha
 bus transaction up, which is what the reference solution does; what a real design would do
 instead is the discussion the exercise exists for.
 
+\section{A network topology or routing algorithm}\label{sec:extend-noc}
+\begingroup\emergencystretch=3em
+
+The network of \cref{ch:noc} takes topologies and routing algorithms as plug-ins. Neither touches
+the router engine, the NI, the classifier or the controllers.
+
+\paragraph{A topology} is a builder: a subclass of \code{TopologyBuilder}
+(\file{header/Interconnect/Network/TopologyBuilder.h}) with three methods. \code{name()} is the
+value of \key{topology} that selects it. \code{keys()} lists the keys it reads, with their types,
+defaults and meanings. \code{build(keys, endpoint\_ids, local\_ports)} returns the
+\code{Topology}. It builds the graph with the construction API of \code{Topology}:
+\code{addRouter(id)} for each router, \code{addPort(r, to, name)} for each link port, in port
+order, \code{attachAt(r, endpoint)} for each endpoint, then \code{finalize(local\_ports)}, which
+pairs every port with its reverse, refuses a link without one and numbers the local ports. A
+lattice also calls \code{setLattice} after adding its routers in lattice index order, and gives
+each port its dimension and direction (\code{addPort(r, to, name, dim, dir)}). Then \code{XY},
+the oblivious algorithms and \code{AdaptiveMinimal} run on it, within the limits of
+\cref{tab:noc-routing}. \code{setAttr} stores
+per-router metadata of other shapes (a tree level, a group) for a routing algorithm that needs
+it, and \code{setImplicit} marks a router that adds no latency. \code{KeyView} reads the keys:
+\code{geti}, \code{getvi}, \code{rows("connection\_matrix")} and \code{nodeMap(endpoints)}, which
+refuses an endpoint without a \key{node\_map} entry. To ship the builder:
+
+\begin{enumerate}[nosep]
+\item put the class in a new file in \file{src/Interconnect/Network/topologies/}, with a
+  function that returns a new builder;
+\item declare that function in \file{Builtin.cpp} and add one line that registers its result
+  in \code{registerBuiltinTopologies};
+\item add the file to the \code{target\_sources} list in \file{src/Interconnect/CMakeLists.txt};
+\item document its keys and its name in \file{configuration/Interconnect/Network.csv}.
+\end{enumerate}
+
+The registry is explicit because the network code is linked from a static library: a
+self-registering object file that nothing references would be dropped by the linker. The unit
+test \code{T1-REGISTRY} lists the registered names in order, so it changes with the list.
+
+\paragraph{A routing algorithm} is a subclass of \code{RoutingAlgorithm}
+(\file{header/Interconnect/Network/Routing.h}) in \file{src/Interconnect/Network/Routing.cpp},
+plus one line in \code{createRouting}. It implements:
+
+\begin{description}[nosep]
+\item[\code{nextHop}] the output port and VC mask for a head at a router. It may read the
+  topology, the packet and the current router's credits, and nothing else.
+\item[\code{candidates}] every output it may use at this hop, whatever the credits. The default
+  returns \code{nextHop}. An adaptive or oblivious algorithm must list all its choices, because
+  the channel dependency check explores exactly these.
+\item[\code{ordering}] \code{PAIR\_PER\_CLASS} only if a pair's packets of one class keep one path;
+  otherwise \code{NONE}. \code{fixesVCPerPair} says whether the VC is fixed per pair too.
+\item[\code{deadlockFreeOn}] whether the algorithm is free of deadlock on the topology. The
+  function \code{channelDependencyAcyclic} checks it over the candidates. Returning \code{true}
+  asserts it without a check.
+\item[\code{name}] the value of \key{routing}.
+\end{description}
+
+The constructor reads what it needs from the topology's capabilities, \code{lattice()},
+\code{dirPort} and \code{attr}, never from its name, and throws \code{ConfigError} with the reason
+when the topology or the VC count does not fit. An oblivious algorithm overrides \code{onInject}
+to draw its per-packet choice into \code{Packet::route\_aux} from the packet's \code{seq} and
+the routing seed. An algorithm with an escape network returns \code{true} from
+\code{needsEscapeVC} and puts the escape route in the fallback fields \code{alt\_port} and
+\code{alt\_mask} of its \code{Route}, which VC allocation grants in its second pass. The step T
+unit tests in \file{test/network/unit/topology_plugin.cpp} show the checks a new algorithm
+should pass: an acyclic dependency graph over its candidates, minimal paths where it claims them,
+and a refusal on topologies it does not support.
+
 \section{Planned}
 
-Multi-hop routing is built: \cref{ch:noc} describes the network. A new routing algorithm is a
-subclass of \code{RoutingAlgorithm} in \file{src/Interconnect/Network/Routing.cpp} with
-\code{nextHop}, \code{ordering} and \code{deadlockFreeOn}, plus one line in \code{createRouting},
-the network's analogue of adding an arbiter. Real-time arbitration on the network (TDM slot
-tables, priority VCs) and snooping over the network are planned. \file{docs/NoC_MultiHop_Plan.md}
-has the design and its phasing.
+Real-time arbitration on the network (TDM slot tables, priority VCs) and snooping over the network
+are planned. \file{docs/NoC_MultiHop_Plan.md} has the design and its phasing. One-way links and
+endpoints attached to several routers are step T6 of \file{docs/NoC_Topology_Plugin_Plan.md}.
+\endgroup
 
 \begin{wherebox}
 \begin{itemize}[nosep,leftmargin=1.2em]
@@ -122,6 +187,8 @@ has the design and its phasing.
 \item \file{src/Interconnect/SplitBusController.cpp} --- the arbiter factory for the bus
 \item \file{header/ReplacementPolicies/ReplacementPolicy.h}, \file{src/ReplacementPolicies/} --- replacement (LRU, random)
 \item \file{src/SystemConfigurations/} --- the system classes
+\item \file{header/Interconnect/Network/TopologyBuilder.h}, \file{src/Interconnect/Network/topologies/}: network topology builders and their registry
+\item \file{header/Interconnect/Network/Routing.h}, \file{src/Interconnect/Network/Routing.cpp}: network routing algorithms and \code{createRouting}
 \item \file{tutorial/03-extending-octopus/} --- the three exercises with their checks
 \end{itemize}
 \end{wherebox}

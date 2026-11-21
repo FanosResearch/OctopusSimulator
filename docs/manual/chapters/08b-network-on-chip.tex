@@ -2,7 +2,7 @@
 \begingroup\emergencystretch=3em
 
 \whatyoufind{The flit-level network that connects L1s, LLC banks and memory controllers on a
-grid, a torus, a ring, a star or any graph you write down. What it models, from packets and flits
+grid, a torus, a 3-D mesh or torus, a ring, a star or any graph you write down. What it models, from packets and flits
 to routers, credits and virtual channels. The routing algorithms and arbiters it ships. How the
 directory protocols stay free of deadlock on it. LLC banks and memory controllers as network
 endpoints. How to configure and run it, what it reports, and how it is validated.}
@@ -122,37 +122,66 @@ MOESI uses \code{DIRECTORY\_MOESI}, \code{MOESI\_directory\_v2}, \code{DIRECTORY
 \section{Topology and endpoint attachment}\label{sec:noc-topology}
 
 A topology is a set of routers, the links between them and the router each endpoint attaches to.
-\key{topology} selects it:
+\key{topology} names the \emph{builder} that makes it. Seven builders ship:
 
 \begin{description}
 \item[\code{grid2d}] $k_x \times k_y$ routers from \key{dims(vi),kx,ky}, numbered row-major,
-  $r = y\cdot k_x + x$, with $y$ growing downwards (north is $y-1$). Link ports are ordered east,
-  west, north, south, and directions that do not exist at an edge are skipped
+  $r = y\cdot k_x + x$, with $y$ growing downwards (north is $y-1$)
   (\cref{fig:noc-system}, right).
 \item[\code{torus2d}] the grid plus wrap links on every row and column. Both dimensions must be
   at least 3, so that a wrap link differs from a direct link.
-\item[\code{ring}] $k \ge 3$ routers from \key{dims(vi),k}. Ports are clockwise, then
-  counter-clockwise.
+\item[\code{mesh3d}] $k_x \times k_y \times k_z$ routers from \key{dims(vi),kx,ky,kz}, numbered
+  $r = x + k_x\cdot(y + k_y\cdot z)$. Layer $z$ is a $k_x \times k_y$ grid numbered as
+  \code{grid2d}.
+\item[\code{torus3d}] the 3-D mesh plus wrap links in all three dimensions, each at least 3.
+\item[\code{ring}] $k \ge 3$ routers from \key{dims(vi),k}, a one-dimensional torus.
 \item[\code{star}] one router with every endpoint on it.
 \item[\code{custom}] any graph from \key{connection\_matrix[i]} rows (node id, then its
   neighbours), as for the mesh. The matrix must be symmetric. A node in \key{component\_ids} is an
   endpoint and gets an \emph{implicit router} of its own, which stands for the endpoint's link
   ports and adds no router latency. The other nodes are explicit routers (\key{router\_ids} may
-  list them). At a node the link ports to lower-id neighbours come first, in ascending id, and
-  the ports to higher-id neighbours follow in the order of the node's row. For every shipped
-  matrix this is the row order.
+  list them).
 \end{description}
 
-On the generated topologies \key{node\_map[<id>](i)} names the router of every endpoint in
-\key{component\_ids}, and a missing entry stops the run with the key named. Several endpoints may
-share a router. With \key{local\_ports} 0, the default, each endpoint gets its own local port,
-numbered after the link ports. On \code{grid2d}, \code{torus2d} and \code{ring} the local ports
-follow ascending endpoint id, on \code{star} and \code{custom} the order of
-\key{component\_ids}. In \code{MultiCoreSystem\_Grid} router 3
-has west (0), north (1), L1 3 on local port 2 and the LLC on local port 3. A positive
-\key{local\_ports} smaller than the endpoints at a router makes them share ports round-robin. The
-NIs on a shared port then compete for it through the port's arbiter, and the RX credits stay per
-endpoint and class.
+The five generated shapes other than \code{star} are \emph{lattices}: each router has a coordinate
+per dimension, a dimension may wrap, and each link port has a direction. Routing algorithms read
+this capability rather than a topology name, so an algorithm written for lattices works on all of
+them (\cref{sec:noc-routing}).
+
+\paragraph{Port order.} A router numbers its link ports first, in a fixed order, and its local
+ports last (\cref{tab:noc-ports}). On a lattice the order follows the directions, and a direction
+that does not exist at the edge of a mesh is skipped, so the numbers shift. A wrap link takes the
+place of the missing direction and is named with \code{(wrap)}, for example \code{east(wrap)}. On
+\code{custom} a node's link ports follow the order in which its own row names its neighbours. In
+\code{MultiCoreSystem\_NetNoC} the row \code{0,200,10} gives L1 0 port 0 to switch 200 and port 1
+to the LLC.
+
+\begin{table}[htbp]\centering\small
+\caption{Link port order per builder. Local ports follow the link ports.}\label{tab:noc-ports}
+\begin{tabularx}{\textwidth}{@{}lY@{}}
+\toprule builder & link ports, in order \\ \midrule
+\code{grid2d}, \code{torus2d} & east ($x+1$), west ($x-1$), north ($y-1$), south ($y+1$) \\
+\code{mesh3d}, \code{torus3d} & east, west, north, south as on the grid, then up ($z-1$) and down ($z+1$) \\
+\code{ring} & clockwise ($r+1$), counter-clockwise ($r-1$) \\
+\code{custom} & the neighbours in the order of the node's own matrix row. A neighbour named twice gets one port \\
+\code{star} & none \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Port numbers name ports and carry no routing intent. A preferred route on a \code{custom} graph
+is stated with \key{routing\_via} (\cref{sec:noc-routing}). \code{NetNoC} uses it to send L1-to-L1
+traffic through switch 200 rather than leaving the choice to a tie-break by the lowest port.
+
+\paragraph{Endpoints.} On the generated topologies \key{node\_map[<id>](i)} names the router of
+every endpoint in \key{component\_ids}, and a missing entry stops the run with the key named.
+Several endpoints may share a router. With \key{local\_ports} 0, the default, each endpoint gets
+its own local port, numbered after the link ports. On the lattices the local ports follow
+ascending endpoint id, on \code{star} and \code{custom} the order of \key{component\_ids}. In
+\code{MultiCoreSystem\_Grid} router 3 has west (0), north (1), L1 3 on local port 2 and the LLC on
+local port 3. A positive \key{local\_ports} smaller than the endpoints at a router makes them
+share ports round-robin. The NIs on a shared port then compete for it through the port's arbiter,
+and the RX credits stay per endpoint and class.
 
 \section{Packets, flits and classes}\label{sec:noc-packets}
 
@@ -284,13 +313,27 @@ A packet passes four stages:
 \item[VA, VC allocation] once per packet. A head competes for a free output VC of its class on
   its output port no earlier than \key{router\_latency} ticks after it arrived (2 by default).
   Implicit routers of a \code{custom} graph add no latency. On a local output port the head also
-  needs and reserves an RX slot.
+  needs and reserves an RX slot. An algorithm with an escape network gets a second VA pass in the
+  same tick, in which a head still without a VC may take its fallback route
+  (\cref{sec:noc-routing}).
 \item[SA, switch allocation] once per flit. A flit competes for its output port if it is at the
-  front of its FIFO, its output VC has a credit and the link is free. One flit leaves each input
-  port and each output port per tick. Body and tail flits can leave in the tick they arrive.
+  front of its FIFO, its output VC has a credit and the link is free. A head also waits
+  \key{switch\_latency} ticks after it won VA (0 by default, so VA and SA can fall in one tick).
+  One flit leaves each input port and each output port per tick. Body and tail flits can leave
+  in the tick they arrive.
 \item[LT, link traversal] the flit is at the downstream router \key{link\_latency} ticks later
   (1 by default). A tail sent on a local port completes the packet.
 \end{description}
+
+\paragraph{Router options.} \key{router\_latency[<router id>](i)} overrides
+\key{router\_latency} at one router, for a slower router in an otherwise uniform network. An id
+that is not a router stops the run. \key{switch\_latency} adds a separate SA stage after VA at
+every explicit router. \key{sa\_allocator} chooses the switch allocator. \code{output\_first}, the
+default, lets every eligible input VC compete at its output port, and an input port that has sent
+a flit drops out of the later elections of that tick. \code{input\_first} is a separable
+input-first allocator. Each input port first picks one of its ready VCs with its own arbiter, and
+the output ports then elect among at most one candidate per input port. Both allocators use
+\key{arbiter\_type} (\cref{sec:noc-arbitration}). Implicit routers apply neither latency.
 
 The network executes each tick in five phases, over all routers in ascending id and all ports and
 VCs in ascending index: injection, arrivals (flits and credits whose time has come), route
@@ -324,9 +367,11 @@ with a larger \key{credit\_latency}.
 \paragraph{Unloaded latency.} A packet of $f$ flits that crosses $R$ routers, and so $R-1$ links,
 alone in the network, takes
 \[
-T = R\cdot\textit{router\_latency} + (R-1)\cdot\textit{link\_latency} + (f-1)
+T = R\cdot(\textit{router\_latency} + \textit{switch\_latency}) + (R-1)\cdot\textit{link\_latency} + (f-1)
 \]
-ticks from the head's injection to the tail's ejection. Local links cost nothing. The $f-1$ term
+ticks from the head's injection to the tail's ejection. With per-router overrides the first term
+is the sum of $\textit{router\_latency}_r + \textit{switch\_latency}$ over the routers crossed,
+and an implicit router adds nothing to it. Local links cost nothing. The $f-1$ term
 is the tail following the head one tick per flit, since a head leaves a router before its tail
 has arrived (cut-through). The formula holds while the credits never run out on the way, which
 needs $\textit{vc\_depth} \ge \min(f, L + c)$ at every link latency. The default depth of 4 meets
@@ -348,45 +393,121 @@ direction. The configured arbiter elects it over both routers' candidates.
 
 \begin{figure}[htbp]\centering
 \begin{adjustbox}{max width=\textwidth}\input{figures/tikz/noc-routing}\end{adjustbox}
-\caption{The four routing algorithms, with the ordering each one declares. Black: deterministic
-paths. Amber: adaptive choices by credits. Teal: the escape VC of \code{AdaptiveMinimal}.}
+\caption{Four of the routing algorithms on a 4$\times$4 grid and the dateline of \code{XY} on a
+wrapped dimension, with the ordering each declares. Black: deterministic paths. Amber: adaptive
+choices by credits. Teal: the escape route of \code{AdaptiveMinimal}. \Cref{tab:noc-routing}
+lists all of them.}
 \label{fig:noc-routing}
 \end{figure}
 
 A routing algorithm is a plug-in chosen by name with \key{routing}. Given the current router, the
-input port and VC, the destination router and the class, it returns the output port and a mask
-of the output VCs the packet may use. It may read the current router's credit counts and nothing
-else. \code{auto}, the default, selects \code{XY} on \code{grid2d} and \code{torus2d} and
-\code{Table} elsewhere. Four algorithms ship (\cref{fig:noc-routing}):
+input port and VC, the source and destination routers, the class and the packet, it returns the
+output port and a mask of the output VCs the packet may use. It may read the current router's
+credit counts and nothing else. Ten algorithms ship (\cref{tab:noc-routing}).
+\code{auto}, the default, selects \code{XY} on \code{grid2d}, \code{torus2d}, \code{mesh3d} and
+\code{torus3d}, \code{XY} on a \code{ring} when \key{vcs\_per\_class} is at least 2, and
+\code{Table} everywhere else. A construction that does not fit an algorithm stops the run with
+the reason, for example \code{O1TURN} on a 3-D mesh or \code{XY} on a torus with one VC.
 
+\begin{table}[htbp]\centering\small
+\caption{The routing algorithms, where they run and the ordering each declares
+(\code{Routing.cpp}). A lattice is \code{grid2d}, \code{torus2d}, \code{ring}, \code{mesh3d} or
+\code{torus3d}. \emph{Wraps} are the wrap links of a torus or a ring.}\label{tab:noc-routing}
+\begin{tabularx}{\textwidth}{@{}llYl@{}}
+\toprule algorithm & kind & topologies and VCs & ordering \\ \midrule
+\code{Table} & deterministic & any, if the channel dependency graph is acyclic & pair per class \\
+\code{XY} & deterministic & any lattice. With wraps, \key{vcs\_per\_class} $\ge 2$ & pair per class \\
+\code{WestFirst} & turn model & \code{grid2d} & none \\
+\code{NorthLast} & turn model & \code{grid2d} & none \\
+\code{NegativeFirst} & turn model & \code{grid2d} & none \\
+\code{OddEven} & turn model & \code{grid2d} & none \\
+\code{O1TURN} & oblivious & a 2-D lattice without wraps (\code{grid2d}), \key{vcs\_per\_class} $\ge 2$ & none \\
+\code{Valiant} & oblivious & a lattice without wraps (\code{grid2d}, \code{mesh3d}), \key{vcs\_per\_class} $\ge 2$ & none \\
+\code{ROMM} & oblivious & as \code{Valiant} & none \\
+\code{AdaptiveMinimal} & adaptive & any lattice, \key{escape\_vc} set, \key{vcs\_per\_class} $\ge 2$, with wraps $\ge 3$ & none \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Deterministic.}
 \begin{description}
-\item[\code{Table}] any topology. Shortest paths found by breadth-first search from every
-  destination, ties to the lowest port index. \key{routing\_table[<router>](vi)} overrides single
-  entries as \code{dest,port} pairs, and a port the router does not have stops the run. The table
-  must pass the channel dependency check (\cref{sec:noc-deadlock}).
-\item[\code{XY}] \code{grid2d} and \code{torus2d}. Along X to the destination column, then along
-  Y. On a torus it takes the shorter way round each ring and applies the dateline rule: a leg that
-  crosses the wrap link uses VC 1, any other leg VC 0. A torus with \code{XY} therefore needs
-  \key{vcs\_per\_class} of at least 2.
-\item[\code{WestFirst}] \code{grid2d}. The turn model: a packet with a westward component goes
-  west first. Otherwise it picks, among the minimal outputs, the one whose VCs of its class hold
-  the most credits, ties to the lowest port.
-\item[\code{AdaptiveMinimal}] \code{grid2d}, with \key{escape\_vc} set and
-  \key{vcs\_per\_class} of at least 2. It picks the minimal output with the most credits on the
-  adaptive VCs (every VC but the escape VC). A packet that finds no adaptive credit is routed by
-  \code{XY} on the escape VC, and a packet that arrived over a link on the escape VC stays on it.
-  \code{torus2d} is accepted, but the escape VC ignores the dateline there, so the escape network
-  of a torus is not deadlock-free (\cref{sec:noc-limits}).
+\item[\code{Table}] any topology. One next hop per router and destination router. By default the
+  shortest paths by hop count, found by breadth-first search from every destination, ties to the
+  lowest port index. \key{link\_weight[<router>](vi)} gives \code{neighbour,weight} pairs (weights
+  at least 1, default 1). With any weight set, \code{Table} computes the shortest weighted paths
+  instead (Dijkstra) and prints how many router and destination pairs had several equal-cost
+  ports, which it also breaks to the lowest port. \key{routing\_via[<router>](vi)} then sets single
+  entries as \code{dest,neighbour} pairs: the route to router \code{dest} leaves through the link
+  to router \code{neighbour}. It does not depend on port numbering, so it is the preferred way to
+  state a route. \key{routing\_table[<router>](vi)} is applied last, as \code{dest,port} pairs. A
+  neighbour that is not linked, or a port the router does not have, stops the run. The table must
+  pass the channel dependency check (\cref{sec:noc-deadlock}).
+\item[\code{XY}] any lattice. Dimension-order routing: along dimension 0 (X) to the destination's
+  coordinate, then dimension 1 (Y), then dimension 2 (Z). On a wrapped dimension it takes the
+  shorter way round, the positive direction on a tie, and applies the dateline rule. The leg in a
+  dimension uses VC 1 if the shorter way from the source's coordinate to the destination's crosses
+  the wrap link, and VC 0 otherwise. A torus or a ring with \code{XY} therefore needs
+  \key{vcs\_per\_class} of at least 2, and only VCs 0 and 1 carry traffic.
+\end{description}
+
+\paragraph{Turn models.} \code{grid2d} only. Each forbids enough turns to break every cycle of
+channel dependencies, so it is deadlock-free at any VC count, and every route it allows is
+minimal. At each router the head takes, among the allowed outputs, the one whose VCs of its class
+hold the most credits, ties to the lowest port.
+\begin{description}
+\item[\code{WestFirst}] all westward hops first. Then any minimal mix of east, north and south.
+\item[\code{NorthLast}] northward hops last, with no turn after them. Before them any minimal mix
+  of the east or west hops and the south hops.
+\item[\code{NegativeFirst}] the negative directions, west and north, first and adaptively among
+  them. Then the positive ones, east and south, adaptively.
+\item[\code{OddEven}] Chiu's minimal odd-even rule: no turn from east to north or south in an even
+  column, and no turn from north or south to west in an odd column. The column is the $x$
+  coordinate.
+\end{description}
+
+\paragraph{Oblivious.} \code{O1TURN}, \code{Valiant} and \code{ROMM} choose once per packet,
+when it is created, independently of the load. The choice is drawn from a hash of the packet's
+network sequence number and \key{routing\_seed}, so a rerun takes the same paths and another seed
+takes others. They run on lattices without wraps and split each class's VCs into two sets,
+A $= [0, v/2)$ and B $= [v/2, v)$ for $v$ = \key{vcs\_per\_class}. Each set carries only
+dimension-order routes, and a packet moves from A to B at most once, so the channel dependency
+graph is acyclic.
+\begin{description}
+\item[\code{O1TURN}] each packet takes XY on set A or YX on set B, each with probability one half.
+  2-D only.
+\item[\code{Valiant}] dimension order to an intermediate router drawn uniformly among all
+  routers, on set A, then dimension order to the destination on set B. The paths are not minimal.
+\item[\code{ROMM}] as \code{Valiant}, with the intermediate drawn in each dimension between the
+  source's and the destination's coordinates, so every path is minimal.
+\end{description}
+
+\paragraph{Adaptive.}
+\begin{description}
+\item[\code{AdaptiveMinimal}] any lattice, with \key{escape\_vc} set. Minimal adaptive routing with
+  an escape network (Duato). The minimal outputs are one per dimension still to cover. The head
+  asks for the one with the most credits on the adaptive VCs, which are every VC but the escape
+  VCs, and carries the escape route as its fallback. If VA cannot grant the adaptive output, its
+  second pass may grant the escape route instead, so a waiting head can always leave on the escape
+  network. A head that sees no adaptive credit on any minimal output asks for the escape route
+  directly. A packet that arrived over a link on an escape VC stays on the escape network to its
+  destination. The escape route is dimension order on \key{escape\_vc}. On a wrapped dimension it
+  uses two escape VCs with a dateline that depends only on the current router: a hop whose
+  remaining leg still crosses the wrap link uses \key{escape\_vc}$+1$, any other hop
+  \key{escape\_vc}. A grid or a 3-D mesh needs \key{vcs\_per\_class} of at least 2, one adaptive
+  VC and the escape VC. A torus or a ring needs at least 3 and \key{escape\_vc}$+1$ below
+  \key{vcs\_per\_class}. At start-up the network checks that the escape network is free of
+  cycles (\cref{sec:noc-deadlock}).
 \end{description}
 
 \paragraph{Ordering.} Two packets of one class from one source to one destination arrive in the
 order they were injected when the path and the VC are fixed by source, destination and class:
-\code{Table} and \code{XY} with \key{vcs\_per\_class} 1, and \code{XY} on a torus, where the
-dateline fixes the VC. These declare \code{PAIR\_PER\_CLASS}. The adaptive algorithms declare
-\code{NONE}. No algorithm orders packets of different classes. The directory presets set the
-system-level key \key{requires\_ordering(s),pair\_per\_class}, and the network refuses at start-up
-an algorithm or a VC count that cannot provide it. Multicast is not routed as such: it is one
-packet per destination.
+\code{Table} and \code{XY} with \key{vcs\_per\_class} 1, and \code{XY} on a torus or a ring, where
+the dateline fixes the VC. These two algorithms declare \code{PAIR\_PER\_CLASS}. The turn models,
+the oblivious algorithms and \code{AdaptiveMinimal} declare \code{NONE}. No algorithm orders
+packets of different classes. The directory presets set the system-level key
+\key{requires\_ordering(s),pair\_per\_class}, and the network refuses at start-up an algorithm that
+declares \code{NONE}, and more than one VC per class unless the algorithm fixes the VC per pair
+(\code{XY} with wraps). Multicast is not routed as such: it is one packet per destination.
 
 \section{Arbitration}\label{sec:noc-arbitration}
 
@@ -466,14 +587,27 @@ routing when it is built, the protocol once every controller exists.
 \label{fig:noc-deadlock}
 \end{figure}
 
-\paragraph{Routing level.} For \code{Table} the network builds the channel dependency graph: one
-node per (link, VC), and an edge from one channel to the next whenever some route uses them in that
-order, with each hop's VC mask. A cycle stops the run and the message names the channels on it.
-\code{Table} never routes a packet on the escape VC, so an \key{escape\_vc} does not lift the
-refusal. \code{XY} and \code{WestFirst} on \code{grid2d}, \code{XY} on \code{torus2d} and
-\code{AdaptiveMinimal} on \code{grid2d} are deadlock-free by construction. The computed
-\code{Table} on a ring of four or more routers always has such a cycle and is refused at any VC
-count. A hand-written \key{routing\_table} that breaks the cycle passes the check.
+\paragraph{Routing level.} The channel dependency graph has one node per (link, VC) and an edge
+from one channel to the next whenever some packet may hold the first and then ask for the second.
+To build it the network starts at every source router, for every destination router, and follows
+every output the algorithm may use there, its \emph{candidates}, with every VC each hop's mask
+allows: all allowed ports of a turn model, both orders of \code{O1TURN}, every intermediate of
+\code{Valiant}, the adaptive outputs and the escape fallback of \code{AdaptiveMinimal}. The walk
+does not stop at the destination router unless the route there is the local port, so a
+\code{Valiant} packet that passes its destination on the way to its intermediate is followed. A
+cycle stops the run and the message names the channels on it.
+
+At start-up each algorithm answers whether it is deadlock-free on the topology. \code{Table} runs
+this check. \code{Table} never routes a packet on the escape VC, so an \key{escape\_vc} does not
+lift a refusal. The computed \code{Table} on a ring of four or more routers always has a cycle
+and is refused at any VC count. \code{routing\_via} or \code{routing\_table} entries that break the
+cycle pass, and \code{XY} with two VCs is the ring's deadlock-free routing. \code{AdaptiveMinimal}
+checks its escape network: a packet may enter it at any router and then follows the escape route
+to its destination, so the graph is built from every entry router and destination. With one escape
+VC on a torus this graph has a cycle through the wrap link, which is why a wrapped lattice needs
+the two escape VCs. \code{XY}, the turn models and the oblivious algorithms are deadlock-free by
+construction and are accepted without a graph. The step T unit tests run the full check over
+their candidates on several grid shapes and VC counts.
 
 \paragraph{Protocol level.} Once every controller exists, the network reads each protocol's FSM
 table. For every cell with actions it takes the class of the message the event consumes and the
@@ -585,7 +719,8 @@ linked to the LLC and to one switch, half duplex, a message held on a link for i
 The legacy controller gives every connection two links, a request link and a data link. The network
 has one link per direction, shared by both classes, and under half duplex one per connection. \code{MultiCoreSystem\_NetNoC} sets the network up that way
 (\cref{fig:noc-legacy}). The legacy matrix becomes a \code{custom} graph with switch 200 as the
-only explicit router, \code{Table} routing, one flit per message, two classes, serial half-duplex
+only explicit router, \code{Table} routing with \key{routing\_via} entries that send L1-to-L1
+messages through the switch, one flit per message, two classes, serial half-duplex
 links with the class latencies 2 and 5, \code{alternate} RX serving and the protocol check in
 \code{warn} mode.
 
@@ -612,12 +747,47 @@ flight. The generators are closed-loop: a refused packet is retried, not dropped
 saturation the offered load limits itself. Saturation is therefore read from the accepted rate:
 the first offered rate whose accepted rate falls below 0.9 of it.
 
+\paragraph{Patterns.} Under \code{uniform} every packet goes to a random other endpoint. Under
+\code{hotspot} every packet goes to \key{hotspot\_id}, and under \code{neighbour} to the next
+endpoint id, cyclically. The permutation patterns give every generator one fixed partner, which
+the system computes from the topology at start-up (\cref{tab:noc-patterns}). In the bit patterns
+$i$ is the endpoint's index among the endpoint ids in ascending order, $N$ is the number of
+endpoints, and $N$ must be a power of two. A permutation other than \code{transpose} whose partner
+is the endpoint itself, or no endpoint, makes that generator send nothing. \code{transpose} keeps
+its fallback to the first other endpoint.
+
+\begin{table}[htbp]\centering\small
+\caption{Permutation patterns (\code{NetworkOnly.cpp}).}\label{tab:noc-patterns}
+\begin{tabularx}{\textwidth}{@{}lY@{}}
+\toprule pattern & partner of an endpoint \\ \midrule
+\code{transpose} & the first endpoint at the router with swapped coordinates, $(x,y) \to (y,x)$, on a 2-D lattice. Without one (a 3-D or non-lattice topology, a swapped router outside the grid or without an endpoint) the first other endpoint \\
+\code{bitcomp} & index $i$ with all $\log_2 N$ bits complemented \\
+\code{bitrev} & index $i$ with its $\log_2 N$ bits in reverse order \\
+\code{shuffle} & index $i$ rotated left by one bit \\
+\code{tornado} & on a lattice, the first endpoint at the router whose coordinate in every dimension is $c' = (c + \lceil k/2 \rceil - 1) \bmod k$. Otherwise index $(i + \lceil N/2 \rceil - 1) \bmod N$ \\
+\code{randperm} & index $\pi(i)$ of one random permutation $\pi$ of $0..N-1$: a Fisher-Yates shuffle over \code{std::mt19937} seeded with \key{perm\_seed}, the same in every generator that has the same \key{perm\_seed} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Injection.} \key{injection} \code{bernoulli}, the default, injects a packet in each
+tick with probability \key{rate}/1000. \code{onoff} makes the generator a two-state Markov source
+that starts off. In each tick it first switches state, off with probability
+\key{on\_to\_off}/1000 when on and on with probability \key{off\_to\_on}/1000 when off, and then,
+if on, injects with probability \key{rate}/1000. The long-run share of time on is
+$\textit{off\_to\_on} / (\textit{on\_to\_off} + \textit{off\_to\_on})$, so the mean offered rate is
+that share times \key{rate}, in bursts.
+
 \begin{table}[htbp]\centering\small
 \caption{Traffic generator keys.}\label{tab:noc-gen}
 \begin{tabularx}{\textwidth}{@{}llY@{}}
 \toprule key & default & meaning \\ \midrule
-\key{pattern} & uniform & \code{uniform}, \code{hotspot}, \code{transpose} (the endpoint at the router with swapped coordinates), \code{neighbour} (the next endpoint id), \code{none} \\
-\key{rate} & 50 & packets per 1000 ticks, from 0 to 1000 \\
+\key{pattern} & uniform & \code{uniform}, \code{hotspot}, \code{neighbour} (the next endpoint id), \code{none}, or a permutation: \code{transpose}, \code{bitcomp}, \code{bitrev}, \code{shuffle}, \code{tornado}, \code{randperm} (\cref{tab:noc-patterns}) \\
+\key{rate} & 50 & packets per 1000 ticks, from 0 to 1000. Under \code{onoff} the rate while on \\
+\key{injection} & bernoulli & \code{bernoulli} or \code{onoff} \\
+\key{on\_to\_off} & 100 & \code{onoff}: per-1000 probability per tick of switching off, 0 to 1000 \\
+\key{off\_to\_on} & 100 & \code{onoff}: per-1000 probability per tick of switching on, 0 to 1000 \\
+\key{perm\_seed} & 1 & \code{randperm}: the seed of the permutation \\
 \key{payload\_bytes} & 64 & payload per packet, so the flit count follows \cref{sec:noc-packets}. 0 is a header-only packet \\
 \key{cls} & 2 & class to inject on: 0, 1 or 2 \\
 \key{hotspot\_id} & 0 & destination of the \code{hotspot} pattern \\
@@ -694,10 +864,13 @@ Every network error prints \code{Network:} followed by what went wrong, with the
 packet and message id where they apply, runs the hang dump when it is enabled, and exits with
 status 2. At start-up the network refuses, with the key named: an invalid value of any key in
 \cref{tab:noc-keys}, an endpoint without a router, an asymmetric \code{custom} matrix, an unknown
-topology or routing name, a \code{routing\_table} entry naming a missing port, a torus with
-\code{XY} and one VC, an \key{escape\_vc} not below \key{vcs\_per\_class}, an ordering requirement
-the routing cannot meet, a cyclic channel dependency graph, the deferred real-time keys, and a
-protocol that fails the check. At run time these are fatal: a destination that is not an endpoint,
+topology name (the message lists the registered builders) or routing name, a \code{routing\_table}
+entry naming a missing port, a \code{routing\_via} or \code{link\_weight} entry naming a router
+that is not a neighbour, a link weight below 1, a \key{router\_latency[<router id>](i)} for an id that is
+not a router, a routing algorithm on a topology or VC count it does not support
+(\cref{tab:noc-routing}), an \key{escape\_vc} not below \key{vcs\_per\_class}, an ordering
+requirement the routing cannot meet, a cyclic channel dependency graph or escape network, the
+deferred real-time keys, and a protocol that fails the check. At run time these are fatal: a destination that is not an endpoint,
 an unclassifiable message, a routing result naming a missing port or an empty VC mask, a VC
 overflow, a credit counter above \key{vc\_depth}, and a delivery without an RX reservation. None of
 them can happen in a correct configuration. They exist so that an error in a new routing algorithm
@@ -715,9 +888,9 @@ system file. \Cref{tab:noc-syskeys} lists the system and controller keys the net
 \toprule key & default & meaning \\ \midrule\endhead
 \bottomrule\endlastfoot
 \multicolumn{3}{@{}l}{\textit{topology}}\\
-\key{topology(s)} & \code{custom} & \code{grid2d}, \code{torus2d}, \code{ring}, \code{star} or \code{custom} \\
+\key{topology(s)} & \code{custom} & \code{custom}, \code{grid2d}, \code{torus2d}, \code{ring}, \code{star}, \code{mesh3d} or \code{torus3d} \\
 \key{component\_ids(vi)} & from \code{Mesh.csv} & the endpoint ids \\
-\key{dims(vi)} & 0 & $k_x,k_y$ for grids and tori, $k$ for a ring \\
+\key{dims(vi)} & 0 & $k_x,k_y$ for \code{grid2d} and \code{torus2d}, $k_x,k_y,k_z$ for \code{mesh3d} and \code{torus3d}, $k$ for a ring \\
 \key{node\_map[<id>](i)} & none & the router of an endpoint, on generated topologies \\
 \key{connection\_matrix[i](vi)} & from \code{Mesh.csv} & \code{custom}: node id, then its neighbours \\
 \key{router\_ids(vi)} & $-1$ & \code{custom}: the explicit routers. $-1$: every node that is not an endpoint \\
@@ -730,6 +903,8 @@ system file. \Cref{tab:noc-syskeys} lists the system and controller keys the net
 \key{vcs\_per\_class(i)} & 1 & VCs per class per input port \\
 \key{vc\_depth(i)} & 4 & flits per VC \\
 \key{router\_latency(i)} & 2 & ticks from a head's arrival to its earliest VC allocation, at least 0 \\
+\key{router\_latency[<router id>](i)} & none & overrides \key{router\_latency} at one router \\
+\key{switch\_latency(i)} & 0 & ticks from a head's VC grant to its earliest switch allocation, at least 0 \\
 \key{link\_latency(i)} & 1 & ticks per link, at least 1. Local links cost 0 \\
 \key{class\_link\_latency(vi)} & $-1$ & one link latency per class. $-1$: \code{link\_latency} \\
 \key{credit\_latency(i)} & $-1$ & ticks for a credit to return. $-1$: \code{link\_latency} \\
@@ -740,10 +915,14 @@ system file. \Cref{tab:noc-syskeys} lists the system and controller keys the net
 \key{rx\_serving(s)} & \code{priority} & \code{priority}: response, forward, request. \code{alternate}: the legacy rotation \\
 \key{m\_clk\_period(i)} & 50 & from \code{Mesh.csv}. One tick per two periods, one core cycle \\
 \multicolumn{3}{@{}l}{\textit{routing and allocation}}\\
-\key{routing(s)} & \code{auto} & \code{auto} (\code{XY} on grids and tori, else \code{Table}), \code{Table}, \code{XY}, \code{WestFirst}, \code{AdaptiveMinimal} \\
-\key{routing\_table[<router>](vi)} & none & \code{Table}: \code{dest,port} pairs overriding the computed table \\
-\key{escape\_vc(i)} & $-1$ & \code{AdaptiveMinimal}: the escape VC. $-1$: none \\
+\key{routing(s)} & \code{auto} & \code{auto} (\code{XY} on grids, tori, 3-D lattices and on a ring with 2 VCs or more, else \code{Table}), or an algorithm of \cref{tab:noc-routing} \\
+\key{routing\_via[<router>](vi)} & none & \code{Table}: \code{dest,neighbour} pairs overriding the computed table \\
+\key{link\_weight[<router>](vi)} & none & \code{Table}: \code{neighbour,weight} pairs. Any entry switches to weighted shortest paths \\
+\key{routing\_table[<router>](vi)} & none & \code{Table}: \code{dest,port} pairs, applied last \\
+\key{routing\_seed(i)} & 1 & \code{O1TURN}, \code{Valiant}, \code{ROMM}: the seed of the per-packet draw \\
+\key{escape\_vc(i)} & $-1$ & \code{AdaptiveMinimal}: the escape VC, and on wrapped lattices also the next one. $-1$: none \\
 \key{arbiter\_type(s)} & \code{FCFSArbiter} & injection, VC and switch allocation: \code{FCFSArbiter} or \code{RRArbiter} \\
+\key{sa\_allocator(s)} & \code{output\_first} & switch allocation: \code{output\_first} or \code{input\_first} \\
 \key{deadlock\_check(s)} & \code{refuse} & the protocol-and-network check: \code{refuse} or \code{warn} \\
 \end{longtable}
 
@@ -772,7 +951,7 @@ One runner builds the simulator and runs the network tests:
 
 \begin{lstlisting}[style=shell]
 bash test/network/run.sh all     # every test
-bash test/network/run.sh 4       # one step: 0..8, M2..M6, D
+bash test/network/run.sh 4       # one step: 0..8, M2..M6, D, T
 bash test/network/run.sh reg     # the regression suite only
 \end{lstlisting}
 
@@ -782,7 +961,7 @@ tests take their expected values from the formulas of this chapter, not from ear
 wrong engine cannot confirm itself. REG-MESH, REG-TDM, REG-MEMNET, MEM-OFF and S6 compare against
 committed references instead. The trace checks need a Python with numpy and duckdb. S4-ASAN,
 S5-ASAN, S5-XPLAT and S8-BOOKSIM run only where \code{wsl.exe} and the sanitizer build
-\file{build\_asan} or BookSim exist, and report XFAIL elsewhere. \Cref{tab:noc-tests} summarises what the suite establishes.
+\file{build_asan} or BookSim exist, and report XFAIL elsewhere. \Cref{tab:noc-tests} summarises what the suite establishes.
 
 \begin{longtable}{@{}p{0.24\textwidth}p{0.71\textwidth}@{}}
 \caption{What the test suite (\code{test/network/}) checks.}\label{tab:noc-tests}\\
@@ -796,12 +975,14 @@ S4 conservation & every run ends with flits injected equal to flits ejected, no 
 S4 saturation & 4$\times$4, \code{XY}, 5-flit packets, uniform traffic saturates at an offered 110 packets per 1000 ticks per endpoint. Hotspot (20) and transpose (80) saturate earlier \\
 S4 ordering, faults & no reordering under \code{XY} and \code{Table}. Adaptive routing reorders (an expected failure that reports the count). Each fatal path exits with status 2 \\
 S5 system & directory MSI on \code{Grid}: all ten EEMBC traces complete, event-path tiling with no failure, byte-identical reruns, the placement figures of \cref{sec:noc-example}, and the hang dump on a deliberately wedged ring. Where WSL and the sanitizer build exist: identical Windows and Linux runs and a clean AddressSanitizer run \\
-S6 legacy & \code{MultiCoreSystem\_NetNoC} against the legacy \code{NoC} references: S6-IDENTITY (byte identity), S6-FALLBACK (the per-core \code{Summary.csv} deltas) and S6-NOC-ALIAS, all three XFAIL by the accepted-divergence file \file{test/network/ref/s6-accepted.txt}. The suite asserts no per-path figures. Those of \cref{fig:noc-legacy} come from \file{docs/NoC\_Implementation\_Report.md} \\
+S6 legacy & \code{MultiCoreSystem\_NetNoC} against the legacy \code{NoC} references: S6-IDENTITY (byte identity), S6-FALLBACK (the per-core \code{Summary.csv} deltas) and S6-NOC-ALIAS, all three XFAIL by the accepted-divergence file \file{test/network/ref/s6-accepted.txt}. The suite asserts no per-path figures. Those of \cref{fig:noc-legacy} come from \file{docs/NoC_Implementation_Report.md} \\
 S7 observability & router hops in the trace equal \col{NoC Hops}, \col{NoC Wait} plus \col{NoC Transfer} equals the network time of every request, and the contention example reports a wait of 4 and the right winner \\
 S8 BookSim & 4$\times$4 mesh, dimension-order routing, one VC, 4-flit buffers, 5-flit uniform traffic, with BookSim's buffer residency mapped onto \code{router\_latency} 3 and \code{credit\_latency} 4. The test passes when the saturation throughputs agree within 10\,\%. The recorded measurement is 3.5\,\% (0.288 and 0.279 flits per cycle per node) \\
 P2 protocol & three classes with an RX depth of 2 under both arbiters, \code{inject\_queue\_depth} 4 without a refused push (2 wedges and exits with status 2 as documented), ADMIT-RF on three controllers, the protocol check passing on three classes and refusing two, and every request reaching the bank the home map names \\
 MEM & memory on the network: existing presets unchanged when it is off, EEMBC complete with one and two controllers and with MCsim, no read-after-write overtake, every memory packet in its class, memory hops equal to the formula, and every read and write reaching the controller the map names \\
 D & directory MESI and MOESI on every grid preset, under both arbiters and with small queues: every run completes without a fault \\
+T (unit) & topology plug-ins: the port order of every builder and \code{custom} row order, \code{routing\_via}, the builder registry, lattice ports, the dependency check over the candidates of every algorithm on several grids and VC counts, the escape-network check (the one-escape-VC torus is refused), the \code{AdaptiveMinimal} fallback, 3-D lattices, \code{XY} on rings of 3 to 9, weighted \code{Table}, and the oblivious draws (minimal for \code{O1TURN} and \code{ROMM}, varying with the packet and the seed) \\
+T system & T4-UNLOADED: a ring of 8, \code{mesh3d} 4$\times$2$\times$2 and \code{torus3d} 3$\times$3$\times$3, 1 and 5 flits, each equal to the formula. T4-AUTO-RING: \code{auto} gives \code{XY} on a ring with 2 VCs, \code{Table} on a ring of 3, and a ring of 8 with one VC is refused. T4-ROUTER-OPTIONS: \code{switch\_latency} 1 (27 ticks), \code{router\_latency[3]} 6 (24) and \code{input\_first} (24) on a 4$\times$4 grid, each equal to the formula. T4-SOAK, T4-SOAK-2: loaded runs of every new topology and algorithm, \code{AdaptiveMinimal} on grid, torus and 3-D mesh, \code{input\_first} with \code{RRArbiter}, the new patterns and on/off injection complete with conservation. T4-PATTERNS: under \code{bitcomp}, \code{bitrev}, \code{shuffle} and \code{tornado} every endpoint hears from exactly its partner. T5-ADAPT-TORUS-REFUSED \\
 REG & REG-BUS, REG-MESH, REG-TDM and REG-MEMNET: the bus, legacy mesh, TDM and memory-on-network references stay byte-identical. REG-ENV: the environment check's sample run gives its known request count and worst DRAM latency. REG-HAZARD: no memory read overtakes an older write of its line \\
 \end{longtable}
 
@@ -818,12 +999,20 @@ slot through switch allocation and traversal, raise \key{router\_latency} and
   the network does not provide.
 \item No real-time arbitration: \code{TDMArbiter}, \code{PriorityArbiter}, \code{TDM\_XY},
   \code{slot\_table} and \code{vc\_priority} are refused as deferred.
-\item On a ring of four or more routers the computed \code{Table} is refused at any VC count,
-  because \code{Table} has no dateline and no other algorithm supports rings. Only a hand-written
-  \key{routing\_table} that breaks the cycle runs.
-\item \code{AdaptiveMinimal} is for \code{grid2d}. On \code{torus2d} it is accepted, but its escape
-  VC follows \code{XY} without the dateline, so the escape network is not deadlock-free there. A fix
-  is planned.
+\item A ring of four or more routers needs \code{XY} with \key{vcs\_per\_class} of at least 2.
+  With one VC, \code{auto} falls back to \code{Table}, which has no dateline and is refused there.
+\item The turn models run on \code{grid2d} only, \code{O1TURN} on 2-D lattices without wraps, and
+  \code{Valiant} and \code{ROMM} on lattices without wraps. No oblivious algorithm runs on a torus
+  or a ring.
+\item On a torus or a ring \code{XY} uses VCs 0 and 1 only. More VCs per class add buffers that
+  \code{XY} leaves empty.
+\item The \code{transpose} pattern needs a 2-D lattice. Elsewhere every generator sends to the
+  first other endpoint. The bit patterns need a power-of-two number of endpoints.
+\item At start-up the full channel dependency check runs for \code{Table} and, on its escape
+  network, for \code{AdaptiveMinimal}. The other algorithms are accepted as deadlock-free by
+  construction. A new algorithm should override \code{deadlockFreeOn} with the check.
+\item Every link has a reverse link, so a butterfly cannot be expressed, and an endpoint attaches
+  to exactly one router.
 \item Injection follows age only among eligible packets. Under \code{FCFSArbiter} a younger packet
   of another class leaves first when the older one finds no free VC with a credit. Under
   \code{RRArbiter} the local port rotates over packet owners, so an endpoint's packets of different
@@ -844,13 +1033,14 @@ slot through switch allocation and traversal, raise \key{router\_latency} and
 
 \begin{wherebox}
 \begin{itemize}[nosep,leftmargin=1.2em]
-\item \file{header/Interconnect/Network/}, \file{src/Interconnect/Network/}: \code{Network} (the engine, statistics, hang dump), \code{NetworkInterface}, \code{Topology}, \code{Routing} (the algorithms, the channel dependency check), \code{Classifier}, \code{ProtocolCheck}, \code{TrafficGenerator}
+\item \file{header/Interconnect/Network/}, \file{src/Interconnect/Network/}: \code{Network} (the engine, statistics, hang dump), \code{NetworkInterface}, \code{Topology} and \code{TopologyBuilder} (the graph, the lattice capability, the builder registry), \code{Routing} (the algorithms, the channel dependency check), \code{Classifier}, \code{ProtocolCheck}, \code{TrafficGenerator}
+\item \file{src/Interconnect/Network/topologies/}: the builders (\file{Lattice.cpp}, \file{Graph.cpp}) and their registry (\file{Builtin.cpp})
 \item \file{header/Arbiters/Arbiter.h}: \code{Candidate} and \code{electIndex}
 \item \file{src/SystemConfigurations/MultiCoreSystem_Mesh.cpp}: wiring, LLC banks, memory on the network. \file{src/SystemConfigurations/NetworkOnly.cpp}: network-only mode
 \item \file{src/CacheControllers/CacheController.cpp}: transmit-side admission (\code{txNeed}, \code{txAdmit})
 \item \file{configuration/Interconnect/Network.csv}, \file{configuration/TrafficGenerator.csv}, the presets in \file{configuration/SystemConfigurations/}
 \item \file{test/network/}: the runner, the unit tests, the checks and the BookSim configuration
-\item \file{docs/NoC_Architecture_Spec.md}, \file{docs/NoC_Implementation_Report.md}: the specification and the measured record of each step
+\item \file{docs/NoC_Architecture_Spec.md}, \file{docs/NoC_Implementation_Report.md}: the specification and the measured record of each step. \file{docs/NoC_Topology_Plugin_Plan.md}: the plug-in design
 \end{itemize}
 \end{wherebox}
 \endgroup

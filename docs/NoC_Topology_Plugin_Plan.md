@@ -1,6 +1,6 @@
 # NoC topologies as plug-ins: design and plan
 
-Status: T0, T1, T2, T3 and T5 implemented on `network` (2026-11-21); T4 features follow. Every step was gated on byte-identical results over a 35-configuration matrix and the full test suite.
+Status: T0, T1, T2, T3 and T5 implemented on `network` (2026-11-21), each gated on byte-identical results over a 35-configuration matrix and the full test suite. T4 implemented the same day: `mesh3d` and `torus3d`, `XY` on rings with a dateline, the turn models `NorthLast`, `NegativeFirst` and `OddEven`, the oblivious `O1TURN`, `Valiant` and `ROMM`, weighted `Table`, `switch_latency`, per-router `router_latency`, `sa_allocator`, and new traffic patterns and on/off injection, validated by step T (`bash test/network/run.sh T`). T6 (one-way links and split attachment) is not done. The manual (chapter 9) and `docs/NoC_Architecture_Spec.md` (revision 2026-11-21) describe the result.
 Branch: `network`. Related: `docs/NoC_Architecture_Spec.md` §4.1, §5 and §10, `docs/NoC_Test_Plan.md`.
 
 ## 1. Goal

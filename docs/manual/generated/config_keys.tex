@@ -436,6 +436,10 @@ interconnect.\allowbreak{}connection\_\allowbreak{}matrix\allowbreak{}[3]\index[
 interconnect.\allowbreak{}connection\_\allowbreak{}matrix\allowbreak{}[4]\index[cfg]{interconnect.connection\_matrix[4]@\code{interconnect.connection\_matrix[4]}} & int list & \texttt{10,\allowbreak{} 0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3} &  \\
 interconnect.\allowbreak{}connection\_\allowbreak{}matrix\allowbreak{}[5]\index[cfg]{interconnect.connection\_matrix[5]@\code{interconnect.connection\_matrix[5]}} & int list & \texttt{200,\allowbreak{} 0,\allowbreak{} 1,\allowbreak{} 2,\allowbreak{} 3} &  \\
 interconnect.\allowbreak{}routing\index[cfg]{interconnect.routing@\code{interconnect.routing}} & string & \texttt{Table} &  \\
+interconnect.\allowbreak{}routing\_\allowbreak{}via\allowbreak{}[0]\index[cfg]{interconnect.routing\_via[0]@\code{interconnect.routing\_via[0]}} & int list & \texttt{1,\allowbreak{} 200,\allowbreak{} 2,\allowbreak{} 200,\allowbreak{} 3,\allowbreak{} 200} &  \\
+interconnect.\allowbreak{}routing\_\allowbreak{}via\allowbreak{}[1]\index[cfg]{interconnect.routing\_via[1]@\code{interconnect.routing\_via[1]}} & int list & \texttt{0,\allowbreak{} 200,\allowbreak{} 2,\allowbreak{} 200,\allowbreak{} 3,\allowbreak{} 200} &  \\
+interconnect.\allowbreak{}routing\_\allowbreak{}via\allowbreak{}[2]\index[cfg]{interconnect.routing\_via[2]@\code{interconnect.routing\_via[2]}} & int list & \texttt{0,\allowbreak{} 200,\allowbreak{} 1,\allowbreak{} 200,\allowbreak{} 3,\allowbreak{} 200} &  \\
+interconnect.\allowbreak{}routing\_\allowbreak{}via\allowbreak{}[3]\index[cfg]{interconnect.routing\_via[3]@\code{interconnect.routing\_via[3]}} & int list & \texttt{0,\allowbreak{} 200,\allowbreak{} 1,\allowbreak{} 200,\allowbreak{} 2,\allowbreak{} 200} &  \\
 interconnect.\allowbreak{}flit\_\allowbreak{}bytes\index[cfg]{interconnect.flit\_bytes@\code{interconnect.flit\_bytes}} & int & \texttt{0} & one flit per message \\
 interconnect.\allowbreak{}router\_\allowbreak{}latency\index[cfg]{interconnect.router\_latency@\code{interconnect.router\_latency}} & int & \texttt{1} & the switch's store-and-forward cycle \\
 interconnect.\allowbreak{}vcs\_\allowbreak{}per\_\allowbreak{}class\index[cfg]{interconnect.vcs\_per\_class@\code{interconnect.vcs\_per\_class}} & int & \texttt{1} &  \\
@@ -765,7 +769,7 @@ arbiter\_\allowbreak{}type\index[cfg]{arbiter\_type@\code{arbiter\_type}} & stri
 \toprule \normalfont key & type & value & meaning \\ \midrule \endfirsthead
 \toprule \normalfont key & type & value & meaning \\ \midrule \endhead
 \bottomrule \endfoot
-topology\index[cfg]{topology@\code{topology}} & string & \texttt{custom} & custom | grid2d | torus2d | ring | star (docs/NoC\_Architecture\_Spec.md s4) \\
+topology\index[cfg]{topology@\code{topology}} & string & \texttt{custom} & custom | grid2d | torus2d | ring | star | mesh3d | torus3d (docs/NoC\_Topology\_Plugin\_Plan.md) \\
 dims\index[cfg]{dims@\code{dims}} & int list & \texttt{0} & grid2d/torus2d: kx \\
 home\_\allowbreak{}ids\index[cfg]{home\_ids@\code{home\_ids}} & int list & \texttt{-1} & LLC / directory home ids for the classifier; -1 = none (the system sets them) \\
 router\_\allowbreak{}ids\index[cfg]{router\_ids@\code{router\_ids}} & int list & \texttt{-1} & custom: explicit router ids; -1 = every non-endpoint node \\
@@ -777,6 +781,8 @@ num\_\allowbreak{}classes\index[cfg]{num\_classes@\code{num\_classes}} & int & \
 vcs\_\allowbreak{}per\_\allowbreak{}class\index[cfg]{vcs\_per\_class@\code{vcs\_per\_class}} & int & \texttt{1} &  \\
 vc\_\allowbreak{}depth\index[cfg]{vc\_depth@\code{vc\_depth}} & int & \texttt{4} & flits per VC \\
 router\_\allowbreak{}latency\index[cfg]{router\_latency@\code{router\_latency}} & int & \texttt{2} & ticks \\
+switch\_\allowbreak{}latency\index[cfg]{switch\_latency@\code{switch\_latency}} & int & \texttt{0} & ticks from a head's VC grant to its earliest switch allocation (a separate SA stage) \\
+sa\_\allowbreak{}allocator\index[cfg]{sa\_allocator@\code{sa\_allocator}} & string & \texttt{output\_\allowbreak{}first} & switch allocation: output\_first | input\_first (separable allocators) \\
 link\_\allowbreak{}latency\index[cfg]{link\_latency@\code{link\_latency}} & int & \texttt{1} & ticks per link between routers; local links cost 0 \\
 credit\_\allowbreak{}latency\index[cfg]{credit\_latency@\code{credit\_latency}} & int & \texttt{-1} & ticks; -1 = same as link\_latency \\
 half\_\allowbreak{}duplex\index[cfg]{half\_duplex@\code{half\_duplex}} & int & \texttt{0} & 1 = the two directions of a connection share one occupancy (legacy) \\
@@ -785,6 +791,7 @@ inject\_\allowbreak{}queue\_\allowbreak{}depth\index[cfg]{inject\_queue\_depth@\
 eject\_\allowbreak{}queue\_\allowbreak{}depth\index[cfg]{eject\_queue\_depth@\code{eject\_queue\_depth}} & int & \texttt{16} & messages per class at the NI (the endpoint RX) \\
 rx\_\allowbreak{}serving\index[cfg]{rx\_serving@\code{rx\_serving}} & string & \texttt{priority} & priority (response \\
 routing\index[cfg]{routing@\code{routing}} & string & \texttt{auto} & auto (XY on grids \\
+routing\_\allowbreak{}seed\index[cfg]{routing\_seed@\code{routing\_seed}} & int & \texttt{1} & O1TURN / Valiant / ROMM: seed of the per-packet draws \\
 escape\_\allowbreak{}vc\index[cfg]{escape\_vc@\code{escape\_vc}} & int & \texttt{-1} & AdaptiveMinimal: VC reserved for the escape route; -1 = none \\
 arbiter\_\allowbreak{}type\index[cfg]{arbiter\_type@\code{arbiter\_type}} & string & \texttt{FCFSArbiter} & VC and switch allocation: FCFSArbiter | RRArbiter \\
 deadlock\_\allowbreak{}check\index[cfg]{deadlock\_check@\code{deadlock\_check}} & string & \texttt{refuse} & protocol-and-network check at construction (spec s14.3): refuse | warn \\
@@ -940,7 +947,7 @@ processing\_\allowbreak{}queue\_\allowbreak{}size\index[cfg]{processing\_queue\_
 \toprule \normalfont key & type & value & meaning \\ \midrule \endhead
 \bottomrule \endfoot
 m\_\allowbreak{}clk\_\allowbreak{}period\index[cfg]{m\_clk\_period@\code{m\_clk\_period}} & int & \texttt{100} & one generator cycle = one network tick (both step once per 100 ns) \\
-pattern\index[cfg]{pattern@\code{pattern}} & string & \texttt{uniform} & uniform | hotspot | transpose | neighbour | none \\
+pattern\index[cfg]{pattern@\code{pattern}} & string & \texttt{uniform} & uniform | hotspot | transpose | neighbour | bitcomp | bitrev | shuffle | tornado | randperm | none \\
 rate\index[cfg]{rate@\code{rate}} & int & \texttt{50} & packets per 1000 ticks \\
 payload\_\allowbreak{}bytes\index[cfg]{payload\_bytes@\code{payload\_bytes}} & int & \texttt{64} & 0 = a request-sized packet (header only) \\
 cls\index[cfg]{cls@\code{cls}} & int & \texttt{2} & class to inject on (0 request \\
@@ -952,5 +959,9 @@ consume\_\allowbreak{}after\index[cfg]{consume\_after@\code{consume\_after}} & i
 multicast\index[cfg]{multicast@\code{multicast}} & int & \texttt{1} & destinations per message \\
 untagged\index[cfg]{untagged@\code{untagged}} & int & \texttt{0} & 1 = leave Message::kind unknown (classifier fallback / fatal paths) \\
 start\index[cfg]{start@\code{start}} & int & \texttt{0} & first cycle at which the generator injects \\
+injection\index[cfg]{injection@\code{injection}} & string & \texttt{bernoulli} & bernoulli (rate per tick) | onoff (a two-state Markov source; rate while on) \\
+on\_\allowbreak{}to\_\allowbreak{}off\index[cfg]{on\_to\_off@\code{on\_to\_off}} & int & \texttt{100} & onoff: per-1000 probability per tick of switching off \\
+off\_\allowbreak{}to\_\allowbreak{}on\index[cfg]{off\_to\_on@\code{off\_to\_on}} & int & \texttt{100} & onoff: per-1000 probability per tick of switching on \\
+perm\_\allowbreak{}seed\index[cfg]{perm\_seed@\code{perm\_seed}} & int & \texttt{1} & randperm: the seed of the one random permutation shared by all generators \\
 \end{longtable}
 
