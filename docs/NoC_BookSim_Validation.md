@@ -50,7 +50,7 @@ python3 test/network/booksim/compare.py --octopus build/Octopus_Simulator \
 It writes `points.csv` (every run), `cases.csv` (one row per case) and `patternmap.csv`. The copies
 committed under `test/network/ref/booksim/` are the data behind this document. The plots in
 `docs/imgs/booksim/` come from `test/network/booksim/plot.py points.csv docs/imgs/booksim`, which
-needs matplotlib and is not part of the suite. The whole matrix takes about 30 minutes on 14 cores.
+needs matplotlib and is not part of the suite. The whole matrix takes about 2.5 minutes on an idle 20-core machine (14 parallel runs), and longer on a shared one.
 Both simulators are deterministic, so a rerun gives the same numbers.
 
 ## 2. Setup

@@ -91,8 +91,8 @@ s8_mesh44() {
     local bacc; bacc=$(grep "offered $bsat " "$O/booksim.txt" | sed 's/.*accepted \([0-9.]*\).*/\1/')
     if [ -n "$bsat" ] && [ -n "$oacc" ] && [ "$osat" != exit ]; then
       local rel; rel=$($PY -c "a=$oacc; b=$bacc; print(round(abs(a-b)/max(a,b), 3))")
-      if $PY -c "import sys; sys.exit(0 if $rel <= 0.10 else 1)"; then pass S8-BOOKSIM "saturation throughput Octopus $oacc (offered $oflits) vs BookSim $bacc (offered $bsat) flits/cycle/node, rel. diff $rel" "within 10%" "$(elapsed "$t0")"
-      else fail S8-BOOKSIM "saturation throughput Octopus $oacc (offered $oflits) vs BookSim $bacc (offered $bsat) flits/cycle/node, rel. diff $rel" "within 10%" "$(elapsed "$t0")"; fi
+      if $PY -c "import sys; sys.exit(0 if $rel <= 0.10 else 1)"; then pass S8-BOOKSIM "saturation throughput Octopus $oacc (offered $oflits) vs BookSim $bacc (offered $bsat) flits/cycle/node; rel. diff $rel" "within 10%" "$(elapsed "$t0")"
+      else fail S8-BOOKSIM "saturation throughput Octopus $oacc (offered $oflits) vs BookSim $bacc (offered $bsat) flits/cycle/node; rel. diff $rel" "within 10%" "$(elapsed "$t0")"; fi
     else fail S8-BOOKSIM "Octopus ${osat} BookSim ${bsat:-no saturation found}" "both saturation rates" "$(elapsed "$t0")"; fi
   else
     xfail S8-BOOKSIM "BookSim is not built on this machine (see $O/.build); Octopus saturates at offered $osat packets/1000 ticks = $oflits flits/cycle/node (unloaded mean $obase); the reference for a 4x4 mesh, DOR, 1 VC, 4-flit buffers, 5-flit packets under uniform traffic is about 0.4-0.5 flits/cycle/node"
@@ -116,14 +116,14 @@ s8_mesh88() {
   local line
   line=$(grep '^PATTERNMAP ' "$O/compare.txt")
   case "$line" in
-    "PATTERNMAP PASS"*) pass S8-PATTERN-MAP "${line#PATTERNMAP PASS }" "same destinations" "$(elapsed "$t0")";;
+    "PATTERNMAP PASS"*) local pm="${line#PATTERNMAP PASS }"; pass S8-PATTERN-MAP "${pm//,/;}" "same destinations" "$(elapsed "$t0")";;
     *) fail S8-PATTERN-MAP "${line:-no result (see $O/compare.err)}" "same destinations" "$(elapsed "$t0")";;
   esac
   local r tid
   for r in XY O1TURN ROMM Valiant AdaptiveMinimal; do
     case $r in Valiant) tid=S8-88-VALIANT;; AdaptiveMinimal) tid=S8-88-ADAPTIVE;; *) tid=S8-88-$r;; esac
     if [ $r = Valiant ] && [ -z "$vb" ]; then xfail "$tid" "the patched BookSim copy for Valiant did not build (see $1/.build); stock valiant_mesh deadlocks at saturation"; continue; fi
-    line=$(grep "^ROUTING $r " "$O/compare.txt"); local detail="${line#ROUTING $r * }"
+    line=$(grep "^ROUTING $r " "$O/compare.txt"); local detail="${line#ROUTING $r * }"; detail="${detail//,/;}"
     case "$line" in
       "ROUTING $r PASS"*) pass "$tid" "$detail" "C1-C4 on every pattern" "$(elapsed "$t0")";;
       "ROUTING $r KNOWN"*) xfail "$tid" "only the misses documented in docs/NoC_BookSim_Validation.md s7: $detail";;
