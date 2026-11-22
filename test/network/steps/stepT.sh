@@ -201,8 +201,8 @@ PYEOF
   ok=1; detail=""
   refused bf-halfduplex "half_duplex needs two-way links, but topology butterfly has one-way links" -- $BF42 -p interconnect.half_duplex\(i\)=1 -p generator[*].packets\(i\)=10
   refused bf-xy "XY routing needs a lattice topology" -- $BF42 -p interconnect.routing\(s\)=XY -p generator[*].packets\(i\)=10
-  refused bf-adapt "routing needs a lattice topology" -- $BF42 -p interconnect.routing\(s\)=AdaptiveMinimal -p interconnect.vcs_per_class\(i\)=2 -p interconnect.escape_vc\(i\)=1 -p generator[*].packets\(i\)=10
-  refused bf-wf "routing needs a lattice topology" -- $BF42 -p interconnect.routing\(s\)=WestFirst -p generator[*].packets\(i\)=10
+  refused bf-adapt "AdaptiveMinimal routing needs a lattice topology" -- $BF42 -p interconnect.routing\(s\)=AdaptiveMinimal -p interconnect.vcs_per_class\(i\)=2 -p interconnect.escape_vc\(i\)=1 -p generator[*].packets\(i\)=10
+  refused bf-wf "WestFirst routing needs a lattice topology" -- $BF42 -p interconnect.routing\(s\)=WestFirst -p generator[*].packets\(i\)=10
   refused bf-dor "DOR routing needs a flattened_butterfly topology" -- $BF42 -p interconnect.routing\(s\)=DOR -p generator[*].packets\(i\)=10
   refused grid-dor "DOR routing needs a flattened_butterfly topology" -- -p interconnect.routing\(s\)=DOR -p generator[*].packets\(i\)=10
   refused bf-dims "dims needs k,n for butterfly" -- -p interconnect.topology\(s\)=butterfly -p interconnect.dims\(vi\)=4 -p interconnect.routing\(s\)=auto -p generator[*].packets\(i\)=10

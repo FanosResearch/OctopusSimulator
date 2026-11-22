@@ -210,7 +210,7 @@ namespace octopus { namespace net
         const Topology &m_t; int m_vcs; const Lattice &m_l;
         static const Lattice &needLattice(const Topology &t, const std::string &who)
         {
-            if (!t.lattice()) throw ConfigError(who + " routing needs a lattice topology (grid2d, torus2d, ring)");
+            if (!t.lattice()) throw ConfigError(who + " routing needs a lattice topology (grid2d, torus2d, ring, mesh3d, torus3d), not " + t.kindName());
             return *t.lattice();
         }
         // signed step in dimension d: +1, -1 or 0; on a wrapped dimension the shorter way, and
@@ -233,10 +233,15 @@ namespace octopus { namespace net
         }
         int localOut(const RouteContext &c) const { return c.packet ? localPortFor(m_t, c.router, c.packet->dst_endpoint) : m_t.linkPorts(c.router); }
     public:
-        XYRouting(const Topology &t, const RoutingParams &p) : m_t(t), m_vcs(p.vcs_per_class), m_l(needLattice(t, "XY"))
+        XYRouting(const Topology &t, const RoutingParams &p) : XYRouting(t, p, "XY")
         {
             if (m_l.anyWrap() && m_vcs < 2) throw ConfigError(t.kindName() + " with XY needs vcs_per_class >= 2 (dateline rule)");
         }
+    protected:
+        // for the algorithms built on XY's lattice helpers: refusals name the algorithm, and each
+        // one checks its own wrap and VC needs
+        XYRouting(const Topology &t, const RoutingParams &p, const std::string &who) : m_t(t), m_vcs(p.vcs_per_class), m_l(needLattice(t, who)) {}
+    public:
         Route nextHop(const RouteContext &c) const override
         {
             Route rt; rt.vc_mask = allVCs(m_vcs);
@@ -290,7 +295,7 @@ namespace octopus { namespace net
         Route make(int port, uint32_t mask) const { Route rt; rt.out_port = port; rt.vc_mask = mask; return rt; }
         Route local(const RouteContext &c) const { return make(localOut(c), allVCs(m_vcs)); }
     public:
-        TwoSetRouting(const Topology &t, const RoutingParams &p, const std::string &name) : XYRouting(t, p), m_name(name), m_seed(p.seed)
+        TwoSetRouting(const Topology &t, const RoutingParams &p, const std::string &name) : XYRouting(t, p, name), m_name(name), m_seed(p.seed)
         {
             if (m_l.anyWrap()) throw ConfigError(name + " routing needs a lattice without wrap links (grid2d, mesh3d)");
             if (m_vcs < 2) throw ConfigError(name + " routing needs vcs_per_class >= 2 (two VC sets)");
@@ -407,7 +412,7 @@ namespace octopus { namespace net
             return a;
         }
     public:
-        TurnModelRouting(const Topology &t, const RoutingParams &p, const std::string &name) : XYRouting(t, p), m_name(name)
+        TurnModelRouting(const Topology &t, const RoutingParams &p, const std::string &name) : XYRouting(t, p, name), m_name(name)
         {
             if (m_l.rank() != 2 || m_l.anyWrap()) throw ConfigError(name + " routing needs a grid2d topology");
         }
@@ -556,7 +561,7 @@ namespace octopus { namespace net
         }
         bool stays(const RouteContext &c) const { return onEscape(c.in_vc) && c.in_port >= 0 && !m_t.isLocalPort(c.router, c.in_port); }
     public:
-        AdaptiveMinimalRouting(const Topology &t, const RoutingParams &p) : XYRouting(t, p), m_escape(p.escape_vc), m_wrapped(m_l.anyWrap())
+        AdaptiveMinimalRouting(const Topology &t, const RoutingParams &p) : XYRouting(t, p, "AdaptiveMinimal"), m_escape(p.escape_vc), m_wrapped(m_l.anyWrap())
         {
             if (p.escape_vc < 0) throw ConfigError("AdaptiveMinimal needs escape_vc >= 0");
             if (p.escape_vc >= p.vcs_per_class) throw ConfigError("escape_vc must be < vcs_per_class");
