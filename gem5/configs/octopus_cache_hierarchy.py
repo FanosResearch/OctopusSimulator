@@ -23,9 +23,21 @@ class OctopusCacheHierarchy(AbstractClassicCacheHierarchy):
     instruction caches at ids 0..n-1 and the data caches at n..2n-1.
     """
 
-    def __init__(self, config_name, output_path, atp_files=None, extra_params=None) -> None:
+    def __init__(self, config_name, output_path, atp=None, extra_params=None) -> None:
+        """
+        atp: optional ATP aggressors, a dict with
+          files    the .atp profile files loaded into one ProfileGen
+          masters  the ATP master names in those files
+          streams  (master, root_profile, read_base, read_range, write_base,
+                   write_range) per stream; MaxAddr leaves a direction as is
+        Every master gets its own Octopus bridge, ids 2n, 2n+1, ... in
+        alphabetical order of master name (the order ProfileGen assigns its
+        ports), so the preset must declare those caches too
+        (MultiCoreSystem_gem5_atp). The streams loop (auto_reset) and ATP
+        never ends the simulation: the workload does.
+        """
         AbstractClassicCacheHierarchy.__init__(self=self)
-        self._useATP = False
+        self._atp = atp
         self._configName = config_name
         self._outputPath = output_path
         # Octopus 'name(type)=value' overrides applied on top of the preset,
@@ -38,10 +50,8 @@ class OctopusCacheHierarchy(AbstractClassicCacheHierarchy):
         if any("log_requests" in p for p in self._extraParams):
             os.makedirs(os.path.join(self._outputPath, "newLogger"), exist_ok=True)
         self.membus = SystemXBar(width=64)
-        if atp_files is not None:
-            self._useATP = True
 
-    def _bridge(self, cache_id, core):
+    def _bridge(self, cache_id, core=-1):
         return Octopus(
             cache_id=cache_id,
             log_core=core,
@@ -90,15 +100,27 @@ class OctopusCacheHierarchy(AbstractClassicCacheHierarchy):
             else:
                 cpu.connect_interrupt()
 
-        if self._useATP:
-            base = 2 * n
-            self.atp_caches = [
-                self._bridge(base + i)
-                for i in range(len(self.atp_adaptor.config_files))
-            ]
-            for i in range(len(self.atp_adaptor.config_files)):
-                self.atp_adaptor.port = self.atp_caches[i].cpu_side
-                self.atp_caches[i].mem_side = self.membus.cpu_side_ports
+        if self._atp:
+            self._incorporate_atp(2 * n)
+
+    def _incorporate_atp(self, base):
+        # only a gem5 built with ATP-Engine as an EXTRAS module has ProfileGen
+        from m5.objects import ProfileGen
+
+        atp = self._atp
+        masters = sorted(atp["masters"])          # ProfileGen's port order
+        self.atp_gen = ProfileGen(
+            config_files=list(atp["files"]),
+            exit_when_done=False,
+            disable_watchdog=True,
+        )
+        self.atp_caches = [self._bridge(base + i, base + i) for i in range(len(masters))]
+        for bridge in self.atp_caches:
+            self.atp_gen.port = bridge.cpu_side
+            bridge.mem_side = self.membus.cpu_side_ports
+        for master, root, rbase, rrange, wbase, wrange in atp["streams"]:
+            self.atp_gen.initStream(master, root, rbase, rrange, wbase, wrange,
+                                    auto_reset=True)
 
     def _setup_io_cache(self, board: AbstractBoard) -> None:
         """Create a cache for coherent I/O connections"""

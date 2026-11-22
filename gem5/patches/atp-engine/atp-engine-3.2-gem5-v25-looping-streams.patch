@@ -1,0 +1,401 @@
+diff --git a/event.hh b/event.hh
+index a46b155..7de5729 100644
+--- a/event.hh
++++ b/event.hh
+@@ -10,6 +10,7 @@
+ #ifndef __AMBA_TRAFFIC_PROFILE_EVENT_HH__
+ #define __AMBA_TRAFFIC_PROFILE_EVENT_HH__
+ 
++#include <cstdint>
+ #include <functional>
+ #include <iostream>
+ 
+diff --git a/event_manager.hh b/event_manager.hh
+index 1de77ae..7ce3643 100644
+--- a/event_manager.hh
++++ b/event_manager.hh
+@@ -10,6 +10,7 @@
+ #ifndef __AMBA_TRAFFIC_PROFILE_EVENT_MANAGER_HH__
+ #define __AMBA_TRAFFIC_PROFILE_EVENT_MANAGER_HH__
+ 
++#include <cstdint>
+ #include <array>
+ #include <list>
+ #include <map>
+diff --git a/fifo.hh b/fifo.hh
+index c625152..e463262 100644
+--- a/fifo.hh
++++ b/fifo.hh
+@@ -10,6 +10,7 @@
+ #ifndef _AMBA_TRAFFIC_PROFILE_FIFO_HH_
+ #define _AMBA_TRAFFIC_PROFILE_FIFO_HH_
+ 
++#include <cstdint>
+ #include <algorithm>
+ #include <deque>
+ #include <list>
+diff --git a/gem5/ProfileGen.py b/gem5/ProfileGen.py
+index 3d90481..875c5ce 100644
+--- a/gem5/ProfileGen.py
++++ b/gem5/ProfileGen.py
+@@ -55,9 +55,12 @@ class ProfileGen(SimObject):
+         self._streams = []
+ 
+     def initStream(self, master, rootp, rbase=MaxAddr, rrange=MaxAddr,
+-                   wbase=MaxAddr, wrange=MaxAddr, task_id=1024):
++                   wbase=MaxAddr, wrange=MaxAddr, task_id=1024,
++                   auto_reset=False):
++        # auto_reset: restart the Stream from its first packet each time it
++        # terminates, so it loops for as long as the simulation runs
+         self._streams.append((master, rootp, rbase, rrange,
+-                              wbase, wrange, task_id))
++                              wbase, wrange, task_id, auto_reset))
+ 
+     def init(self):
+         self.getCCObject().init()
+diff --git a/gem5/atp_device.cc b/gem5/atp_device.cc
+index 20082c5..59dd58c 100644
+--- a/gem5/atp_device.cc
++++ b/gem5/atp_device.cc
+@@ -21,7 +21,7 @@ namespace ATP {
+ 
+ Device::Device(const Params &p)
+     : AmbaDmaDevice(p, 0x1000), adapter(p.adapter),
+-      atpId(p.atp_id), sid(p.sid), ssid(p.ssid),
++      atpId(p.atp_id), sid(p.sid.value_or(0)), ssid(p.ssid.value_or(0)),
+       streamNameRead([this]{ streamNameHandler(); }, name()) { }
+ 
+ AddrRangeList
+diff --git a/gem5/profile_gen.cc b/gem5/profile_gen.cc
+index 04d2364..e048eed 100644
+--- a/gem5/profile_gen.cc
++++ b/gem5/profile_gen.cc
+@@ -11,6 +11,7 @@
+ 
+ #include <set>
+ #include <utility>
++#include <vector>
+ 
+ #include "base/intmath.hh"
+ #include "base/random.hh"
+@@ -146,6 +147,13 @@ void ProfileGen::init() {
+ void
+ ProfileGen::startup() {
+     SimObject::startup();
++    hasStarted = true;
++
++    // ATP time starts at the current tick, which is the checkpoint's tick
++    // after a restore; then the Streams initialised from Python start
++    tpm.setTime(getAtpTime());
++    for (auto &apply : pendingStreams) apply();
++    pendingStreams.clear();
+ 
+     // schedule first event
+     if (!initOnly) scheduleUpdate();
+@@ -596,15 +604,16 @@ void ProfileGen::update() {
+     tpm.setTime(getAtpTime());
+ 
+     // check if any active stream is terminated and trigger their callbacks
+-    auto stream = activeStreams.begin();
+-    while (stream != activeStreams.end()) {
+-        const uint64_t stream_id{ *stream };
+-        if (tpm.streamTerminated(stream_id)) {
+-            stream = activeStreams.erase(stream);
+-            if (onTerminate[stream_id]) onTerminate[stream_id]();
+-        } else {
+-            stream++;
+-        }
++    // (collect first: an auto_reset callback re-inserts its stream into
++    // activeStreams, which must not happen while iterating over it)
++    std::vector<uint64_t> terminatedStreams;
++    for (const uint64_t stream_id : activeStreams) {
++        if (tpm.streamTerminated(stream_id))
++            terminatedStreams.push_back(stream_id);
++    }
++    for (const uint64_t stream_id : terminatedStreams) {
++        activeStreams.erase(stream_id);
++        if (onTerminate[stream_id]) onTerminate[stream_id]();
+     }
+ 
+     // Schedule next update if we were able to send some of the packets
+@@ -804,7 +813,9 @@ void ProfileGen::regStats() {
+ 
+ void
+ ProfileGen::scheduleUpdate(const Tick when) {
+-    if (!system->isTimingMode()) {
++    if (!hasStarted) {
++        // before startup(): it schedules the first update itself
++    } else if (!system->isTimingMode()) {
+         warn("ProfileGen::%s AMBA Traffic Profile Generator is only active in "
+              "timing mode", __func__);
+     // Skip if new time is later than currently scheduled
+@@ -819,16 +830,21 @@ ProfileGen::initStream(const std::string &master_name,
+                        const std::string &root_prof_name,
+                        const Addr read_base, const Addr read_range,
+                        const Addr write_base, const Addr write_range,
+-                       const uint32_t task_id) {
+-    const uint64_t stream_id{ uniqueStream(master_name, root_prof_name) };
+-    if (read_base != MaxAddr && read_range != MaxAddr)
+-        configureStream(stream_id, read_base, read_range,
+-                        TrafficProfiles::Profile::READ);
+-    if (write_base != MaxAddr && write_range != MaxAddr)
+-        configureStream(stream_id, write_base, write_range,
+-                        TrafficProfiles::Profile::WRITE);
+-    activateStream(stream_id, nullptr,
+-                   [task_id](RequestPtr req) { req->taskId(task_id); });
++                       const uint32_t task_id, const bool auto_reset) {
++    auto apply = [=]() {
++        const uint64_t stream_id{ uniqueStream(master_name, root_prof_name) };
++        if (read_base != MaxAddr && read_range != MaxAddr)
++            configureStream(stream_id, read_base, read_range,
++                            TrafficProfiles::Profile::READ);
++        if (write_base != MaxAddr && write_range != MaxAddr)
++            configureStream(stream_id, write_base, write_range,
++                            TrafficProfiles::Profile::WRITE);
++        activateStream(stream_id, nullptr,
++                       [task_id](RequestPtr req) { req->taskId(task_id); },
++                       auto_reset);
++    };
++    if (hasStarted) apply();
++    else pendingStreams.push_back(apply);
+ }
+ 
+ uint64_t
+@@ -870,6 +886,11 @@ ProfileGen::activateStream(const uint64_t root_prof_id,
+     if (auto_reset) {
+         onTerminate[root_prof_id] = [this, root_prof_id, on_terminate]() {
+             tpm.streamReset(root_prof_id);
++            // keep tracking the Stream so it resets on every termination,
++            // and wake the generator: the TPM may have had nothing left to
++            // send, so no update would otherwise be scheduled
++            activeStreams.emplace(root_prof_id);
++            scheduleUpdate();
+             if (on_terminate) on_terminate();
+         };
+     } else {
+diff --git a/gem5/profile_gen.hh b/gem5/profile_gen.hh
+index c0eda65..750ffe1 100644
+--- a/gem5/profile_gen.hh
++++ b/gem5/profile_gen.hh
+@@ -11,6 +11,7 @@
+ #define __AMBA_PROFILE_GEN_HH__
+ 
+ // std includes
++#include <cstdint>
+ #include <map>
+ #include <memory>
+ #include <fstream>
+@@ -305,6 +306,14 @@ protected:
+     const bool coreEngineDebug;
+     //! Initialises ATP Engine but does not trigger an update immediately after
+     const bool initOnly;
++
++    //! true once startup() ran: the first update and the Streams wait for it
++    bool hasStarted = false;
++    //! Streams initialised from Python before startup(), applied there. With a
++    //! restored checkpoint init() runs at tick 0 and the clock only then moves
++    //! to the checkpoint's tick, so an update scheduled from init() would be in
++    //! the past and the profiles would start at the wrong ATP time.
++    std::vector<std::function<void()>> pendingStreams;
+     //! Disables ProfileGen watchdog
+     const bool disableWatchdog;
+     //! Disables check for ATP Engine valid physical memory addresses
+@@ -423,7 +432,7 @@ public:
+                     const std::string &root_prof_name,
+                     const gem5::Addr read_base, const gem5::Addr read_range,
+                     const gem5::Addr write_base, const gem5::Addr write_range,
+-                    const uint32_t task_id);
++                    const uint32_t task_id, const bool auto_reset=false);
+ 
+     /*
+      * Retrieves Root Profile ID associated to unique Stream instance
+diff --git a/kronos.hh b/kronos.hh
+index 5de94fe..0f99ee4 100644
+--- a/kronos.hh
++++ b/kronos.hh
+@@ -9,6 +9,7 @@
+ #ifndef __AMBA_TRAFFIC_PROFILE_KRONOS_HH__
+ #define __AMBA_TRAFFIC_PROFILE_KRONOS_HH__
+ 
++#include <cstdint>
+ #include <vector>
+ #include <list>
+ #include <deque>
+diff --git a/packet_desc.hh b/packet_desc.hh
+index 2e64a9c..0243dcd 100644
+--- a/packet_desc.hh
++++ b/packet_desc.hh
+@@ -11,6 +11,7 @@
+ #define __AMBA_TRAFFIC_PROFILE_PACKET_DESC_HH_
+ 
+ // Traffic Profile includes
++#include <cstdint>
+ #include "proto/tp_config.pb.h"
+ #include "proto/tp_packet.pb.h"
+ #include "random_generator.hh"
+diff --git a/packet_tagger.hh b/packet_tagger.hh
+index 41153e1..125f40b 100644
+--- a/packet_tagger.hh
++++ b/packet_tagger.hh
+@@ -10,6 +10,7 @@
+ #ifndef __AMBA_TRAFFIC_PROFILE_PACKET_TAGGER_HH__
+ #define __AMBA_TRAFFIC_PROFILE_PACKET_TAGGER_HH__
+ 
++#include <cstdint>
+ #include "proto/tp_packet.pb.h"
+ #include "types.hh"
+ 
+diff --git a/packet_tracer.hh b/packet_tracer.hh
+index a5106d8..64ec208 100644
+--- a/packet_tracer.hh
++++ b/packet_tracer.hh
+@@ -9,6 +9,7 @@
+ #ifndef __AMBA_TRAFFIC_PROFILE_PACKET_TRACER_HH__
+ #define __AMBA_TRAFFIC_PROFILE_PACKET_TRACER_HH__
+ 
++#include <cstdint>
+ #include <array>
+ #include <string>
+ #include <unordered_map>
+diff --git a/random_generator.hh b/random_generator.hh
+index b5d798a..9fc179b 100644
+--- a/random_generator.hh
++++ b/random_generator.hh
+@@ -11,6 +11,7 @@
+ #define __AMBA_TRAFFIC_PROFILE_RANDOM_GEN_DESC_HH_
+ 
+ // Traffic Profile includes
++#include <cstdint>
+ #include "proto/tp_config.pb.h"
+ 
+ #include <random>
+diff --git a/test_atp.hh b/test_atp.hh
+index 71c3368..fbb4b71 100644
+--- a/test_atp.hh
++++ b/test_atp.hh
+@@ -12,6 +12,7 @@
+ 
+ // std includes
+ 
++#include <cstdint>
+ #include <iostream>
+ #include <fstream>
+ #include <string>
+diff --git a/traffic_profile_checker.hh b/traffic_profile_checker.hh
+index 883e5e3..3f69a3d 100644
+--- a/traffic_profile_checker.hh
++++ b/traffic_profile_checker.hh
+@@ -10,6 +10,7 @@
+ #ifndef __AMBA_TRAFFIC_PROFILE_CHECKER_HH__
+ #define __AMBA_TRAFFIC_PROFILE_CHECKER_HH__
+ 
++#include <cstdint>
+ #include "traffic_profile_desc.hh"
+ #include "fifo.hh"
+ 
+diff --git a/traffic_profile_delay.hh b/traffic_profile_delay.hh
+index 3056be1..c3334cd 100644
+--- a/traffic_profile_delay.hh
++++ b/traffic_profile_delay.hh
+@@ -10,6 +10,7 @@
+ #ifndef __AMBA_TRAFFIC_PROFILE_DELAY_HH__
+ #define __AMBA_TRAFFIC_PROFILE_DELAY_HH__
+ 
++#include <cstdint>
+ #include "traffic_profile_desc.hh"
+ 
+ namespace TrafficProfiles {
+diff --git a/traffic_profile_desc.hh b/traffic_profile_desc.hh
+index bc5db18..0be4621 100644
+--- a/traffic_profile_desc.hh
++++ b/traffic_profile_desc.hh
+@@ -11,6 +11,7 @@
+ #define __AMBA_TRAFFIC_PROFILE_DESC_HH_
+ 
+ // Traffic Profile includes
++#include <cstdint>
+ #include <vector>
+ #include <map>
+ #include <set>
+diff --git a/traffic_profile_manager.cc b/traffic_profile_manager.cc
+index 24d01dc..eeb77bc 100644
+--- a/traffic_profile_manager.cc
++++ b/traffic_profile_manager.cc
+@@ -1499,13 +1499,24 @@ TrafficProfileManager::getStream(const uint64_t root) {
+             if (events!= waitEventMap.end()) {
+                 // access the waitEventMap from the root
+                 for (auto& leaves: events->second) {
+-                    // follow TERMINATION event chains
+-                    if (leaves.first.type == Event::TERMINATION) {
++                    // follow TERMINATION event chains, and SEND_STATUS
++                    // (PROFILE_LOCKED / PROFILE_UNLOCKED) gating: a profile
++                    // gated on this node's send status belongs to the same
++                    // Stream, so it is tested by streamTerminated and
++                    // restored by streamReset
++                    const bool termination =
++                        (leaves.first.type == Event::TERMINATION);
++                    const bool sendStatus =
++                        (Event::category[leaves.first.type] ==
++                         Event::SEND_STATUS);
++                    if (termination || sendStatus) {
+                         /* this is a set of profile IDs waiting on
+-                         * the root TERMINATION
++                         * the root TERMINATION (or gated on its
++                         * send status)
+                          */
+-                        // not a leaf node
+-                        isLeaf = false;
++                        // not a leaf node only if followed by termination;
++                        // a send-status gated profile runs alongside it
++                        if (termination) isLeaf = false;
+ 
+                         for (auto& leaf: leaves.second) {
+                             // if not visited, start recursion
+diff --git a/traffic_profile_manager.hh b/traffic_profile_manager.hh
+index 834e79b..bf9052b 100644
+--- a/traffic_profile_manager.hh
++++ b/traffic_profile_manager.hh
+@@ -12,6 +12,7 @@
+ #define __AMBA_TRAFFIC_PROFILE_MANAGER_HH__
+ 
+ // Traffic Profile includes
++#include <cstdint>
+ #include <iostream>
+ #include <fstream>
+ #include <deque>
+diff --git a/traffic_profile_master.hh b/traffic_profile_master.hh
+index 43f8bfb..e7e12fb 100644
+--- a/traffic_profile_master.hh
++++ b/traffic_profile_master.hh
+@@ -10,6 +10,7 @@
+ #ifndef __AMBA_TRAFFIC_PROFILE_MASTER_HH_
+ #define __AMBA_TRAFFIC_PROFILE_MASTER_HH_
+ 
++#include <cstdint>
+ #include "traffic_profile_desc.hh"
+ #include "fifo.hh"
+ 
+diff --git a/traffic_profile_slave.hh b/traffic_profile_slave.hh
+index 424ea16..51d8b59 100644
+--- a/traffic_profile_slave.hh
++++ b/traffic_profile_slave.hh
+@@ -9,6 +9,7 @@
+ #ifndef __AMBA_TRAFFIC_PROFILE_SLAVE_HH__
+ #define __AMBA_TRAFFIC_PROFILE_SLAVE_HH__
+ 
++#include <cstdint>
+ #include "traffic_profile_desc.hh"
+ #include "fifo.hh"
+ #include <list>
+diff --git a/utilities.hh b/utilities.hh
+index bc3456d..4c2af85 100644
+--- a/utilities.hh
++++ b/utilities.hh
+@@ -11,6 +11,7 @@
+ #ifndef __AMBA_TRAFFIC_PROFILE_UTILITIES_HH__
+ #define __AMBA_TRAFFIC_PROFILE_UTILITIES_HH__
+ 
++#include <cstdint>
+ #include "logger.hh"
+ #include <cmath>
+ #include <algorithm>
