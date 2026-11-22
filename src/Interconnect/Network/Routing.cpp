@@ -570,6 +570,7 @@ namespace octopus { namespace net
                 throw ConfigError("AdaptiveMinimal on " + t.kindName() + " needs two escape VCs for the dateline (escape_vc and escape_vc + 1 < vcs_per_class) and one adaptive VC, so vcs_per_class >= 3");
         }
         bool needsEscapeVC() const override { return true; }
+        bool atomicVC(int vc) const override { return !onEscape(vc); }
         Route nextHop(const RouteContext &c) const override
         {
             Route esc = escapeRoute(c.router, c.dst_router, c.packet);

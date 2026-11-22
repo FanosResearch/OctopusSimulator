@@ -48,6 +48,12 @@ namespace octopus { namespace net
         virtual Route nextHop(const RouteContext &) const = 0;
         virtual Ordering ordering() const = 0;
         virtual bool needsEscapeVC() const { return false; }
+        // true if output VC `vc` may be granted to a new packet only when its downstream buffer is
+        // empty (all credits back): atomic VC reallocation. Duato's condition needs it on the
+        // adaptive VCs of an escape-VC algorithm: a head granted an adaptive VC still holding
+        // another packet's flits is committed to it and can no longer fall back to the escape
+        // network, so the adaptive VCs could close a cycle (docs/NoC_Architecture_Spec.md s14.3).
+        virtual bool atomicVC(int /*vc*/) const { return false; }
         // called once when a packet is created, after its source and destination routers are set:
         // an oblivious algorithm draws its per-packet choice here (Packet::route_aux), from a hash
         // of the packet's sequence number and the routing seed, so runs stay deterministic

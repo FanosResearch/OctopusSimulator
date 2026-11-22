@@ -82,6 +82,13 @@ statements use **shall**; everything else is explanation.
   only those pairs (§10.2, §14.3).
 - `half_duplex` on a topology with one-way links is refused (§4.5).
 
+**Revision 2026-11-22 (atomic adaptive VCs).** `AdaptiveMinimal` deadlocked on an 8x8 mesh with
+3 VCs at full load (found in the BookSim comparison, `docs/NoC_BookSim_Validation.md` §8.1). A head
+was granted an adaptive VC whose downstream buffer still held another packet, so it could not fall
+back to the escape VC, and the adaptive VCs closed a cycle. VC allocation now reallocates adaptive
+VCs atomically: `RoutingAlgorithm::atomicVC(vc)` marks them, and VA grants such a VC only when all
+its credits are back (§11.2, §14.3). Only `AdaptiveMinimal` results change.
+
 Contents
 
 1. Scope and goals
@@ -684,6 +691,12 @@ all routers. Pass 1 offers each head still without an output VC its fallback rou
 `alt_mask`, §10.1) under the same rules. A head granted there takes the fallback as its route.
 This is Duato's condition: a waiting head can always use the escape network.
 
+An output VC for which the routing's `atomicVC(vc)` is true (the adaptive VCs of
+`AdaptiveMinimal`) is granted only when its downstream buffer is empty: all `vc_depth` credits back.
+Other VCs are free again as soon as the previous tail has left (§8.3). Without atomic reallocation
+a head could be granted an adaptive VC still holding another packet's flits and then wait on it,
+committed, with no way back to the escape network; the adaptive VCs could then close a cycle.
+
 ### 11.3 Switch allocation
 
 Per output port, per tick: candidates are the input VCs holding an output VC on this port whose
@@ -835,7 +848,9 @@ the watchdog reports.
   - `AdaptiveMinimal` checks its escape network (`escapeDependencyAcyclic`): a packet may enter it
     at any router and then follows the escape route to its destination, so the graph is built
     from every (entry router, destination) pair. The single-escape-VC version on a torus fails
-    this check. The dateline version passes.
+    this check. The dateline version passes. The check is sufficient only with atomic
+    reallocation of the adaptive VCs (§11.2), which `AdaptiveMinimal` requests through
+    `atomicVC`.
   - `XY`, the turn models and the oblivious algorithms return true by construction. On networks
     of up to 64 routers construction cross-checks the claim with the full candidate check, and a
     cycle found there is reported as an internal error. Larger networks skip the cross-check: its

@@ -58,6 +58,21 @@ stepT() {
   [ $CONSERVE_FAILS = $before ] || { ok=0; detail="$detail conservation"; }
   if [ $ok = 1 ]; then pass T4-SOAK "all complete, conserved" "same" "$(elapsed "$t0")"; else fail T4-SOAK "$detail" "all complete, conserved" "$(elapsed "$t0")"; fi
 
+  # ---------------- AdaptiveMinimal reallocates adaptive VCs atomically: the 8x8, 3-VC, full-load
+  # case that deadlocked before (docs/NoC_BookSim_Validation.md s8.1) runs to the end; the hang
+  # watchdog turns a wedge into exit 2 instead of a hung run
+  t0=$(now); before=$CONSERVE_FAILS
+  local ids64 nm64="" i; ids64=$(seq -s, 0 63); for i in $(seq 0 63); do nm64="$nm64 -p interconnect.node_map[$i](i)=$i"; done
+  ( export OCTOPUS_HANG_DUMP=2000
+    NO "$O/adapt-atomic" -p interconnect.dims\(vi\)=8,8 -p interconnect.component_ids\(vi\)=$ids64 $nm64 \
+      -p interconnect.routing\(s\)=AdaptiveMinimal -p interconnect.vcs_per_class\(i\)=3 -p interconnect.escape_vc\(i\)=0 \
+      -p interconnect.router_latency\(i\)=3 -p interconnect.credit_latency\(i\)=4 -p interconnect.sa_allocator\(s\)=input_first \
+      -p generator[*].rate\(i\)=1000 -p generator[*].packets\(i\)=-1 -p generator[*].cycles\(i\)=10000
+    echo $? > "$O/adapt-atomic.rc"; echo $CONSERVE_FAILS > "$O/adapt-atomic.cf" )
+  if [ "$(cat "$O/adapt-atomic.rc")" = 0 ] && [ "$(cat "$O/adapt-atomic.cf")" = "$before" ]; then
+    pass T5-ADAPT-ATOMIC "completes, conserved" "same" "$(elapsed "$t0")"
+  else fail T5-ADAPT-ATOMIC "rc $(cat "$O/adapt-atomic.rc"), $(grep -m1 Network: "$O/adapt-atomic/.stderr")" "completes, conserved" "$(elapsed "$t0")"; fi
+
   # ---------------- the old torus escape network (one escape VC) is refused
   NO "$O/adapt-torus-2vc" -p interconnect.topology\(s\)=torus2d -p interconnect.routing\(s\)=AdaptiveMinimal -p interconnect.vcs_per_class\(i\)=2 -p interconnect.escape_vc\(i\)=1 -p generator[*].packets\(i\)=10
   if [ $? = 2 ] && grep -q "two escape VCs" "$O/adapt-torus-2vc/.stdout" "$O/adapt-torus-2vc/.stderr" 2>/dev/null; then pass T5-ADAPT-TORUS-REFUSED

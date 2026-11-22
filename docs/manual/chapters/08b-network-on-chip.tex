@@ -521,8 +521,11 @@ graph is acyclic.
   asks for the one with the most credits on the adaptive VCs, which are every VC but the escape
   VCs, and carries the escape route as its fallback. If VA cannot grant the adaptive output, its
   second pass may grant the escape route instead, so a waiting head can always leave on the escape
-  network. A head that sees no adaptive credit on any minimal output asks for the escape route
-  directly. A packet that arrived over a link on an escape VC stays on the escape network to its
+  network. An adaptive VC goes to a new packet only when its downstream buffer is empty, with all
+  credits back. Without this atomic reallocation a head could be granted an adaptive VC still
+  holding another packet, wait there with no way back to the escape network, and close a cycle of
+  adaptive VCs. Escape VCs are free again as soon as the previous tail has left. A head that sees
+  no adaptive credit on any minimal output asks for the escape route directly. A packet that arrived over a link on an escape VC stays on the escape network to its
   destination. The escape route is dimension order on \key{escape\_vc}. On a wrapped dimension it
   uses two escape VCs with a dateline that depends only on the current router: a hop whose
   remaining leg still crosses the wrap link uses \key{escape\_vc}$+1$, any other hop

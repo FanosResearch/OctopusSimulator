@@ -509,6 +509,8 @@ namespace octopus { namespace net
                 {
                     OutVC &o = R.out[p].vcs[c][ov];
                     if (o.holder != 0) continue;
+                    // atomic reallocation (RoutingAlgorithm::atomicVC): the downstream buffer must be empty
+                    if (!local && o.credits < m_cfg.vc_depth && m_routing->atomicVC(ov)) continue;
                     std::vector<Candidate> cands; std::vector<VCState *> who;
                     for (int q = 0; q < t.ports(r); q++) for (int w = 0; w < m_cfg.vcs_per_class; w++)
                     {

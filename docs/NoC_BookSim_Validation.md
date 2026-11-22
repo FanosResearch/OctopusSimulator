@@ -1,6 +1,8 @@
 # Octopus NoC against BookSim 2
 
-Status: 2026-11-22. Octopus at commit 6585fc6b (branch `network`) plus this work. BookSim 2 at
+Status: 2026-11-22. Octopus at commit 6585fc6b (branch `network`) plus this work, and the
+AdaptiveMinimal fix of §8.1 (atomic reallocation of adaptive VCs), which changed only the
+AdaptiveMinimal rows. BookSim 2 at
 commit `28f43299f1706a3160ffac721ca461d74eb6e618` (github.com/booksim/booksim2, the head of its
 master branch, June 2017). Platform: Linux on aarch64.
 
@@ -290,12 +292,12 @@ are a workload difference (§7.1). XFAIL.
 
 | pattern | zero-load Octopus+3 / BookSim | diff | saturation Octopus / BookSim | rel. diff | knee Octopus / BookSim | worst curve diff (to 0.8 knee) | criteria missed |
 |---|---|---|---|---|---|---|---|
-| uniform | 32.15 / 33.49 | -1.34 | 0.208 / 0.270 | 22.9% | 0.225 / 0.270 | -0.9 | C2, C3 |
-| transpose | 35.18 / 36.03 | -0.85 | 0.248 / 0.237 | 4.5% | 0.175 / 0.140 | -2.2 | C3 |
-| bitcomp | 42.86 / 44.19 | -1.34 | 0.116 / 0.176 | 34.2% | 0.125 / 0.175 | +2.8 | C2, C3 |
-| bitrev | 35.05 / 35.77 | -0.73 | 0.177 / 0.166 | 6.7% | 0.170 / 0.140 | -3.9 | C3 |
-| shuffle | 27.78 / 28.44 | -0.66 | 0.260 / 0.308 | 15.5% | 0.210 / 0.225 | -2.3 | C2 |
-| tornado | 41.02 / 42.02 | -1.00 | 0.133 / 0.188 | 29.5% | 0.160 / 0.190 | +1.4 | C2, C3 |
+| uniform | 32.15 / 33.49 | -1.34 | 0.207 / 0.270 | 23.3% | 0.220 / 0.270 | +1.8 | C2, C3 |
+| transpose | 35.18 / 36.03 | -0.85 | 0.212 / 0.237 | 10.6% | 0.160 / 0.140 | -1.2 | C2, C3 |
+| bitcomp | 42.86 / 44.19 | -1.34 | 0.123 / 0.176 | 29.9% | 0.125 / 0.175 | +4.8 | C2, C3 |
+| bitrev | 35.05 / 35.77 | -0.73 | 0.177 / 0.166 | 7.0% | 0.165 / 0.140 | -3.0 | C3 |
+| shuffle | 27.78 / 28.44 | -0.66 | 0.257 / 0.308 | 16.6% | 0.200 / 0.225 | -1.0 | C2, C3 |
+| tornado | 41.02 / 42.02 | -1.00 | 0.143 / 0.188 | 24.2% | 0.155 / 0.190 | +2.8 | C2, C3 |
 
 S8-88-ADAPTIVE: 0 of 6 by C1 to C4. Zero load and the curve below the knee agree. Saturation does
 not (§7.3). XFAIL.
@@ -367,8 +369,8 @@ when a flow saturates gradually. The saturation throughputs of the case agree wi
 ### 7.3 Adaptive routing selects differently
 
 Zero-load latency and the curve below the knee agree (C1 and C4 hold on all six patterns). The
-saturation throughput does not: Octopus is 23 to 34 percent lower on uniform, bitcomp and tornado
-and 5 to 7 percent higher on transpose and bitrev. The selection functions differ:
+saturation throughput does not: Octopus is 11 to 30 percent lower on every pattern but bitrev, and
+7 percent higher on bitrev. The selection functions differ:
 
 - BookSim gives the VC allocator every free output VC on every minimal port (adaptive VCs at
   priority 1, the escape VC at priority 0) and lets allocation choose.
@@ -379,7 +381,7 @@ and 5 to 7 percent higher on transpose and bitrev. The selection functions diffe
   dimension-order escape network for the rest of its path.
 
 Under load many packets therefore drop onto the single escape VC, and Octopus's adaptive routing
-carries less than its own XY on 2 VCs (0.208 against 0.298 on uniform). BookSim's `min_adapt` also
+carries less than its own XY on 2 VCs (0.207 against 0.298 on uniform). BookSim's `min_adapt` also
 loses to `dor` on uniform (0.270 against 0.296), but by less. This is a design choice of the spec,
 not a fault, and a definitional difference for the comparison. It may be worth revisiting (§8.2).
 
@@ -433,14 +435,24 @@ cannot fall back. With non-atomic VC reallocation the adaptive VCs can then form
 Context: the same run with 2 or 4 VCs completes, as do 3 VCs with Octopus's default pipeline
 (`router_latency 2`, `credit_latency` = link, `output_first`) over 100 000 cycles, 3 VCs with only
 two of the three overrides, and 3 VCs under tornado. BookSim's `min_adapt` with 3 VCs at full load
-completes (0.340 flits/cycle/node). Not fixed here.
+completes (0.340 flits/cycle/node).
+
+**Fixed** after this study. Adaptive VCs are now reallocated atomically: VC allocation grants an
+adaptive (non-escape) output VC to a new packet only when its downstream buffer is empty, all
+credits back (`RoutingAlgorithm::atomicVC`, spec §14.3). A head granted an adaptive VC then always
+has room to advance, and a head still waiting at the front of a buffer can always take the escape
+VC, which is Duato's condition. Escape VCs keep non-atomic reallocation, since the escape network
+is acyclic. The repro above now runs to the end (71 310 packets in 20 000 cycles, all delivered).
+A stress sweep of 66 full-load runs also completes with every packet delivered: 8x8 grid with 2, 3
+or 4 VCs and either escape VC, 8x8 torus with 3 or 4 VCs, uniform, transpose, tornado and bitcomp,
+the default and the BookSim pipeline, VC depth 1 and 2, and a 4x4x4 mesh. The fix moved the
+AdaptiveMinimal rows of §6.2 by a few percent and left every other routing unchanged.
 
 ### 8.2 AdaptiveMinimal selection by credit count (performance, not correctness)
 
 §7.3. Choosing the primary port by the credits of VCs that may be held, and then falling to the
 escape network for good, makes `AdaptiveMinimal` carry less than `XY` under uniform traffic
-(8x8, 2 VCs, BookSim pipeline: 0.208 against 0.298 flits/cycle/node; 0.221 against 0.308 in a
-10 000-cycle run). Repro: `compare.py --routings AdaptiveMinimal,XY --patterns uniform`. A selection
+(8x8, 2 VCs, BookSim pipeline: 0.207 against 0.298 flits/cycle/node). Repro: `compare.py --routings AdaptiveMinimal,XY --patterns uniform`. A selection
 that only counts free VCs, or a VA that may try the other minimal port before the escape, would
 likely close most of the gap.
 
@@ -460,5 +472,6 @@ partner. The comparison silences the diagonal generators to match BookSim (§3).
   10 to 11 percent where BookSim routes self packets through the network. Stock BookSim's
   `valiant_mesh` deadlocks under full load. A one-line fix is applied for the comparison.
 - The two minimal adaptive algorithms agree at low load and differ at saturation, because their
-  selection functions differ. Octopus's `AdaptiveMinimal` also deadlocked once in this study (§8.1).
+  selection functions differ. Octopus's `AdaptiveMinimal` deadlocked once in this study, through
+non-atomic reallocation of adaptive VCs. That is fixed (§8.1).
 - The 4x4 S8-BOOKSIM test now runs natively on Linux and passes (3 percent).
