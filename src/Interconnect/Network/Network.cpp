@@ -125,7 +125,7 @@ namespace octopus { namespace net
             // applies; a ring needs two VCs for its dateline, else Table
             const std::string &t = c.topology;
             bool lattice = t == "grid2d" || t == "torus2d" || t == "mesh3d" || t == "torus3d";
-            c.routing = (lattice || (t == "ring" && c.vcs_per_class >= 2)) ? "XY" : "Table";
+            c.routing = (lattice || (t == "ring" && c.vcs_per_class >= 2)) ? "XY" : t == "flattened_butterfly" ? "DOR" : "Table";
         }
         m_class_stats.assign(c.num_classes, ClassStats{});
     }
@@ -238,6 +238,8 @@ namespace octopus { namespace net
         m_lower_ids = m_component_ids;
         for (auto &kv : m_cfg.router_latency_at)
             if (t.routerIndex(kv.first) < 0) throw ConfigError("router_latency[" + std::to_string(kv.first) + "]: not a router id");
+        if (m_cfg.half_duplex && t.hasOneWayLinks())
+            throw ConfigError("half_duplex needs two-way links, but topology " + t.kindName() + " has one-way links");
         m_routers.resize(t.routers());
         for (int r = 0; r < t.routers(); r++)
         {
@@ -319,7 +321,7 @@ namespace octopus { namespace net
         p.msg = msg;                                   // delivered bit-identical, `to` included (spec §3.2)
         p.seq = seq; p.cls = cls; p.dst_endpoint = dst_endpoint;
         p.src_router = m_topo->routerOf(src_endpoint);          // the injecting NI, not msg.from (a protocol may carry another id there)
-        p.dst_router = m_topo->routerOf(dst_endpoint);
+        p.dst_router = m_topo->ejectRouter(dst_endpoint);
         if (p.src_router < 0)
             fatal("message injected by " + std::to_string(src_endpoint) + " which is not an endpoint: " + Classifier::describe(msg, dst_endpoint));
         p.flits = flitCount(msg, m_cfg.flit_bytes, m_cfg.header_bytes);
@@ -470,7 +472,7 @@ namespace octopus { namespace net
                 Packet &p = m_packets.at(v.fifo.front().seq);
                 RouteContext ctx; ctx.router = r; ctx.in_port = q; ctx.in_vc = w; ctx.dst_router = p.dst_router; ctx.cls = c; ctx.src_router = p.src_router; ctx.packet = &p; ctx.here = &view;
                 Route rt = m_routing->nextHop(ctx);
-                if (rt.out_port < 0 || rt.out_port >= t.ports(r))
+                if (rt.out_port < 0 || rt.out_port >= t.ports(r) || (!t.isLocalPort(r, rt.out_port) && !t.canSend(r, rt.out_port)))
                     fatal("routing " + m_cfg.routing + " returned port " + std::to_string(rt.out_port) + " at router " + std::to_string(t.routerId(r)) + " for packet " + std::to_string(p.seq) + " (msg " + std::to_string(p.msg.msg_id) + ")");
                 rt.vc_mask &= allVCs(m_cfg.vcs_per_class);
                 if (m_debug == "mask" && m_tick >= 50) rt.vc_mask = 0;
@@ -479,7 +481,7 @@ namespace octopus { namespace net
                 v.alt_port = -1; v.alt_mask = 0;
                 if (rt.alt_port >= 0)
                 {
-                    if (rt.alt_port >= t.ports(r) || (rt.alt_mask & allVCs(m_cfg.vcs_per_class)) == 0)
+                    if (rt.alt_port >= t.ports(r) || (!t.isLocalPort(r, rt.alt_port) && !t.canSend(r, rt.alt_port)) || (rt.alt_mask & allVCs(m_cfg.vcs_per_class)) == 0)
                         fatal("routing " + m_cfg.routing + " returned a bad fallback route at router " + std::to_string(t.routerId(r)) + " for packet " + std::to_string(p.seq));
                     v.alt_port = rt.alt_port; v.alt_mask = rt.alt_mask & allVCs(m_cfg.vcs_per_class);
                 }
@@ -596,10 +598,11 @@ namespace octopus { namespace net
         int occ = (local || m_cfg.link_model == "pipelined") ? 1 : L;          // ticks the link is held per flit
         m_link_busy[linkKey(r, p)] = m_tick + occ - 1;
         op.flits++; op.busy_ticks += occ;
-        // credit back to whoever feeds input port q
+        // credit back to whoever feeds input port q: out of band, credit_latency ticks later,
+        // over no data link (a one-way link has none in the reverse direction)
         CreditEvt ce;
         if (t.isLocalPort(r, q)) ce = {true, r, q, c, w};
-        else { auto up = t.link(r, q); ce = {false, up.router, up.port, c, w}; }
+        else { auto up = t.upstream(r, q); ce = {false, up.router, up.port, c, w}; }
         if (m_cfg.credit_latency == 0)
         {
             OutVC &o = ce.local ? m_local.at({ce.router, ce.port}).vcs[c][w] : m_routers[ce.router].out[ce.port].vcs[c][w];

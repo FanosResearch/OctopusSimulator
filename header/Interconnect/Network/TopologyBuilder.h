@@ -65,6 +65,8 @@ namespace octopus { namespace net
     Topology buildGrid2D(int kx, int ky, const std::map<int, int> &node_map, int local_ports, bool torus);
     Topology buildRing(int k, const std::map<int, int> &node_map, int local_ports);
     Topology buildLattice3D(int kx, int ky, int kz, const std::map<int, int> &node_map, int local_ports, bool torus);
+    Topology buildButterfly(int k, int n, const std::map<int, int> &node_map, int local_ports);
+    Topology buildFlattenedButterfly(const std::vector<int> &dims, const std::map<int, int> &node_map, int local_ports);
     Topology buildStar(const std::vector<int> &endpoint_ids, int local_ports);
     Topology buildCustom(const std::vector<std::vector<int>> &matrix, const std::vector<int> &endpoint_ids,
                          const std::vector<int> &router_ids, int local_ports);

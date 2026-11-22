@@ -64,6 +64,24 @@ statements use **shall**; everything else is explanation.
 - The ordering refusal names both ways out: one VC per class, or `XY` on a wrapped lattice (§14).
 - §19 lists the files as they are.
 
+**Revision 2026-11-22 (T6).** One-way links and split attachment
+(`docs/NoC_Topology_Plugin_Plan.md`, step T6). What changed:
+
+- A link port may be send-only or receive-only. A one-way link is a send-only port on one router
+  and a receive-only port on the other. `link(r, p)` is where a port sends, `upstream(r, p)`
+  where its flits come from (§5.1, §5.3).
+- An endpoint may inject at one router and eject at another (§5.2).
+- Credits return out of band, `credit_latency` ticks after the flit leaves the downstream FIFO,
+  to the port's upstream. They never used the reverse data link, so a one-way link needs no
+  reverse (§9). This is the BookSim model.
+- New topologies: `butterfly` (a k-ary n-fly, unidirectional) and `flattened_butterfly` (§4.1,
+  §5.1). New algorithm `DOR`, dimension order on a flattened butterfly, which `auto` selects
+  there (§4.3, §10.2).
+- `Table` searches the directed graph. With one-way links only the (injection router, ejection
+  router) pairs of the endpoints must be reachable, and the channel dependency check explores
+  only those pairs (§10.2, §14.3).
+- `half_duplex` on a topology with one-way links is refused (§4.5).
+
 Contents
 
 1. Scope and goals
@@ -184,11 +202,11 @@ existing convention: `(i)` int, `(s)` string, `(vi)` int list, `(vs)` string lis
 
 | key | type | default | meaning |
 |---|---|---|---|
-| `topology` | s | `custom` | the name of a registered builder (§5.1): `custom`, `grid2d`, `torus2d`, `ring`, `star`, `mesh3d`, `torus3d`. An unknown name is refused with the list of registered names |
+| `topology` | s | `custom` | the name of a registered builder (§5.1): `custom`, `grid2d`, `torus2d`, `ring`, `star`, `mesh3d`, `torus3d`, `butterfly`, `flattened_butterfly`. An unknown name is refused with the list of registered names |
 | `component_ids` | vi | — | endpoint ids (unchanged) |
 | `connection_matrix[i]` | vi | — | `custom` only: node id then its neighbours (unchanged); nodes that are not in `component_ids` are routers |
-| `dims` | vi | — | `grid2d`/`torus2d`: `k_x,k_y`; `mesh3d`/`torus3d`: `k_x,k_y,k_z`; `ring`: `k` |
-| `node_map[<endpoint id>]` | i | — | generated topologies: the router an endpoint attaches to; every endpoint shall be mapped |
+| `dims` | vi | — | `grid2d`/`torus2d`: `k_x,k_y`; `mesh3d`/`torus3d`: `k_x,k_y,k_z`; `ring`: `k`; `butterfly`: `k,n` (radix and stages); `flattened_butterfly`: `k_0,k_1,...` (routers per dimension) |
+| `node_map[<endpoint id>]` | i | — | generated topologies: the router an endpoint attaches to; `butterfly`: the endpoint's terminal, `0..k^n−1`. Every endpoint shall be mapped |
 | `router_ids` | vi | derived | `custom` only: which ids in the matrix are routers; defaults to the ids absent from `component_ids` |
 | `home_ids` | vi | derived | ids of the LLC / directory homes, for the classifier (§6.3); defaults to the system's `m_shared_memory_id` values |
 | `local_ports` | i | 0 | local ports per router; `0` means one per attached endpoint (no sharing). A positive value smaller than the endpoints at a router makes endpoints share ports (§5.2) |
@@ -218,7 +236,7 @@ existing convention: `(i)` int, `(s)` string, `(vi)` int list, `(vs)` string lis
 
 | key | type | default | meaning |
 |---|---|---|---|
-| `routing` | s | `auto` | `auto`, `Table`, `XY`, `WestFirst`, `NorthLast`, `NegativeFirst`, `OddEven`, `O1TURN`, `Valiant`, `ROMM`, `AdaptiveMinimal` (§10.2). `auto` is resolved at construction: `XY` on `grid2d`, `torus2d`, `mesh3d` and `torus3d`, and on a `ring` with `vcs_per_class ≥ 2`; `Table` on every other topology. A torus therefore needs `vcs_per_class ≥ 2` even with the default, and a ring with one VC gets `Table`, which construction refuses on four routers or more (§14.3) |
+| `routing` | s | `auto` | `auto`, `Table`, `XY`, `WestFirst`, `NorthLast`, `NegativeFirst`, `OddEven`, `O1TURN`, `Valiant`, `ROMM`, `AdaptiveMinimal`, `DOR` (§10.2). `auto` is resolved at construction: `XY` on `grid2d`, `torus2d`, `mesh3d` and `torus3d`, and on a `ring` with `vcs_per_class ≥ 2`; `DOR` on `flattened_butterfly`; `Table` on every other topology (on a `butterfly` it computes the destination-tag routes). A torus therefore needs `vcs_per_class ≥ 2` even with the default, and a ring with one VC gets `Table`, which construction refuses on four routers or more (§14.3) |
 | `routing_table[<router>]` | vi | computed | `Table`: `dest,port,dest,port,...` by router id and port index; applied last, over the computed table and `routing_via` |
 | `routing_via[<router>]` | vi | — | `Table`: `dest,neighbour,dest,neighbour,...` by router id; the route to `dest` leaves through the link to `neighbour`. Independent of port numbering, so it is the preferred way to state a route. A neighbour that is not linked to the router is refused |
 | `link_weight[<router>]` | vi | — | `Table`: `neighbour,weight,...`; weights ≥ 1, default 1. When any is given, `Table` computes shortest weighted paths (Dijkstra) instead of hop counts and prints the number of (router, destination) pairs that had several equal-cost ports |
@@ -243,7 +261,8 @@ a `custom` matrix is not symmetric; any constraint in §4.2 is violated; `escape
 `vcs_per_class`; a `routing_table` names a port the router does not have; a `routing_via` or
 `link_weight` entry names a router that is not a neighbour; `requires_ordering` demands what `routing` and `vcs_per_class` cannot provide (§14.1); a
 routing algorithm meets a topology or VC count it does not support (§10.2, for example a wrapped
-lattice with `XY` and `vcs_per_class = 1`); or the routing deadlock check fails (§14.3).
+lattice with `XY` and `vcs_per_class = 1`); `half_duplex = 1` meets a topology with one-way
+links; or the routing deadlock check fails (§14.3).
 
 ## 5. Topology
 
@@ -255,16 +274,28 @@ local ports last. Each link between routers is unidirectional and has an owner r
 each end. Every physical connection in a `custom` matrix becomes two links; with `half_duplex = 1`
 the two links share one occupancy.
 
+A link port is **two-way**, **send-only** or **receive-only**. A two-way port sends to and receives
+from the same far port, so a pair of two-way ports is a physical connection. A **one-way link** is a
+send-only port on one router and a receive-only port on the other, with no reverse. `link(r, p)` is
+the far end a port sends to and `upstream(r, p)` the far end its flits come from, where its
+credits return (§9). Both are the same on a two-way port. A send-only port has no upstream and a
+receive-only port no `link`. Routing never sends out of a receive-only port: the engine treats
+such a route as fatal, and `Table`, `routing_table` and the dependency check refuse it. The
+shipped topologies other than `butterfly` have only two-way ports.
+
 **Builders.** Each topology is a `TopologyBuilder` (`header/Interconnect/Network/TopologyBuilder.h`)
 with a `name()`, the `keys()` it reads, and `build(keys, endpoint_ids, local_ports)`. The builders
 live in `src/Interconnect/Network/topologies/` and are registered explicitly in
 `registerBuiltinTopologies` (`Builtin.cpp`), in the order `custom`, `grid2d`, `torus2d`, `ring`,
-`star`, `mesh3d`, `torus3d`. The network code is a static library, so there is no
-self-registration. A builder uses the construction API of `Topology`: `addRouter(id)`,
+`star`, `mesh3d`, `torus3d`, `butterfly`, `flattened_butterfly`. The network code is a static
+library, so there is no self-registration. A builder uses the construction API of `Topology`: `addRouter(id)`,
 `addPort(r, to, name)` (or with a lattice dimension and direction), `setLattice`, `setImplicit`,
-`setAttr`, `attachAt(r, endpoint)` and `finalize(local_ports)`. Routers are indexed in the order
-they are added and link ports in the order `addPort` is called. `finalize` pairs the k-th port
-`r → n` with the k-th port `n → r`, refuses a link without a reverse, and numbers the local ports.
+`setAttr`, `attachAt(r, endpoint)`, `addOneWay(a, b, name_a, name_b)`,
+`attachSplit(inject, eject, endpoint)` and `finalize(local_ports)`. Routers are indexed in the
+order they are added and link ports in the order `addPort` or `addOneWay` appends them to their
+router. `addOneWay` appends a send-only port on `a` and a receive-only port on `b` and pairs them.
+`finalize` pairs the k-th two-way port `r → n` with the k-th two-way port `n → r`, refuses a
+two-way port without a reverse, and numbers the local ports.
 
 **Capabilities.** Routing reads capabilities, never a topology name. `lattice()` returns, for a
 lattice, its dimensions (`dims`, dimension 0 varying fastest, `r = c0 + d0·(c1 + d1·(c2 + …))`) and
@@ -285,9 +316,33 @@ router** of its own id, which stands for the endpoint's link ports and adds no `
 or `switch_latency` (only explicit routers, the matrix nodes that are not endpoints, are pipeline
 stages). `star` is one router whose ports are all local.
 
+`butterfly` is a k-ary n-fly as in BookSim (`dims = k,n`, `k ≥ 2`, `n ≥ 1`, at most `2^20`
+terminals). It has `n` stages of `S = k^(n−1)` routers. Router (stage `s`, row `a`) has id
+`s·S + a` and the attribute `stage = s`. Output `j` of (`s`, `a`) is a one-way link to stage
+`s + 1`, row `a` with base-k digit `n−2−s` set to `j`, and enters there at input `v`, the digit it
+replaced. Ports are ordered `in0 … in(k−1)` (stages 1 to n−1), then `out0 … out(k−1)` (stages 0
+to n−2), then local ports. `node_map[<id>]` gives an endpoint its terminal `t` in `[0, k^n)`. It
+injects at router `t / k` of stage 0 and ejects at router `t / k` of stage `n − 1` (split
+attachment, §5.2). With `n = 1` the one stage does both. Each (source, destination) pair has
+exactly one path, the destination-tag path: at stage `s` the output is digit `n−1−s` of the
+destination terminal.
+
+`flattened_butterfly` (Kim, Dally and Abts, ISCA 2007) takes `dims = k_0,k_1,…` and numbers
+routers as a lattice, dimension 0 fastest. Each router has a two-way link to every router that
+differs from it in exactly one coordinate. Ports go dimension by dimension, by ascending
+coordinate within a dimension, named `x<c>`, `y<c>`, `z<c>`, then `d<i>.<c>`. Routers carry the
+attributes `flat_rank` and `flat_c<d>` (their coordinates). It publishes no lattice, so the
+lattice algorithms refuse it. `node_map` attaches endpoints as on a grid, any number per router.
+
 ### 5.2 Endpoint attachment
 
-Each endpoint is attached to one router through one local port over a zero-latency local link.
+Each endpoint is attached to one router through one local port over a zero-latency local link,
+or, when attached split (`attachSplit`, used by `butterfly`), injects through a local port of one
+router and ejects through a local port of another. It then takes one local port at each router,
+numbered after that router's link ports with the router's other endpoints in attachment order.
+`routerOf` and `localPort` name the injection side, `ejectRouter` and `ejectPort` the ejection
+side; they agree when the endpoint is not split. A packet's destination router is its
+destination's ejection router.
 With `local_ports = 0` every endpoint has its own local port. With a positive `local_ports`
 smaller than the endpoints at a router, endpoints are assigned round-robin to the ports and
 share them: on the injection side the port's input VCs are shared and the NIs arbitrate for them
@@ -298,8 +353,10 @@ modelling option, never a default.
 ### 5.3 Construction output
 
 The topology object exposes: `routers()`, `ports(r)`, `linkPorts(r)`, `isLocalPort(r, p)`,
-`link(r, p) → (r', p')`, `routerId(r)`, `routerIndex(id)`, `routerOf(endpoint)`,
-`localPort(endpoint)`, `endpointsAt(r)`, `endpointsAtPort(r, p)`, `portName(r, p)`, `kindName()`,
+`link(r, p) → (r', p')`, `upstream(r, p)`, `canSend(r, p)`, `canReceive(r, p)`,
+`hasOneWayLinks()`, `routedPairs()`, `routerId(r)`, `routerIndex(id)`, `routerOf(endpoint)`,
+`localPort(endpoint)`, `ejectRouter(endpoint)`, `ejectPort(endpoint)`, `endpointsAt(r)`,
+`endpointsAtPort(r, p)`, `portName(r, p)`, `kindName()`,
 and the capabilities `lattice()`, `dirPort`, `portDir`, `attr` and `implicitRouter`. Routing
 functions and the deadlock checker use only this interface.
 
@@ -480,7 +537,10 @@ classes because classes map to distinct RX queues.
 
 - A flit is sent on a link only when the destination VC holds a credit for it.
 - Credits are returned on the pop of a flit from the downstream FIFO, not on its arrival, and reach
-  the upstream router after `credit_latency` ticks.
+  the upstream router after `credit_latency` ticks. They travel out of band: a credit is an event
+  addressed to the input port's upstream (`upstream(r, p)`, §5.1), and it takes no bandwidth on
+  any data link. A one-way link therefore needs no reverse link for its credits, as in BookSim,
+  where credit channels are separate from data channels.
 - `vc_depth` may be smaller than a packet's flit count; that is the wormhole case and is allowed.
   `vc_depth ≥ flits` for every class is virtual cut-through; `flit_bytes = 0` and `vc_depth ≥ 1`
   is the message-level model.
@@ -558,12 +618,21 @@ port index.
 | `O1TURN` | a 2-D lattice without wraps (grid2d); `vcs_per_class ≥ 2` | each packet takes XY on VC set A or YX on VC set B, with equal probability, drawn at injection | NONE |
 | `Valiant` | a lattice without wraps (grid2d, mesh3d); `vcs_per_class ≥ 2` | dimension order to an intermediate router drawn uniformly among all routers, on set A, then dimension order to the destination on set B. Not minimal | NONE |
 | `ROMM` | as `Valiant` | as `Valiant`, with the intermediate drawn per dimension inside the minimal box of source and destination, so paths are minimal | NONE |
+| `DOR` | `flattened_butterfly` (it reads the `flat_rank` and `flat_c<d>` attributes) | dimension order on a flattened butterfly: dimension 0 first, then 1, and so on. In each dimension one hop straight to the destination's coordinate, so a route takes one hop per coordinate that differs. `vc_mask = ~0`. Deadlock-free with one VC: each dimension takes one link and dimensions are taken in order | PAIR_PER_CLASS |
 | `AdaptiveMinimal` | any lattice; `escape_vc ≥ 0`, `vcs_per_class ≥ 2`; on a wrapped lattice `vcs_per_class ≥ 3` and `escape_vc + 1 < vcs_per_class` | minimal adaptive routing with an escape network (Duato). The minimal outputs are one per dimension still to cover (the shorter way on a wrapped dimension). The primary route is the one with the most credits on the adaptive VCs (every VC but the escape VCs), with the escape route as its fallback (`alt`). A head that sees no adaptive credit on any minimal output gets the escape route as its primary. A packet that arrived over a link on an escape VC stays on the escape network. The escape route is dimension order on `escape_vc`; on a wrapped dimension a hop whose remaining leg still crosses the wrap link uses `escape_vc + 1` (a memoryless dateline) | NONE |
 
 VC sets: `O1TURN`, `Valiant` and `ROMM` split each class's VCs into A = `[0, vcs/2)` and
 B = `[vcs/2, vcs)`. Each set carries dimension-order routes only, and a packet moves from A to B
 at most once (O1TURN never moves), so their channel dependency graph is acyclic. A packet that
 arrived over a link on a B VC is in its last phase.
+
+**One-way links.** `Table` searches the directed graph: the BFS (or Dijkstra) from each
+destination follows links backwards through `upstream`, and a next hop leaves only through a port
+that can send. When every link is two-way, every router shall reach every other, as before. With
+one-way links (a butterfly) not every router reaches every other, and only the pairs of
+`routedPairs()` shall be reachable: every (injection router of an endpoint, ejection router of
+an endpoint). On a butterfly the path of each pair is unique, so `Table` gives exactly the
+destination-tag routes. The lattice algorithms and `DOR` refuse a butterfly.
 
 A ring now has `XY` with two VCs, which `auto` selects. A ring routed by `Table` closes a cycle of
 channel dependencies at four routers or more, at any VC count, and is refused (§14.3). A ring of
@@ -750,11 +819,14 @@ the watchdog reports.
   if it returns false, with the cycle from `deadlockCycle` in the message.
   - The channel dependency check (`channelDependencyAcyclic`) builds a graph whose nodes are
     (router, output link port, VC) and whose edges are the transitions some packet can make. For
-    every source and destination router it explores every state (router, input port, input VC)
+    every source and destination router in `routedPairs()` (every pair of routers when every link
+    is two-way; the endpoints' injection and ejection routers with one-way links) it explores
+    every state (router, input port, input VC)
     reachable from the source, following every route in `candidates()` (primary and fallback)
     with every VC its mask allows. It does not stop at the destination router unless the route
     there is the local port, so a phase-1 `Valiant` path that passes through its destination is
-    followed. A cycle rejects the routing and the message names its channels.
+    followed. A cycle rejects the routing and the message names its channels. A route out of a
+    receive-only port is refused.
   - `Table` runs this check in `deadlockFreeOn`. `escape_vc` does not rescue it: `Table` has no
     escape routing function, the escape VC only narrows the VC mask, and the cycle stays in the
     graph. On a `ring` of four or more routers the computed table always has a cycle (§10.2). The
@@ -974,6 +1046,7 @@ src/Interconnect/Network/
   topologies/Builtin.cpp   the registry and KeyView
   topologies/Lattice.cpp   grid2d, torus2d, ring, mesh3d, torus3d
   topologies/Graph.cpp     custom, star
+  topologies/Butterfly.cpp butterfly, flattened_butterfly
 src/SystemConfigurations/NetworkOnly.cpp   the network-only system, permutation partners
 header/Arbiters/Arbiter.h        + electIndex and Candidate
 header/HangDump.h                the hang-dump registry

@@ -138,10 +138,10 @@ TEST("T3-FLAGS")
 TEST("T1-REGISTRY")
 {
     auto names = TopologyRegistry::builtin().names();
-    CHECK(names == std::vector<std::string>({"custom", "grid2d", "torus2d", "ring", "star", "mesh3d", "torus3d"}));
+    CHECK(names == std::vector<std::string>({"custom", "grid2d", "torus2d", "ring", "star", "mesh3d", "torus3d", "butterfly", "flattened_butterfly"}));
     Configurable::ParametersMap empty; KeyView v(empty);
     std::string e = errOf([&] { TopologyRegistry::builtin().create("hypercube", v, {}, 0); });
-    CHECK(e.find("unknown topology 'hypercube' (custom, grid2d, torus2d, ring, star, mesh3d, torus3d)") != std::string::npos);
+    CHECK(e.find("unknown topology 'hypercube' (custom, grid2d, torus2d, ring, star, mesh3d, torus3d, butterfly, flattened_butterfly)") != std::string::npos);
 }
 
 // T5: the dependency check explores every candidate output
@@ -366,4 +366,183 @@ TEST("T4-OBLIVIOUS")
     int same = 0, diff = 0;
     for (uint64_t q = 1; q <= 50; q++) { CHECK(walk(*v1, g, q, 0, 15) == walk(*v2, g, q, 0, 15)); (walk(*v1, g, q, 0, 15) == walk(*v7, g, q, 0, 15) ? same : diff)++; }
     CHECK(diff > 0);
+}
+
+// ---------------------------------------------------------------- T6: one-way links, split attachment, butterflies
+static std::map<int, int> identity(int n) { std::map<int, int> m; for (int i = 0; i < n; i++) m[i] = i; return m; }
+// T6: on two-way links upstream() is link(); every shipped shape has no one-way link and serves every pair
+TEST("T6-TWO-WAY-UNCHANGED")
+{
+    std::vector<Topology> ts = {Topology::custom(NOC, {0, 1, 2, 3, 10}, {200}, 0), Topology::grid2d(4, 4, {}, 0), Topology::grid2d(3, 3, {}, 0, true),
+                                Topology::ring(5, {}, 0), buildLattice3D(3, 3, 3, {}, 0, true), Topology::star({0, 1, 2}, 0)};
+    for (auto &t : ts)
+    {
+        CHECK(!t.hasOneWayLinks());
+        for (int r = 0; r < t.routers(); r++) for (int p = 0; p < t.linkPorts(r); p++)
+        {
+            CHECK(t.canSend(r, p)); CHECK(t.canReceive(r, p));
+            CHECK_EQ(t.upstream(r, p).router, t.link(r, p).router); CHECK_EQ(t.upstream(r, p).port, t.link(r, p).port);
+        }
+        CHECK_EQ((int)t.routedPairs().size(), t.routers() * (t.routers() - 1));
+        for (int e : t.endpoints()) { CHECK_EQ(t.ejectRouter(e), t.routerOf(e)); CHECK_EQ(t.ejectPort(e), t.localPort(e)); }
+    }
+}
+// T6: a one-way ring 0 -> 1 -> 2 -> 3 -> 0 built with the construction API: ports, the credits'
+// upstream, Table over directed links, and the dependency check finds the ring's cycle
+TEST("T6-ONEWAY-RING")
+{
+    Topology t; t.setKindName("oneway-ring");
+    for (int r = 0; r < 4; r++) t.addRouter(r);
+    for (int r = 0; r < 4; r++) t.addOneWay(r, (r + 1) % 4, "next", "prev");
+    for (int r = 0; r < 4; r++) t.attachAt(r, r);
+    t.finalize(0);
+    CHECK(t.hasOneWayLinks());
+    for (int r = 0; r < 4; r++)
+    {
+        CHECK_EQ(t.linkPorts(r), 2); CHECK_EQ(t.ports(r), 3);
+        // ports in call order: router 0 adds its send port first, the others receive first
+        int snd = r == 0 ? 0 : 1, rcv = 1 - snd;
+        CHECK(t.canSend(r, snd)); CHECK(!t.canReceive(r, snd)); CHECK(!t.canSend(r, rcv)); CHECK(t.canReceive(r, rcv));
+        CHECK_EQ(t.portName(r, snd), std::string("next")); CHECK_EQ(t.portName(r, rcv), std::string("prev"));
+        auto f = t.link(r, snd);
+        CHECK_EQ(f.router, (r + 1) % 4);
+        CHECK_EQ(t.upstream(f.router, f.port).router, r); CHECK_EQ(t.upstream(f.router, f.port).port, snd);
+        CHECK(!t.link(r, rcv).valid()); CHECK(!t.upstream(r, snd).valid());
+    }
+    CHECK(errOf([&] { Topology u; u.addRouter(0); u.addOneWay(0, 0, "a", "b"); }).find("to itself") != std::string::npos);
+    RoutingParams p1; p1.vcs_per_class = 1;
+    auto tab = createRouting("Table", t, p1);
+    CHECK(routeIds(t, *tab, 0, 3) == std::vector<int>({0, 1, 2, 3}));     // the long way is the only way
+    CHECK(routeIds(t, *tab, 3, 0) == std::vector<int>({3, 0}));
+    std::string cyc;
+    CHECK(!channelDependencyAcyclic(t, *tab, 1, &cyc));
+    CHECK(cyc.find("cycle:") != std::string::npos);
+    CHECK(!tab->deadlockFreeOn(t));
+    // a routing_table entry may not send out of a receive-only port
+    RoutingParams bad; bad.routing_table[0] = {2, 1};
+    CHECK(errOf([&] { createRouting("Table", t, bad); }).find("receive-only") != std::string::npos);
+    // a one-way chain 0 -> 1 -> 2: Table serves the pairs it must and refuses an unreachable one
+    Topology c; for (int r = 0; r < 3; r++) c.addRouter(r);
+    c.addOneWay(0, 1, "o", "i"); c.addOneWay(1, 2, "o", "i");
+    c.attachSplit(0, 2, 7); c.finalize(0);
+    CHECK_EQ(c.routerOf(7), 0); CHECK_EQ(c.ejectRouter(7), 2);
+    CHECK_EQ((int)c.routedPairs().size(), 1);
+    CHECK(createRouting("Table", c, p1)->deadlockFreeOn(c));
+    Topology x; for (int r = 0; r < 3; r++) x.addRouter(r);
+    x.addOneWay(0, 1, "o", "i"); x.addOneWay(1, 2, "o", "i");
+    x.attachSplit(2, 0, 7); x.finalize(0);                                  // injects at 2, ejects at 0: no way back
+    CHECK(errOf([&] { createRouting("Table", x, p1); }).find("is unreachable") != std::string::npos);
+}
+// T6: split attachment takes a local port at each router, numbered after that router's link ports
+TEST("T6-SPLIT-ATTACH")
+{
+    Topology t; for (int r = 0; r < 2; r++) t.addRouter(r);
+    t.addOneWay(0, 1, "o", "i");
+    t.attachSplit(0, 1, 5); t.attachSplit(0, 1, 6); t.attachAt(1, 9);
+    t.finalize(0);
+    CHECK_EQ(t.localPorts(0), 2); CHECK_EQ(t.localPorts(1), 3);
+    CHECK_EQ(t.localPort(5), 1); CHECK_EQ(t.localPort(6), 2);              // injection ports at router 0
+    CHECK_EQ(t.ejectPort(5), 1); CHECK_EQ(t.ejectPort(6), 2); CHECK_EQ(t.ejectPort(9), 3);
+    CHECK_EQ(t.localPort(9), 3); CHECK_EQ(t.routerOf(9), 1);
+    CHECK_EQ((int)t.endpoints().size(), 3);
+    CHECK(errOf([&] { Topology u; u.addRouter(0); u.addRouter(1); u.attachSplit(0, 1, 5); u.attachSplit(1, 0, 5); }).find("attached twice") != std::string::npos);
+}
+// T6: k-ary n-fly wiring, destination-tag routes from Table, the dependency check, refusals
+TEST("T6-BUTTERFLY")
+{
+    RoutingParams p1; p1.vcs_per_class = 1;
+    for (auto kn : std::vector<std::pair<int, int>>{{2, 1}, {2, 2}, {2, 3}, {3, 2}, {4, 2}, {2, 4}, {3, 3}})
+    {
+        int k = kn.first, n = kn.second, N = 1, S = 1;
+        for (int i = 0; i < n; i++) { N *= k; if (i < n - 1) S *= k; }
+        Topology t = buildButterfly(k, n, identity(N), 0);
+        CHECK_EQ(t.kindName(), std::string("butterfly"));
+        CHECK_EQ(t.routers(), n * S);
+        CHECK_EQ(t.hasOneWayLinks(), n > 1);
+        CHECK(t.lattice() == nullptr);
+        for (int r = 0; r < t.routers(); r++)
+        {
+            int s = t.attr(r, "stage");
+            CHECK_EQ(s, r / S);
+            int ins = s > 0 ? k : 0, outs = s < n - 1 ? k : 0;
+            CHECK_EQ(t.linkPorts(r), ins + outs);
+            for (int p = 0; p < ins; p++) { CHECK(!t.canSend(r, p)); CHECK_EQ(t.portName(r, p), "in" + std::to_string(p)); CHECK_EQ(t.attr(t.upstream(r, p).router, "stage"), s - 1); }
+            for (int p = ins; p < ins + outs; p++) { CHECK(!t.canReceive(r, p)); CHECK_EQ(t.portName(r, p), "out" + std::to_string(p - ins)); CHECK_EQ(t.attr(t.link(r, p).router, "stage"), s + 1); }
+            CHECK_EQ(t.localPorts(r), (s == 0 ? k : 0) + (s == n - 1 && n > 1 ? k : 0));
+        }
+        for (int e = 0; e < N; e++) { CHECK_EQ(t.routerOf(e), e / k); CHECK_EQ(t.ejectRouter(e), (n - 1) * S + e / k); }
+        if (n == 1) continue;
+        auto tab = createRouting("Table", t, p1);
+        // destination tag: at stage s the output is digit n-1-s of the destination terminal
+        for (int src = 0; src < N; src++) for (int dst = 0; dst < N; dst++)
+        {
+            auto path = tab->path(t, t.routerOf(src), t.ejectRouter(dst));
+            CHECK_EQ((int)path.size(), n);
+            int div = N;
+            for (int s = 0; s < n - 1; s++)
+            {
+                div /= k;
+                CHECK_EQ(t.portName(path[s].first, path[s].second), "out" + std::to_string((dst / div) % k));
+            }
+            CHECK_EQ(path.back().first, t.ejectRouter(dst));
+        }
+        std::string cyc;
+        CHECK(channelDependencyAcyclic(t, *tab, 1, &cyc));
+        CHECK(tab->deadlockFreeOn(t));
+        CHECK_EQ((int)t.routedPairs().size(), S * S);
+        // the lattice algorithms refuse it
+        RoutingParams pa; pa.vcs_per_class = 2; pa.escape_vc = 1;
+        for (const char *alg : {"XY", "WestFirst", "O1TURN", "Valiant", "AdaptiveMinimal"})
+            CHECK(errOf([&] { createRouting(alg, t, pa); }).find("needs a lattice") != std::string::npos);
+        CHECK(errOf([&] { createRouting("DOR", t, p1); }).find("needs a flattened_butterfly") != std::string::npos);
+    }
+    // fewer endpoints than terminals is fine; bad dims and terminals are refused
+    Topology part = buildButterfly(2, 3, {{10, 0}, {11, 7}}, 0);
+    CHECK_EQ(part.routerOf(11), 3); CHECK_EQ(part.ejectRouter(11), 11);
+    CHECK(errOf([] { buildButterfly(1, 2, {}, 0); }).find("k >= 2") != std::string::npos);
+    CHECK(errOf([] { buildButterfly(2, 0, {}, 0); }).find("n >= 1") != std::string::npos);
+    CHECK(errOf([] { buildButterfly(2, 2, {{0, 4}}, 0); }).find("not a terminal") != std::string::npos);
+    CHECK(errOf([] { buildButterfly(2, 2, {{0, 1}, {1, 1}}, 0); }).find("already taken") != std::string::npos);
+    CHECK(errOf([] { buildButterfly(2, 30, {}, 0); }).find("too large") != std::string::npos);
+}
+// T6: flattened butterfly: all-to-all rows, DOR takes one hop per differing coordinate, in
+// dimension order, and is acyclic with one VC
+TEST("T6-FLATTENED-BUTTERFLY")
+{
+    RoutingParams p1; p1.vcs_per_class = 1;
+    for (auto dims : std::vector<std::vector<int>>{{4}, {4, 4}, {3, 2, 2}, {2, 3, 4}})
+    {
+        Lattice shape; shape.dims = dims; shape.wrap.assign(dims.size(), false);
+        Topology t = buildFlattenedButterfly(dims, identity(shape.size()), 0);
+        CHECK(!t.hasOneWayLinks()); CHECK(t.lattice() == nullptr);
+        int deg = 0; for (int k : dims) deg += k - 1;
+        for (int r = 0; r < t.routers(); r++) CHECK_EQ(t.linkPorts(r), deg);
+        farEndsConsistent(t);
+        auto dor = createRouting("DOR", t, p1);
+        for (int s = 0; s < t.routers(); s++) for (int d = 0; d < t.routers(); d++)
+        {
+            if (s == d) continue;
+            auto path = dor->path(t, s, d);
+            auto cs = shape.coord(s), cd = shape.coord(d); int diff = 0, last = -1;
+            for (size_t i = 0; i < cs.size(); i++) diff += cs[i] != cd[i];
+            CHECK_EQ((int)path.size() - 1, diff);
+            for (size_t h = 0; h + 1 < path.size(); h++)
+            {
+                auto a = shape.coord(path[h].first), b = shape.coord(path[h + 1].first);
+                int changed = -1; for (size_t i = 0; i < a.size(); i++) if (a[i] != b[i]) { CHECK_EQ(changed, -1); changed = (int)i; }
+                CHECK(changed > last); last = changed;                       // dimension order
+                CHECK_EQ(b[changed], cd[changed]);                           // straight to the target coordinate
+            }
+        }
+        std::string cyc;
+        CHECK(channelDependencyAcyclic(t, *dor, 1, &cyc));
+        CHECK(dor->ordering() == Ordering::PAIR_PER_CLASS);
+    }
+    Topology f = buildFlattenedButterfly({3, 2}, {}, 0);
+    std::vector<std::string> names; for (int p = 0; p < f.linkPorts(0); p++) names.push_back(f.portName(0, p));
+    CHECK(names == std::vector<std::string>({"x1", "x2", "y1"}));
+    CHECK(errOf([] { buildFlattenedButterfly({}, {}, 0); }).find("needs dims") != std::string::npos);
+    CHECK(errOf([] { buildFlattenedButterfly({4, 4}, {{0, 16}}, 0); }).find("not a router") != std::string::npos);
+    Topology g = Topology::grid2d(4, 4, {}, 0);
+    CHECK(errOf([&] { createRouting("DOR", g, p1); }).find("needs a flattened_butterfly") != std::string::npos);
 }

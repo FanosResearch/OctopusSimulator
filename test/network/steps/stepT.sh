@@ -138,4 +138,74 @@ PYEOF
   if grep -q "^options,,1,-1,1,output_first,1,FCFSArbiter$" "$O/lat-sl1/NetworkStats.csv" && grep -q "^routerlatency,3,,,6," "$O/lat-rl3/NetworkStats.csv"
   then pass TF-STATS-OPTIONS "options and routerlatency rows" "same"
   else fail TF-STATS-OPTIONS "rows missing or wrong" "options and routerlatency rows"; fi
+
+  # ================ T6: one-way links, split attachment, butterfly and flattened butterfly
+  local BF42="-p interconnect.topology(s)=butterfly -p interconnect.dims(vi)=4,2 -p interconnect.routing(s)=auto"
+  local BF24="-p interconnect.topology(s)=butterfly -p interconnect.dims(vi)=2,4 -p interconnect.routing(s)=auto"
+  local BF23="-p interconnect.topology(s)=butterfly -p interconnect.dims(vi)=2,3 -p interconnect.component_ids(vi)=0,1,2,3,4,5,6,7 -p interconnect.routing(s)=auto"
+  local FB44="-p interconnect.topology(s)=flattened_butterfly -p interconnect.dims(vi)=4,4 -p interconnect.routing(s)=auto"
+
+  # ---------------- unloaded latency: every butterfly path crosses n routers and n-1 links, so
+  # R*rl + (R-1)*L + (f-1) with R = n, whatever the pair; on the flattened butterfly R is 1 + the
+  # number of coordinates that differ
+  t0=$(now); ok=1; detail=""
+  tunl6() { # tunl6 <label> <R> <f> <rl> <L> -- run args
+    local label="$1" R="$2" f="$3" rl="$4" L="$5"; shift 6
+    e=$(unl "$R" "$f" "$rl" "$L")
+    NO "$O/unl6-$label" "$@"; local rc=$?; [ $rc = 0 ] || { ok=0; detail="$detail $label:exit$rc"; return; }
+    m=$(nstat "$O/unl6-$label" class 2 3)
+    same "$m" "$e" || { ok=0; detail="$detail $label:$m/$e"; }
+  }
+  tunl6 bf23-07-1 3 1 2 1 -- $BF23 $(one 0 7 0)
+  tunl6 bf23-70-5 3 5 2 1 -- $BF23 $(one 7 0 64)
+  tunl6 bf23-33-1 3 1 2 1 -- $BF23 $(one 3 3 0)                     # to itself: still through every stage
+  tunl6 bf42-015-5 2 5 2 1 -- $BF42 $(one 0 15 64)
+  # link_latency 3: credits also take 3 ticks, so 4-flit VCs would stall a 5-flit packet; 8 do not
+  tunl6 bf24-L3-5 4 5 2 3 -- $BF24 -p interconnect.link_latency\(i\)=3 -p interconnect.vc_depth\(i\)=8 $(one 5 10 64)
+  tunl6 bf24-rl1-1 4 1 1 1 -- $BF24 -p interconnect.router_latency\(i\)=1 -p interconnect.credit_latency\(i\)=4 $(one 15 0 0)
+  tunl6 fb44-015-1 3 1 2 1 -- $FB44 $(one 0 15 0)
+  tunl6 fb44-03-5 2 5 2 1 -- $FB44 $(one 0 3 64)
+  tunl6 fb44-012-5 2 5 2 1 -- $FB44 $(one 0 12 64)
+  if [ $ok = 1 ]; then pass T6-UNLOADED "formula" "formula" "$(elapsed "$t0")"; else fail T6-UNLOADED "$detail" "R*rl+(R-1)*L+(f-1)" "$(elapsed "$t0")"; fi
+
+  # ---------------- loaded runs complete with conservation; credits on one-way links return out of
+  # band, so shallow VCs with slow credits must still drain
+  t0=$(now); ok=1; detail=""; before=$CONSERVE_FAILS
+  soak bf42 $BF42 -p generator[*].rate\(i\)=300
+  soak bf24 $BF24 -p generator[*].rate\(i\)=200
+  soak bf42-credit $BF42 -p interconnect.vc_depth\(i\)=1 -p interconnect.credit_latency\(i\)=5 -p generator[*].rate\(i\)=300
+  soak bf24-vc2 $BF24 -p interconnect.vcs_per_class\(i\)=2 -p interconnect.vc_depth\(i\)=2 -p interconnect.arbiter_type\(s\)=RRArbiter -p generator[*].rate\(i\)=300
+  soak bf24-serial $BF24 -p interconnect.link_model\(s\)=serial -p interconnect.link_latency\(i\)=3 -p generator[*].rate\(i\)=150
+  soak bf24-lp1 $BF24 -p interconnect.local_ports\(i\)=1 -p interconnect.sa_allocator\(s\)=input_first -p generator[*].rate\(i\)=200
+  soak bf24-bitrev $BF24 -p generator[*].pattern\(s\)=bitrev -p generator[*].rate\(i\)=200
+  soak fb44 $FB44 -p generator[*].rate\(i\)=200
+  soak fb44-table $FB44 -p interconnect.routing\(s\)=Table -p generator[*].rate\(i\)=200
+  soak fb422 -p interconnect.topology\(s\)=flattened_butterfly -p interconnect.dims\(vi\)=4,2,2 -p interconnect.routing\(s\)=DOR -p generator[*].rate\(i\)=200
+  [ $CONSERVE_FAILS = $before ] || { ok=0; detail="$detail conservation"; }
+  if [ $ok = 1 ]; then pass T6-SOAK "all complete, conserved" "same" "$(elapsed "$t0")"; else fail T6-SOAK "$detail" "all complete, conserved" "$(elapsed "$t0")"; fi
+
+  # ---------------- every butterfly packet crosses n-1 links: link flit hops = (n-1) * ejected flits;
+  # the stats name the one-way ports in<v> / out<j>
+  local lf ef
+  lf=$(nstat "$O/soak-bf24" totals linkflits 1); ef=$(nstat "$O/soak-bf24" totals flits 2)
+  if [ -n "$lf" ] && [ "$lf" = "$((3 * ef))" ] && grep -q "^port,8,0,in0," "$O/soak-bf24/NetworkStats.csv" && grep -q "^port,8,2,out0," "$O/soak-bf24/NetworkStats.csv"
+  then pass T6-LINKFLITS "linkflits = 3 * flits, in/out port rows" "same"
+  else fail T6-LINKFLITS "linkflits $lf, flits $ef" "linkflits = 3 * flits, in/out port rows"; fi
+
+  # ---------------- the dependency check runs on the one-way graph and accepts the butterfly
+  if grep -q "^config,,butterfly,Table," "$O/soak-bf42/NetworkStats.csv" && grep -q "^config,,flattened_butterfly,DOR," "$O/soak-fb44/NetworkStats.csv"
+  then pass T6-AUTO-ROUTING "butterfly Table, flattened_butterfly DOR" "same"
+  else fail T6-AUTO-ROUTING "config rows wrong" "butterfly Table, flattened_butterfly DOR"; fi
+
+  # ---------------- refusals with status 2 and the reason
+  ok=1; detail=""
+  refused bf-halfduplex "half_duplex needs two-way links, but topology butterfly has one-way links" -- $BF42 -p interconnect.half_duplex\(i\)=1 -p generator[*].packets\(i\)=10
+  refused bf-xy "XY routing needs a lattice topology" -- $BF42 -p interconnect.routing\(s\)=XY -p generator[*].packets\(i\)=10
+  refused bf-adapt "routing needs a lattice topology" -- $BF42 -p interconnect.routing\(s\)=AdaptiveMinimal -p interconnect.vcs_per_class\(i\)=2 -p interconnect.escape_vc\(i\)=1 -p generator[*].packets\(i\)=10
+  refused bf-wf "routing needs a lattice topology" -- $BF42 -p interconnect.routing\(s\)=WestFirst -p generator[*].packets\(i\)=10
+  refused bf-dor "DOR routing needs a flattened_butterfly topology" -- $BF42 -p interconnect.routing\(s\)=DOR -p generator[*].packets\(i\)=10
+  refused grid-dor "DOR routing needs a flattened_butterfly topology" -- -p interconnect.routing\(s\)=DOR -p generator[*].packets\(i\)=10
+  refused bf-dims "dims needs k,n for butterfly" -- -p interconnect.topology\(s\)=butterfly -p interconnect.dims\(vi\)=4 -p interconnect.routing\(s\)=auto -p generator[*].packets\(i\)=10
+  refused bf-terminal "node_map\[3\] = 4 is not a terminal of this butterfly" -- -p interconnect.topology\(s\)=butterfly -p interconnect.dims\(vi\)=2,2 -p interconnect.component_ids\(vi\)=0,1,2,3 -p interconnect.node_map[3]\(i\)=4 -p interconnect.routing\(s\)=auto -p generator[*].packets\(i\)=10
+  if [ $ok = 1 ]; then pass T6-REFUSALS "status 2 with the reason" "same"; else fail T6-REFUSALS "$detail" "status 2 with the reason"; fi
 }

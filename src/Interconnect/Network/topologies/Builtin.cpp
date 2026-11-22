@@ -70,6 +70,8 @@ namespace octopus { namespace net
     std::unique_ptr<TopologyBuilder> makeStarBuilder();
     std::unique_ptr<TopologyBuilder> makeMesh3DBuilder();
     std::unique_ptr<TopologyBuilder> makeTorus3DBuilder();
+    std::unique_ptr<TopologyBuilder> makeButterflyBuilder();
+    std::unique_ptr<TopologyBuilder> makeFlattenedButterflyBuilder();
 
     void registerBuiltinTopologies(TopologyRegistry &reg)
     {
@@ -80,5 +82,7 @@ namespace octopus { namespace net
         reg.add(makeStarBuilder());
         reg.add(makeMesh3DBuilder());
         reg.add(makeTorus3DBuilder());
+        reg.add(makeButterflyBuilder());
+        reg.add(makeFlattenedButterflyBuilder());
     }
 }}

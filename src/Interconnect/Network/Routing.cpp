@@ -21,7 +21,7 @@ namespace octopus { namespace net
     }
     static int localPortFor(const Topology &t, int r, int dst_endpoint)
     {
-        return t.routerOf(dst_endpoint) == r ? t.localPort(dst_endpoint) : -1;
+        return t.ejectRouter(dst_endpoint) == r ? t.ejectPort(dst_endpoint) : -1;
     }
     static uint32_t allVCs(int n) { return n >= 32 ? ~0u : ((1u << n) - 1); }
 
@@ -43,6 +43,8 @@ namespace octopus { namespace net
                                   " for destination router " + std::to_string(t.routerId(dst)));
             hops.push_back({r, rt.out_port});
             if (t.isLocalPort(r, rt.out_port)) return hops;
+            if (!t.canSend(r, rt.out_port))
+                throw ConfigError(name() + ": router " + std::to_string(t.routerId(r)) + " routes out of its receive-only port " + t.portName(r, rt.out_port));
             auto f = t.link(r, rt.out_port); in_port = f.port; r = f.router;
         }
         throw ConfigError(name() + ": no path from router " + std::to_string(t.routerId(src)) + " to " + std::to_string(t.routerId(dst)));
@@ -87,7 +89,8 @@ namespace octopus { namespace net
                     // every router n with a link n -> r relaxes through it
                     for (int q = 0; q < t.linkPorts(r); q++)
                     {
-                        auto back = t.link(r, q); int n = back.router;
+                        auto back = t.upstream(r, q); int n = back.router;
+                        if (n < 0) continue;                         // a send-only port
                         long nd = dist[r] + w[n][back.port];
                         if (nd < dist[n]) { pq.erase({dist[n], n}); dist[n] = nd; pq.insert({nd, n}); }
                     }
@@ -95,15 +98,22 @@ namespace octopus { namespace net
                 for (int r = 0; r < R; r++)
                 {
                     if (r == d) { m_next[r][d] = t.linkPorts(r); continue; }
-                    if (dist[r] >= INF) throw ConfigError("Table: router " + std::to_string(t.routerId(d)) + " is unreachable from router " + std::to_string(t.routerId(r)));
+                    if (dist[r] >= INF) { unreachable(t, r, d); continue; }
                     int best = -1, ties = 0;
                     for (int q = 0; q < t.linkPorts(r); q++)
-                        if (w[r][q] + dist[t.link(r, q).router] == dist[r]) { if (best < 0) best = q; ties++; }
+                        if (t.canSend(r, q) && w[r][q] + dist[t.link(r, q).router] == dist[r]) { if (best < 0) best = q; ties++; }
                     m_next[r][d] = best;
                     if (ties > 1) m_ties++;
                 }
             }
             std::cout << "Table: weighted shortest paths; " << m_ties << " (router, destination) pairs chose between equal-cost ports by lowest port index (state preferences with routing_via)" << std::endl;
+        }
+        // with one-way links not every router reaches every other: only the routed pairs must
+        std::vector<std::vector<bool>> m_needed;
+        void unreachable(const Topology &t, int r, int d) const
+        {
+            if (m_needed.empty() || m_needed[r][d])
+                throw ConfigError("Table: router " + std::to_string(t.routerId(d)) + " is unreachable from router " + std::to_string(t.routerId(r)));
         }
     public:
         int equalCostTies() const { return m_ties; }
@@ -111,6 +121,11 @@ namespace octopus { namespace net
         {
             int R = t.routers();
             m_next.assign(R, std::vector<int>(R, -1));
+            if (t.hasOneWayLinks())
+            {
+                m_needed.assign(R, std::vector<bool>(R, false));
+                for (auto &pr : t.routedPairs()) m_needed[pr.first][pr.second] = true;
+            }
             if (!p.link_weight.empty()) { weighted(t, p); }
             else
             // BFS from every destination over reversed links: next hop toward dst is the
@@ -123,16 +138,16 @@ namespace octopus { namespace net
                     int r = q.front(); q.pop_front();
                     for (int p = 0; p < t.linkPorts(r); p++)
                     {
-                        int n = t.link(r, p).router;
-                        if (dist[n] < 0) { dist[n] = dist[r] + 1; q.push_back(n); }
+                        int n = t.upstream(r, p).router;              // a router that sends to r
+                        if (n >= 0 && dist[n] < 0) { dist[n] = dist[r] + 1; q.push_back(n); }
                     }
                 }
                 for (int r = 0; r < R; r++)
                 {
                     if (r == d) { m_next[r][d] = t.linkPorts(r); continue; }     // a local port; refined per endpoint in nextHop
-                    if (dist[r] < 0) throw ConfigError("Table: router " + std::to_string(t.routerId(d)) + " is unreachable from router " + std::to_string(t.routerId(r)));
+                    if (dist[r] < 0) { unreachable(t, r, d); continue; }
                     for (int p = 0; p < t.linkPorts(r); p++)
-                        if (dist[t.link(r, p).router] == dist[r] - 1) { m_next[r][d] = p; break; }
+                        if (t.canSend(r, p) && dist[t.link(r, p).router] == dist[r] - 1) { m_next[r][d] = p; break; }
                 }
             }
             // CSV overrides by neighbour: dest id, neighbour router id, ... (the preferred form: it
@@ -164,6 +179,8 @@ namespace octopus { namespace net
                     if (d < 0) throw ConfigError("routing_table[" + std::to_string(kv.first) + "]: destination " + std::to_string(kv.second[i]) + " is not a router id");
                     if (port < 0 || port >= t.ports(r))
                         throw ConfigError("routing_table[" + std::to_string(kv.first) + "]: router " + std::to_string(kv.first) + " has no port " + std::to_string(port));
+                    if (!t.isLocalPort(r, port) && !t.canSend(r, port))
+                        throw ConfigError("routing_table[" + std::to_string(kv.first) + "]: port " + std::to_string(port) + " of router " + std::to_string(kv.first) + " is receive-only");
                     m_next[r][d] = port;
                 }
             }
@@ -582,6 +599,56 @@ namespace octopus { namespace net
         std::string name() const override { return "AdaptiveMinimal"; }
     };
 
+    // ------------------------------------------------------------------ DOR: dimension order on a flattened butterfly
+    // A flattened butterfly links every router to every other router of its row in each
+    // dimension, so a dimension takes one hop. DOR corrects dimension 0 first, then 1, ..., one
+    // hop each. Within a dimension a packet takes one link, and dimensions are taken in order,
+    // so the channel dependency graph is acyclic with one VC. Reads the attributes "flat_rank",
+    // "flat_c<d>" (the router's coordinate in dimension d) that the flattened_butterfly builder sets.
+    class FlatDORRouting : public RoutingAlgorithm
+    {
+        const Topology &m_t; int m_vcs, m_rank = 0;
+        std::vector<std::vector<int>> m_coord;                    // [router][dim]
+        std::vector<std::vector<std::map<int, int>>> m_port;      // [router][dim] coordinate -> port
+    public:
+        FlatDORRouting(const Topology &t, const RoutingParams &p) : m_t(t), m_vcs(p.vcs_per_class)
+        {
+            m_rank = t.routers() ? t.attr(0, "flat_rank") : -1;
+            if (m_rank < 1) throw ConfigError("DOR routing needs a flattened_butterfly topology (router attribute flat_rank); on a lattice use XY");
+            m_coord.assign(t.routers(), std::vector<int>(m_rank));
+            for (int r = 0; r < t.routers(); r++)
+                for (int d = 0; d < m_rank; d++) m_coord[r][d] = t.attr(r, "flat_c" + std::to_string(d));
+            m_port.assign(t.routers(), std::vector<std::map<int, int>>(m_rank));
+            for (int r = 0; r < t.routers(); r++)
+                for (int q = 0; q < t.linkPorts(r); q++)
+                {
+                    if (!t.canSend(r, q)) continue;
+                    int n = t.link(r, q).router, dim = -1, diff = 0;
+                    for (int d = 0; d < m_rank; d++) if (m_coord[n][d] != m_coord[r][d]) { dim = d; diff++; }
+                    if (diff == 1 && !m_port[r][dim].count(m_coord[n][dim])) m_port[r][dim][m_coord[n][dim]] = q;
+                }
+        }
+        Route nextHop(const RouteContext &c) const override
+        {
+            Route rt; rt.vc_mask = allVCs(m_vcs);
+            for (int d = 0; d < m_rank; d++)
+            {
+                int to = m_coord[c.dst_router][d];
+                if (m_coord[c.router][d] == to) continue;
+                auto it = m_port[c.router][d].find(to);
+                if (it == m_port[c.router][d].end())
+                    throw ConfigError("DOR: router " + std::to_string(m_t.routerId(c.router)) + " has no link in dimension " + std::to_string(d) + " to coordinate " + std::to_string(to));
+                rt.out_port = it->second;
+                return rt;
+            }
+            rt.out_port = c.packet ? localPortFor(m_t, c.router, c.packet->dst_endpoint) : m_t.linkPorts(c.router);
+            return rt;
+        }
+        Ordering ordering() const override { return Ordering::PAIR_PER_CLASS; }
+        bool deadlockFreeOn(const Topology &) const override { return true; }    // by construction (see above)
+        std::string name() const override { return "DOR"; }
+    };
+
     // ------------------------------------------------------------------ factory
     std::unique_ptr<RoutingAlgorithm> createRouting(const std::string &name, const Topology &t, const RoutingParams &p)
     {
@@ -597,8 +664,9 @@ namespace octopus { namespace net
         if (name == "Valiant") return std::make_unique<TwoPhaseRouting>(t, p, false);
         if (name == "ROMM") return std::make_unique<TwoPhaseRouting>(t, p, true);
         if (name == "AdaptiveMinimal") return std::make_unique<AdaptiveMinimalRouting>(t, p);
+        if (name == "DOR") return std::make_unique<FlatDORRouting>(t, p);
         if (name == "TDM_XY") throw ConfigError("routing TDM_XY is deferred (docs/NoC_Architecture_Spec.md s12)");
-        throw ConfigError("unknown routing algorithm '" + name + "' (Table, XY, WestFirst, NorthLast, NegativeFirst, OddEven, O1TURN, Valiant, ROMM, AdaptiveMinimal)");
+        throw ConfigError("unknown routing algorithm '" + name + "' (Table, XY, WestFirst, NorthLast, NegativeFirst, OddEven, O1TURN, Valiant, ROMM, AdaptiveMinimal, DOR)");
     }
 
     // ------------------------------------------------------------------ deadlock check
@@ -644,6 +712,9 @@ namespace octopus { namespace net
             if (port < 0 || port >= t.ports(r))
                 throw ConfigError(who + ": router " + std::to_string(t.routerId(r)) + " has no port " + std::to_string(port) +
                                   " for destination router " + std::to_string(t.routerId(d)));
+            if (!t.isLocalPort(r, port) && !t.canSend(r, port))
+                throw ConfigError(who + ": router " + std::to_string(t.routerId(r)) + " routes out of its receive-only port " + t.portName(r, port) +
+                                  " for destination router " + std::to_string(t.routerId(d)));
         }
     }
 
@@ -658,11 +729,11 @@ namespace octopus { namespace net
         if (vcs_per_class > 32) throw ConfigError("the deadlock check supports at most 32 VCs per class");
         // every state (router, in_port, in_vc) a packet from s to d can reach, following every
         // candidate output (primary and fallback) with every VC its mask allows
-        int R = t.routers(); CDG g;
+        CDG g;
         uint32_t all = vcs_per_class >= 32 ? ~0u : ((1u << vcs_per_class) - 1);
-        for (int s = 0; s < R; s++) for (int d = 0; d < R; d++)
+        for (auto &sd : t.routedPairs())             // every pair, or with one-way links the endpoint pairs
         {
-            if (s == d) continue;
+            int s = sd.first, d = sd.second;
             struct St { int router, in_port, in_vc, prev; };
             std::set<std::tuple<int, int, int>> seen; std::vector<St> todo{{s, -1, 0, -1}};
             while (!todo.empty())

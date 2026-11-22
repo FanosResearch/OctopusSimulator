@@ -122,7 +122,7 @@ MOESI uses \code{DIRECTORY\_MOESI}, \code{MOESI\_directory\_v2}, \code{DIRECTORY
 \section{Topology and endpoint attachment}\label{sec:noc-topology}
 
 A topology is a set of routers, the links between them and the router each endpoint attaches to.
-\key{topology} names the \emph{builder} that makes it. Seven builders ship:
+\key{topology} names the \emph{builder} that makes it. Nine builders ship:
 
 \begin{description}
 \item[\code{grid2d}] $k_x \times k_y$ routers from \key{dims(vi),kx,ky}, numbered row-major,
@@ -141,12 +141,32 @@ A topology is a set of routers, the links between them and the router each endpo
   endpoint and gets an \emph{implicit router} of its own, which stands for the endpoint's link
   ports and adds no router latency. The other nodes are explicit routers (\key{router\_ids} may
   list them).
+\item[\code{butterfly}] a $k$-ary $n$-fly from \key{dims(vi),k,n}, as in BookSim. It has $n$
+  stages of $k^{n-1}$ routers with $k$ inputs and $k$ outputs each, joined by one-way links from
+  each stage to the next. Router (stage $s$, row $a$) has id $s\cdot k^{n-1} + a$. Output $j$
+  leads to the router of the next stage whose row is $a$ with base-$k$ digit $n-2-s$ set to $j$.
+  \key{node\_map[<id>](i)} gives each endpoint a terminal $t$ between 0 and $k^n-1$. The endpoint
+  injects at router $t/k$ of stage 0 and ejects at router $t/k$ of the last stage, so every packet
+  crosses $n$ routers.
+\item[\code{flattened\_butterfly}] the butterfly with each row of routers merged into one router
+  (Kim, Dally and Abts, 2007). \key{dims(vi)} gives the routers per dimension,
+  $k_0,k_1,\dots$, numbered as a lattice with dimension 0 fastest. Each router has a two-way
+  link to every router that differs from it in exactly one coordinate, so it reaches any router
+  in as many hops as coordinates differ. \key{node\_map} attaches endpoints as on a grid.
 \end{description}
 
 The five generated shapes other than \code{star} are \emph{lattices}: each router has a coordinate
 per dimension, a dimension may wrap, and each link port has a direction. Routing algorithms read
 this capability rather than a topology name, so an algorithm written for lattices works on all of
-them (\cref{sec:noc-routing}).
+them (\cref{sec:noc-routing}). The two butterflies are not lattices.
+
+\paragraph{One-way links.} A link port is two-way, send-only or receive-only. A two-way port
+sends to and receives from the same far port, as on every topology except \code{butterfly}. A
+one-way link is a send-only port on one router and a receive-only port on the other, with no link
+back. Credits need no link back either: a credit returns to the port that fed the flit
+\key{credit\_latency} ticks after the flit leaves the downstream buffer, out of band, as in
+BookSim (\cref{sec:noc-flow}). \key{half\_duplex} needs two-way links and is refused on a
+butterfly.
 
 \paragraph{Port order.} A router numbers its link ports first, in a fixed order, and its local
 ports last (\cref{tab:noc-ports}). On a lattice the order follows the directions, and a direction
@@ -165,6 +185,8 @@ to the LLC.
 \code{ring} & clockwise ($r+1$), counter-clockwise ($r-1$) \\
 \code{custom} & the neighbours in the order of the node's own matrix row. A neighbour named twice gets one port \\
 \code{star} & none \\
+\code{butterfly} & inputs \code{in0} to \code{in}$(k-1)$ (not at stage 0), then outputs \code{out0} to \code{out}$(k-1)$ (not at the last stage). Input $v$ comes from the router whose replaced digit is $v$ \\
+\code{flattened\_butterfly} & dimension 0 first, then 1 and so on, by ascending coordinate within a dimension, named \code{x}$c$, \code{y}$c$, \code{z}$c$, then \code{d}$i$\code{.}$c$ \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -181,7 +203,9 @@ ascending endpoint id, on \code{star} and \code{custom} the order of \key{compon
 \code{MultiCoreSystem\_Grid} router 3 has west (0), north (1), L1 3 on local port 2 and the LLC on
 local port 3. A positive \key{local\_ports} smaller than the endpoints at a router makes them
 share ports round-robin. The NIs on a shared port then compete for it through the port's arbiter,
-and the RX credits stay per endpoint and class.
+and the RX credits stay per endpoint and class. On a \code{butterfly} an endpoint is attached
+\emph{split}: it injects through a local port of a stage-0 router and ejects through a local port
+of a last-stage router. With $n = 1$ the single stage does both.
 
 \section{Packets, flits and classes}\label{sec:noc-packets}
 
@@ -403,10 +427,10 @@ lists all of them.}
 A routing algorithm is a plug-in chosen by name with \key{routing}. Given the current router, the
 input port and VC, the source and destination routers, the class and the packet, it returns the
 output port and a mask of the output VCs the packet may use. It may read the current router's
-credit counts and nothing else. Ten algorithms ship (\cref{tab:noc-routing}).
+credit counts and nothing else. Eleven algorithms ship (\cref{tab:noc-routing}).
 \code{auto}, the default, selects \code{XY} on \code{grid2d}, \code{torus2d}, \code{mesh3d} and
-\code{torus3d}, \code{XY} on a \code{ring} when \key{vcs\_per\_class} is at least 2, and
-\code{Table} everywhere else. A construction that does not fit an algorithm stops the run with
+\code{torus3d}, \code{XY} on a \code{ring} when \key{vcs\_per\_class} is at least 2, \code{DOR} on
+\code{flattened\_butterfly}, and \code{Table} everywhere else, which includes \code{butterfly}. A construction that does not fit an algorithm stops the run with
 the reason, for example \code{O1TURN} on a 3-D mesh or \code{XY} on a torus with one VC.
 
 \begin{table}[htbp]\centering\small
@@ -425,6 +449,7 @@ the reason, for example \code{O1TURN} on a 3-D mesh or \code{XY} on a torus with
 \code{Valiant} & oblivious & a lattice without wraps (\code{grid2d}, \code{mesh3d}), \key{vcs\_per\_class} $\ge 2$ & none \\
 \code{ROMM} & oblivious & as \code{Valiant} & none \\
 \code{AdaptiveMinimal} & adaptive & any lattice, \key{escape\_vc} set, \key{vcs\_per\_class} $\ge 2$, with wraps $\ge 3$ & none \\
+\code{DOR} & deterministic & \code{flattened\_butterfly} & pair per class \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -441,13 +466,21 @@ the reason, for example \code{O1TURN} on a 3-D mesh or \code{XY} on a torus with
   to router \code{neighbour}. It does not depend on port numbering, so it is the preferred way to
   state a route. \key{routing\_table[<router>](vi)} is applied last, as \code{dest,port} pairs. A
   neighbour that is not linked, or a port the router does not have, stops the run. The table must
-  pass the channel dependency check (\cref{sec:noc-deadlock}).
+  pass the channel dependency check (\cref{sec:noc-deadlock}). The search follows the direction
+  of each link, so \code{Table} also routes one-way networks. There not every router reaches
+  every other, and only the routers where endpoints inject must reach the routers where
+  endpoints eject. On a \code{butterfly} each pair has exactly one path, so \code{Table} computes
+  the destination-tag route: at stage $s$ the output is digit $n-1-s$ of the destination
+  terminal in base $k$.
 \item[\code{XY}] any lattice. Dimension-order routing: along dimension 0 (X) to the destination's
   coordinate, then dimension 1 (Y), then dimension 2 (Z). On a wrapped dimension it takes the
   shorter way round, the positive direction on a tie, and applies the dateline rule. The leg in a
   dimension uses VC 1 if the shorter way from the source's coordinate to the destination's crosses
   the wrap link, and VC 0 otherwise. A torus or a ring with \code{XY} therefore needs
   \key{vcs\_per\_class} of at least 2, and only VCs 0 and 1 carry traffic.
+\item[\code{DOR}] \code{flattened\_butterfly} only. Dimension 0 first, then 1 and so on, with one
+  hop per dimension straight to the destination's coordinate. Each dimension takes one link and
+  the dimensions come in order, so it is deadlock-free with one VC.
 \end{description}
 
 \paragraph{Turn models.} \code{grid2d} only. Each forbids enough turns to break every cycle of
@@ -501,8 +534,8 @@ graph is acyclic.
 
 \paragraph{Ordering.} Two packets of one class from one source to one destination arrive in the
 order they were injected when the path and the VC are fixed by source, destination and class:
-\code{Table} and \code{XY} with \key{vcs\_per\_class} 1, and \code{XY} on a torus or a ring, where
-the dateline fixes the VC. These two algorithms declare \code{PAIR\_PER\_CLASS}. The turn models,
+\code{Table}, \code{XY} and \code{DOR} with \key{vcs\_per\_class} 1, and \code{XY} on a torus or a
+ring, where the dateline fixes the VC. These three algorithms declare \code{PAIR\_PER\_CLASS}. The turn models,
 the oblivious algorithms and \code{AdaptiveMinimal} declare \code{NONE}. No algorithm orders
 packets of different classes. The directory presets set the system-level key
 \key{requires\_ordering(s),pair\_per\_class}, and the network refuses at start-up an algorithm that
@@ -589,7 +622,9 @@ routing when it is built, the protocol once every controller exists.
 
 \paragraph{Routing level.} The channel dependency graph has one node per (link, VC) and an edge
 from one channel to the next whenever some packet may hold the first and then ask for the second.
-To build it the network starts at every source router, for every destination router, and follows
+To build it the network starts at every source router, for every destination router (on a
+network with one-way links, at every router where an endpoint injects, for every router where
+an endpoint ejects), and follows
 every output the algorithm may use there, its \emph{candidates}, with every VC each hop's mask
 allows: all allowed ports of a turn model, both orders of \code{O1TURN}, every intermediate of
 \code{Valiant}, the adaptive outputs and the escape fallback of \code{AdaptiveMinimal}. The walk
@@ -893,10 +928,10 @@ system file. \Cref{tab:noc-syskeys} lists the system and controller keys the net
 \toprule key & default & meaning \\ \midrule\endhead
 \bottomrule\endlastfoot
 \multicolumn{3}{@{}l}{\textit{topology}}\\
-\key{topology(s)} & \code{custom} & \code{custom}, \code{grid2d}, \code{torus2d}, \code{ring}, \code{star}, \code{mesh3d} or \code{torus3d} \\
+\key{topology(s)} & \code{custom} & \code{custom}, \code{grid2d}, \code{torus2d}, \code{ring}, \code{star}, \code{mesh3d}, \code{torus3d}, \code{butterfly} or \code{flattened\_butterfly} \\
 \key{component\_ids(vi)} & from \code{Mesh.csv} & the endpoint ids \\
-\key{dims(vi)} & 0 & $k_x,k_y$ for \code{grid2d} and \code{torus2d}, $k_x,k_y,k_z$ for \code{mesh3d} and \code{torus3d}, $k$ for a ring \\
-\key{node\_map[<id>](i)} & none & the router of an endpoint, on generated topologies \\
+\key{dims(vi)} & 0 & $k_x,k_y$ for \code{grid2d} and \code{torus2d}, $k_x,k_y,k_z$ for \code{mesh3d} and \code{torus3d}, $k$ for a ring, $k,n$ for \code{butterfly}, the routers per dimension for \code{flattened\_butterfly} \\
+\key{node\_map[<id>](i)} & none & the router of an endpoint, on generated topologies. On \code{butterfly}: its terminal, 0 to $k^n-1$ \\
 \key{connection\_matrix[i](vi)} & from \code{Mesh.csv} & \code{custom}: node id, then its neighbours \\
 \key{router\_ids(vi)} & $-1$ & \code{custom}: the explicit routers. $-1$: every node that is not an endpoint \\
 \key{local\_ports(i)} & 0 & local ports per router. 0: one per endpoint \\
@@ -914,13 +949,13 @@ system file. \Cref{tab:noc-syskeys} lists the system and controller keys the net
 \key{class\_link\_latency(vi)} & $-1$ & one link latency per class. $-1$: \code{link\_latency} \\
 \key{credit\_latency(i)} & $-1$ & ticks for a credit to return. $-1$: \code{link\_latency} \\
 \key{link\_model(s)} & \code{pipelined} & \code{pipelined}: one flit per tick per link. \code{serial}: a flit holds the link for its latency \\
-\key{half\_duplex(i)} & 0 & 1: the two directions of a connection share one link \\
+\key{half\_duplex(i)} & 0 & 1: the two directions of a connection share one link. Refused with one-way links \\
 \key{inject\_queue\_depth(i)} & 16 & packets per class at the NI. At least the number of caches \\
 \key{eject\_queue\_depth(i)} & 16 & messages per class in the endpoint's RX \\
 \key{rx\_serving(s)} & \code{priority} & \code{priority}: response, forward, request. \code{alternate}: the legacy rotation \\
 \key{m\_clk\_period(i)} & 50 & from \code{Mesh.csv}. One tick per two periods, one core cycle \\
 \multicolumn{3}{@{}l}{\textit{routing and allocation}}\\
-\key{routing(s)} & \code{auto} & \code{auto} (\code{XY} on grids, tori, 3-D lattices and on a ring with 2 VCs or more, else \code{Table}), or an algorithm of \cref{tab:noc-routing} \\
+\key{routing(s)} & \code{auto} & \code{auto} (\code{XY} on grids, tori, 3-D lattices and on a ring with 2 VCs or more, \code{DOR} on \code{flattened\_butterfly}, else \code{Table}), or an algorithm of \cref{tab:noc-routing} \\
 \key{routing\_via[<router>](vi)} & none & \code{Table}: \code{dest,neighbour} pairs overriding the computed table \\
 \key{link\_weight[<router>](vi)} & none & \code{Table}: \code{neighbour,weight} pairs. Any entry switches to weighted shortest paths \\
 \key{routing\_table[<router>](vi)} & none & \code{Table}: \code{dest,port} pairs, applied last \\
@@ -988,6 +1023,8 @@ MEM & memory on the network: existing presets unchanged when it is off, EEMBC co
 D & directory MESI and MOESI on every grid preset, under both arbiters and with small queues: every run completes without a fault \\
 T (unit) & topology plug-ins: the port order of every builder and \code{custom} row order, \code{routing\_via}, the builder registry, lattice ports, the dependency check over the candidates of every algorithm on several grids and VC counts, the escape-network check (the one-escape-VC torus is refused), the \code{AdaptiveMinimal} fallback, 3-D lattices, \code{XY} on rings of 3 to 9, weighted \code{Table}, and the oblivious draws (minimal for \code{O1TURN} and \code{ROMM}, varying with the packet and the seed) \\
 T system & T4-UNLOADED: a ring of 8, \code{mesh3d} 4$\times$2$\times$2 and \code{torus3d} 3$\times$3$\times$3, 1 and 5 flits, each equal to the formula. T4-AUTO-RING: \code{auto} gives \code{XY} on a ring with 2 VCs, \code{Table} on a ring of 3, and a ring of 8 with one VC is refused. T4-ROUTER-OPTIONS: \code{switch\_latency} 1 (27 ticks), \code{router\_latency[3]} 6 (24) and \code{input\_first} (24) on a 4$\times$4 grid, each equal to the formula. T4-SOAK, T4-SOAK-2: loaded runs of every new topology and algorithm, \code{AdaptiveMinimal} on grid, torus, ring and 3-D mesh, \code{input\_first} with \code{RRArbiter}, the new patterns and on/off injection complete with conservation. T4-PATTERNS: under \code{bitcomp}, \code{bitrev}, \code{shuffle} and \code{tornado} every endpoint hears from exactly its partner. TF-RANDPERM-NO-FIXED-POINT: under \code{randperm} every endpoint sends and receives. TF-REFUSALS: a malformed router id in a key and a bit pattern on 12 endpoints end with status 2 and the reason. TF-STATS-OPTIONS: \code{NetworkStats.csv} has the \code{options} and \code{routerlatency} rows. T5-ADAPT-TORUS-REFUSED \\
+T6 (unit) & one-way links and the butterflies: two-way ports have \code{upstream} equal to \code{link} on every shipped shape, a one-way ring built port by port has the expected send and receive ports and its \code{Table} dependency graph has a cycle, split attachment numbers a local port at each router, every butterfly from 2-ary 1-fly to 3-ary 3-fly has the documented wiring and \code{Table} gives the destination-tag route for every pair with an acyclic dependency graph, \code{DOR} on four flattened butterflies takes one hop per differing coordinate in dimension order, and the lattice algorithms and \code{DOR} refuse the shapes they do not fit \\
+T6 system & T6-UNLOADED: 2-ary 3-fly, 4-ary 2-fly and 2-ary 4-fly (with \key{link\_latency} 3, and with \key{router\_latency} 1 and \key{credit\_latency} 4) and a 4$\times$4 flattened butterfly, 1 and 5 flits, each equal to the formula with $R = n$ on a butterfly. T6-SOAK: loaded runs of both butterflies with shallow VCs and slow credits, two VCs, \code{serial} links, shared local ports, \code{input\_first} and \code{bitrev} complete with conservation. T6-LINKFLITS: on a 2-ary 4-fly the link flit hops are 3 times the flits. T6-AUTO-ROUTING: \code{auto} gives \code{Table} and \code{DOR}. T6-REFUSALS: \key{half\_duplex}, \code{XY}, \code{AdaptiveMinimal}, \code{WestFirst} and \code{DOR} on a butterfly, \code{DOR} on a grid, a butterfly with one \key{dims} entry and a terminal out of range end with status 2 and the reason \\
 REG & REG-BUS, REG-MESH, REG-TDM and REG-MEMNET: the bus, legacy mesh, TDM and memory-on-network references stay byte-identical. REG-ENV: the environment check's sample run gives its known request count and worst DRAM latency. REG-HAZARD: no memory read overtakes an older write of its line \\
 \end{longtable}
 
@@ -1016,8 +1053,11 @@ slot through switch allocation and traversal, raise \key{router\_latency} and
 \item On a network of more than 64 routers the start-up check trusts the algorithms that are
   deadlock-free by construction and does not build their dependency graph. \code{Table} and the
   escape network of \code{AdaptiveMinimal} are checked at every size.
-\item Every link has a reverse link, so a butterfly cannot be expressed, and an endpoint attaches
-  to exactly one router.
+\item \code{custom} matrices are symmetric, so a one-way link exists only in a builder
+  (\code{butterfly}). \key{half\_duplex} is refused on one-way links.
+\item The lattice algorithms do not run on the butterflies. A \code{butterfly} routes by
+  \code{Table}, which has one path per pair, and a \code{flattened\_butterfly} by \code{DOR} or
+  \code{Table}. There is no adaptive or non-minimal routing on either.
 \item Injection follows age only among eligible packets. Under \code{FCFSArbiter} a younger packet
   of another class leaves first when the older one finds no free VC with a credit. Under
   \code{RRArbiter} the local port rotates over packet owners, so an endpoint's packets of different
@@ -1039,7 +1079,7 @@ slot through switch allocation and traversal, raise \key{router\_latency} and
 \begin{wherebox}
 \begin{itemize}[nosep,leftmargin=1.2em]
 \item \file{header/Interconnect/Network/}, \file{src/Interconnect/Network/}: \code{Network} (the engine, statistics, hang dump), \code{NetworkInterface}, \code{Topology} and \code{TopologyBuilder} (the graph, the lattice capability, the builder registry), \code{Routing} (the algorithms, the channel dependency check), \code{Classifier}, \code{ProtocolCheck}, \code{TrafficGenerator}
-\item \file{src/Interconnect/Network/topologies/}: the builders (\file{Lattice.cpp}, \file{Graph.cpp}) and their registry (\file{Builtin.cpp})
+\item \file{src/Interconnect/Network/topologies/}: the builders (\file{Lattice.cpp}, \file{Graph.cpp}, \file{Butterfly.cpp}) and their registry (\file{Builtin.cpp})
 \item \file{header/Arbiters/Arbiter.h}: \code{Candidate} and \code{electIndex}
 \item \file{src/SystemConfigurations/MultiCoreSystem_Mesh.cpp}: wiring, LLC banks, memory on the network. \file{src/SystemConfigurations/NetworkOnly.cpp}: network-only mode
 \item \file{src/CacheControllers/CacheController.cpp}: transmit-side admission (\code{txNeed}, \code{txAdmit})

@@ -1,6 +1,6 @@
 # NoC topologies as plug-ins: design and plan
 
-Status: T0, T1, T2, T3 and T5 implemented on `network` (2026-11-21), each gated on byte-identical results over a 35-configuration matrix and the full test suite. T4 implemented the same day: `mesh3d` and `torus3d`, `XY` on rings with a dateline, the turn models `NorthLast`, `NegativeFirst` and `OddEven`, the oblivious `O1TURN`, `Valiant` and `ROMM`, weighted `Table`, `switch_latency`, per-router `router_latency`, `sa_allocator`, and new traffic patterns and on/off injection, validated by step T (`bash test/network/run.sh T`). T6 (one-way links and split attachment) is not done. The manual (chapter 9) and `docs/NoC_Architecture_Spec.md` (revision 2026-11-21) describe the result.
+Status: T0, T1, T2, T3 and T5 implemented on `network` (2026-11-21), each gated on byte-identical results over a 35-configuration matrix and the full test suite. T4 implemented the same day: `mesh3d` and `torus3d`, `XY` on rings with a dateline, the turn models `NorthLast`, `NegativeFirst` and `OddEven`, the oblivious `O1TURN`, `Valiant` and `ROMM`, weighted `Table`, `switch_latency`, per-router `router_latency`, `sa_allocator`, and new traffic patterns and on/off injection, validated by step T (`bash test/network/run.sh T`). T6 implemented on branch `t6-oneway` (2026-11-22): one-way links (`addOneWay`, credits out of band to `upstream()`), split attachment (`attachSplit`, `ejectRouter`), the `butterfly` (k-ary n-fly, routed by `Table` on the directed graph) and `flattened_butterfly` (routed by `DOR`) builders, gated on the same byte-identity matrix and the full suite. The manual (chapter 9) and `docs/NoC_Architecture_Spec.md` (revisions 2026-11-21 and 2026-11-22) describe the result.
 Branch: `network`. Related: `docs/NoC_Architecture_Spec.md` §4.1, §5 and §10, `docs/NoC_Test_Plan.md`.
 
 ## 1. Goal
@@ -41,7 +41,8 @@ The rigidity sits in four places.
    `torus2d` needs both dimensions at least 3.
 4. **One attachment router per endpoint, links in pairs.** An endpoint injects and ejects at the
    same router and local port. `custom` requires a symmetric matrix, so every link has a reverse.
-   Unidirectional multistage networks (butterfly, omega, baseline) do not fit.
+   Unidirectional multistage networks (butterfly, omega, baseline) do not fit. T6 lifts this for
+   builders: one-way links and split attachment (§3.6).
 
 A smaller issue on the way: `custom` port numbering follows from how its loop is written, not from
 a stated rule (`Topology.cpp:186-196`). The loop runs over nodes in ascending id (`adj` is a
@@ -214,6 +215,14 @@ For unidirectional multistage networks:
   another. This is the only change that reaches the engine: `routerOf()` and `localPort()` split
   into inject and eject versions in `Network.cpp` and `NetworkInterface.cpp`.
 
+As built (T6, 2026-11-22): `addOneWay(a, b, name_a, name_b)` adds a send-only port on `a` and a
+receive-only port on `b`, so both ends have a port index for the stats and the hang dump.
+`Topology::upstream(r, p)` is where an input port's credits go. The engine already sent credits
+as timed events, never over the reverse data link, so the only engine change is `upstream()` in
+place of `link()` for the credit and `ejectRouter()` for a packet's destination router.
+`half_duplex` with one-way links is refused rather than ignored. `NetworkInterface.cpp` needed no
+change.
+
 This is worth doing only if unidirectional butterflies, omega or baseline networks are needed.
 Folded butterflies and fat trees already fit two-way links.
 
@@ -245,7 +254,7 @@ traces fetched) and every reference unchanged. Steps 1 to 3 add no feature.
 | T3 | Per-router implicit flag and attributes. Delete `Kind`. `fixesVCPerPair()` | Topology, Routing.cpp | byte-identical |
 | T4 | Features that fall out: ring routing with a dateline, `mesh3d` and `torus3d` builders, AdaptiveMinimal dateline fix | Routing.cpp, new builders | new tests with formula-derived expectations: unloaded latency on a ring and a 3-D mesh, channel dependency check passes on rings of 3 to 8, ordering refusal and acceptance |
 | T5 | Companion: `RouteState` and `onInject`, `candidates()` and the full dependency check | NetTypes.h, Routing, Network.cpp | byte-identical for the shipped algorithms. The torus AdaptiveMinimal of today must be refused by the new check before the T4 fix |
-| T6 | Optional: one-way links and split attachment | Topology, Network.cpp, NetworkInterface.cpp | new tests on a 2-stage butterfly |
+| T6 | Optional: one-way links and split attachment | Topology, Network.cpp, NetworkInterface.cpp | new tests on a 2-stage butterfly. Done: T6-* unit tests (wiring, destination-tag routes, a one-way ring's dependency cycle, split ports) and step-T runs (unloaded latency, soak with conservation, link flits, refusals) |
 
 T5 can run before T4 if the check should catch the torus bug first, which is the stronger
 demonstration that the new check works.
