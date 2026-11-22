@@ -728,6 +728,6 @@ namespace octopus { namespace net
             throw ConfigError("the protocol requires pair_per_class ordering but routing " + r.name() + " does not preserve it");
         if (vcs_per_class > 1 && !r.fixesVCPerPair())
             throw ConfigError("the protocol requires pair_per_class ordering but vcs_per_class = " + std::to_string(vcs_per_class) +
-                              " lets a pair's packets take different VCs (only the torus dateline fixes the VC)");
+                              " lets a pair's packets take different VCs (use vcs_per_class = 1, or XY on a lattice with wrap links, where the dateline fixes the VC)");
     }
 }}

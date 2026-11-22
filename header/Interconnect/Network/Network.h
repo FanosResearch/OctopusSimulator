@@ -36,6 +36,7 @@ namespace octopus { namespace net
         std::string link_model = "pipelined";         // pipelined: one flit per tick per link; serial: a flit holds the link for its latency
         int inject_depth = 16, eject_depth = 16, local_ports = 0, escape_vc = -1;
         std::string rx_serving = "priority", routing = "Table", arbiter_type = "FCFSArbiter", topology = "custom";
+        int routing_seed = 1;                         // oblivious algorithms' per-packet draws
         std::string deadlock_check = "refuse";        // protocol-and-network check (spec s14.3): refuse | warn
         int linkLatency(int cls) const { return class_link_latency.empty() ? link_latency : class_link_latency[cls]; }
         std::vector<int> classPriority() const;        // classes in serving order, highest first

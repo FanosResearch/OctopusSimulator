@@ -50,6 +50,20 @@ statements use **shall**; everything else is explanation.
 - Traffic generators: patterns `bitcomp`, `bitrev`, `shuffle`, `tornado`, `randperm`, and on/off
   injection (§18).
 
+**Revision 2026-11-22.** Small fixes after the plug-in work. What changed:
+
+- The algorithms deadlock-free by construction are cross-checked at start-up on the full channel
+  dependency graph of their candidates, on networks of up to 64 routers (§14.3).
+- A router-numbered key (`router_latency[`, `routing_table[`, `routing_via[`, `link_weight[`)
+  whose brackets do not hold an integer id is refused. It used to read as router 0 (§16).
+- A generator setting the network-only mode cannot use (a bit pattern on a non-power-of-two
+  endpoint count, an unknown pattern) ends the run through the fatal path, status 2 (§18).
+- `randperm` draws a single random cycle (Sattolo's algorithm), so no endpoint is its own partner
+  (§18).
+- `NetworkStats.csv` gains the `options` and `routerlatency` rows (§15.4).
+- The ordering refusal names both ways out: one VC per class, or `XY` on a wrapped lattice (§14).
+- §19 lists the files as they are.
+
 Contents
 
 1. Scope and goals
@@ -750,8 +764,12 @@ the watchdog reports.
     at any router and then follows the escape route to its destination, so the graph is built
     from every (entry router, destination) pair. The single-escape-VC version on a torus fails
     this check. The dateline version passes.
-  - `XY`, the turn models and the oblivious algorithms return true by construction. The unit tests
-    (step T) run the full candidate check on each of them over several grid shapes and VC counts.
+  - `XY`, the turn models and the oblivious algorithms return true by construction. On networks
+    of up to 64 routers construction cross-checks the claim with the full candidate check, and a
+    cycle found there is reported as an internal error. Larger networks skip the cross-check: its
+    cost grows with routers squared times the states a packet can reach (about 6 s for `Valiant`
+    on 16x16), and the construction argument does not depend on the size. The unit tests (step T)
+    run the same check on each algorithm over several grid shapes and VC counts.
 - **Protocol-level** (`Network::checkProtocols`, `src/Interconnect/Network/ProtocolCheck.cpp`):
   at construction, after every controller exists, read each protocol's FSM table and, for every
   cell with actions, the class of the message the event consumes and the classes of the messages
@@ -814,7 +832,10 @@ delta)` beside the existing set-valued `annotate`:
 At the end of a run the network writes `newLogger/NetworkStats.csv` with: per link, flits carried
 and ticks busy; per router and output port, allocation attempts and losses (the contention count);
 per class, packets, mean and maximum injection-to-ejection latency and maximum `NoC Wait`; and the
-conservation totals of §9. The network-only harness (§18) reads this file to plot latency versus
+conservation totals of §9. Two rows record the configuration: `config` (topology, the resolved
+routing, `flit_bytes`, `vc_depth`, `router_latency`, `link_latency`) and `options`
+(`vcs_per_class`, `escape_vc`, `switch_latency`, `sa_allocator`, `routing_seed`, `arbiter_type`),
+plus one `routerlatency` row (router id, latency) per `router_latency[<router id>]` override. The network-only harness (§18) reads this file to plot latency versus
 injection rate; the sweep harness can read it like any other report.
 
 ### 15.5 Hang dump
@@ -830,6 +851,8 @@ class, owner, flits present, output port and VC, and credits available on its ou
 - A message with an unknown destination, an unclassifiable message, a routing function returning a
   port the router does not have or an empty `vc_mask`, a credit counter exceeding its initial value,
   or a `pushMessage2RX` that returns `false` are fatal.
+- A router-numbered key (`router_latency[`, `routing_table[`, `routing_via[`, `link_weight[`)
+  whose brackets do not hold an integer id is refused at start-up, naming the key.
 - Determinism: no decision may depend on pointer values or on unordered-container iteration.
   Candidates are ordered by `(in_port, cls, vc)`; ties everywhere by `seq`. Adaptive choices use
   credit counts and lowest port index, never a random number.
@@ -917,9 +940,10 @@ and `i` an endpoint's index among the endpoint ids in ascending order.
 | `bitrev` | index `i` with its `log2 N` bits reversed. Needs `N` a power of two |
 | `shuffle` | index `i` rotated left by one bit. Needs `N` a power of two |
 | `tornado` | on a lattice, the first endpoint at the router whose coordinate in every dimension is `c' = (c + ⌈k/2⌉ − 1) mod k`. On any other topology index `(i + ⌈N/2⌉ − 1) mod N` |
-| `randperm` | index `perm[i]`, where `perm` is one Fisher-Yates permutation of `0..N−1` over `std::mt19937` seeded with `perm_seed` (the same for every generator while `perm_seed` is) |
+| `randperm` | index `perm[i]`, where `perm` is one random cyclic permutation of `0..N−1` (Sattolo's algorithm over `std::mt19937` seeded with `perm_seed`; the same for every generator while `perm_seed` is). A single cycle has no fixed point, so every endpoint sends and receives |
 
-A bit pattern with `N` not a power of two is refused at construction. A permutation other than
+A bit pattern with `N` not a power of two is refused at construction, through the fatal path
+(status 2). A permutation other than
 `transpose` whose partner is the endpoint itself, or no endpoint, makes that generator send
 nothing.
 
@@ -935,28 +959,34 @@ caches.
 
 ```
 header/Interconnect/Network/
-  Topology.h        Topology, generators, port numbering
-  Packet.h          Packet, Flit, class ids
-  Classifier.h      message -> class
-  Routing.h         RoutingAlgorithm, RouteContext, Route, factory
-  Router.h          Router: VCs, allocators, credits, local-port reservations
-  NetworkInterface.h
-  TrafficGenerator.h
-  Network.h         ClockedObj + Configurable, owns everything, getInterfaceFor
-  NetworkController.h  the per-tick engine (§13.2)
-  DeadlockCheck.h   channel-dependency and protocol-level checks
-  NetworkStats.h
-src/Interconnect/Network/*.cpp   one per header, plus Routing_XY.cpp, Routing_Table.cpp, ...
+  NetTypes.h          classes, Packet, Flit, ConfigError, fatal()
+  Classifier.h        message -> class
+  Topology.h          Topology (graph, ports, capabilities, construction API), Lattice
+  TopologyBuilder.h   KeyView, KeySpec, TopologyBuilder, TopologyRegistry
+  Routing.h           RoutingAlgorithm, RouteContext, Route, RoutingParams, factory, checks
+  NetworkInterface.h  the endpoint side (CommunicationInterface)
+  TrafficGenerator.h  network-only endpoints (§18)
+  Network.h           NetConfig, the engine: routers, VCs, allocators, credits, statistics
+src/Interconnect/Network/
+  Classifier.cpp, Fatal.cpp, Network.cpp, NetworkInterface.cpp, Routing.cpp (every algorithm and
+  the channel dependency checks), ProtocolCheck.cpp (§14.3 protocol level), Topology.cpp,
+  TrafficGenerator.cpp
+  topologies/Builtin.cpp   the registry and KeyView
+  topologies/Lattice.cpp   grid2d, torus2d, ring, mesh3d, torus3d
+  topologies/Graph.cpp     custom, star
+src/SystemConfigurations/NetworkOnly.cpp   the network-only system, permutation partners
 header/Arbiters/Arbiter.h        + electIndex and Candidate
+header/HangDump.h                the hang-dump registry
 header/Logger.h                  + Role::NOC, Annot NOC_*, accumulate()
-configuration/Interconnect/Network.csv
-configuration/SystemConfigurations/MultiCoreSystem_Grid.csv   2x2 grid, directory MSI, LLC on router 3
-configuration/SystemConfigurations/NetworkOnly.csv
-test/network/                   §20
+configuration/Interconnect/Network.csv, configuration/TrafficGenerator.csv
+configuration/SystemConfigurations/MultiCoreSystem_Grid*.csv, MultiCoreSystem_NetNoC.csv, NetworkOnly.csv
+test/network/                    §20: run.sh, steps/, unit/
 ```
 
-The legacy `Mesh`, `MeshController`, `MeshInterface`, `NoC*` files are untouched by Phase 1. They
-were to be deleted after §17.1 passed. The divergence was accepted instead, so they stay (§17.1).
+There are no separate router, controller, deadlock-check or statistics files: the router state,
+the per-tick engine and the statistics live in `Network`, the dependency checks in `Routing.cpp`.
+The legacy `Mesh`, `MeshController`, `MeshInterface`, `NoC*` files are untouched. They were to be
+deleted after §17.1 passed. The divergence was accepted instead, so they stay (§17.1).
 
 ## 20. Validation
 

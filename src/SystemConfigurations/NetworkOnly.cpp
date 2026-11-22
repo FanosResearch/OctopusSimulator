@@ -54,11 +54,13 @@ namespace octopus
         }
         else if (pattern == "randperm")
         {
-            // one permutation for all generators: Fisher-Yates over mt19937 (portable, unlike std::shuffle)
+            // one permutation for all generators, drawn with Sattolo's algorithm over mt19937 (portable,
+            // unlike std::shuffle): a uniformly random single cycle through all N endpoints, so no
+            // endpoint is its own partner and every endpoint sends and receives
             int seed = gp.count("perm_seed") ? std::get<int>(gp.at("perm_seed").value) : 1;   // TrafficGenerator.csv's default
             std::mt19937 rng((uint32_t)seed);
             vector<int> perm(N); for (int k = 0; k < N; k++) perm[k] = k;
-            for (int k = N - 1; k > 0; k--) { int j = (int)(rng() % (uint32_t)(k + 1)); std::swap(perm[k], perm[j]); }
+            for (int k = N - 1; k > 0; k--) { int j = (int)(rng() % (uint32_t)k); std::swap(perm[k], perm[j]); }
             out = ids[perm[i]];
         }
         return out == id ? -1 : out;
@@ -78,8 +80,15 @@ namespace octopus
             // the destination of a permutation pattern (docs/NoC_Architecture_Spec.md s18)
             ParametersMap gp = getSubMap(STRINGIFY(generator), id);
             std::string pattern = gp.count("pattern") ? std::get<std::string>(gp.at("pattern").value) : std::string("uniform");
-            int transpose = net::TrafficGenerator::isPermutation(pattern) ? partner(pattern, id, ids, t, gp) : -1;
-            m_gens.push_back(new net::TrafficGenerator(getSubMap(STRINGIFY(generator), id), id, m_net->getInterfaceFor(id), others, transpose, name));
+            // a bad generator setting (a bit pattern on a non-power-of-two count, an unknown pattern)
+            // ends the run through the network's fatal path, as a bad network setting does
+            try
+            {
+                int transpose = net::TrafficGenerator::isPermutation(pattern) ? partner(pattern, id, ids, t, gp) : -1;
+                m_gens.push_back(new net::TrafficGenerator(getSubMap(STRINGIFY(generator), id), id, m_net->getInterfaceFor(id), others, transpose, name));
+            }
+            catch (net::ConfigError &e) { net::fatal(e.what()); }
+            catch (std::out_of_range &e) { net::fatal(std::string("missing generator configuration key (") + e.what() + ")"); }
         }
         m_net->standalone(m_gens);
         Logger::getLogger()->registerReportPath("newLogger");

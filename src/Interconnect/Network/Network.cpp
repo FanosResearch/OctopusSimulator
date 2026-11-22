@@ -23,6 +23,18 @@ namespace octopus { namespace net
         return {CLASS_RESPONSE, CLASS_FORWARD, CLASS_REQUEST};
     }
 
+    // The id inside a router-numbered key "<prefix><id>]"; a malformed id is a configuration error
+    // (atoi would silently read it as router 0).
+    static int keyId(const std::string &key, const std::string &prefix)
+    {
+        std::string body = key.substr(prefix.size());
+        size_t n = 0; int id = 0;
+        try { id = std::stoi(body, &n); } catch (std::exception &) { n = 0; }
+        if (n == 0 || n + 1 != body.size() || body[n] != ']')
+            throw ConfigError("key " + key + ": the part in brackets must be a router id");
+        return id;
+    }
+
     // ------------------------------------------------------------------ construction
     Network::Network(ParametersMap map, std::string pname, std::string config_path, std::string name)
         : ClockedObj(0), Configurable(map, config_path, name, pname)
@@ -76,7 +88,7 @@ namespace octopus { namespace net
         if (has("switch_latency")) c.switch_latency = geti("switch_latency");
         if (has("sa_allocator")) c.sa_allocator = gets("sa_allocator");
         for (auto &kv : parameters)
-            if (kv.first.rfind("router_latency[", 0) == 0) c.router_latency_at[std::atoi(kv.first.c_str() + 15)] = std::get<int>(kv.second.value);
+            if (kv.first.rfind("router_latency[", 0) == 0) c.router_latency_at[keyId(kv.first, "router_latency[")] = std::get<int>(kv.second.value);
         m_home_ids = optvi("home_ids");
 
         auto bad = [](const std::string &m) { throw ConfigError(m); };
@@ -127,29 +139,44 @@ namespace octopus { namespace net
         m_topo = std::make_unique<Topology>(TopologyRegistry::builtin().create(m_cfg.topology, KeyView(parameters), m_component_ids, m_cfg.local_ports));
 
         RoutingParams rp; rp.vcs_per_class = m_cfg.vcs_per_class; rp.escape_vc = m_cfg.escape_vc;
-        if (parameters.count("routing_seed")) rp.seed = (uint64_t)std::get<int>(parameters.at("routing_seed").value);
+        if (parameters.count("routing_seed")) m_cfg.routing_seed = std::get<int>(parameters.at("routing_seed").value);
+        rp.seed = (uint64_t)m_cfg.routing_seed;
         for (auto &kv : parameters)
             if (kv.first.rfind("routing_table[", 0) == 0)
             {
-                int rid = std::atoi(kv.first.c_str() + 14);
+                int rid = keyId(kv.first, "routing_table[");
                 rp.routing_table[rid] = std::get<std::vector<int>>(kv.second.value);
             }
             else if (kv.first.rfind("link_weight[", 0) == 0)
             {
-                int rid = std::atoi(kv.first.c_str() + 12);
+                int rid = keyId(kv.first, "link_weight[");
                 rp.link_weight[rid] = std::get<std::vector<int>>(kv.second.value);
             }
             else if (kv.first.rfind("routing_via[", 0) == 0)
             {
-                int rid = std::atoi(kv.first.c_str() + 12);
+                int rid = keyId(kv.first, "routing_via[");
                 rp.routing_via[rid] = std::get<std::vector<int>>(kv.second.value);
             }
         m_routing = createRouting(m_cfg.routing, *m_topo, rp);
-        if (!m_routing->deadlockFreeOn(*m_topo) && m_debug != "nocheck")
+        if (m_debug != "nocheck")
         {
-            std::string cyc = m_routing->deadlockCycle(*m_topo, m_cfg.vcs_per_class);
-            throw ConfigError("routing " + m_cfg.routing + " is not deadlock-free on this topology: " + cyc +
-                              (m_routing->needsEscapeVC() ? "" : " (use a deadlock-free algorithm, or routing_via / routing_table entries that break the cycle)"));
+            // An escape-VC algorithm (AdaptiveMinimal) is checked on its escape network, Table on
+            // the channel dependency graph of its routes (spec s14). The algorithms deadlock-free by
+            // construction are cross-checked on the graph of all their candidate outputs too, on
+            // networks of up to 64 routers: the check grows with routers^2 times the states a packet
+            // can reach (about 6 s for Valiant on 16x16), and the construction argument does not
+            // depend on the size.
+            std::string cyc;
+            bool claimed = m_routing->deadlockFreeOn(*m_topo);
+            if (!claimed) cyc = m_routing->deadlockCycle(*m_topo, m_cfg.vcs_per_class);
+            else if (!m_routing->needsEscapeVC() && m_routing->name() != "Table" && m_topo->routers() <= 64)
+                cyc = m_routing->deadlockCycle(*m_topo, m_cfg.vcs_per_class);
+            if (!claimed)
+                throw ConfigError("routing " + m_cfg.routing + " is not deadlock-free on this topology: " + cyc +
+                                  (m_routing->needsEscapeVC() ? "" : " (use a deadlock-free algorithm, or routing_via / routing_table entries that break the cycle)"));
+            if (!cyc.empty())
+                throw ConfigError("routing " + m_cfg.routing + " is deadlock-free by construction, but the dependency check found a cycle on this topology: " + cyc +
+                                  " (an internal error: please report it)");
         }
         std::set<int> homes(m_home_ids.begin(), m_home_ids.end());
         m_classifier = std::make_unique<Classifier>(m_cfg.num_classes, homes);
@@ -728,6 +755,9 @@ namespace octopus { namespace net
         f << "totals,linkflits,,," << m_totals.link_flit_hops << ",,,\n";
         f << "totals,ticks,,," << m_tick << ",,,\n";
         f << "config,," << m_cfg.topology << "," << m_cfg.routing << "," << m_cfg.flit_bytes << "," << m_cfg.vc_depth << "," << m_cfg.router_latency << "," << m_cfg.link_latency << "\n";
+        f << "options,," << m_cfg.vcs_per_class << "," << m_cfg.escape_vc << "," << m_cfg.switch_latency << "," << m_cfg.sa_allocator << "," << m_cfg.routing_seed << "," << m_cfg.arbiter_type << "\n";
+        for (auto &kv : m_cfg.router_latency_at)
+            f << "routerlatency," << kv.first << ",,," << kv.second << ",,,\n";
     }
     void Network::statsAtExit() { if (s_instance) s_instance->flushStats(); }
     void Network::flushStats()

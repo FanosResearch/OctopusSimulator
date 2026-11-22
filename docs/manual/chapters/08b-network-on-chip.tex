@@ -606,8 +606,11 @@ checks its escape network: a packet may enter it at any router and then follows 
 to its destination, so the graph is built from every entry router and destination. With one escape
 VC on a torus this graph has a cycle through the wrap link, which is why a wrapped lattice needs
 the two escape VCs. \code{XY}, the turn models and the oblivious algorithms are deadlock-free by
-construction and are accepted without a graph. The step T unit tests run the full check over
-their candidates on several grid shapes and VC counts.
+construction. On a network of up to 64 routers the start-up check still builds the graph over
+all their candidates and reports a cycle as an internal error. Larger networks skip this
+cross-check, because its cost grows with the square of the router count (about 6\,s for
+\code{Valiant} on 16$\times$16) and the construction argument does not depend on the size. The
+step T unit tests run the same check on several grid shapes and VC counts.
 
 \paragraph{Protocol level.} Once every controller exists, the network reads each protocol's FSM
 table. For every cell with actions it takes the class of the message the event consumes and the
@@ -765,7 +768,7 @@ its fallback to the first other endpoint.
 \code{bitrev} & index $i$ with its $\log_2 N$ bits in reverse order \\
 \code{shuffle} & index $i$ rotated left by one bit \\
 \code{tornado} & on a lattice, the first endpoint at the router whose coordinate in every dimension is $c' = (c + \lceil k/2 \rceil - 1) \bmod k$. Otherwise index $(i + \lceil N/2 \rceil - 1) \bmod N$ \\
-\code{randperm} & index $\pi(i)$ of one random permutation $\pi$ of $0..N-1$: a Fisher-Yates shuffle over \code{std::mt19937} seeded with \key{perm\_seed}, the same in every generator that has the same \key{perm\_seed} \\
+\code{randperm} & index $\pi(i)$ of one random cyclic permutation $\pi$ of $0..N-1$: Sattolo's algorithm over \code{std::mt19937} seeded with \key{perm\_seed}, the same in every generator that has the same \key{perm\_seed}. A single cycle has no fixed point, so every endpoint sends and receives \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -853,7 +856,9 @@ values (\cref{tab:noc-stats}).
 \code{epclass} & endpoint, class: packets received in that class \\
 \code{generator} & generator id: sent, received, retries, out-of-order deliveries \\
 \code{totals} & flits and packets injected and ejected and still in flight, flit-link traversals, ticks \\
-\code{config} & topology, routing, \code{flit\_bytes}, \code{vc\_depth}, \code{router\_latency}, \code{link\_latency} \\
+\code{config} & topology, routing (as resolved from \code{auto}), \code{flit\_bytes}, \code{vc\_depth}, \code{router\_latency}, \code{link\_latency} \\
+\code{options} & \code{vcs\_per\_class}, \code{escape\_vc}, \code{switch\_latency}, \code{sa\_allocator}, \code{routing\_seed}, \code{arbiter\_type} \\
+\code{routerlatency} & router id: its \key{router\_latency[<router id>]} override, one row per override \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -867,7 +872,7 @@ status 2. At start-up the network refuses, with the key named: an invalid value 
 topology name (the message lists the registered builders) or routing name, a \code{routing\_table}
 entry naming a missing port, a \code{routing\_via} or \code{link\_weight} entry naming a router
 that is not a neighbour, a link weight below 1, a \key{router\_latency[<router id>](i)} for an id that is
-not a router, a routing algorithm on a topology or VC count it does not support
+not a router, a router-numbered key whose brackets do not hold an integer, a routing algorithm on a topology or VC count it does not support
 (\cref{tab:noc-routing}), an \key{escape\_vc} not below \key{vcs\_per\_class}, an ordering
 requirement the routing cannot meet, a cyclic channel dependency graph or escape network, the
 deferred real-time keys, and a protocol that fails the check. At run time these are fatal: a destination that is not an endpoint,
@@ -982,7 +987,7 @@ P2 protocol & three classes with an RX depth of 2 under both arbiters, \code{inj
 MEM & memory on the network: existing presets unchanged when it is off, EEMBC complete with one and two controllers and with MCsim, no read-after-write overtake, every memory packet in its class, memory hops equal to the formula, and every read and write reaching the controller the map names \\
 D & directory MESI and MOESI on every grid preset, under both arbiters and with small queues: every run completes without a fault \\
 T (unit) & topology plug-ins: the port order of every builder and \code{custom} row order, \code{routing\_via}, the builder registry, lattice ports, the dependency check over the candidates of every algorithm on several grids and VC counts, the escape-network check (the one-escape-VC torus is refused), the \code{AdaptiveMinimal} fallback, 3-D lattices, \code{XY} on rings of 3 to 9, weighted \code{Table}, and the oblivious draws (minimal for \code{O1TURN} and \code{ROMM}, varying with the packet and the seed) \\
-T system & T4-UNLOADED: a ring of 8, \code{mesh3d} 4$\times$2$\times$2 and \code{torus3d} 3$\times$3$\times$3, 1 and 5 flits, each equal to the formula. T4-AUTO-RING: \code{auto} gives \code{XY} on a ring with 2 VCs, \code{Table} on a ring of 3, and a ring of 8 with one VC is refused. T4-ROUTER-OPTIONS: \code{switch\_latency} 1 (27 ticks), \code{router\_latency[3]} 6 (24) and \code{input\_first} (24) on a 4$\times$4 grid, each equal to the formula. T4-SOAK, T4-SOAK-2: loaded runs of every new topology and algorithm, \code{AdaptiveMinimal} on grid, torus and 3-D mesh, \code{input\_first} with \code{RRArbiter}, the new patterns and on/off injection complete with conservation. T4-PATTERNS: under \code{bitcomp}, \code{bitrev}, \code{shuffle} and \code{tornado} every endpoint hears from exactly its partner. T5-ADAPT-TORUS-REFUSED \\
+T system & T4-UNLOADED: a ring of 8, \code{mesh3d} 4$\times$2$\times$2 and \code{torus3d} 3$\times$3$\times$3, 1 and 5 flits, each equal to the formula. T4-AUTO-RING: \code{auto} gives \code{XY} on a ring with 2 VCs, \code{Table} on a ring of 3, and a ring of 8 with one VC is refused. T4-ROUTER-OPTIONS: \code{switch\_latency} 1 (27 ticks), \code{router\_latency[3]} 6 (24) and \code{input\_first} (24) on a 4$\times$4 grid, each equal to the formula. T4-SOAK, T4-SOAK-2: loaded runs of every new topology and algorithm, \code{AdaptiveMinimal} on grid, torus, ring and 3-D mesh, \code{input\_first} with \code{RRArbiter}, the new patterns and on/off injection complete with conservation. T4-PATTERNS: under \code{bitcomp}, \code{bitrev}, \code{shuffle} and \code{tornado} every endpoint hears from exactly its partner. TF-RANDPERM-NO-FIXED-POINT: under \code{randperm} every endpoint sends and receives. TF-REFUSALS: a malformed router id in a key and a bit pattern on 12 endpoints end with status 2 and the reason. TF-STATS-OPTIONS: \code{NetworkStats.csv} has the \code{options} and \code{routerlatency} rows. T5-ADAPT-TORUS-REFUSED \\
 REG & REG-BUS, REG-MESH, REG-TDM and REG-MEMNET: the bus, legacy mesh, TDM and memory-on-network references stay byte-identical. REG-ENV: the environment check's sample run gives its known request count and worst DRAM latency. REG-HAZARD: no memory read overtakes an older write of its line \\
 \end{longtable}
 
@@ -1008,9 +1013,9 @@ slot through switch allocation and traversal, raise \key{router\_latency} and
   \code{XY} leaves empty.
 \item The \code{transpose} pattern needs a 2-D lattice. Elsewhere every generator sends to the
   first other endpoint. The bit patterns need a power-of-two number of endpoints.
-\item At start-up the full channel dependency check runs for \code{Table} and, on its escape
-  network, for \code{AdaptiveMinimal}. The other algorithms are accepted as deadlock-free by
-  construction. A new algorithm should override \code{deadlockFreeOn} with the check.
+\item On a network of more than 64 routers the start-up check trusts the algorithms that are
+  deadlock-free by construction and does not build their dependency graph. \code{Table} and the
+  escape network of \code{AdaptiveMinimal} are checked at every size.
 \item Every link has a reverse link, so a butterfly cannot be expressed, and an endpoint attaches
   to exactly one router.
 \item Injection follows age only among eligible packets. Under \code{FCFSArbiter} a younger packet

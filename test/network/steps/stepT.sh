@@ -49,6 +49,7 @@ stepT() {
   soak torus3d $T3 -p generator[*].rate\(i\)=150
   soak adapt-grid -p interconnect.routing\(s\)=AdaptiveMinimal -p interconnect.vcs_per_class\(i\)=2 -p interconnect.escape_vc\(i\)=1 -p generator[*].rate\(i\)=100
   soak adapt-torus -p interconnect.topology\(s\)=torus2d -p interconnect.routing\(s\)=AdaptiveMinimal -p interconnect.vcs_per_class\(i\)=3 -p interconnect.escape_vc\(i\)=0 -p generator[*].rate\(i\)=150
+  soak adapt-ring8 $R8 -p interconnect.routing\(s\)=AdaptiveMinimal -p interconnect.vcs_per_class\(i\)=3 -p interconnect.escape_vc\(i\)=0 -p generator[*].rate\(i\)=200
   soak adapt-mesh3d $M3 -p interconnect.routing\(s\)=AdaptiveMinimal -p interconnect.vcs_per_class\(i\)=2 -p interconnect.escape_vc\(i\)=1 -p generator[*].rate\(i\)=150
   local tm; for tm in WestFirst NorthLast NegativeFirst OddEven; do
     soak "$tm" -p interconnect.routing\(s\)=$tm -p generator[*].rate\(i\)=100
@@ -112,4 +113,29 @@ print(' '.join(errs))
 PYEOF
 )
   if [ -z "$bad" ]; then pass T4-PATTERNS "partners as defined" "same" "$(elapsed "$t0")"; else fail T4-PATTERNS "$bad" "partners as defined" "$(elapsed "$t0")"; fi
+
+  # ---------------- randperm is a single cycle: every generator sends, every endpoint receives
+  local zs zr
+  zs=$(awk -F, '$1=="generator" && $5==0' "$O/soak-pat-randperm/NetworkStats.csv" | wc -l)
+  zr=$(awk -F, '$1=="received" && $5==0' "$O/soak-pat-randperm/NetworkStats.csv" | wc -l)
+  if [ "$zs" = 0 ] && [ "$zr" = 0 ]; then pass TF-RANDPERM-NO-FIXED-POINT "all send and receive" "same"
+  else fail TF-RANDPERM-NO-FIXED-POINT "$zs silent senders, $zr silent receivers" "0, 0"; fi
+
+  # ---------------- refusals with status 2 and the reason: a malformed router id in a key, a bit
+  # pattern on 12 endpoints
+  ok=1; detail=""
+  refused() { # refused <label> <text> -- run args
+    local label="$1" text="$2"; shift 3
+    NO "$O/ref-$label" "$@"; local rc=$?
+    [ $rc = 2 ] && grep -q "$text" "$O/ref-$label/.stderr" || { ok=0; detail="$detail $label:rc$rc"; }
+  }
+  refused key-x "router_latency\[x\]: the part in brackets must be a router id" -- -p interconnect.router_latency[x]\(i\)=3 -p generator[*].packets\(i\)=10
+  refused key-3x "routing_via\[3x\]: the part in brackets must be a router id" -- -p interconnect.routing_via[3x]\(vi\)=2 -p generator[*].packets\(i\)=10
+  refused bitcomp12 "needs a power-of-two number of endpoints, got 12" -- -p interconnect.dims\(vi\)=4,3 -p interconnect.component_ids\(vi\)=0,1,2,3,4,5,6,7,8,9,10,11 -p generator[*].pattern\(s\)=bitcomp -p generator[*].packets\(i\)=10
+  if [ $ok = 1 ]; then pass TF-REFUSALS "status 2 with the reason" "same"; else fail TF-REFUSALS "$detail" "status 2 with the reason"; fi
+
+  # ---------------- the stats file records the new options
+  if grep -q "^options,,1,-1,1,output_first,1,FCFSArbiter$" "$O/lat-sl1/NetworkStats.csv" && grep -q "^routerlatency,3,,,6," "$O/lat-rl3/NetworkStats.csv"
+  then pass TF-STATS-OPTIONS "options and routerlatency rows" "same"
+  else fail TF-STATS-OPTIONS "rows missing or wrong" "options and routerlatency rows"; fi
 }
