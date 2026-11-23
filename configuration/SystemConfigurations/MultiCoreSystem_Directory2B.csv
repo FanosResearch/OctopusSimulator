@@ -2,6 +2,7 @@ llc_banks(i),2,,,#2-bank LLC derived from MultiCoreSystem_Directory.csv by test/
 bus[0].upper_level_cache_ids(vi),10,11
 workload_path(s),BMs/TestBM/,,,#Absolute path is recommended,,
 num_cores(i),4,,,,,
+page_placer(i),0,,,#1: place each page in a frame whose colour/bank (partition[k] colour|bank schemes) the first-touching core owns. Trace-driven runs only,,
 bus_type(vs),TripleBus,Bus,,#Bus[0] is the interconnect between private caches and LLC and Bus[1] is between LLC and main memory,,
 cache_controller_type(s),CacheControllerDirectory,,,#Type should match the name of the class,,
 ,,,,,,

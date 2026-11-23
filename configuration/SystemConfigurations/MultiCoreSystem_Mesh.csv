@@ -1,5 +1,6 @@
 workload_path(s),BMs/TestBM/,,,#Absolute path is recommended,,
 num_cores(i),4,,,,,
+page_placer(i),0,,,#1: place each page in a frame whose colour/bank (partition[k] colour|bank schemes) the first-touching core owns. Trace-driven runs only,,
 cache_controller_type(s),CacheControllerDirectory,,,#Type should match the name of the class,,
 ,,,,,,
 interconnect_type(s),NoC,,,,,

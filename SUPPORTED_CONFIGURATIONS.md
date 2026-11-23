@@ -18,9 +18,9 @@ below can be selected, swept, or combined without touching C++.
 | Coherence protocols | Snoop & directory MSI / MESI / MOESI (CSV FSMs, stable + transient states); extensible incl. time-based coherence |
 | Interconnect topology | Point-to-point, unified bus, split bus, triple bus, mesh, NoC |
 | Arbitration | FCFS, FR-FCFS, RR, Weighted-RR, Harmonic-RR, TDM, GRROF |
-| Cache hierarchy | Arbitrary depth, private/shared, multi-bank, non-blocking (MSHRs, WB/refill buffers) |
+| Cache hierarchy | Arbitrary depth, private/shared, multi-bank LLC (line or page interleave), data-array sub-banks, non-blocking (MSHRs, WB/refill buffers) |
 | Replacement | LRU, FIFO, Random |
-| Predictable caching | Set partitioning, bank partitioning, predictable coherence protocols |
+| Predictable caching | Way, set (page colour) and LLC-bank partitioning with a page placer, predictable coherence protocols |
 | Main memory | Fixed-latency model, or cycle-accurate DRAM via MCsim |
 | Operating modes | Standalone (trace-driven), full-system (gem5 Arm/Linux, MacSim, MCsim) |
 | Monitoring | Per-request per-stage latency, worst-case tracking, filterable CSV traces |
@@ -66,7 +66,16 @@ below can be selected, swept, or combined without touching C++.
 
 - **Arbitrary depth:** L1, L2, L3, … with **private or shared** configuration at
   any level
-- **Multi-bank** caches
+- **Multi-bank LLC:** `llc_banks(i)` banks, each a full LLC controller with its own
+  data array. Lines are interleaved over the banks by line or by page
+  (`home_ids(vi)`, `home_interleave_shift(i)` on the L1s); every L1 request names
+  its home bank, and each bank indexes all of its sets. Snoop and directory MSI,
+  MESI and MOESI run on 1, 2 and 4 banks. Presets: `MultiCoreSystem_Snoop2B`,
+  `MultiCoreSystem_Directory2B`, `MultiCoreSystem_Snoop4BPage`; any preset can be
+  banked with `test/banking/make_banked.py`.
+- **Data-array sub-banks:** `sub_banks(i)` and `sub_bank_shift(i)` on a cache's data
+  handler give each sub-bank its own occupancy timer, so an access waits only for
+  an earlier access to the same sub-bank
 - **Non-blocking** controllers: MSHRs, write-back buffers, refill buffers
 - Optimizations: allocate-on-fill, miss forwarding, write-buffer hits
 - Blocking and non-blocking controller modes
@@ -80,8 +89,26 @@ below can be selected, swept, or combined without touching C++.
 
 ## Predictable caching / real-time support
 
-- **Set partitioning**
-- **Bank partitioning**
+Cache partitioning is configured per cache as `partition[k].scheme(s)` (what is
+split), `ownership(s)` (who owns which units; default `static`) and `owners(s)`
+(`cores:units;...` with `a-b` ranges; unlisted cores share the unclaimed units).
+Several schemes can apply to one cache.
+
+| Scheme | Units | Enforced by |
+|---|---|---|
+| `way` | ways of a set | the cache, on fill and victim choice. `way_partition(s)` is its alias |
+| `colour` (set partitioning) | page colours: set-index bits above the page offset | the page placer |
+| `bank` | banks of a multi-bank LLC (needs page interleave) | the page placer |
+
+- **Page placer** (`page_placer(i),1` on the system): an OS-style page allocator in
+  the trace path. A page's first access gets a fresh frame whose colour and bank the
+  core owns; one page table serves all cores, so shared pages stay coherent.
+- **Report:** `Partitions.csv` in the report directory lists, per cache, scheme and
+  core, the fills, the **violations** (fills outside the core's units) and the fills
+  into pages placed for another core (shared data). `partition[k].strict(i),1`
+  stops the run on the first violation.
+- Under gem5 full system, page allocation is the guest kernel's: colour and bank
+  partitions report violations but are not enforced.
 - Predictable cache-coherent protocols (see Coherence protocols above)
 - Per-request **worst-case latency** tracking to support timing analysis
 
