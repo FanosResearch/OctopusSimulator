@@ -71,6 +71,7 @@ namespace octopus
     {
         PartitionContext ctx;
         ctx.cache = parent_name + "." + name;
+        if (m_map.banked()) ctx.cache += "[bank " + std::to_string(m_map.bankIndex()) + "]";
         m_partitions.setName(ctx.cache);
         ctx.ways = m_ways_count; ctx.sets = m_sets_count; ctx.map = &m_map;
         auto str = [](const ParametersMap &m, const char *key, const std::string &dflt) {

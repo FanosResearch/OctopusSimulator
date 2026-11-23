@@ -80,6 +80,7 @@ namespace octopus
             return p << m_block_bits;
         }
         bool banked() const { return m_self_idx >= 0; }
+        int bankIndex() const { return m_self_idx; }   // this cache's index in its bank group; -1 = not a bank
         const Interleave &banks() const { return m_banks; }   // this cache's bank group (empty = not a bank)
 
         // Home map (s4.2): which cache of the NEXT level serves a line. An L1's home map lists the
