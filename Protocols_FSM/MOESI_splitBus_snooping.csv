@@ -54,11 +54,12 @@ StateNum,State,,,,,,,,,,,,,
 26,EM_a,,,,,,,,,,,,,
 27,IM_dOI,,,,,,,,,,,,,
 28,SM_dOI,,,,,,,,,,,,,
+29,IS_dInv,,,,,,,,,,,,,
 ,,,,,,,,,,,,,,
 State,stable,isDataValid,Load,Store,Replacement,Own_GetS,Own_GetM,Own_PutM,Other_GetS,Other_GetM,Other_PutM,OwnData,Invalidation,OwnData_Execlusive
 I,1,0,GetS/IS_ad,GetM/IM_ad,,Fault/,Fault/,Fault/,,,,Fault/,,Fault/
 IS_ad,0,1,Stall/,Stall/,Stall/,IS_d,Fault/,Fault/,,,,IS_a,,Fault/
-IS_d,0,1,Stall/,Stall/,Stall/,Fault/,Fault/,Fault/,SaveReq/IES_d, SaveReq/IS_dI,,Hit/S,IS_dI,Hit/E
+IS_d,0,1,Stall/,Stall/,Stall/,Fault/,Fault/,Fault/,SaveReq/IES_d, SaveReq/IS_dI,,Hit/S,IS_dInv,Hit/E
 IS_a,0,1,Stall/,Stall/,Stall/,Hit/S,Fault/,Fault/,,,Fault/,Fault/,IS_ad,Fault/
 IS_dI,0,1,Stall/,Stall/,Stall/,Fault/,Fault/,Fault/,,,,Hit/removeSavedReq/I,, Hit/Data2Req/I
 IM_ad,0,1,Stall/,Stall/,Stall/,Fault/,IM_d,Fault/,,,,IM_a,,Fault/
@@ -79,9 +80,10 @@ E,1,1,Hit/,GetM/EM_a,PutM/EI_a,Fault/,Fault/,Fault/,Data2Req/S,Data2Req/I,,Fault
 O,1,1,Hit/,GetM/OM_a,PutM/OI_a,Fault/,Fault/,Fault/,Data2Req/,Data2Req/I,,Fault/,Data2Req/I,Fault/
 OM_a,0,1,Hit/,Stall/,Stall/,Fault/,Hit/M,Fault/,Data2Req/,Data2Req/IM_ad,,Fault/,Data2Req/IM_ad,Fault/
 OI_a,0,1,Hit/,Stall/,Stall/,Fault/,Fault/,Data2Req/I,Data2Req/,Data2Req/II_a,,Fault/,Data2Req/II_a,Fault/
-EI_a,0,1,Hit/,Stall/,Stall/,Fault/,Fault/,I,Data2Req/,Data2Req/II_a,,Fault/,II_a,Fault/
+EI_a,0,1,Hit/,Stall/,Stall/,Fault/,Fault/,I,Data2Req/II_a,Data2Req/II_a,,Fault/,II_a,Fault/
 IES_d,0,1,Stall/,Stall/,Stall/,Fault/,Fault/,Fault/,,IES_dI,,Hit/removeSavedReq/S,IS_dI,Hit/Data2Req/S
 IES_dI,0,1,Stall/,Stall/,Stall/,Fault/,Fault/,Fault/,,,,Hit/removeSavedReq/S,IS_dI,Hit/Data2Req/I
 EM_a,0,1,Stall/,Stall/,Stall/,Fault/,Hit/M,Fault/,Data2Req/SM_ad,Data2Req/IM_ad,Stall/,Fault/,IM_ad,Fault/
 IM_dOI,0,1,Stall/,Stall/,Stall/,Fault/,Fault/,Fault/,,,,Hit/Data2Req/I,,Fault/
 SM_dOI,0,1,Hit/,Stall/,Stall/,Fault/,Fault/,Fault/,,,,Hit/Data2Req/I,,Fault/
+IS_dInv,0,1,Stall/,Stall/,Stall/,Fault/,Fault/,Fault/,,,,Hit/I,,Hit/I
