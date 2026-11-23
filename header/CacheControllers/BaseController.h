@@ -127,7 +127,10 @@ namespace octopus
         virtual void updateCacheLine(void *);
 
     public:
-        void setBankIds(const std::vector<int> &ids) { m_bank_ids = ids; }
+        // This controller is one of the LLC banks of `banks` (the cores' home map): it serves only
+        // what names it (s4.4) and indexes its sets with the bank digit removed (s5.2).
+        void setBanks(const Interleave &banks);
+        const Interleave &homeMap() const { return m_home; }
         BaseController(ParametersMap map, CommunicationInterface *upper_interface, 
                        CommunicationInterface *lower_interface, string pname = "",
                        string config_path = string(CONFIGURATION_PATH) + string(CACHECONTROLLERS),

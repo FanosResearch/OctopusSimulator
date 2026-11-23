@@ -81,6 +81,12 @@ namespace octopus
     // A bank serves only what names it (docs/LLC_Banking_and_Partitioning_Design.md s4.4). The L1s
     // address every LLC-bound message to the line's home bank (homeOf); the bus still broadcasts
     // demand requests and back-invalidations to every interface, so the other banks see them too.
+    void BaseController::setBanks(const Interleave &banks)
+    {
+        m_bank_ids = banks.ids;
+        m_data_handler->setBanks(banks, banks.indexOf(m_id));
+    }
+
     bool BaseController::notForThisBank(const Message &msg) const
     {
         if (m_bank_ids.size() <= 1) return false;
