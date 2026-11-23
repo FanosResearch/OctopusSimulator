@@ -90,6 +90,8 @@ below can be selected, swept, or combined without touching C++.
 - **Standalone:** configurable fixed-latency memory model
 - **Cycle-accurate DRAM via MCsim integration:**
   - Various DRAM standards (via Ramulator); configurable channels / ranks / banks
+  - `mcsim_core_clock_mhz(i)` (default 2400) is the core clock MCsim converts DRAM
+    cycles against; one Octopus LLC cycle is one core cycle. The gem5 preset sets 3000
   - Per-requestor buffers and criticality-aware scheduling
   - **High-performance controllers:** FCFS, CMDBundle, ORP, MEDUSA, RTMem, ROC,
     RankReorder

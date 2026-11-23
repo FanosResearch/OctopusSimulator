@@ -16,7 +16,7 @@ namespace octopus
 {
     MCsimInterface::MCsimInterface(CommunicationInterface *lower_interface, int dram_id, int llc_id,
                                    int num_cores, int block_size, uint64_t clk_period,
-                                   const std::string &mem_system)
+                                   const std::string &mem_system, uint64_t core_clock_mhz)
         : ClockedObj(clk_period) // == LLC period: one tick per core cycle (see header). Must be
                                  // non-zero: ClockManager reschedules at current_time+period, so
                                  // period 0 self-reschedules at the same timestamp forever.
@@ -46,7 +46,7 @@ namespace octopus
             "8Gb_x8",
             1,
             1);
-        m_mcsim->setCPUClockSpeed(2.4 * 1e9);
+        m_mcsim->setCPUClockSpeed(core_clock_mhz * 1000000ull);
 
         MCsim::TransactionCompleteCB *read_cb = new MCsim::MCsimCallback<MCsimInterface, void, unsigned, uint64_t, uint64_t>(this, &MCsimInterface::read_callback);
         MCsim::TransactionCompleteCB *write_cb = new MCsim::MCsimCallback<MCsimInterface, void, unsigned, uint64_t, uint64_t>(this, &MCsimInterface::write_callback);

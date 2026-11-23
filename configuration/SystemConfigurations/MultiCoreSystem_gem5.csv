@@ -62,6 +62,7 @@ llc_controller.arbiter_type(s),FCFSArbiter,,,,,
 llc_controller.arbiter_candidates_ids(vi),0,1,2,3,4,5,6,7
 ,,,,,,
 main_memory_type(s),MCsim,,,#DDR4-2400 model (MCsimInterface),,
+mcsim_core_clock_mhz(i),3000,,,#Core clock MCsim converts DRAM cycles against: the gem5 CPU clock (fs_arm.py and se_arm.py clk_freq 3GHz). Default 2400,,
 m_main_memory.m_llc_id(i),10,,,,,
 m_main_memory.m_id(i),100,,,,,
 ,,,,,,
