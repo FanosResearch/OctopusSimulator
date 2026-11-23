@@ -26,6 +26,9 @@ namespace octopus
     protected:
         int m_id;
         int m_shared_memory_id;
+        // home map: the LLC bank that serves each line (docs/LLC_Banking_and_Partitioning_Design.md
+        // s4.2); empty = the single m_shared_memory_id
+        Interleave m_home;
         bool m_cache2Cache;
         int m_reqWbRatio;
 
@@ -33,6 +36,9 @@ namespace octopus
         CacheDataHandler *m_data_handler;
 
     public:
+        void setHomeMap(const Interleave &home) { m_home = home; }
+        int  homeOf(uint64_t addr) const;
+        bool isHome(int id) const;
         CoherenceProtocolHandler(CacheDataHandler *cache, const std::string& fsm_path, int id, int sharedMemId);
         virtual ~CoherenceProtocolHandler();
 

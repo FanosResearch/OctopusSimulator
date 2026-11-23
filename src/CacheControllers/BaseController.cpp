@@ -23,6 +23,11 @@ namespace octopus
         //Parameters initialization
         m_id = std::get<int>(parameters.at(STRINGIFY(m_id)).value);
         m_shared_memory_id = std::get<int>(parameters.at(STRINGIFY(m_shared_memory_id)).value);
+        if (parameters.find(STRINGIFY(home_ids)) != parameters.end())
+            m_home.ids = std::get<vector<int>>(parameters.at(STRINGIFY(home_ids)).value);
+        if (!m_home.ids.empty() && m_home.ids[0] < 0) m_home.ids.clear();
+        if (parameters.find(STRINGIFY(home_interleave_shift)) != parameters.end())
+            m_home.shift = std::get<int>(parameters.at(STRINGIFY(home_interleave_shift)).value);
 
         // Optional perfect-LLC knob, defaulted off so existing configs parse and
         // every non-LLC controller (which never sets it) behaves normally.
@@ -43,7 +48,7 @@ namespace octopus
         
         m_data_handler = new CacheDataHandler(getSubMap(STRINGIFY(m_data_handler)), parent_name + "." + name);
 
-        m_protocol = Protocols::getNewProtocol(protocol_type, m_data_handler, fsm_path, m_id, m_shared_memory_id);
+        m_protocol = Protocols::getNewProtocol(protocol_type, m_data_handler, fsm_path, m_id, m_shared_memory_id, m_home);
 
         m_processing_queue =
             new FRFCFS_Buffer<Message, CoherenceProtocolHandler>(&CoherenceProtocolHandler::getRequestState,
@@ -61,6 +66,16 @@ namespace octopus
         action_functions[ControllerAction::Type::SEND_BUS_MSG] = [&](void* ptr) {sendBusRequest(ptr);};
         action_functions[ControllerAction::Type::WRITE_BACK] = [&](void* ptr) {performWriteBack(ptr);};
         action_functions[ControllerAction::Type::UPDATE_CACHE_LINE] = [&](void* ptr) {updateCacheLine(ptr);};
+    }
+
+    int BaseController::homeOf(uint64_t addr) const
+    {
+        return m_home.ids.empty() ? m_shared_memory_id : m_home.select(addr / m_data_handler->getBlockSize());
+    }
+
+    bool BaseController::isHome(int id) const
+    {
+        return m_home.ids.empty() ? id == m_shared_memory_id : m_home.indexOf(id) >= 0;
     }
 
     BaseController::~BaseController()

@@ -36,6 +36,12 @@ namespace octopus
     protected:
         int m_id;
         int m_shared_memory_id;
+        // home map (docs/LLC_Banking_and_Partitioning_Design.md s4.2): home_ids(vi) lists the LLC
+        // banks, home_interleave_shift(i) the granularity (0 = consecutive lines alternate). Absent
+        // = the single m_shared_memory_id, today's system.
+        Interleave m_home;
+        int  homeOf(uint64_t addr) const;
+        bool isHome(int id) const;
 
         // Perfect-LLC knob (default 0 = off). When 1, this controller never issues
         // to the memory above it: a miss's fetch is synthesized locally and looped
