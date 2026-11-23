@@ -6,7 +6,8 @@
 # For each protocol family (snoop and directory MSI/MESI/MOESI), bank count and interleave
 # (shift 0: lines alternate; 6: 4 KiB pages), the preset is derived with make_banked.py.
 # A run passes when it exits 0 and every core's LatencyReport has one row per trace line
-# plus the end-of-run "Average" footer. JOBS sets the parallelism; ARB overrides the arbiter.
+# plus the end-of-run "Average" footer. JOBS sets the parallelism; ARB overrides the arbiter;
+# ONLY=<regex> selects families; DIR_MESI_LLC, DIR_MOESI_L1, DIR_MOESI_LLC pick the directory FSM tables.
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUT="$1"; shift; BANKS="${*:-2 4}"; JOBS="${JOBS:-16}"
@@ -19,13 +20,14 @@ FAMILIES=(
   "snoop-mesi|MultiCoreSystem_Snoop|$EXCL $(p SNOOP_MESI MESI_splitBus_snooping SNOOP_LLC_MESI MESI_LLC)"
   "snoop-moesi|MultiCoreSystem_Snoop|$EXCL $(p SNOOP_MOESI MOESI_splitBus_snooping SNOOP_LLC_MOESI MOESI_LLC)"
   "dir-msi|MultiCoreSystem_Directory|"
-  "dir-mesi|MultiCoreSystem_Directory|$(p DIRECTORY_MESI MESI_directory DIRECTORY_LLC_MESI MESI_LLC_directory)"
-  "dir-moesi|MultiCoreSystem_Directory|$(p DIRECTORY_MOESI MOESI_directory DIRECTORY_LLC_MOESI MOESI_LLC_directory)"
+  "dir-mesi|MultiCoreSystem_Directory|$(p DIRECTORY_MESI MESI_directory DIRECTORY_LLC_MESI ${DIR_MESI_LLC:-MESI_LLC_directory})"
+  "dir-moesi|MultiCoreSystem_Directory|$(p DIRECTORY_MOESI ${DIR_MOESI_L1:-MOESI_directory} DIRECTORY_LLC_MOESI ${DIR_MOESI_LLC:-MOESI_LLC_directory})"
 )
 [ -n "${ARB:-}" ] && ARBP="-p bus[0].interconnect_controller.arbiter_type(s)=$ARB" || ARBP=""
 mkdir -p "$OUT/cfg"; : > "$OUT/jobs"
 for f in "${FAMILIES[@]}"; do
   IFS='|' read -r fam base args <<< "$f"
+  [[ "$fam" =~ ${ONLY:-.} ]] || continue
   for n in $BANKS; do for sh in 0 6; do
     cfg="$OUT/cfg/${base}_${n}B_s${sh}.csv"
     [ -f "$cfg" ] || python3 "$ROOT/test/banking/make_banked.py" "$C/$base.csv" "$cfg" "$n" "$sh"
@@ -36,7 +38,7 @@ export BIN OUT W
 xargs -P "$JOBS" -d '\n' -I{} bash -c '
   IFS="|" read -r name b args <<< "{}"; d="$OUT/$name/$b"; rm -rf "$d"; mkdir -p "$d"
   read -ra A <<< "$args"
-  timeout 1800 "$BIN" "${A[@]}" -p "workload_path(s)=$W/$b/" -o "$d" > "$d/.stdout" 2> "$d/.stderr"; echo $? > "$d/.rc"' < "$OUT/jobs"
+  timeout "${CAP:-1800}" "$BIN" "${A[@]}" -p "workload_path(s)=$W/$b/" -o "$d" > "$d/.stdout" 2> "$d/.stderr"; echo $? > "$d/.rc"' < "$OUT/jobs"
 pass=0; fail=0; : > "$OUT/results.txt"
 while IFS='|' read -r name b args; do
   d="$OUT/$name/$b"; rc=$(cat "$d/.rc"); ok=1; why=""
