@@ -162,12 +162,14 @@ namespace octopus
         ParametersMap bank0 = llc_banks == 1 ? getSubMap(STRINGIFY(llc_controller)) : getSubMap(STRINGIFY(llc_controller), 0);
         int mem_shift = bank0.count("mem_interleave_shift") ? std::get<int>(bank0.at("mem_interleave_shift").value) : 0;
         int first_llc = std::get<int>(bank0.at("m_id").value);
+        uint64_t core_clock_mhz = parameters.count(STRINGIFY(mcsim_core_clock_mhz))
+            ? (uint64_t)std::get<int>(parameters.at(STRINGIFY(mcsim_core_clock_mhz)).value) : 2400;
         for (int mem_id : memory_ids)
         {
             CommunicationInterface *mem_iface = memory_on_network ? interfaceFor(mem_id) : bus->getInterfaceFor(mem_id);
             if (main_memory_type == "MCsim")
                 new MCsimInterface(mem_iface, mem_id, first_llc, num_cores, /*block_size=*/64, m_llc_period, mem_system,
-                                   (int)memory_ids.size(), mem_shift);
+                                   (int)memory_ids.size(), mem_shift, core_clock_mhz);
             else
             {
                 ParametersMap mmap = getSubMap(STRINGIFY(MainMemoryController));

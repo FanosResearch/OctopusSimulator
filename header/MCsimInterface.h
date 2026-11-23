@@ -64,15 +64,18 @@ namespace octopus
         // (e.g. "FRFCFS"). Device is configured for DDR4-2400U, 8Gb x8.
         // clk_period is this object's ClockManager period and MUST equal the LLC's (the
         // memory controller it replaces): MCsim's update() is called once per tick and its
-        // clock-domain crosser (DDR 1.2 GHz vs. core 2.4 GHz) assumes one tick == one core
-        // cycle. A smaller period over-clocks DRAM relative to the cores (period 1 with
-        // 100-tick cores made a 40-DRAM-cycle access complete within one core cycle).
+        // clock-domain crosser (DDR4-2400: 1.2 GHz) assumes one tick == one core cycle of
+        // core_clock_mhz (mcsim_core_clock_mhz(i), default 2400). A smaller period over-clocks
+        // DRAM relative to the cores (period 1 with 100-tick cores made a 40-DRAM-cycle
+        // access complete within one core cycle); a wrong core_clock_mhz scales DRAM speed by
+        // core_clock_mhz / the real core clock (gem5: set it to the CPU clock).
         // interleave_ways / interleave_shift: with several memory controllers the line index bits
         // [shift, shift + log2(ways)) select the controller; they are removed before MCsim sees the address,
         // so each controller decodes a dense address space (spec s25.4). ways must be a power of two; 1 = none.
         MCsimInterface(CommunicationInterface *lower_interface, int dram_id, int llc_id,
                        int num_cores, int block_size, uint64_t clk_period,
-                       const std::string &mem_system = "FRFCFS", int interleave_ways = 1, int interleave_shift = 0);
+                       const std::string &mem_system = "FRFCFS", int interleave_ways = 1, int interleave_shift = 0,
+                       uint64_t core_clock_mhz = 2400);
         ~MCsimInterface();
 
         virtual void init();
