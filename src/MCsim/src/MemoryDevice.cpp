@@ -2,6 +2,8 @@
 #include "MemoryDevice.h"
 #include "MemoryController.h"
 
+#include <cstdlib>
+
 using namespace MCsim;
 
 MemoryDevice::MemoryDevice(unsigned int ranks) :
@@ -9,6 +11,10 @@ MemoryDevice::MemoryDevice(unsigned int ranks) :
 												 ranks(ranks)
 {
 	clockCycle = 0;
+	// Test only: start the device clock elsewhere, e.g. just below 2^32, to check long
+	// runs without simulating them (test/banking/mcsim_wrap.sh).
+	if (const char *start = std::getenv("OCTOPUS_MCSIM_DEVICE_START_CYCLE"))
+		clockCycle = std::strtoull(start, NULL, 0);
 	bankGroups = 1;
 	banks = 1;
 	subArrays = 1;
