@@ -18,7 +18,7 @@ namespace octopus
     public:
         static const uint64_t REQUEST_TYPE_PUTO = 8;
         static const uint64_t RESPONSE_TYPE_ACKCOUNT = 9;
-        static const uint64_t REQUEST_TYPE_INVM = 10;
+        static const uint64_t REQUEST_TYPE_INVM = 11;   // not 10: Message::isInvalidation() reads 10 as the snoop INV and gates it per line
 
     protected:
         enum class EventId

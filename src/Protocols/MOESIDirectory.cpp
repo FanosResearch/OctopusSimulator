@@ -97,7 +97,11 @@ namespace octopus
     {
         if (msg.source == Message::Source::UPPER_INTERCONNECT && msg.complementary_value2 == MOESIDirectory::RESPONSE_TYPE_ACKCOUNT)
         {
-            if(msg.complementary_value == 0)
+            // zero when no ack is owed, or when every owed ack already arrived (an InvAck may overtake the
+            // ack count), as MSIDirectory decides Data_zeroAck
+            uint64_t addr_key = msg.addr & ~uint64_t(m_data_handler->getBlockSize() -1);
+            if(msg.complementary_value == 0 ||
+               (ack_counters->find(addr_key) != ack_counters->end() && (ack_counters->at(addr_key) + (int64_t)msg.complementary_value) == 0))
                 *out_id = (MSIDirectory::EventId)EventId::AckCount_zero;
             else
                 *out_id = (MSIDirectory::EventId)EventId::AckCount;
