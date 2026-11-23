@@ -21,6 +21,7 @@ namespace octopus
     public:
         MOESIProtocol(CacheDataHandler *cache, const std::string &fsm_path, int id, int sharedMemId);
         ~MOESIProtocol();
+        bool llcExpectsDeferredSupplyCopy() const override { return false; }
     };
 }
 

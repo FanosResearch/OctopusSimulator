@@ -37,6 +37,10 @@ namespace octopus
 
     public:
         void setHomeMap(const Interleave &home) { m_home = home; }
+        // Snooping: whether this protocol's LLC waits for a copy of a deferred supply to a parked
+        // GetS (MESI: S_d / MN_d). MOESI's LLC does not: E + GetS -> ClearOwner/S lets the owner
+        // supply the reader alone, and a copy arriving afterwards would fault it.
+        virtual bool llcExpectsDeferredSupplyCopy() const { return true; }
         int  homeOf(uint64_t addr) const;
         bool isHome(int id) const;
         CoherenceProtocolHandler(CacheDataHandler *cache, const std::string& fsm_path, int id, int sharedMemId);
