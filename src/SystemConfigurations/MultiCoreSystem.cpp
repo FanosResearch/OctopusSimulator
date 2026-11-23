@@ -97,6 +97,7 @@ namespace octopus
         int llc_banks = parameters.count(STRINGIFY(llc_banks)) ? std::get<int>(parameters.at(STRINGIFY(llc_banks)).value) : 1;
         BaseController *llc_controller = NULL;
         int llc_id = -1;
+        std::vector<BaseController *> banks; std::vector<int> bank_ids;
         for (int k = 0; k < llc_banks; k++)
         {
             ParametersMap lmap = llc_banks == 1 ? getSubMap(STRINGIFY(llc_controller)) : getSubMap(STRINGIFY(llc_controller), k);
@@ -111,7 +112,10 @@ namespace octopus
                                                     bus[0]->getInterfaceFor(bank_id), name);
             bank->setLogRole(Logger::Role::LLC);   // Design B: tag LLC events
             if (k == 0) { llc_controller = bank; llc_id = bank_id; }   // MCsim's default reply target and clock
+            banks.push_back(bank); bank_ids.push_back(bank_id);
         }
+        if (llc_banks > 1)
+            for (BaseController *b : banks) b->setBankIds(bank_ids);
 
         // Main memory: the basic MainMemoryController by default, or the MCsim DRAM
         // simulator when `main_memory_type=MCsim` (configured for DDR4 in MCsimInterface).

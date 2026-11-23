@@ -78,6 +78,27 @@ namespace octopus
         return m_home.ids.empty() ? id == m_shared_memory_id : m_home.indexOf(id) >= 0;
     }
 
+    // A bank serves only what names it (docs/LLC_Banking_and_Partitioning_Design.md s4.4). The L1s
+    // address every LLC-bound message to the line's home bank (homeOf); the bus still broadcasts
+    // demand requests and back-invalidations to every interface, so the other banks see them too.
+    bool BaseController::notForThisBank(const Message &msg) const
+    {
+        if (m_bank_ids.size() <= 1) return false;
+        if (msg.from == (uint16_t)m_id) return false;   // our own broadcast coming back (Own_Invalidation)
+        auto bank = [&](int id) { return std::find(m_bank_ids.begin(), m_bank_ids.end(), id) != m_bank_ids.end(); };
+        if (bank(msg.from)) return true;                  // another bank's broadcast: banks never talk to each other
+        bool other = false;
+        for (uint16_t t : msg.to)
+        {
+            if (t == (uint16_t)m_id) return false;
+            if (bank(t)) other = true;
+        }
+        if (other) return true;
+        cerr << "LLC bank " << m_id << ": message " << msg.msg_id << " (kind " << (int)msg.kind << ", addr 0x" << std::hex << msg.addr
+             << std::dec << ", from " << msg.from << ") names no LLC bank; every LLC-bound message must name its home (homeOf)" << endl;
+        exit(2);
+    }
+
     BaseController::~BaseController()
     {
         delete m_protocol;
@@ -199,7 +220,11 @@ namespace octopus
                 m_upper_interface->popFrontMessage();
         }
 
-        if (m_lower_interface->peekMessage(&msg))
+        // peek once: a bus interface's peek selects the buffer that the following pop removes
+        bool lower = m_lower_interface->peekMessage(&msg);
+        if (lower && notForThisBank(msg))
+            m_lower_interface->popFrontMessage();   // another bank's line or another bank's broadcast (s4.4)
+        else if (lower)
         {
             msg.source = Message::Source::LOWER_INTERCONNECT;
             traceMsg("intake-lower", msg);
@@ -406,7 +431,7 @@ namespace octopus
         // arrives (BusController delivers responses via the same pushMessage2RX),
         // but with no bus transport and no DRAM latency. The existing fill FSM path
         // (transient --Data_fromUpperInterface--> resident) then completes normally.
-        if (m_perfect_llc && !msg->to.empty() && msg->to[0] == (uint16_t)m_shared_memory_id)
+        if (m_perfect_llc && !msg->to.empty() && isHome(msg->to[0]))
         {
             uint8_t return_data[64] = {0};
             Message fill(msg->msg_id, msg->addr, this->m_cache_cycle, 0, msg->owner);
@@ -450,7 +475,7 @@ namespace octopus
                 delete msg;
                 return;
             }
-            msg->to.push_back(this->m_shared_memory_id);
+            msg->to.push_back(homeOf(msg->addr));
         }
         else
         {

@@ -42,6 +42,10 @@ namespace octopus
         Interleave m_home;
         int  homeOf(uint64_t addr) const;
         bool isHome(int id) const;
+        // LLC banks (s4.4): the ids of all banks when this controller is one of several; empty
+        // otherwise. A bank serves only the broadcasts that name it.
+        std::vector<int> m_bank_ids;
+        bool notForThisBank(const Message &msg) const;
 
         // Perfect-LLC knob (default 0 = off). When 1, this controller never issues
         // to the memory above it: a miss's fetch is synthesized locally and looped
@@ -123,6 +127,7 @@ namespace octopus
         virtual void updateCacheLine(void *);
 
     public:
+        void setBankIds(const std::vector<int> &ids) { m_bank_ids = ids; }
         BaseController(ParametersMap map, CommunicationInterface *upper_interface, 
                        CommunicationInterface *lower_interface, string pname = "",
                        string config_path = string(CONFIGURATION_PATH) + string(CACHECONTROLLERS),

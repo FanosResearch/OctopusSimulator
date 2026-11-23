@@ -24,6 +24,6 @@ namespace octopus
         MSIProtocol::readEvent(msg, out_id);
 
         if (*out_id == MSIProtocol::EventId::OwnData)
-            *out_id = (MSIProtocol::EventId)((msg.to[0] == this->m_shared_memory_id) ? EventId::RDM : EventId::RDC);
+            *out_id = (MSIProtocol::EventId)(isHome(msg.to[0]) ? EventId::RDM : EventId::RDC);
     }
 }

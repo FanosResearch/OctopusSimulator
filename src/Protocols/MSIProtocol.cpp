@@ -146,7 +146,7 @@ namespace octopus
                                                                                              : MSIProtocol::REQUEST_TYPE_GETM, // Complementary_value
                                                              (uint16_t)this->m_id);                                       // Owner
 
-                ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+                ((Message *)controller_action.data)->to.push_back((uint16_t)this->homeOf(msg.addr));
                 ((Message *)controller_action.data)->kind = (action == (int)ActionId::GetS) ? Message::K_GETS : Message::K_GETM;
                 break;
             case ActionId::PutM:
@@ -157,7 +157,7 @@ namespace octopus
                                                              0,                              // Cycle
                                                              MSIProtocol::REQUEST_TYPE_PUTM, // Complementary_value
                                                              (uint16_t)this->m_id);     // Owner
-                ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+                ((Message *)controller_action.data)->to.push_back((uint16_t)this->homeOf(msg.addr));
                 ((Message *)controller_action.data)->kind = Message::K_PUTM;
                 break;
 
@@ -178,7 +178,7 @@ namespace octopus
 
                 ((Message *)controller_action.data)->to.clear();
                 if (action == (int)ActionId::Data2Both)
-                    ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+                    ((Message *)controller_action.data)->to.push_back((uint16_t)this->homeOf(msg.addr));
                 
                 controller_actions.insert(controller_actions.begin(), controller_action);
                 continue;
