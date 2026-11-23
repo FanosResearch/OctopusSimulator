@@ -128,6 +128,7 @@ namespace octopus
     int CacheDataHandler_COTS::chooseEvictionWay(uint64_t set, int core)
     {
         int way;
+        ensurePartitions();
         
         m_replacement_policy->getReplacementCandidate(set, &way, allowedWays(core, set));   // partitioning (all ways when unconfigured)
         return way;

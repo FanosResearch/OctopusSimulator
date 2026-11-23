@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <cmath>
 #include <vector>
+#include <algorithm>
 
 namespace octopus
 {
@@ -69,6 +70,7 @@ namespace octopus
         }
 
         uint64_t line(uint64_t a) const { return a >> m_block_bits; }
+        uint64_t blockBytes() const { return 1ull << m_block_bits; }
         uint64_t set(uint64_t a) const { return packed(a) & (m_sets - 1); }
         uint64_t tag(uint64_t a) const { return packed(a) >> m_set_bits; }
         uint64_t address(uint64_t tag, uint64_t set) const
@@ -93,6 +95,44 @@ namespace octopus
         void setSubBanks(int n, int shift) { m_sub.ids.clear(); for (int i = 0; i < n; i++) m_sub.ids.push_back(i); m_sub.shift = shift; }
         int subBanks() const { return m_sub.n(); }
         int subBank(uint64_t a) const { return m_sub.index(packed(a)); }
+
+        // Page colours (s5.1, s6.5): the set-index bits that lie above the page offset, so every
+        // line of a page has the same colour and moving a page to another frame can change it.
+        // `page_bytes` is the page size. colourLo() is the lowest such bit of the set index (in
+        // this cache's own line space); -1 when no layout of colours exists: line-interleaved banks
+        // whose count is not a power of two scatter a page's lines over non-contiguous set bits.
+        int colourLo(uint64_t page_bytes) const
+        {
+            int P = (int)log2((double)page_bytes) - m_block_bits;   // page offset, in line bits
+            if (P < 0) P = 0;
+            if (m_self_idx < 0) return P;
+            int n = m_banks.n(), s = m_banks.shift;
+            if (s >= P) return P;
+            if (n & (n - 1)) return -1;
+            int nb = (int)log2((double)n);
+            return std::max(s, P - nb);
+        }
+        int colours(uint64_t page_bytes) const
+        {
+            int lo = colourLo(page_bytes);
+            return (lo < 0 || lo >= m_set_bits) ? 1 : 1 << (m_set_bits - lo);
+        }
+        int colour(uint64_t a, uint64_t page_bytes) const
+        {
+            int lo = colourLo(page_bytes), k = colours(page_bytes);
+            return k == 1 ? 0 : (int)((packed(a) >> lo) & (uint64_t)(k - 1));
+        }
+        // `a` moved to the frame whose colour is `c`: only bits above the page offset change, and
+        // the bank (for a banked cache) is kept.
+        uint64_t withColour(uint64_t a, int c, uint64_t page_bytes) const
+        {
+            int lo = colourLo(page_bytes), k = colours(page_bytes);
+            if (k == 1) return a;
+            uint64_t mask = (uint64_t)(k - 1) << lo;
+            uint64_t p = (packed(a) & ~mask) | (((uint64_t)c << lo) & mask);
+            uint64_t l = m_self_idx >= 0 ? m_banks.insert(p, m_banks.index(line(a))) : p;
+            return (l << m_block_bits) | (a & ((1ull << m_block_bits) - 1));
+        }
 
     private:
         uint64_t packed(uint64_t a) const { return m_self_idx >= 0 ? m_banks.strip(line(a)) : line(a); }

@@ -7,6 +7,7 @@
  */
 
 #include "../header/CPU.h"
+#include "PagePlacer.h"
 #include <sstream>
 #include <algorithm>
 
@@ -196,6 +197,7 @@ namespace octopus
         char sample_type = 'R';
 
         sscanf(sample_line.c_str(), "%llx %*d %c %lld", &out_msg->addr, &sample_type, &out_msg->cycle);
+        out_msg->addr = PagePlacer::instance().place(m_id, out_msg->addr);   // page_placer(i): off = unchanged
 
         out_msg->complementary_value = (sample_type == 'R') ? RequestType::READ : RequestType::WRITE;
         out_msg->msg_id = IdGenerator::nextReqId();
@@ -307,7 +309,7 @@ namespace octopus
         uint64_t compute = 0;
         auto access = [&](uint64_t addr, bool write) {
             TraceSample s; s.compute_time = compute; s.read_cycle = 0; compute = 0;
-            s.msg.addr = addr; s.msg.cycle = 0;
+            s.msg.addr = PagePlacer::instance().place(m_id, addr); s.msg.cycle = 0;
             s.msg.complementary_value = write ? RequestType::WRITE : RequestType::READ;
             s.msg.msg_id = IdGenerator::nextReqId(); s.msg.owner = m_id; s.msg.to.push_back(m_id);
             m_job_samples.push_back(s);

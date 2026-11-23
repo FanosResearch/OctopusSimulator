@@ -91,6 +91,30 @@ int main()
         CHECK(!l1.isHome(99) && !l1.isHome(19), "isHome rejects non-banks n=%d", n);
         CHECK(bank.isHome(7) && !bank.isHome(20), "bank isHome n=%d", n);
     }
+    // 4. page colours: every line of a page has one colour; withColour keeps the page offset and
+    //    the bank, and inverts colour(); layouts with no contiguous colour bits report -1
+    for (int n : {1, 2, 3, 4, 8}) for (int shift : {0, 3, 6, 7}) for (uint32_t sets : {256u, 1024u}) for (uint64_t page : {4096ull, 8192ull})
+    {
+        Interleave il; for (int k = 0; k < n; k++) il.ids.push_back(30 + k); il.shift = shift;
+        AddressMap m(64, sets); m.setBanks(il, 0);
+        int lo = m.colourLo(page), k = m.colours(page);
+        bool pow2 = (n & (n - 1)) == 0;
+        int P = (int)log2((double)page) - 6;
+        CHECK((lo < 0) == (n > 1 && !pow2 && shift < P), "colourLo n=%d shift=%d page=%llu: %d", n, shift, (unsigned long long)page, lo);
+        if (lo < 0 || k < 2) continue;
+        for (int i = 0; i < 4000; i++)
+        {
+            uint64_t a = (rng() >> 20) & ~63ull;
+            uint64_t pg = a & ~(page - 1);
+            CHECK(m.colour(a, page) == m.colour(pg, page), "page has one colour n=%d shift=%d", n, shift);
+            int c = (int)(rng() % k);
+            uint64_t b = m.withColour(a, c, page);
+            CHECK(m.colour(b, page) == c, "withColour/colour n=%d shift=%d sets=%u", n, shift, sets);
+            CHECK((b & (page - 1)) == (a & (page - 1)), "page offset kept n=%d shift=%d", n, shift);
+            CHECK(il.index(b / 64) == il.index(a / 64), "bank kept n=%d shift=%d", n, shift);
+            CHECK(m.withColour(a, m.colour(a, page), page) == a, "identity n=%d shift=%d", n, shift);
+        }
+    }
     printf(fails ? "addressmap_test: %d FAILURES\n" : "addressmap_test: PASS\n", fails);
     return fails != 0;
 }

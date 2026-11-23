@@ -33,9 +33,13 @@ namespace octopus
         // unrestricted).
         PartitionSet m_partitions;
         uint32_t m_all_mask = 0;
+        // Built once the system is complete (finalizePartitions), since colour and bank schemes
+        // depend on the bank group the system builder installs after the caches exist; built
+        // lazily on first use if a builder does not call it.
+        bool m_partitions_built = false;
+        void ensurePartitions() { if (!m_partitions_built) { m_partitions_built = true; buildPartitions(); } }
         void buildPartitions();
-        // every handler with partitions, for the one Partitions.csv of the run
-        static std::vector<CacheDataHandler *> &partitioned();
+        static std::vector<CacheDataHandler *> &handlers();   // every live handler
         uint32_t m_sets_count;
         // set / tag / address of a line (docs/LLC_Banking_and_Partitioning_Design.md s5)
         AddressMap m_map;
@@ -100,6 +104,9 @@ namespace octopus
         int findEmptyWay(uint64_t address, int core = -1);
         uint32_t allowedWays(int core, uint64_t set) const { return m_partitions.allowedWays(core, set, m_all_mask); }
         const PartitionSet &partitions() const { return m_partitions; }
+        // End of system construction: build every cache's partitions, then configure the page
+        // placer (page_placer(i) of the system) with their placing schemes.
+        static void finalizePartitions(bool page_placer);
         // The address map (design doc s5): geometry, bank group, sub-banks and home map. The
         // controller installs the home map and the bank group; the protocol reads it.
         AddressMap &addressMap() { return m_map; }

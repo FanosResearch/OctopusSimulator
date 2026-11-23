@@ -158,6 +158,10 @@ namespace octopus
         }
 
         Logger::getLogger()->registerReportPath(workload_path + string("/newLogger"));
+
+        // Partitions need the complete system (bank groups installed); then the page placer.
+        CacheDataHandler::finalizePartitions(parameters.count(STRINGIFY(page_placer)) &&
+                                             std::get<int>(parameters.at(STRINGIFY(page_placer)).value) != 0);
     }
 
     BaseController* MultiCoreSystem::createController(string type, ParametersMap map,

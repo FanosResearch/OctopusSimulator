@@ -43,7 +43,8 @@ namespace octopus
         std::string cache;            // the cache's configuration name, for messages
         uint32_t ways = 1;
         uint64_t sets = 1;
-        const AddressMap *map = nullptr;
+        const AddressMap *map = nullptr;   // complete: bank group and home map installed
+        uint64_t page_bytes = 4096;        // partition[k].page_size(i): the placer's page
     };
 
     // What is split, and where it is enforced. Every hook has a no-op default.
@@ -53,17 +54,26 @@ namespace octopus
         virtual ~PartitionScheme() = default;
         virtual const char *name() const = 0;
         virtual int units() const = 0;
-        void setOwnership(std::unique_ptr<Ownership> o) { m_owners = std::move(o); ownershipChanged(); }
+        void setOwnership(std::unique_ptr<Ownership> o, const std::string &spec = "")
+        { m_owners = std::move(o); m_owner_spec = spec; ownershipChanged(); }
         const Ownership &owners() const { return *m_owners; }
+        const std::string &ownerSpec() const { return m_owner_spec; }
 
         // cache-side enforcement
         virtual void restrictVictims(int core, uint64_t set, uint32_t &way_mask) const {}
         virtual bool admit(int core, uint64_t addr) const { return true; }
 
-        // source-side enforcement (addresses chosen outside the cache)
+        // source-side enforcement (addresses chosen outside the cache): the PagePlacer moves a
+        // page to a frame whose unit the core owns. withUnit keeps the page offset.
         virtual bool     placesAddresses() const { return false; }
         virtual int      unitOf(uint64_t addr) const { return 0; }
         virtual uint64_t withUnit(uint64_t addr, int unit) const { return addr; }
+        virtual uint64_t pageBytes() const { return 0; }
+        // Identifies the address function and the owners: the same placing scheme configured on
+        // every LLC bank has one signature, and the placer uses it once.
+        virtual std::string signature() const { return std::string(name()) + " owners=" + m_owner_spec; }
+        // why this scheme cannot work on this cache (checked once the system is built); "" = fine
+        virtual std::string invalid() const { return ""; }
 
         // Whether a fill by `core` of `addr` into (set, way) stays inside the core's units. A
         // fill that does not is a violation, counted by the PartitionSet. A cache-enforced scheme
@@ -78,6 +88,7 @@ namespace octopus
     protected:
         virtual void ownershipChanged() {}
         std::unique_ptr<Ownership> m_owners;
+        std::string m_owner_spec;
     };
 
     // The schemes of one cache. Forwards every hook to all of them: way masks and admit answers
@@ -114,11 +125,12 @@ namespace octopus
         uint64_t fills(size_t k, int core) const;
         uint64_t violations(size_t k, int core) const;
         uint64_t violations() const;                 // all schemes, all cores
-        // CSV rows "cache,partition,scheme,core,fills,violations", one per scheme and core
+        uint64_t sharedOutside(size_t k, int core) const;
+        // CSV rows "cache,partition,scheme,core,fills,violations,shared_outside", one per scheme and core
         void report(std::ostream &os) const;
 
     private:
-        struct Stats { std::map<int, uint64_t> fills, violations; };
+        struct Stats { std::map<int, uint64_t> fills, violations, shared; };
         std::string m_cache;
         std::vector<std::unique_ptr<PartitionScheme>> m_schemes;
         std::vector<bool> m_strict;

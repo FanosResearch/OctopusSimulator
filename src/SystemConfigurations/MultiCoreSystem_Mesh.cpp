@@ -64,6 +64,10 @@ namespace octopus
         m_main_memory = new MainMemoryController(getSubMap(STRINGIFY(MainMemoryController)), bus->getInterfaceFor(main_memory_id), name);
 
         Logger::getLogger()->registerReportPath(workload_path + string("/newLogger"));
+
+        // Partitions need the complete system (bank groups installed); then the page placer.
+        CacheDataHandler::finalizePartitions(parameters.count(STRINGIFY(page_placer)) &&
+                                             std::get<int>(parameters.at(STRINGIFY(page_placer)).value) != 0);
     }
 
     BaseController* MultiCoreSystem_Mesh::createController(string type, ParametersMap map,

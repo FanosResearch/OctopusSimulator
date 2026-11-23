@@ -7,6 +7,7 @@
  */
 #include "../header/CacheDataHandler.h"
 #include "../header/Logger.h"
+#include "PagePlacer.h"
 
 #include <algorithm>
 #include <fstream>
@@ -57,7 +58,7 @@ namespace octopus
         m_replacement_policy = Policy::getReplacementPolicy(replacement_policy_name, m_ways_count);
 
         m_all_mask = (m_ways_count >= 32) ? 0xffffffffu : ((1u << m_ways_count) - 1);
-        buildPartitions();
+        handlers().push_back(this);
 
         dprint = new DebugPrint(getSubMap(STRINGIFY(dprint)), name, parent_name + "." + name);
 
@@ -102,7 +103,9 @@ namespace octopus
                 exit(2);
             }
             bool strict = pm.count("strict") && std::get<int>(pm.at("strict").value) != 0;
-            m_partitions.add(PartitionRegistry::build(scheme, str(pm, "ownership", "static"), str(pm, "owners", ""), ctx), strict);
+            PartitionContext c = ctx;
+            if (pm.count("page_size")) c.page_bytes = (uint64_t)std::get<int>(pm.at("page_size").value);
+            m_partitions.add(PartitionRegistry::build(scheme, str(pm, "ownership", "static"), str(pm, "owners", ""), c), strict);
         }
         if (m_partitions.empty()) return;
         // Partitions.csv in the report directory: fills and violations per cache, scheme, core.
@@ -111,23 +114,34 @@ namespace octopus
         if (!hooked && (hooked = true))
             Logger::atRunEnd([](const std::string &dir) {
                 std::ofstream f(dir + "/Partitions.csv");
-                f << "Cache,Partition,Scheme,Core,Fills,Violations\n";
+                f << "Cache,Partition,Scheme,Core,Fills,Violations,SharedOutside\n";
                 uint64_t v = 0;
-                for (CacheDataHandler *h : partitioned()) { h->m_partitions.report(f); v += h->m_partitions.violations(); }
+                for (CacheDataHandler *h : handlers()) { h->m_partitions.report(f); v += h->m_partitions.violations(); }
                 cout << "Partitioning: " << v << " violation(s); per-core fills in " << dir << "/Partitions.csv" << endl;
+                if (PagePlacer::instance().enabled()) PagePlacer::instance().report(cout);
             });
-        partitioned().push_back(this);
     }
 
-    std::vector<CacheDataHandler *> &CacheDataHandler::partitioned()
+    std::vector<CacheDataHandler *> &CacheDataHandler::handlers()
     {
         static std::vector<CacheDataHandler *> v;
         return v;
     }
 
+    void CacheDataHandler::finalizePartitions(bool page_placer)
+    {
+        std::vector<const PartitionScheme *> schemes;
+        for (CacheDataHandler *h : handlers())
+        {
+            h->ensurePartitions();
+            for (auto &s : h->m_partitions.schemes()) schemes.push_back(s.get());
+        }
+        PagePlacer::instance().configure(page_placer, schemes);
+    }
+
     CacheDataHandler::~CacheDataHandler()
     {
-        auto &v = partitioned();
+        auto &v = handlers();
         v.erase(std::remove(v.begin(), v.end(), this), v.end());
         delete[] m_cache;
         delete m_replacement_policy;
@@ -191,7 +205,7 @@ namespace octopus
 
         *((GenericCacheLine *)getLine(set, way)) = *line;
         ((GenericCacheLine *)getLine(set, way))->tag = calculate_tag(address);
-        if (core >= 0 && !m_partitions.empty()) m_partitions.onFill(core, address, set, way);
+        if (core >= 0 && !m_partitions.empty()) m_partitions.onFill(core, address, set, way);   // built by findEmptyWay
         
         if(!soft_write)
             m_replacement_policy->update(set, way, m_cycle); //ToDo: this should change to support allocation on miss
@@ -292,6 +306,7 @@ namespace octopus
 
     int CacheDataHandler::findEmptyWay(uint64_t address, int core)
     {
+        ensurePartitions();
         uint64_t set = calculate_set(address);
 
         uint32_t allowed = allowedWays(core, set);

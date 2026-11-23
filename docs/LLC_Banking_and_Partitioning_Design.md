@@ -197,10 +197,11 @@ public:
     int      home(uint64_t a) const;                   // which next-level cache serves the line
     bool     isHome(int id) const;
     int      subBank(uint64_t a) const;                // internal data-array bank (timing)
-    // P3:
-    int      colour(uint64_t a) const;                 // set-index bits above the page offset
-    uint64_t withColour(uint64_t a, int c) const;
-    int      colours() const;
+    // page colours (P3): set-index bits above the page offset
+    int      colourLo(uint64_t page) const;            // lowest colour bit; -1 = no layout
+    int      colours(uint64_t page) const;
+    int      colour(uint64_t a, uint64_t page) const;
+    uint64_t withColour(uint64_t a, int c, uint64_t page) const;  // keeps page offset and bank
 private:
     Interleave m_banks;       // this cache's bank group (the banks of THIS level)
     int        m_self_idx;    // this cache's index in m_banks; -1 if not a bank
@@ -208,13 +209,19 @@ private:
     int        m_home_fallback;
     int        m_set_bits, m_block_bits;
     Interleave m_sub;         // data-array sub-banks
-    int        m_colour_lo = 0, m_colour_bits = 0;     // P3
 };
 ```
 
 The bank group and the home map are separate fields. An L1 has a home map (the LLC banks) and
 no bank group. An LLC bank has a bank group (its peers) and an empty home map, so its home is
 memory. A single field for both would send an LLC bank's misses to its peers.
+
+Colours are computed in the cache's own (bank-stripped) line space. A packed set-index bit is a
+colour bit when the line bit it comes from is above the page offset. With N banks interleaved
+every 2^s lines and P page-offset line bits, the lowest colour bit is P when s >= P (page or
+coarser interleave, any N), and max(s, P - log2 N) when s < P and N is a power of two. Line-
+interleaved banks of another count scatter a page's lines over non-contiguous set bits and have
+no colour layout (`colourLo` = -1); colour partitioning refuses them.
 
 An XOR set hash (folding tag bits into the set index) is not scheduled; it would be a further
 `AddressMap` option with its own step.
@@ -347,8 +354,8 @@ llc_controller.m_data_handler.partition[1].owners(s),0:0-127;1-3:128-255
 | Scheme | Hooks | Enforced by | Step |
 |---|---|---|---|
 | `WayPartition` | `restrictVictims` | the cache, on fill and victim choice (today's code, moved) | P1 |
-| `ColourPartition` (set partitioning) | `placesAddresses`, `unitOf`/`withUnit` via `AddressMap::colour`, `onFill` | `PagePlacer`; the cache counts violations | P3 |
-| `LlcBankPartition` | same, via `AddressMap::home` | `PagePlacer`; the cache counts violations | P4 |
+| `ColourPartition` (set partitioning) | `placesAddresses`, `unitOf`/`withUnit` via `AddressMap::colour`, `inPartition` | `PagePlacer`; the cache counts violations | P3 |
+| `LlcBankPartition` | same, via the bank group (`AddressMap::banks`); needs page interleave | `PagePlacer`; each bank counts violations | P4 |
 | `SubBankPartition` | same, via `AddressMap::subBank` | `PagePlacer` | later |
 | `DramBankPartition` | same, via MCsim's address mapping | `PagePlacer` | later |
 | `MshrPartition` | `admit` | the cache | later |
@@ -379,7 +386,19 @@ bank. They are enforced where addresses are chosen, as an OS page allocator does
   owns (round-robin), and composes them by chaining `withUnit()`.
 - One page table serves all cores, keyed by the original page. A shared page maps to one frame
   for every core, so coherence is unaffected. Its units come from the first core that touches it.
-- Off by default (`page_placer(i),0`): addresses pass through unchanged.
+  A fill by another core into such a page is outside that core's units by design; it is counted
+  in the `SharedOutside` column of `Partitions.csv`, not as a violation, and never stops a
+  strict run.
+- Frames are allocated, never computed from the original page: for each tuple of units the
+  placer walks candidate frames (`withUnit` applied to page number k = 0, 1, ...) and takes the
+  first unused one, so two pages never share a frame.
+- Off by default (`page_placer(i),0`, a system parameter): addresses pass through unchanged.
+  The placer uses every placing scheme of every cache once (the same scheme on every LLC bank,
+  by `signature()`). Two schemes of one name that differ, different `page_size(i)`, or schemes
+  whose bits overlap (one undoes another) are refused at startup.
+- Partitions are built when the system is complete (`CacheDataHandler::finalizePartitions`,
+  called by both system builders), because colours and banks depend on the bank group the
+  builder installs after the caches exist.
 
 | Front end | Set/bank partitioning |
 |---|---|

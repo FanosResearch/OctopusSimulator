@@ -51,8 +51,10 @@ static std::string random_spec(std::mt19937 &rng, int cores, int units)
 int main()
 {
     std::mt19937 rng(7);
-    AddressMap map(64, 256);
-    PartitionContext ctx; ctx.cache = "test"; ctx.ways = 8; ctx.sets = 256; ctx.map = &map;
+    // one bank of a 4-bank, page-interleaved LLC: every scheme (way, colour, bank) is valid here
+    Interleave banks; banks.ids = {10, 11, 12, 13}; banks.shift = 6;
+    AddressMap map(64, 1024); map.setBanks(banks, 0);
+    PartitionContext ctx; ctx.cache = "test"; ctx.ways = 8; ctx.sets = 1024; ctx.map = &map;
     const uint32_t all = 0xff;
 
     // 1. way scheme + static ownership == the old way_partition masks, on random specs

@@ -5,6 +5,7 @@
  * (docs/LLC_Banking_and_Partitioning_Design.md s6).
  */
 #include "Partitioning.h"
+#include "PagePlacer.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -18,6 +19,10 @@ namespace octopus
         {
             m_stats[k].fills[core]++;
             if (m_schemes[k]->inPartition(core, addr, set, way)) continue;
+            // A page the placer gave another core (its first toucher) is shared data: outside the
+            // requester's units by design, counted apart and never strict.
+            int placed_for = m_schemes[k]->placesAddresses() ? PagePlacer::instance().frameOwner(addr) : -1;
+            if (placed_for >= 0 && placed_for != core) { m_stats[k].shared[core]++; continue; }
             m_stats[k].violations[core]++;
             if (m_strict[k])
             {
@@ -41,6 +46,12 @@ namespace octopus
         return it == m_stats[k].violations.end() ? 0 : it->second;
     }
 
+    uint64_t PartitionSet::sharedOutside(size_t k, int core) const
+    {
+        auto it = m_stats[k].shared.find(core);
+        return it == m_stats[k].shared.end() ? 0 : it->second;
+    }
+
     uint64_t PartitionSet::violations() const
     {
         uint64_t n = 0;
@@ -53,7 +64,7 @@ namespace octopus
         for (size_t k = 0; k < m_schemes.size(); k++)
             for (auto &kv : m_stats[k].fills)
                 os << m_cache << "," << k << "," << m_schemes[k]->name() << "," << kv.first << ","
-                   << kv.second << "," << violations(k, kv.first) << "\n";
+                   << kv.second << "," << violations(k, kv.first) << "," << sharedOutside(k, kv.first) << "\n";
     }
 
     std::unique_ptr<PartitionScheme> PartitionRegistry::build(const std::string &scheme, const std::string &ownership,
@@ -73,6 +84,12 @@ namespace octopus
             exit(2);
         }
         std::unique_ptr<PartitionScheme> s = sf->second(ctx);
+        std::string bad = s->invalid();
+        if (!bad.empty())
+        {
+            std::cerr << ctx.cache << ": partition scheme '" << scheme << "': " << bad << std::endl;
+            exit(2);
+        }
         std::unique_ptr<Ownership> o = of->second();
         o->configure(owners, s->units());
         std::string why = o->invalid();
@@ -81,7 +98,7 @@ namespace octopus
             std::cerr << ctx.cache << ": partition scheme '" << scheme << "' owners '" << owners << "': " << why << std::endl;
             exit(2);
         }
-        s->setOwnership(std::move(o));
+        s->setOwnership(std::move(o), owners);
         return s;
     }
 
