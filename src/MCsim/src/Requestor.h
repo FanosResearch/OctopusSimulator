@@ -68,7 +68,7 @@ namespace MCsim
 		unsigned requestorID;
 		unsigned prevArrive;
 		unsigned prevComplete;
-		unsigned currentClockCycle;
+		uint64_t currentClockCycle;
 		unsigned int RequestBufferSize;
 		unsigned int hitRatioCtr;
 		unsigned long requestRequest;
