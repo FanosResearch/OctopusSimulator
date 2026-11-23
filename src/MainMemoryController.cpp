@@ -76,7 +76,7 @@ namespace octopus
                                   m_clk_cycle,         // Cycle
                                   0,                   // Complementary_value
                                   ready_msg.owner);    // Owner
-            msg.to.push_back((uint16_t) m_llc_id);     // To
+            msg.to.push_back(ready_msg.from ? ready_msg.from : (uint16_t)m_llc_id);   // To: the LLC bank that asked
             msg.kind = Message::K_FILL;
             msg.copy(return_data);
                     

@@ -107,7 +107,9 @@ namespace octopus
                 controller_actions.push_back(controller_action);
 
                 uint64_t addr_key = msg.addr & ~uint64_t(m_data_handler->getBlockSize() -1);
-                if((msg.source == Message::Source::UPPER_INTERCONNECT) &&
+                // data that carries the ack count and completes it with acks that came first (Data_zeroAck):
+                // settle the counter here. A message without data (MOESI's ack count) has its own SetAck in the row.
+                if((msg.source == Message::Source::UPPER_INTERCONNECT) && (msg.data != NULL) &&
                    (ack_counters->find(addr_key) != ack_counters->end()) &&
                    ((ack_counters->at(addr_key) + msg.complementary_value) == 0))
                 {
@@ -138,7 +140,7 @@ namespace octopus
                                                                                              : MSIDirectory::REQUEST_TYPE_GETM, // Complementary_value
                                                              (uint16_t)this->m_id);                                             // Owner
 
-                ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+                ((Message *)controller_action.data)->to.push_back((uint16_t)this->homeOf(msg.addr));
                 ((Message *)controller_action.data)->kind = (action == (int)ActionId::GetS) ? Message::K_GETS : Message::K_GETM;
                 break;
             case ActionId::PutS:
@@ -149,7 +151,7 @@ namespace octopus
                                                              0,                              // Cycle
                                                              MSIDirectory::REQUEST_TYPE_PUTS,// Complementary_value
                                                              (uint16_t)this->m_id);          // Owner
-                ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+                ((Message *)controller_action.data)->to.push_back((uint16_t)this->homeOf(msg.addr));
                 ((Message *)controller_action.data)->kind = Message::K_PUTS;
                 break;
             case ActionId::PutM_Data:
@@ -176,7 +178,7 @@ namespace octopus
                 ((Message *)controller_action.data)->complementary_value = 0;
                 ((Message *)controller_action.data)->to.clear();
                 if (action == (int)ActionId::Data2Both)
-                    ((Message *)controller_action.data)->to.push_back((uint16_t)this->m_shared_memory_id);
+                    ((Message *)controller_action.data)->to.push_back((uint16_t)this->homeOf(msg.addr));
                 ((Message *)controller_action.data)->kind = Message::K_SUPPLY;   // the owner answers a forwarded request
 
                 controller_actions.insert(controller_actions.begin(), controller_action);
@@ -264,7 +266,7 @@ namespace octopus
         case Message::Source::UPPER_INTERCONNECT:
             if (msg.data != NULL)
             {
-                if(msg.from != m_shared_memory_id)
+                if(!isHome(msg.from))
                     *out_id = EventId::DataFromOwner;
                 else if(msg.complementary_value == 0)
                     *out_id = EventId::Data_zeroAck;

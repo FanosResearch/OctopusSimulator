@@ -15,6 +15,7 @@
 #include "GenericCacheLine.h"
 #include "Policy.h"
 #include "ReplacementPolicy.h"
+#include "AddressMap.h"
 
 #include <math.h>
 
@@ -33,6 +34,8 @@ namespace octopus
         uint32_t m_shared_mask = 0, m_all_mask = 0;
         int m_requester = -1;
         uint32_t m_sets_count;
+        // set / tag / address of a line (docs/LLC_Banking_and_Partitioning_Design.md s5)
+        AddressMap m_map;
 
         // ReplcPolicy m_replacement_policy;
         ReplacementPolicy *m_replacement_policy;
@@ -55,21 +58,9 @@ namespace octopus
             return (void *)&m_cache[set * m_ways_count + way];
         }
 
-        inline uint64_t calculate_tag(uint64_t address)
-        {
-            return (address >> ((int)log2(m_block_size) + (int)log2(m_sets_count)));
-        }
-
-        inline uint64_t calculate_set(uint64_t address)
-        {
-            return ((address >> (int)log2(m_block_size)) & (m_sets_count - 1));
-        }
-
-        inline uint64_t calculate_address(uint64_t tag, uint64_t set)
-        {
-            return (tag << ((int)log2(m_block_size) + (int)log2(m_sets_count))) |
-                   (set << ((int)log2(m_block_size)));
-        }
+        inline uint64_t calculate_tag(uint64_t address) { return m_map.tag(address); }
+        inline uint64_t calculate_set(uint64_t address) { return m_map.set(address); }
+        inline uint64_t calculate_address(uint64_t tag, uint64_t set) { return m_map.address(tag, set); }
 
         virtual bool findline(uint64_t address, uint64_t *set, int *way);
 
@@ -105,6 +96,9 @@ namespace octopus
             return it != m_way_mask.end() ? it->second : m_shared_mask;
         }
         void setRequester(int core) { m_requester = core; }
+        // This cache is bank `self_idx` of `banks` (an LLC bank): index sets with the bank digit
+        // removed, so the bank uses all of its sets (design doc s5.2).
+        void setBanks(const Interleave &banks, int self_idx) { m_map.setBanks(banks, self_idx); }
         bool partitioned() const { return !m_way_mask.empty(); }
 
         uint64_t getEvictionCandidate(uint64_t address, GenericCacheLine *line);

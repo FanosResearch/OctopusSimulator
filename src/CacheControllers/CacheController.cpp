@@ -50,7 +50,7 @@ namespace octopus
         delete m_processing_queue;
 
         m_data_handler = new CacheDataHandler_COTS(getSubMap(STRINGIFY(m_data_handler)), parent_name + "." + name);
-        m_protocol = Protocols::getNewProtocol(protocol_type, m_data_handler, fsm_path, m_id, m_shared_memory_id);
+        m_protocol = Protocols::getNewProtocol(protocol_type, m_data_handler, fsm_path, m_id, m_shared_memory_id, m_home);
 
         m_processing_queue =
             new FRFCFS_Buffer<Message, CoherenceProtocolHandler>(&CoherenceProtocolHandler::getRequestState,
@@ -222,10 +222,10 @@ namespace octopus
             // is told about the transfer by the protocol itself, and an extra unsolicited
             // data copy is a transaction its FSM has no row for.
             bool has_llc = false;
-            for (uint16_t t : msg->to) if (t == (uint16_t)m_shared_memory_id) has_llc = true;
+            for (uint16_t t : msg->to) if (isHome(t)) has_llc = true;
             if (deferredSupplyCopiesToLLC() &&
                 saved.front().complementary_value == MSIProtocol::REQUEST_TYPE_GETS && !has_llc)
-                msg->to.push_back((uint16_t)m_shared_memory_id);
+                msg->to.push_back((uint16_t)homeOf(msg->addr));
             for (size_t i = 1; i < saved.size(); i++)
             {
                 msg->to.push_back(saved[i].owner);
@@ -546,7 +546,7 @@ namespace octopus
                           m_cache_cycle,                       // Cycle
                           0,                                   // Complementary_value
                           (uint16_t)this->m_id);               // Owner
-            msg.to.push_back((uint16_t)this->m_shared_memory_id);
+            msg.to.push_back((uint16_t)homeOf(msg.addr));
             msg.source = Message::Source::SELF;
             msg.kind = Message::K_EVICT;
             // force=true: a write-back must be admitted to drain the PWB. It is

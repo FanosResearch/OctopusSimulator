@@ -6,6 +6,7 @@
  * Created On Dec 1, 2023
  */
 
+#include <algorithm>
 #include "../../header/SystemConfigurations/MultiCoreSystem.h"
 
 using namespace std;
@@ -52,6 +53,7 @@ namespace octopus
         if (bus_type.size() > 1)
             bus[1]->setMemBus();
 
+        std::vector<BaseController *> cores;   // for the LLC bank check below
         // iterate over each core
         for (int i = 0; i < num_cores; i++)
         {
@@ -83,6 +85,7 @@ namespace octopus
                                                 getSubMap(STRINGIFY(cache_controller), i),
                                                 bus[0]->getInterfaceFor(cache_id),
                                                 cpu_interconnect->getInterfaceFor(cache_id), name);
+            cores.push_back(cache_controller);
             if (external_cpu != NULL)
             {
                 cache_controller->setCpuPort(external_cpu);
@@ -90,13 +93,48 @@ namespace octopus
             }
         }
 
-        BaseController *llc_controller;
-        int llc_id = std::get<int>(getSubMap(STRINGIFY(llc_controller)).at("m_id").value);
-        llc_controller = createController(llc_controller_type,
-                                          getSubMap(STRINGIFY(llc_controller)),
-                                          bus[1]->getInterfaceFor(llc_id),
-                                          bus[0]->getInterfaceFor(llc_id), name);
-        llc_controller->setLogRole(Logger::Role::LLC);   // Design B: tag LLC events
+        // LLC banks (docs/LLC_Banking_and_Partitioning_Design.md s4.1): llc_banks(i) complete LLC
+        // controllers, llc_controller[k] when banked, the plain llc_controller map when there is one
+        // (every existing preset). Each bank is its own endpoint on bus[0] and bus[1]; the cores'
+        // home_ids map lines onto them.
+        int llc_banks = parameters.count(STRINGIFY(llc_banks)) ? std::get<int>(parameters.at(STRINGIFY(llc_banks)).value) : 1;
+        BaseController *llc_controller = NULL;
+        int llc_id = -1;
+        std::vector<BaseController *> banks; std::vector<int> bank_ids;
+        for (int k = 0; k < llc_banks; k++)
+        {
+            ParametersMap lmap = llc_banks == 1 ? getSubMap(STRINGIFY(llc_controller)) : getSubMap(STRINGIFY(llc_controller), k);
+            int bank_id = std::get<int>(lmap.at("m_id").value);
+            if (bus[0]->getInterfaceFor(bank_id) == NULL || bus[1]->getInterfaceFor(bank_id) == NULL)
+            {
+                cerr << "MultiCoreSystem: LLC bank " << bank_id << " is not an endpoint of bus[0] (upper_level_cache_ids) and bus[1] (m_lower_level_ids)" << endl;
+                exit(2);
+            }
+            BaseController *bank = createController(llc_controller_type, lmap,
+                                                    bus[1]->getInterfaceFor(bank_id),
+                                                    bus[0]->getInterfaceFor(bank_id), name);
+            bank->setLogRole(Logger::Role::LLC);   // Design B: tag LLC events
+            if (k == 0) { llc_controller = bank; llc_id = bank_id; }   // MCsim's default reply target and clock
+            banks.push_back(bank); bank_ids.push_back(bank_id);
+        }
+        if (llc_banks > 1)
+        {
+            // The banks interleave lines exactly as the cores' home map does (s4.2, s5.2): every core
+            // must name the same banks with the same granularity, and name only banks.
+            Interleave home = cores.empty() ? Interleave() : cores[0]->homeMap();
+            std::vector<int> want = bank_ids, got = home.ids;
+            std::sort(want.begin(), want.end()); std::sort(got.begin(), got.end());
+            bool ok = (got == want);
+            for (BaseController *c : cores)
+                ok = ok && c->homeMap().ids == home.ids && c->homeMap().shift == home.shift;
+            if (!ok)
+            {
+                cerr << "MultiCoreSystem: llc_banks(i) = " << llc_banks << " needs every core's home_ids(vi) to list exactly the"
+                     << " LLC bank ids, with one home_interleave_shift(i) for all cores" << endl;
+                exit(2);
+            }
+            for (BaseController *b : banks) b->setBanks(home);
+        }
 
         // Main memory: the basic MainMemoryController by default, or the MCsim DRAM
         // simulator when `main_memory_type=MCsim` (configured for DDR4 in MCsimInterface).

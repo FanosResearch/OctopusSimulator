@@ -93,6 +93,8 @@ namespace octopus
                     continue;
                 if(id == old_owner && msg.owner != m_id) //skip invalidation of a previous owner as it will be invalidated by a fwd message
                     continue;
+                if(id == old_owner && flags[ActionId::SendInvM]) //the owner gets the InvM of the same transition instead
+                    continue;
                 ((Message *)controller_action.data)->to.push_back((uint16_t)id);
             }
             
@@ -144,6 +146,19 @@ namespace octopus
     {
         if(msg.source == Message::Source::LOWER_INTERCONNECT)
         {
+            // last_PutM_fromOwner / last_PutE_fromOwner exist only in MOESI_LLC_directory_v2; with an older
+            // table (no such events) the owner's put is classified as before
+            auto defines = [this](EventId e, const char *name) { return m_fsm->getEventName((int)e) == name; };
+            if (msg.data == NULL && msg.complementary_value == MESIDirectory::REQUEST_TYPE_PUTE && msg.owner == cache_line.owner_id &&
+                defines(EventId::last_PutE_fromOwner, "last_PutE_fromOwner"))
+            {
+                uint64_t key = msg.addr & ~uint64_t(m_data_handler->getBlockSize() -1);
+                if ((protocol_counters->find(key) != protocol_counters->end()) && ((protocol_counters->at(key).size() - 1) == 0))
+                {
+                    *out_id = (LLCMSIDirectory::EventId)EventId::last_PutE_fromOwner;   // no other sharer left
+                    return;
+                }
+            }
             if (msg.data != NULL)
             {
                 uint64_t addr_key = msg.addr & ~uint64_t(m_data_handler->getBlockSize() -1);
@@ -159,6 +174,15 @@ namespace octopus
                     }
                     else
                         *out_id = (LLCMSIDirectory::EventId)EventId::PutO_Data_fromNonOwner;
+                    return;
+                }
+                else if(msg.complementary_value == MSIDirectory::REQUEST_TYPE_PUTM && msg.owner == cache_line.owner_id &&
+                        defines(EventId::last_PutM_fromOwner, "last_PutM_fromOwner") &&
+                        (protocol_counters->find(addr_key) != protocol_counters->end()) && ((protocol_counters->at(addr_key).size() - 1) == 0))
+                {
+                    // the owner's PutM with no other sharer left: the home finishes (an eviction in N_ad writes back)
+                    // instead of waiting for acks that will not come; otherwise PutM_Data_fromOwner, as in MSI
+                    *out_id = (LLCMSIDirectory::EventId)EventId::last_PutM_fromOwner;
                     return;
                 }
                 else if(msg.complementary_value == MOESIDirectory::REQUEST_TYPE_INV_ACK)
