@@ -32,6 +32,7 @@ namespace octopus
         //Constructor
         int lines_count = cache_size / m_block_size;
         m_sets_count = lines_count / m_ways_count;
+        m_map.setGeometry(m_block_size, m_sets_count);
 
         m_cache = new GenericCacheLine[lines_count];
         m_replacement_policy = Policy::getReplacementPolicy(replacement_policy_name, m_ways_count);
