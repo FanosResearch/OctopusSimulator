@@ -597,6 +597,7 @@ namespace octopus
         if (report_files.empty())
         {
             summary_file.close();
+            for (auto &f : runEndHooks()) f(report_file_path);
             // Event-path self-check: report stage-tiling only if something failed
             // (a bug), or when explicitly debugging. Quiet in normal runs.
             if (g_evt_fail > 0 || std::getenv("OCTOPUS_EVENT_DEBUG") != nullptr)

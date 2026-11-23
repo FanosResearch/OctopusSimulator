@@ -34,6 +34,8 @@ namespace octopus
         PartitionSet m_partitions;
         uint32_t m_all_mask = 0;
         void buildPartitions();
+        // every handler with partitions, for the one Partitions.csv of the run
+        static std::vector<CacheDataHandler *> &partitioned();
         uint32_t m_sets_count;
         // set / tag / address of a line (docs/LLC_Banking_and_Partitioning_Design.md s5)
         AddressMap m_map;

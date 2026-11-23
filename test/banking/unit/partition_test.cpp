@@ -41,7 +41,7 @@ static std::string random_spec(std::mt19937 &rng, int cores, int units)
     int n = rng() % 4;
     for (int i = 0; i < n; i++)
     {
-        int c0 = rng() % cores, c1 = c0 + rng() % 2, u0 = rng() % (units + 1), u1 = u0 + rng() % 3;
+        int c0 = rng() % cores, c1 = c0 + rng() % 2, u0 = rng() % units, u1 = u0 + rng() % 3;   // every core owns >= 1 unit (others are refused)
         s += (i ? ";" : "") + std::to_string(c0) + (c1 > c0 ? "-" + std::to_string(c1) : "") + ":" +
              std::to_string(u0) + (u1 > u0 ? "-" + std::to_string(u1) : "");
     }
@@ -103,6 +103,22 @@ int main()
                 CHECK(s0->withUnit(a, s0->unitOf(a)) == a, "%s: withUnit(a, unitOf(a)) != a", key.c_str());
                 CHECK(s0->unitOf(s0->withUnit(a, u)) == u, "%s: unitOf(withUnit(a, %d)) != %d", key.c_str(), u, u);
             }
+    }
+    // 3. violation counting: a fill outside the requester's units is counted, per core
+    {
+        PartitionSet set; set.setName("test");
+        set.add(PartitionRegistry::build("way", "static", "0:0;1:1-2", ctx));
+        set.onFill(0, 0x40, 3, 0);    // core 0 in its way
+        set.onFill(0, 0x80, 3, 5);    // core 0 outside
+        set.onFill(1, 0xc0, 3, 2);    // core 1 in
+        set.onFill(2, 0x100, 3, 0);   // core 2 shares ways 3-7: way 0 is outside
+        set.onFill(2, 0x140, 3, 7);   // inside
+        set.onFill(-1, 0x180, 3, 0);  // no requester: not counted
+        CHECK(set.fills(0, 0) == 2 && set.violations(0, 0) == 1, "core 0 fills %llu violations %llu",
+              (unsigned long long)set.fills(0, 0), (unsigned long long)set.violations(0, 0));
+        CHECK(set.fills(0, 1) == 1 && set.violations(0, 1) == 0, "core 1");
+        CHECK(set.fills(0, 2) == 2 && set.violations(0, 2) == 1, "core 2");
+        CHECK(set.violations() == 2, "total violations %llu", (unsigned long long)set.violations());
     }
     CHECK(PartitionRegistry::schemes().count("way") == 1, "way scheme not registered");
     CHECK(PartitionRegistry::ownerships().count("static") == 1, "static ownership not registered");

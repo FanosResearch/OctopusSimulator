@@ -13,6 +13,9 @@
 #include "FSMReader.h"
 
 #include <stdint.h>
+#include <functional>
+#include <string>
+#include <vector>
 #include <string>
 #include <fstream>
 #include <sstream>
@@ -145,6 +148,11 @@ namespace octopus
         // hung run's trace ends tens of thousands of cycles before the interesting part.
         void traceFinalize() { traceClose(); }
         static void traceAtExit();
+        // Called with the report directory once every core's reports are written (the
+        // partition report uses it, design doc s6.5).
+        static void atRunEnd(std::function<void(const std::string &dir)> f) { runEndHooks().push_back(std::move(f)); }
+        static std::vector<std::function<void(const std::string &)>> &runEndHooks()
+        { static std::vector<std::function<void(const std::string &)>> v; return v; }
         void addRequest(uint64_t cpu_id, Message&);
         // Discard everything logged so far: per-request rows, worst cases and
         // the requests still in flight. The next request starts new reports,

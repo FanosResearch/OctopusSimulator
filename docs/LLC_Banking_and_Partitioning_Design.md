@@ -356,8 +356,17 @@ llc_controller.m_data_handler.partition[1].owners(s),0:0-127;1-3:128-255
 Ownership types: `StaticOwnership` (P1). Later: `OverlappingOwnership` (CAT-style),
 `UtilityOwnership` (UCP).
 
-A violation is a fill whose unit is outside the requester's allowed units. It is counted and
-reported. `partition[k].strict(i),1` stops the run on the first violation (tests).
+A violation is a fill whose unit is outside the requester's allowed units: the scheme's
+`inPartition(core, addr, set, way)` returns false. `PartitionSet` counts fills and violations per
+scheme and core; at the end of the run they are written to `Partitions.csv` in the report
+directory (`Cache,Partition,Scheme,Core,Fills,Violations`) and the total is printed.
+`partition[k].strict(i),1` stops the run on the first violation (tests). A cache-enforced scheme
+such as `way` cannot violate. A placing scheme violates whenever an address reaches the cache
+unplaced (the placer off, or a gem5 full-system run).
+
+An ownership in which a listed core owns no unit is refused at startup (`Ownership::invalid()`):
+such a core could never fill. (Before P2 a `way_partition` naming only ways past the cache's
+way count ended the run early, with exit code 0.)
 
 ### 6.6 PagePlacer: source-side enforcement
 

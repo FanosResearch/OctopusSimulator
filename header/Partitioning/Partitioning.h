@@ -31,6 +31,8 @@ namespace octopus
         virtual void configure(const std::string &owners, int units) = 0;
         virtual bool owns(int core, int unit) const = 0;
         virtual bool restricts() const = 0;                    // some core is limited
+        // why this ownership cannot work (e.g. a core owns no unit); empty = fine
+        virtual std::string invalid() const { return ""; }
         virtual void onAccess(int core, int unit, bool hit) {}
         virtual void tick(uint64_t cycle) {}
     };
@@ -63,11 +65,15 @@ namespace octopus
         virtual int      unitOf(uint64_t addr) const { return 0; }
         virtual uint64_t withUnit(uint64_t addr, int unit) const { return addr; }
 
+        // Whether a fill by `core` of `addr` into (set, way) stays inside the core's units. A
+        // fill that does not is a violation, counted by the PartitionSet. A cache-enforced scheme
+        // violates only when it had to fall back (the core owns no unit); a placing scheme
+        // violates whenever an address reached the cache unplaced.
+        virtual bool inPartition(int core, uint64_t addr, uint64_t set, int way) const { return true; }
+
         // observation
         virtual void onAccess(int core, uint64_t addr, bool hit) {}
-        virtual void onFill(int core, uint64_t addr) {}
         virtual void tick(uint64_t cycle) {}
-        virtual void report(std::ostream &) const {}
 
     protected:
         virtual void ownershipChanged() {}
@@ -75,12 +81,19 @@ namespace octopus
     };
 
     // The schemes of one cache. Forwards every hook to all of them: way masks and admit answers
-    // are ANDed. With no schemes every query returns at once.
+    // are ANDed. With no schemes every query returns at once. Counts each scheme's fills and
+    // violations per core; a strict scheme stops the run on its first violation.
     class PartitionSet
     {
     public:
         bool empty() const { return m_schemes.empty(); }
-        void add(std::unique_ptr<PartitionScheme> s) { m_schemes.push_back(std::move(s)); }
+        void setName(const std::string &cache) { m_cache = cache; }
+        void add(std::unique_ptr<PartitionScheme> s, bool strict = false)
+        {
+            m_schemes.push_back(std::move(s));
+            m_strict.push_back(strict);
+            m_stats.emplace_back();
+        }
         const std::vector<std::unique_ptr<PartitionScheme>> &schemes() const { return m_schemes; }
 
         // the ways `core` may fill in `set`, out of `all`
@@ -96,10 +109,20 @@ namespace octopus
             for (auto &s : m_schemes) if (!s->admit(core, addr)) return false;
             return true;
         }
-        void report(std::ostream &os) const { for (auto &s : m_schemes) s->report(os); }
+        // a line was installed for `core` in (set, way)
+        void onFill(int core, uint64_t addr, uint64_t set, int way);
+        uint64_t fills(size_t k, int core) const;
+        uint64_t violations(size_t k, int core) const;
+        uint64_t violations() const;                 // all schemes, all cores
+        // CSV rows "cache,partition,scheme,core,fills,violations", one per scheme and core
+        void report(std::ostream &os) const;
 
     private:
+        struct Stats { std::map<int, uint64_t> fills, violations; };
+        std::string m_cache;
         std::vector<std::unique_ptr<PartitionScheme>> m_schemes;
+        std::vector<bool> m_strict;
+        std::vector<Stats> m_stats;
     };
 
     // Name -> factory, filled by the REGISTER_* macros at static-initialisation time.

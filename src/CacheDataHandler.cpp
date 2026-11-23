@@ -6,6 +6,10 @@
  * Created On April 27, 2022
  */
 #include "../header/CacheDataHandler.h"
+#include "../header/Logger.h"
+
+#include <algorithm>
+#include <fstream>
 
 namespace octopus
 {
@@ -66,6 +70,7 @@ namespace octopus
     {
         PartitionContext ctx;
         ctx.cache = parent_name + "." + name;
+        m_partitions.setName(ctx.cache);
         ctx.ways = m_ways_count; ctx.sets = m_sets_count; ctx.map = &m_map;
         auto str = [](const ParametersMap &m, const char *key, const std::string &dflt) {
             auto it = m.find(key);
@@ -84,7 +89,7 @@ namespace octopus
                 cerr << ctx.cache << ": way_partition(s) is an alias for partition[0]; set one or the other" << endl;
                 exit(2);
             }
-            m_partitions.add(PartitionRegistry::build("way", "static", alias, ctx));
+            m_partitions.add(PartitionRegistry::build("way", "static", alias, ctx));   // never strict
         }
         for (int k = alias.empty() ? 0 : 1; ; k++)
         {
@@ -96,12 +101,34 @@ namespace octopus
                 cerr << ctx.cache << ": partition[" << k << "] has no scheme(s)" << endl;
                 exit(2);
             }
-            m_partitions.add(PartitionRegistry::build(scheme, str(pm, "ownership", "static"), str(pm, "owners", ""), ctx));
+            bool strict = pm.count("strict") && std::get<int>(pm.at("strict").value) != 0;
+            m_partitions.add(PartitionRegistry::build(scheme, str(pm, "ownership", "static"), str(pm, "owners", ""), ctx), strict);
         }
+        if (m_partitions.empty()) return;
+        // Partitions.csv in the report directory: fills and violations per cache, scheme, core.
+        // Written once for all partitioned handlers (the first one registers the hook).
+        static bool hooked = false;   // a handler replaced by a derived one leaves the list, not the hook
+        if (!hooked && (hooked = true))
+            Logger::atRunEnd([](const std::string &dir) {
+                std::ofstream f(dir + "/Partitions.csv");
+                f << "Cache,Partition,Scheme,Core,Fills,Violations\n";
+                uint64_t v = 0;
+                for (CacheDataHandler *h : partitioned()) { h->m_partitions.report(f); v += h->m_partitions.violations(); }
+                cout << "Partitioning: " << v << " violation(s); per-core fills in " << dir << "/Partitions.csv" << endl;
+            });
+        partitioned().push_back(this);
+    }
+
+    std::vector<CacheDataHandler *> &CacheDataHandler::partitioned()
+    {
+        static std::vector<CacheDataHandler *> v;
+        return v;
     }
 
     CacheDataHandler::~CacheDataHandler()
     {
+        auto &v = partitioned();
+        v.erase(std::remove(v.begin(), v.end(), this), v.end());
         delete[] m_cache;
         delete m_replacement_policy;
     }
@@ -164,6 +191,7 @@ namespace octopus
 
         *((GenericCacheLine *)getLine(set, way)) = *line;
         ((GenericCacheLine *)getLine(set, way))->tag = calculate_tag(address);
+        if (core >= 0 && !m_partitions.empty()) m_partitions.onFill(core, address, set, way);
         
         if(!soft_write)
             m_replacement_policy->update(set, way, m_cycle); //ToDo: this should change to support allocation on miss

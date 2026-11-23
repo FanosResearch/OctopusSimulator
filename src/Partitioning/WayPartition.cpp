@@ -22,6 +22,12 @@ namespace octopus
             if (it == m_mask.end()) it = m_mask.emplace(core, maskOf(core)).first;
             way_mask &= it->second;
         }
+        bool inPartition(int core, uint64_t addr, uint64_t set, int way) const override
+        {
+            uint32_t m = 0xffffffffu;
+            restrictVictims(core, set, m);
+            return way >= 0 && way < 32 && (m & (1u << way));
+        }
 
     protected:
         void ownershipChanged() override { m_mask.clear(); }
