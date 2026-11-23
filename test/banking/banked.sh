@@ -7,7 +7,7 @@
 # (shift 0: lines alternate; 6: 4 KiB pages), the preset is derived with make_banked.py.
 # A run passes when it exits 0 and every core's LatencyReport has one row per trace line
 # plus the end-of-run "Average" footer. JOBS sets the parallelism; ARB overrides the arbiter;
-# ONLY=<regex> selects families; DIR_MESI_LLC, DIR_MOESI_L1, DIR_MOESI_LLC pick the directory FSM tables.
+# ONLY=<regex> selects families; DIR_MESI_L1, DIR_MESI_LLC, DIR_MOESI_L1, DIR_MOESI_LLC pick the directory FSM tables.
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUT="$1"; shift; BANKS="${*:-2 4}"; JOBS="${JOBS:-16}"
@@ -20,7 +20,7 @@ FAMILIES=(
   "snoop-mesi|MultiCoreSystem_Snoop|$EXCL $(p SNOOP_MESI MESI_splitBus_snooping SNOOP_LLC_MESI MESI_LLC)"
   "snoop-moesi|MultiCoreSystem_Snoop|$EXCL $(p SNOOP_MOESI MOESI_splitBus_snooping SNOOP_LLC_MOESI MOESI_LLC)"
   "dir-msi|MultiCoreSystem_Directory|"
-  "dir-mesi|MultiCoreSystem_Directory|$(p DIRECTORY_MESI MESI_directory DIRECTORY_LLC_MESI ${DIR_MESI_LLC:-MESI_LLC_directory})"
+  "dir-mesi|MultiCoreSystem_Directory|$(p DIRECTORY_MESI ${DIR_MESI_L1:-MESI_directory} DIRECTORY_LLC_MESI ${DIR_MESI_LLC:-MESI_LLC_directory})"
   "dir-moesi|MultiCoreSystem_Directory|$(p DIRECTORY_MOESI ${DIR_MOESI_L1:-MOESI_directory} DIRECTORY_LLC_MOESI ${DIR_MOESI_LLC:-MOESI_LLC_directory})"
 )
 [ -n "${ARB:-}" ] && ARBP="-p bus[0].interconnect_controller.arbiter_type(s)=$ARB" || ARBP=""
