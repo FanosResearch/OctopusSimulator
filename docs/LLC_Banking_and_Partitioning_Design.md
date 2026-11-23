@@ -186,25 +186,38 @@ struct Interleave {                       // spreads lines over N targets
 
 class AddressMap {
 public:
-    AddressMap(uint32_t block, uint32_t sets, const ParametersMap&, int self_id);
+    AddressMap(uint32_t block, uint32_t sets);
+    void setBanks(const Interleave &banks, int self_idx); // this cache is one bank of `banks`
+    void setSubBanks(int n, int shift);
+    void setHome(const Interleave &home, int fallback);   // next-level caches; empty = fallback
     uint64_t line(uint64_t a) const;
     uint64_t set(uint64_t a) const;                    // index in THIS bank
     uint64_t tag(uint64_t a) const;
     uint64_t address(uint64_t tag, uint64_t set) const; // exact inverse
-    int      home(uint64_t a) const;                   // which bank serves the line
+    int      home(uint64_t a) const;                   // which next-level cache serves the line
+    bool     isHome(int id) const;
     int      subBank(uint64_t a) const;                // internal data-array bank (timing)
+    // P3:
     int      colour(uint64_t a) const;                 // set-index bits above the page offset
     uint64_t withColour(uint64_t a, int c) const;
     int      colours() const;
 private:
-    Interleave m_home;        // the banks of this level
-    int        m_self_idx;    // this cache's index in m_home; -1 if not a bank
+    Interleave m_banks;       // this cache's bank group (the banks of THIS level)
+    int        m_self_idx;    // this cache's index in m_banks; -1 if not a bank
+    Interleave m_home;        // the caches of the NEXT level serving this cache's lines
+    int        m_home_fallback;
     int        m_set_bits, m_block_bits;
-    int        m_sub_banks = 1, m_sub_shift = 0;
-    int        m_colour_lo = 0, m_colour_bits = 0;
-    bool       m_xor_hash = false;
+    Interleave m_sub;         // data-array sub-banks
+    int        m_colour_lo = 0, m_colour_bits = 0;     // P3
 };
 ```
+
+The bank group and the home map are separate fields. An L1 has a home map (the LLC banks) and
+no bank group. An LLC bank has a bank group (its peers) and an empty home map, so its home is
+memory. A single field for both would send an LLC bank's misses to its peers.
+
+An XOR set hash (folding tag bits into the set index) is not scheduled; it would be a further
+`AddressMap` option with its own step.
 
 ### 5.2 Decoding
 
@@ -226,10 +239,13 @@ line-interleaved banks every bank uses 1/N of its sets.
 
 - `CacheDataHandler` owns an `AddressMap`. `calculate_set/tag/address` become one-line
   wrappers, so their callers do not change.
-- The controller builds the map, because it holds `home_ids`; the handler supplies block size
-  and set count. The handler receives it with `setAddressMap()`. A default map is today's
-  behaviour.
-- `homeOf()` delegates to `AddressMap::home()`.
+- The handler sets the geometry and sub-banks from its own parameters. The controller installs
+  the home map (`home_ids`, `home_interleave_shift`) with `setHome()` right after it creates the
+  handler, and the system builder installs the bank group on each LLC bank (`setBanks()`).
+  A default map is today's behaviour.
+- `homeOf()` and `isHome()` in the controller and in the protocol handler both delegate to the
+  handler's map. The protocol handler already holds the data handler, so there is no second copy
+  of the home map to keep in step.
 
 ### 5.4 Sub-banks (internal data-array banks)
 

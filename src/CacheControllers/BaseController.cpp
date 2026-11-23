@@ -23,11 +23,6 @@ namespace octopus
         //Parameters initialization
         m_id = std::get<int>(parameters.at(STRINGIFY(m_id)).value);
         m_shared_memory_id = std::get<int>(parameters.at(STRINGIFY(m_shared_memory_id)).value);
-        if (parameters.find(STRINGIFY(home_ids)) != parameters.end())
-            m_home.ids = std::get<vector<int>>(parameters.at(STRINGIFY(home_ids)).value);
-        if (!m_home.ids.empty() && m_home.ids[0] < 0) m_home.ids.clear();
-        if (parameters.find(STRINGIFY(home_interleave_shift)) != parameters.end())
-            m_home.shift = std::get<int>(parameters.at(STRINGIFY(home_interleave_shift)).value);
 
         // Optional perfect-LLC knob, defaulted off so existing configs parse and
         // every non-LLC controller (which never sets it) behaves normally.
@@ -47,8 +42,9 @@ namespace octopus
         m_lower_interface = lower_interface;
         
         m_data_handler = new CacheDataHandler(getSubMap(STRINGIFY(m_data_handler)), parent_name + "." + name);
+        installHomeMap();
 
-        m_protocol = Protocols::getNewProtocol(protocol_type, m_data_handler, fsm_path, m_id, m_shared_memory_id, m_home);
+        m_protocol = Protocols::getNewProtocol(protocol_type, m_data_handler, fsm_path, m_id, m_shared_memory_id);
 
         m_processing_queue =
             new FRFCFS_Buffer<Message, CoherenceProtocolHandler>(&CoherenceProtocolHandler::getRequestState,
@@ -68,14 +64,15 @@ namespace octopus
         action_functions[ControllerAction::Type::UPDATE_CACHE_LINE] = [&](void* ptr) {updateCacheLine(ptr);};
     }
 
-    int BaseController::homeOf(uint64_t addr) const
+    void BaseController::installHomeMap()
     {
-        return m_home.ids.empty() ? m_shared_memory_id : m_home.select(addr / m_data_handler->getBlockSize());
-    }
-
-    bool BaseController::isHome(int id) const
-    {
-        return m_home.ids.empty() ? id == m_shared_memory_id : m_home.indexOf(id) >= 0;
+        Interleave home;
+        if (parameters.find(STRINGIFY(home_ids)) != parameters.end())
+            home.ids = std::get<vector<int>>(parameters.at(STRINGIFY(home_ids)).value);
+        if (!home.ids.empty() && home.ids[0] < 0) home.ids.clear();
+        if (parameters.find(STRINGIFY(home_interleave_shift)) != parameters.end())
+            home.shift = std::get<int>(parameters.at(STRINGIFY(home_interleave_shift)).value);
+        m_data_handler->addressMap().setHome(home, m_shared_memory_id);
     }
 
     // A bank serves only what names it (docs/LLC_Banking_and_Partitioning_Design.md s4.4). The L1s
@@ -83,15 +80,15 @@ namespace octopus
     // demand requests and back-invalidations to every interface, so the other banks see them too.
     void BaseController::setBanks(const Interleave &banks)
     {
-        m_bank_ids = banks.ids;
-        m_data_handler->setBanks(banks, banks.indexOf(m_id));
+        m_data_handler->addressMap().setBanks(banks, banks.indexOf(m_id));
     }
 
     bool BaseController::notForThisBank(const Message &msg) const
     {
-        if (m_bank_ids.size() <= 1) return false;
+        const Interleave &group = m_data_handler->addressMap().banks();
+        if (group.ids.size() <= 1) return false;
         if (msg.from == (uint16_t)m_id) return false;   // our own broadcast coming back (Own_Invalidation)
-        auto bank = [&](int id) { return std::find(m_bank_ids.begin(), m_bank_ids.end(), id) != m_bank_ids.end(); };
+        auto bank = [&](int id) { return group.indexOf(id) >= 0; };
         if (bank(msg.from)) return true;                  // another bank's broadcast: banks never talk to each other
         bool other = false;
         for (uint16_t t : msg.to)

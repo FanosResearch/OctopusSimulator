@@ -65,14 +65,10 @@ namespace octopus
             DIRECTORY_LLC_MOESI,
         };
 
-        // home: the LLC banks this cache addresses (docs/LLC_Banking_and_Partitioning_Design.md s4.2);
-        // empty = the single shared_mem_id. Installed here so no creation site can forget it.
-        static CoherenceProtocolHandler* getNewProtocol(std::string type, CacheDataHandler *cache, const string &fsm_path, int cache_id, int shared_mem_id,
-                                                        const Interleave &home = Interleave())
+        // The protocol reads the home map from `cache`'s address map (installed by the controller).
+        static CoherenceProtocolHandler* getNewProtocol(std::string type, CacheDataHandler *cache, const string &fsm_path, int cache_id, int shared_mem_id)
         {
-            CoherenceProtocolHandler *p = make(type, cache, fsm_path, cache_id, shared_mem_id);
-            if (p) p->setHomeMap(home);
-            return p;
+            return make(type, cache, fsm_path, cache_id, shared_mem_id);
         }
         static CoherenceProtocolHandler* make(const std::string &type, CacheDataHandler *cache, const string &fsm_path, int cache_id, int shared_mem_id)
         {

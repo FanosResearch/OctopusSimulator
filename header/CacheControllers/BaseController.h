@@ -36,15 +36,14 @@ namespace octopus
     protected:
         int m_id;
         int m_shared_memory_id;
-        // home map (docs/LLC_Banking_and_Partitioning_Design.md s4.2): home_ids(vi) lists the LLC
-        // banks, home_interleave_shift(i) the granularity (0 = consecutive lines alternate). Absent
-        // = the single m_shared_memory_id, today's system.
-        Interleave m_home;
-        int  homeOf(uint64_t addr) const;
-        bool isHome(int id) const;
-        // LLC banks (s4.4): the ids of all banks when this controller is one of several; empty
-        // otherwise. A bank serves only the broadcasts that name it.
-        std::vector<int> m_bank_ids;
+        // Home map and bank group live in the data handler's AddressMap (design doc s5).
+        // home_ids(vi) lists the LLC banks, home_interleave_shift(i) the granularity (0 =
+        // consecutive lines alternate). Absent = the single m_shared_memory_id, today's system.
+        // Called by every constructor that creates m_data_handler.
+        void installHomeMap();
+        int  homeOf(uint64_t addr) const { return m_data_handler->addressMap().home(addr); }
+        bool isHome(int id) const { return m_data_handler->addressMap().isHome(id); }
+        // A bank serves only the broadcasts that name it (s4.4).
         bool notForThisBank(const Message &msg) const;
 
         // Perfect-LLC knob (default 0 = off). When 1, this controller never issues
@@ -130,7 +129,7 @@ namespace octopus
         // This controller is one of the LLC banks of `banks` (the cores' home map): it serves only
         // what names it (s4.4) and indexes its sets with the bank digit removed (s5.2).
         void setBanks(const Interleave &banks);
-        const Interleave &homeMap() const { return m_home; }
+        const Interleave &homeMap() const { return m_data_handler->addressMap().homeMap(); }
         BaseController(ParametersMap map, CommunicationInterface *upper_interface, 
                        CommunicationInterface *lower_interface, string pname = "",
                        string config_path = string(CONFIGURATION_PATH) + string(CACHECONTROLLERS),

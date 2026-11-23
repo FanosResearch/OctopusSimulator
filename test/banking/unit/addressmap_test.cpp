@@ -74,6 +74,23 @@ int main()
             CHECK(il.insert(il.strip(line), il.index(line)) == line, "strip/insert n=%d shift=%d", n, shift);
         }
     }
+    // 3. home map: matches the formula homeOf used before (line / block, then select); empty = fallback;
+    //    independent of the bank group (an LLC bank's home is memory, not its peers)
+    for (int n : {1, 2, 3, 4}) for (int shift : {0, 6})
+    {
+        Interleave il; for (int k = 0; k < n; k++) il.ids.push_back(20 + k); il.shift = shift;
+        AddressMap l1(64, 64); l1.setHome(il, 99);
+        AddressMap bank(64, 256); bank.setBanks(il, 0); bank.setHome(Interleave(), 7);
+        for (int i = 0; i < 20000; i++)
+        {
+            uint64_t a = rng() >> 12;
+            CHECK(l1.home(a) == il.ids[((a / 64) >> shift) % n], "home n=%d shift=%d", n, shift);
+            CHECK(bank.home(a) == 7, "bank home is memory n=%d", n);
+        }
+        for (int k = 0; k < n; k++) CHECK(l1.isHome(20 + k), "isHome n=%d k=%d", n, k);
+        CHECK(!l1.isHome(99) && !l1.isHome(19), "isHome rejects non-banks n=%d", n);
+        CHECK(bank.isHome(7) && !bank.isHome(20), "bank isHome n=%d", n);
+    }
     printf(fails ? "addressmap_test: %d FAILURES\n" : "addressmap_test: PASS\n", fails);
     return fails != 0;
 }

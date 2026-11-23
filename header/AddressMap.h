@@ -5,6 +5,8 @@
  * the set, tag and line of an address in one cache, and the inverse. A cache that is one of N
  * interleaved banks (an LLC bank) indexes its sets with the bank-select digit removed, so each
  * bank uses all of its sets; a cache that is not banked (N = 1) uses today's plain modulo split.
+ * The map also holds the home map (which next-level cache serves a line), so one object answers
+ * every address question a controller and its protocol ask.
  * Nothing here depends on which core issued an access.
  */
 
@@ -76,6 +78,15 @@ namespace octopus
             return p << m_block_bits;
         }
         bool banked() const { return m_self_idx >= 0; }
+        const Interleave &banks() const { return m_banks; }   // this cache's bank group (empty = not a bank)
+
+        // Home map (s4.2): which cache of the NEXT level serves a line. An L1's home map lists the
+        // LLC banks; an LLC bank's is empty, so every line goes to `fallback` (memory). Kept apart
+        // from the bank group above: an LLC bank is one of the banks but its home is memory.
+        void setHome(const Interleave &home, int fallback) { m_home = home; m_home_fallback = fallback; }
+        const Interleave &homeMap() const { return m_home; }
+        int  home(uint64_t a) const { return m_home.ids.empty() ? m_home_fallback : m_home.select(line(a)); }
+        bool isHome(int id) const { return m_home.ids.empty() ? id == m_home_fallback : m_home.indexOf(id) >= 0; }
 
         // Sub-banks of this cache's data array (s5.4): lines spread over n sub-banks, the sub-bank
         // changing every 2^shift lines of this cache's own (bank-stripped) line space.
@@ -91,6 +102,8 @@ namespace octopus
         Interleave m_banks;
         int m_self_idx = -1;
         Interleave m_sub;       // data-array sub-banks; one = the whole array
+        Interleave m_home;      // next-level caches serving this cache's lines
+        int m_home_fallback = -1;
     };
 }
 

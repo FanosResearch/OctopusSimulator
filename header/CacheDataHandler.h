@@ -100,9 +100,10 @@ namespace octopus
             return it != m_way_mask.end() ? it->second : m_shared_mask;
         }
         void setRequester(int core) { m_requester = core; }
-        // This cache is bank `self_idx` of `banks` (an LLC bank): index sets with the bank digit
-        // removed, so the bank uses all of its sets (design doc s5.2).
-        void setBanks(const Interleave &banks, int self_idx) { m_map.setBanks(banks, self_idx); }
+        // The address map (design doc s5): geometry, bank group, sub-banks and home map. The
+        // controller installs the home map and the bank group; the protocol reads it.
+        AddressMap &addressMap() { return m_map; }
+        const AddressMap &addressMap() const { return m_map; }
         bool partitioned() const { return !m_way_mask.empty(); }
 
         uint64_t getEvictionCandidate(uint64_t address, GenericCacheLine *line);

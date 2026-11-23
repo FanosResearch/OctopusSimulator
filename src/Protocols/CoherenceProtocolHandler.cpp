@@ -31,14 +31,4 @@ namespace octopus
         int initState = this->m_fsm->getState(string("I"));
         m_data_handler->initializeCacheStates(initState);
     }
-
-    int CoherenceProtocolHandler::homeOf(uint64_t addr) const
-    {
-        return m_home.ids.empty() ? m_shared_memory_id : m_home.select(addr / m_data_handler->getBlockSize());
-    }
-
-    bool CoherenceProtocolHandler::isHome(int id) const
-    {
-        return m_home.ids.empty() ? id == m_shared_memory_id : m_home.indexOf(id) >= 0;
-    }
 }
