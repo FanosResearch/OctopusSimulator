@@ -43,7 +43,11 @@ namespace octopus
 
         uint64_t m_cycle;          // 64-bit: giant traces exceed 2^32 cycles; a
         uint32_t m_data_access_latency;
-        uint64_t m_ready_cycle;
+        // Occupancy model: the cycle each data-array sub-bank frees (sub_banks(i), default 1 =
+        // the whole array; sub_bank_shift(i) sets the granularity, design doc s5.4). An access
+        // waits only for its own sub-bank.
+        std::vector<uint64_t> m_sub_ready;
+        void occupy(uint64_t address) { if (!m_data_array_pipelined) m_sub_ready[m_map.subBank(address)] = m_cycle + m_data_access_latency; }
         // Data-array model. 0 (default): occupancy -- an access returns at once
         // and closes the array for m_data_access_latency cycles, so one access
         // starts per latency window and none pays the latency. 1: pipelined --
@@ -105,8 +109,12 @@ namespace octopus
         
         void updateCycle(uint64_t cycle);
         uint64_t getCycle() { return m_cycle; }
-        virtual bool isReady();
+        virtual bool isReady();                 // some sub-bank is free (the array, with one)
         virtual bool isReady(uint64_t address);
+        // The sub-bank holding `address` is free (no MSHR / write-back-buffer exemption).
+        bool portFree(uint64_t address) const { return m_data_array_pipelined || m_sub_ready[m_map.subBank(address)] <= m_cycle; }
+        int subBanks() const { return m_map.subBanks(); }
+        int subBank(uint64_t address) const { return m_map.subBank(address); }
 
         // Where a block's bytes live. Anything other than the array (the
         // MSHR and write-back buffer of a derived handler) is a register

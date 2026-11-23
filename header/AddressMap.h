@@ -77,6 +77,12 @@ namespace octopus
         }
         bool banked() const { return m_self_idx >= 0; }
 
+        // Sub-banks of this cache's data array (s5.4): lines spread over n sub-banks, the sub-bank
+        // changing every 2^shift lines of this cache's own (bank-stripped) line space.
+        void setSubBanks(int n, int shift) { m_sub.ids.clear(); for (int i = 0; i < n; i++) m_sub.ids.push_back(i); m_sub.shift = shift; }
+        int subBanks() const { return m_sub.n(); }
+        int subBank(uint64_t a) const { return m_sub.index(packed(a)); }
+
     private:
         uint64_t packed(uint64_t a) const { return m_self_idx >= 0 ? m_banks.strip(line(a)) : line(a); }
 
@@ -84,6 +90,7 @@ namespace octopus
         int m_block_bits = 0, m_set_bits = 0;
         Interleave m_banks;
         int m_self_idx = -1;
+        Interleave m_sub;       // data-array sub-banks; one = the whole array
     };
 }
 

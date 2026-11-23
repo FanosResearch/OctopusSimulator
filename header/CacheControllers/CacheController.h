@@ -9,6 +9,7 @@
 #ifndef _CacheController_H
 #define _CacheController_H
 
+#include <functional>
 #include "BaseController.h"
 #include "CacheDataHandler_COTS.h"
 
@@ -84,7 +85,8 @@ namespace octopus
 
         bool pipelinedArray() const;
         void arrayEnqueue(DataArrayOp &&op);                // level-2 entry, both models
-        std::deque<DataArrayOp>::iterator arrayElect();     // next waiting access by policy, or end()
+        // next waiting access by policy among those `eligible` accepts (all when empty), or end()
+        std::deque<DataArrayOp>::iterator arrayElect(const std::function<bool(const DataArrayOp &)> &eligible = nullptr);
         bool arbitrated(int owner) const;
         void arrayAdmit();                                  // pipelined: admit up to the ports this cycle
         void pipelineFire(DataArrayOp &op);

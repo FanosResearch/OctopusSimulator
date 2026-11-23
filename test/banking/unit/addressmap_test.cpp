@@ -53,6 +53,19 @@ int main()
                 CHECK(m.address(m.tag(a), m.set(a)) == line * b, "banked roundtrip n=%d shift=%d self=%d line=%llu", n, shift, self, (unsigned long long)line);
             }
             CHECK(used.size() == s, "bank n=%d shift=%d self=%d uses %zu of %u sets", n, shift, self, used.size(), s);
+
+            // sub-banks are numbered in the bank's own line space: every sub-bank gets lines
+            for (int sb : {2, 4}) for (int sbs : {0, 2})
+            {
+                m.setSubBanks(sb, sbs);
+                std::set<int> subs; uint64_t seen = 0;
+                for (uint64_t line = 0; seen < 4096; line++)
+                {
+                    if (il.index(line) != self) continue;
+                    seen++; subs.insert(m.subBank(line * b));
+                }
+                CHECK((int)subs.size() == sb, "bank n=%d shift=%d self=%d sub_banks=%d shift=%d reaches %zu sub-banks", n, shift, self, sb, sbs, subs.size());
+            }
         }
         // strip/insert inverse for every index
         for (int i = 0; i < 20000; i++)

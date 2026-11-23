@@ -34,6 +34,21 @@ namespace octopus
         m_sets_count = lines_count / m_ways_count;
         m_map.setGeometry(m_block_size, m_sets_count);
 
+        // Data-array sub-banks (design doc s5.4): optional, default one = the whole array.
+        int sub_banks = 1, sub_bank_shift = 0;
+        if (parameters.find(STRINGIFY(sub_banks)) != parameters.end())
+            sub_banks = std::get<int>(parameters.at(STRINGIFY(sub_banks)).value);
+        if (parameters.find(STRINGIFY(sub_bank_shift)) != parameters.end())
+            sub_bank_shift = std::get<int>(parameters.at(STRINGIFY(sub_bank_shift)).value);
+        if (sub_banks < 1 || sub_bank_shift < 0 || (sub_banks > 1 && m_data_array_pipelined))
+        {
+            cerr << name << ": sub_banks(i) must be >= 1 and sub_bank_shift(i) >= 0; sub-banks model the occupancy"
+                 << " data array, so they cannot be combined with m_data_array_pipelined (use m_data_array_ports)" << endl;
+            exit(2);
+        }
+        m_map.setSubBanks(sub_banks, sub_bank_shift);
+        m_sub_ready.assign(sub_banks, 0);
+
         m_cache = new GenericCacheLine[lines_count];
         m_replacement_policy = Policy::getReplacementPolicy(replacement_policy_name, m_ways_count);
 
@@ -63,7 +78,6 @@ namespace octopus
         dprint = new DebugPrint(getSubMap(STRINGIFY(dprint)), name, parent_name + "." + name);
 
         m_cycle = 0;
-        m_ready_cycle = 0;
     }
 
     CacheDataHandler::~CacheDataHandler()
@@ -143,7 +157,7 @@ namespace octopus
             return false;
 
         if(line->m_data != NULL)
-            if (!m_data_array_pipelined) m_ready_cycle = m_cycle + m_data_access_latency;
+            occupy(address);
         
         return writeCacheLine_bypassLatency(address, line);
     }
@@ -169,7 +183,7 @@ namespace octopus
         if (findline(address, &set, &way) && isReady(address))
         {
             ((GenericCacheLine *)getLine(set, way))->copyData(data);
-            if (!m_data_array_pipelined) m_ready_cycle = m_cycle + m_data_access_latency;
+            occupy(address);
             m_replacement_policy->update(set, way, m_cycle); //ToDo: this should change to support allocation on miss
             return true;
         }
@@ -186,7 +200,7 @@ namespace octopus
             uint16_t offset = address & (m_block_size - 1);
             ((GenericCacheLine *)getLine(set, way))->modifyData(data, offset, size);
 
-            if (!m_data_array_pipelined) m_ready_cycle = m_cycle + m_data_access_latency;
+            occupy(address);
             if(!soft_write)
                 m_replacement_policy->update(set, way, m_cycle); //ToDo: this should change to support allocation on miss
             return true;
@@ -204,7 +218,7 @@ namespace octopus
             if (out_line != NULL)
             {    
                 *out_line = *((GenericCacheLine *)getLine(set, way));
-                if (!m_data_array_pipelined) m_ready_cycle = m_cycle + m_data_access_latency;
+                occupy(address);
             }
             if(!soft_read)
                 m_replacement_policy->update(set, way, m_cycle); //ToDo: this should change to support allocation on miss
@@ -267,15 +281,17 @@ namespace octopus
     bool CacheDataHandler::isReady()
     {
         // Pipelined: the array never closes; the controller paces accesses.
-        if(m_data_array_pipelined || m_ready_cycle <= m_cycle)
+        if (m_data_array_pipelined)
             return true;
-        
+        for (uint64_t r : m_sub_ready)
+            if (r <= m_cycle)
+                return true;
         return false;
     }
 
     bool CacheDataHandler::isReady(uint64_t address)
     {
-        return isReady();
+        return portFree(address);
     }
 
     CacheDataHandler::LineLocation CacheDataHandler::lineLocation(uint64_t address)

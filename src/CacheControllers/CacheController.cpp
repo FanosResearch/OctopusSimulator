@@ -140,14 +140,22 @@ namespace octopus
         // array again. A whole deferred message runs its FSM now, so its
         // state change and its bytes land together; a parked single action
         // runs its byte phase now.
+        // With data-array sub-banks (design doc s5.4) each free sub-bank starts at most one
+        // waiting access per cycle; one sub-bank (the default) is the whole array, one access.
         if (!m_data_handler->isReady())
             return;
-        auto it = arrayElect();
-        if (it == m_array_ops.end())
-            return;
-        DataArrayOp op = std::move(*it);
-        m_array_ops.erase(it);
-        pipelineFire(op);   // a parked byte phase is logged as an ARRAY SERVICE when it re-enters checkReadinessOfCache
+        std::vector<bool> tried(m_data_handler->subBanks(), false);
+        for (int n = 0; n < m_data_handler->subBanks(); n++)
+        {
+            auto it = arrayElect([&](const DataArrayOp &op) {
+                return !tried[m_data_handler->subBank(op.msg.addr)] && m_data_handler->portFree(op.msg.addr); });
+            if (it == m_array_ops.end())
+                return;
+            tried[m_data_handler->subBank(it->msg.addr)] = true;
+            DataArrayOp op = std::move(*it);
+            m_array_ops.erase(it);
+            pipelineFire(op);   // a parked byte phase is logged as an ARRAY SERVICE when it re-enters checkReadinessOfCache
+        }
     }
 
     void CacheController::addRequests2ProcessingQueue(FRFCFS_Buffer<Message, CoherenceProtocolHandler> &buf)
@@ -490,7 +498,7 @@ namespace octopus
 
     bool CacheController::checkReadinessOfCache(Message &msg, ControllerAction::Type type, void *data_ptr)
     {
-        bool port_busy = !m_data_handler->isReady();
+        bool port_busy = !m_data_handler->portFree(msg.addr);
         CacheDataHandler_COTS *cots = dynamic_cast<CacheDataHandler_COTS *>(m_data_handler);
         uint16_t reg_flags = cots ? ((cots->inMSHR(msg.addr) ? 0x200 : 0) | (cots->inPWB(msg.addr) ? 0x400 : 0)) : 0;
         if (pipelinedArray())
@@ -636,13 +644,14 @@ namespace octopus
         return false;
     }
 
-    std::deque<CacheController::DataArrayOp>::iterator CacheController::arrayElect()
+    std::deque<CacheController::DataArrayOp>::iterator CacheController::arrayElect(const std::function<bool(const DataArrayOp &)> &eligible)
     {
+        auto ok = [&](const DataArrayOp &op) { return !op.admitted && (!eligible || eligible(op)); };
         // No arbiter (the L1 default): oldest waiting access.
         if (m_data_access_arbiter == NULL)
         {
             for (auto it = m_array_ops.begin(); it != m_array_ops.end(); ++it)
-                if (!it->admitted)
+                if (ok(*it))
                     return it;
             return m_array_ops.end();
         }
@@ -654,7 +663,7 @@ namespace octopus
         // policy and go oldest first when the arbiter elects nothing.
         vector<Message> candidates;
         for (const DataArrayOp &op : m_array_ops)
-            if (!op.admitted && arbitrated(op.msg.owner))
+            if (ok(op) && arbitrated(op.msg.owner))
             {
                 Message m(op.msg);
                 m.msg_id = op.op_id;
@@ -667,11 +676,11 @@ namespace octopus
             Message elected;
             if (m_data_access_arbiter->elect(m_cache_cycle, wrap, &elected))
                 for (auto it = m_array_ops.begin(); it != m_array_ops.end(); ++it)
-                    if (!it->admitted && it->op_id == elected.msg_id)
+                    if (ok(*it) && it->op_id == elected.msg_id)
                         return it;
         }
         for (auto it = m_array_ops.begin(); it != m_array_ops.end(); ++it)
-            if (!it->admitted && !arbitrated(it->msg.owner))
+            if (ok(*it) && !arbitrated(it->msg.owner))
                 return it;
         return m_array_ops.end();
     }
@@ -836,7 +845,7 @@ namespace octopus
             // With line_interlock off the occupancy model keeps upstream's
             // handling everywhere (state now, bytes parked): deferring a whole
             // message without the line hold is not safe (see the constructor).
-            if (m_line_interlock == 0 || m_data_handler->getDataAccessLatency() == 0 || m_data_handler->isReady())
+            if (m_line_interlock == 0 || m_data_handler->getDataAccessLatency() == 0 || m_data_handler->portFree(msg.addr))
                 return false;
             if (!m_protocol->needsDataArray(msg))
                 return false;
