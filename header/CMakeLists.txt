@@ -6,4 +6,5 @@ target_include_directories(Octopus_core PUBLIC
                             MCsim/
                             Protocols/
                             ReplacementPolicies/
+                            Partitioning/
                             SystemConfigurations/)

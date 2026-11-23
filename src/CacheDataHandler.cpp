@@ -52,32 +52,52 @@ namespace octopus
         m_cache = new GenericCacheLine[lines_count];
         m_replacement_policy = Policy::getReplacementPolicy(replacement_policy_name, m_ways_count);
 
-        // way_partition(s): "<cores>:<ways>;..." with ranges a-b, e.g. "0:0;1-3:1" (core 0 owns
-        // way 0, cores 1..3 way 1). Cores not listed share the ways nobody claimed.
         m_all_mask = (m_ways_count >= 32) ? 0xffffffffu : ((1u << m_ways_count) - 1);
-        m_shared_mask = m_all_mask;
-        if (parameters.find(STRINGIFY(way_partition)) != parameters.end())
-        {
-            std::string spec = std::get<std::string>(parameters.at(STRINGIFY(way_partition)).value);
-            auto range = [](const std::string &s, int &lo, int &hi) {
-                size_t d = s.find('-'); lo = atoi(s.c_str()); hi = (d == std::string::npos) ? lo : atoi(s.c_str() + d + 1); };
-            size_t p = 0;
-            while (p < spec.size())
-            {
-                size_t e = spec.find(';', p); if (e == std::string::npos) e = spec.size();
-                std::string entry = spec.substr(p, e - p); p = e + 1;
-                size_t c = entry.find(':'); if (c == std::string::npos || entry.empty()) continue;
-                int c0, c1, w0, w1; range(entry.substr(0, c), c0, c1); range(entry.substr(c + 1), w0, w1);
-                uint32_t mask = 0; for (int w = w0; w <= w1 && w < (int)m_ways_count; w++) mask |= 1u << w;
-                for (int core = c0; core <= c1; core++) m_way_mask[core] = mask;
-                m_shared_mask &= ~mask;
-            }
-            if (!m_way_mask.empty() && m_shared_mask == 0) m_shared_mask = m_all_mask;   // everything claimed: unlisted cores fall back to all ways
-        }
+        buildPartitions();
 
         dprint = new DebugPrint(getSubMap(STRINGIFY(dprint)), name, parent_name + "." + name);
 
         m_cycle = 0;
+    }
+
+    // partition[k].scheme(s) / ownership(s) (default static) / owners(s), k = 0, 1, ...; the
+    // way_partition(s) "<spec>" alias is partition[0] = way / static / <spec>.
+    void CacheDataHandler::buildPartitions()
+    {
+        PartitionContext ctx;
+        ctx.cache = parent_name + "." + name;
+        ctx.ways = m_ways_count; ctx.sets = m_sets_count; ctx.map = &m_map;
+        auto str = [](const ParametersMap &m, const char *key, const std::string &dflt) {
+            auto it = m.find(key);
+            return it == m.end() ? dflt : std::get<std::string>(it->second.value);
+        };
+        std::string alias = str(parameters, STRINGIFY(way_partition), "");
+        if (!getSubMap("partition", 1 << 20).empty())
+        {
+            cerr << ctx.cache << ": partition[*] is not supported; number the partitions partition[0], partition[1], ..." << endl;
+            exit(2);
+        }
+        if (!alias.empty())
+        {
+            if (!getSubMap("partition", 0).empty())
+            {
+                cerr << ctx.cache << ": way_partition(s) is an alias for partition[0]; set one or the other" << endl;
+                exit(2);
+            }
+            m_partitions.add(PartitionRegistry::build("way", "static", alias, ctx));
+        }
+        for (int k = alias.empty() ? 0 : 1; ; k++)
+        {
+            ParametersMap pm = getSubMap("partition", k);
+            if (pm.empty()) break;
+            std::string scheme = str(pm, "scheme", "");
+            if (scheme.empty())
+            {
+                cerr << ctx.cache << ": partition[" << k << "] has no scheme(s)" << endl;
+                exit(2);
+            }
+            m_partitions.add(PartitionRegistry::build(scheme, str(pm, "ownership", "static"), str(pm, "owners", ""), ctx));
+        }
     }
 
     CacheDataHandler::~CacheDataHandler()
@@ -135,10 +155,10 @@ namespace octopus
         return false;
     }
 
-    bool CacheDataHandler::writeCacheLine_bypassLatency(uint64_t address, GenericCacheLine *line, bool soft_write)
+    bool CacheDataHandler::writeCacheLine_bypassLatency(uint64_t address, GenericCacheLine *line, bool soft_write, int core)
     {
         uint64_t set = calculate_set(address);
-        int way = findEmptyWay(address);
+        int way = findEmptyWay(address, core);
         if (way == -1)
             return false;
 
@@ -151,7 +171,7 @@ namespace octopus
         return true;
     }
 
-    bool CacheDataHandler::writeCacheLine(uint64_t address, GenericCacheLine *line)
+    bool CacheDataHandler::writeCacheLine(uint64_t address, GenericCacheLine *line, int core)
     {
         if (!isReady(address))
             return false;
@@ -159,7 +179,7 @@ namespace octopus
         if(line->m_data != NULL)
             occupy(address);
         
-        return writeCacheLine_bypassLatency(address, line);
+        return writeCacheLine_bypassLatency(address, line, false, core);
     }
 
     bool CacheDataHandler::updateLineBits(uint64_t address, GenericCacheLine *line)
@@ -176,7 +196,7 @@ namespace octopus
             return false;
     }
 
-    bool CacheDataHandler::updateLineData(uint64_t address, const uint8_t *data)
+    bool CacheDataHandler::updateLineData(uint64_t address, const uint8_t *data, int core)
     {
         uint64_t set;
         int way;
@@ -242,11 +262,11 @@ namespace octopus
             return false;
     }
 
-    int CacheDataHandler::findEmptyWay(uint64_t address)
+    int CacheDataHandler::findEmptyWay(uint64_t address, int core)
     {
         uint64_t set = calculate_set(address);
 
-        uint32_t allowed = allowedWays();
+        uint32_t allowed = allowedWays(core, set);
         for (uint32_t way = 0; way < m_ways_count; way++)
         {
             if (!(allowed & (1u << way))) continue;

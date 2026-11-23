@@ -27,8 +27,8 @@ add_compile_definitions(SYSTEM_CONFIGURATIONS=\"SystemConfigurations\")
 add_subdirectory(src)
 add_subdirectory(header)
 
-add_executable(Octopus_Simulator Octopus_Simulator.cpp)
-add_library(Octopus SHARED Octopus_Simulator.cpp)
+add_executable(Octopus_Simulator Octopus_Simulator.cpp $<TARGET_OBJECTS:Octopus_partitioning>)
+add_library(Octopus SHARED Octopus_Simulator.cpp $<TARGET_OBJECTS:Octopus_partitioning>)
 
 # target_include_directories(Octopus_Simulator PUBLIC header)
 # target_link_directories(Octopus_Simulator Private src)

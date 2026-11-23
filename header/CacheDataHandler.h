@@ -16,6 +16,7 @@
 #include "Policy.h"
 #include "ReplacementPolicy.h"
 #include "AddressMap.h"
+#include "Partitioning.h"
 
 #include <math.h>
 
@@ -27,12 +28,12 @@ namespace octopus
         GenericCacheLine *m_cache;
         uint32_t m_block_size;
         uint32_t m_ways_count;
-        // way partitioning (way_partition(s), e.g. "0:0;1-3:1"): the ways a core may fill;
-        // cores not listed share the ways nobody claimed. Applied when the controller names the
-        // requester of the fill (setRequester); -1 = unrestricted.
-        std::map<int, uint32_t> m_way_mask;
-        uint32_t m_shared_mask = 0, m_all_mask = 0;
-        int m_requester = -1;
+        // Partitioning (design doc s6): partition[k].scheme/ownership/owners, or the
+        // way_partition(s) alias. The fill paths take the requesting core (-1 = unknown:
+        // unrestricted).
+        PartitionSet m_partitions;
+        uint32_t m_all_mask = 0;
+        void buildPartitions();
         uint32_t m_sets_count;
         // set / tag / address of a line (docs/LLC_Banking_and_Partitioning_Design.md s5)
         AddressMap m_map;
@@ -83,28 +84,24 @@ namespace octopus
         bool isPipelined() const { return m_data_array_pipelined; }
         uint32_t getDataArrayPorts() const { return m_data_array_ports; }
 
-        virtual bool writeCacheLine_bypassLatency(uint64_t address, GenericCacheLine *line, bool soft_write = false);
-        virtual bool writeCacheLine(uint64_t address, GenericCacheLine *line);
+        // `core`: the requester a fill is made for; it picks the ways the line may land in
+        virtual bool writeCacheLine_bypassLatency(uint64_t address, GenericCacheLine *line, bool soft_write = false, int core = -1);
+        virtual bool writeCacheLine(uint64_t address, GenericCacheLine *line, int core = -1);
         virtual bool updateLineBits(uint64_t address, GenericCacheLine *line);
-        virtual bool updateLineData(uint64_t address, const uint8_t *data);
+        virtual bool updateLineData(uint64_t address, const uint8_t *data, int core);
         virtual bool modifyData(uint64_t address, const uint8_t *data, uint16_t size, bool soft_write = false);
 
         virtual bool readCacheLine(uint64_t address, GenericCacheLine *out_line = NULL, bool soft_read = false);
         virtual bool readLineBits(uint64_t address, GenericCacheLine *out_line = NULL);
 
-        int findEmptyWay(uint64_t address);
-        uint32_t allowedWays() const
-        {
-            if (m_requester < 0 || m_way_mask.empty()) return m_all_mask;
-            auto it = m_way_mask.find(m_requester);
-            return it != m_way_mask.end() ? it->second : m_shared_mask;
-        }
-        void setRequester(int core) { m_requester = core; }
+        // an empty way of the set that `core` may fill (-1 = any way)
+        int findEmptyWay(uint64_t address, int core = -1);
+        uint32_t allowedWays(int core, uint64_t set) const { return m_partitions.allowedWays(core, set, m_all_mask); }
+        const PartitionSet &partitions() const { return m_partitions; }
         // The address map (design doc s5): geometry, bank group, sub-banks and home map. The
         // controller installs the home map and the bank group; the protocol reads it.
         AddressMap &addressMap() { return m_map; }
         const AddressMap &addressMap() const { return m_map; }
-        bool partitioned() const { return !m_way_mask.empty(); }
 
         uint64_t getEvictionCandidate(uint64_t address, GenericCacheLine *line);
         

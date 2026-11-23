@@ -510,9 +510,8 @@ namespace octopus
     
         if (msg->data != NULL)
         {
-            m_data_handler->setRequester((int)msg->owner);   // way partitioning: fill lands in the requester's ways
-            bool ok = m_data_handler->updateLineData(msg->addr, msg->data);
-            m_data_handler->setRequester(-1);
+            // partitioning: the fill lands in the requester's ways
+            bool ok = m_data_handler->updateLineData(msg->addr, msg->data, (int)msg->owner);
             if (!ok)
             {
                 cout << "CacheController: update data of an unfound line" << endl;

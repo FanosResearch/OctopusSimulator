@@ -28,6 +28,7 @@ add_library(Octopus_core
     add_subdirectory(Interconnect)
     add_subdirectory(Protocols)
     add_subdirectory(ReplacementPolicies)
+    add_subdirectory(Partitioning)
     add_subdirectory(SystemConfigurations)
 
     # MCsim DRAM simulator (vendored from grrof). Header-only schedulers under

@@ -75,21 +75,21 @@ namespace octopus
         m_pwb_pending_issue.push_back(wb_address);
     }
 
-    bool CacheDataHandler_COTS::updateLineData(uint64_t address, const uint8_t *data)
+    bool CacheDataHandler_COTS::updateLineData(uint64_t address, const uint8_t *data, int core)
     {
         uint64_t set;
         int way;
 
         if (CacheDataHandler::findline(address, &set, &way))
-            return CacheDataHandler::updateLineData(address, data);
+            return CacheDataHandler::updateLineData(address, data, core);
 
         if (checkMSHR(mask_offset(address)))
         {
             m_miss_status_holding_regs[mask_offset(address)].copyData(data);
-            if (findEmptyWay(address) == -1) //ToDo: add clean flag
-                moveLine2WB(set, chooseEvictionWay(set));
+            if (findEmptyWay(address, core) == -1) //ToDo: add clean flag
+                moveLine2WB(set, chooseEvictionWay(set, core));
 
-            if (writeCacheLine(address, &m_miss_status_holding_regs[mask_offset(address)]))
+            if (writeCacheLine(address, &m_miss_status_holding_regs[mask_offset(address)], core))
             {
                 m_miss_status_holding_regs.erase(mask_offset(address));
                 return true;
@@ -125,11 +125,11 @@ namespace octopus
         return return_value;
     }
 
-    int CacheDataHandler_COTS::chooseEvictionWay(uint64_t set)
+    int CacheDataHandler_COTS::chooseEvictionWay(uint64_t set, int core)
     {
         int way;
         
-        m_replacement_policy->getReplacementCandidate(set, &way, allowedWays());   // way partitioning (no-op when unconfigured)
+        m_replacement_policy->getReplacementCandidate(set, &way, allowedWays(core, set));   // partitioning (all ways when unconfigured)
         return way;
     }
 

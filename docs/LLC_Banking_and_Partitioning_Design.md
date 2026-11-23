@@ -381,16 +381,21 @@ bank. They are enforced where addresses are chosen, as an OS page allocator does
 ### 6.7 Explicit requester
 
 `setRequester()` and the hidden `m_requester` are removed. The fill and victim paths take the
-requesting core as an argument (`updateLineData(addr, data, core)`, victim selection with
-`core`). The two controller call sites (`BaseController.cpp:470`, `CacheController.cpp:301`)
-pass `msg->owner`.
+requesting core as an argument: `updateLineData(addr, data, core)`, `writeCacheLine(addr, line,
+core)`, `findEmptyWay(addr, core)` and `chooseEvictionWay(set, core)`. The two controller fill
+sites (`BaseController::updateCacheLine`, `CacheController::writeCacheLineData`) pass
+`msg->owner`. Every other caller passes no core (-1 = unrestricted): the perfect-cache
+pre-fill and `initialize()`, which place lines before any core runs.
 
 ### 6.8 Adding a scheme
 
 Example, MSHR partitioning:
 
 1. Write `src/Partitioning/MshrPartition.cpp`: implement `name()`, `units()`, `admit()`;
-   register it.
+   register it with `REGISTER_PARTITION_SCHEME("mshr", MshrPartition)` inside
+   `namespace octopus`, and add the file to `src/Partitioning/CMakeLists.txt`. (That list is
+   an OBJECT library linked straight into the binaries; in the static core library the linker
+   would drop a file nothing references, and the registration with it.)
 2. Configure `partition[k].scheme(s),mshr` and its `owners`.
 3. The contract tests run on it automatically (section 8.2).
 

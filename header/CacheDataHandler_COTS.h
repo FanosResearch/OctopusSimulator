@@ -37,7 +37,7 @@ namespace octopus
         virtual inline void * getLine(uint64_t set, int way) override;
         virtual bool findline(uint64_t address, uint64_t *set, int *way) override;
 
-        int chooseEvictionWay(uint64_t set);
+        int chooseEvictionWay(uint64_t set, int core);
         void moveLine2WB(uint64_t set, int way);
 
         inline bool checkMSHR(uint64_t address)
@@ -65,7 +65,7 @@ namespace octopus
 
         virtual void writeLine2MSHR(uint64_t address, GenericCacheLine *line);
 
-        virtual bool updateLineData(uint64_t address, const uint8_t *data) override;
+        virtual bool updateLineData(uint64_t address, const uint8_t *data, int core) override;
         virtual bool updateLineBits(uint64_t address, GenericCacheLine *line) override;
 
         virtual bool isReady(uint64_t address) override;
