@@ -111,7 +111,9 @@ namespace octopus
             if (parameters.count(STRINGIFY(mcsim_scheduler)))
                 mem_system = std::get<string>(parameters.at(STRINGIFY(mcsim_scheduler)).value);
             new MCsimInterface(bus[1]->getInterfaceFor(main_memory_id), main_memory_id, llc_id,
-                               num_cores, /*block_size=*/64, llc_controller->getClkPeriod(), mem_system);
+                               num_cores, /*block_size=*/64, llc_controller->getClkPeriod(), mem_system,
+                               parameters.count(STRINGIFY(mcsim_core_clock_mhz))
+                                   ? (uint64_t)std::get<int>(parameters.at(STRINGIFY(mcsim_core_clock_mhz)).value) : 2400);
         }
         else
         {
