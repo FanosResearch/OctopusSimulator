@@ -7,7 +7,7 @@
 # (shift 0: lines alternate; 6: 4 KiB pages), the preset is derived with make_banked.py.
 # A run passes when it exits 0 and every core's LatencyReport has one row per trace line
 # plus the end-of-run "Average" footer. JOBS sets the parallelism; ARB overrides the arbiter;
-# ONLY=<regex> selects families; DIR_MESI_L1, DIR_MESI_LLC, DIR_MOESI_L1, DIR_MOESI_LLC pick the directory FSM tables.
+# EXTRA="-p ..." adds settings to every run. ONLY=<regex> selects families; DIR_MESI_L1, DIR_MESI_LLC, DIR_MOESI_L1, DIR_MOESI_LLC pick the directory FSM tables.
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUT="$1"; shift; BANKS="${*:-2 4}"; JOBS="${JOBS:-16}"
@@ -31,7 +31,7 @@ for f in "${FAMILIES[@]}"; do
   for n in $BANKS; do for sh in 0 6; do
     cfg="$OUT/cfg/${base}_${n}B_s${sh}.csv"
     [ -f "$cfg" ] || python3 "$ROOT/test/banking/make_banked.py" "$C/$base.csv" "$cfg" "$n" "$sh"
-    for b in $EEMBC; do echo "$fam-${n}B-s$sh|$b|-s MultiCoreSystem -c $cfg $args $ARBP" >> "$OUT/jobs"; done
+    for b in $EEMBC; do echo "$fam-${n}B-s$sh|$b|-s MultiCoreSystem -c $cfg $args $ARBP ${EXTRA:-}" >> "$OUT/jobs"; done
   done; done
 done
 export BIN OUT W

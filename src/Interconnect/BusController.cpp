@@ -6,6 +6,7 @@
  * Created On April 20, 2022
  */
 
+#include <algorithm>
 #include "../../header/Interconnect/BusController.h"
 
 using namespace std;
@@ -46,7 +47,7 @@ namespace octopus
         if (msg.isDemandRequest())
         {
             for (int i = 0; i < (int)m_interfaces->size(); i++)
-                if (!m_interfaces->at(i)->canAcceptRX(type))
+                if (!skipsInterface(msg, m_interfaces->at(i)->m_interface_id) && !m_interfaces->at(i)->canAcceptRX(type))
                     return false;
         }
 
@@ -57,9 +58,17 @@ namespace octopus
                                    m_is_mem_bus ? 1u : 0u, Logger::Phase::EXIT);
 
         for (int i = 0; i < (int)m_interfaces->size(); i++)
-            m_interfaces->at(i)->pushMessage2RX(msg, type);
+            if (!skipsInterface(msg, m_interfaces->at(i)->m_interface_id))
+                m_interfaces->at(i)->pushMessage2RX(msg, type);
 
         return true;
+    }
+
+    bool BusController::skipsInterface(const Message &msg, int interface_id) const
+    {
+        if (m_llc_banks.empty()) return false;
+        if (std::find(m_llc_banks.begin(), m_llc_banks.end(), interface_id) == m_llc_banks.end()) return false;
+        return std::find(msg.to.begin(), msg.to.end(), (uint16_t)interface_id) == msg.to.end();
     }
 
     void BusController::send(Message &msg, MessageType type)

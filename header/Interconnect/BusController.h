@@ -56,11 +56,18 @@ namespace octopus
         // rather than the L1<->LLC REQ_BUS/RESP_BUS. Set via setMemBus() at build.
         bool m_is_mem_bus = false;
 
+        // LLC banks on this bus (docs/LLC_Banking_and_Partitioning_Design.md s4.6, B6): a broadcast
+        // skips a bank it does not name, which would drop it on arrival anyway, so a full non-home
+        // bank does not hold a demand request. Empty = one LLC, every interface takes part.
+        std::vector<int> m_llc_banks;
+        bool skipsInterface(const Message &msg, int interface_id) const;
+
         virtual bool broadcast(Message &msg, MessageType type = MessageType::REQUEST);
         virtual void send(Message &msg, MessageType type = MessageType::DATA_RESPONSE);
 
     public:
         void setMemBus() { m_is_mem_bus = true; }
+        void setLLCBanks(const std::vector<int> &ids) { m_llc_banks = ids; }
 
         BusController(ParametersMap map, vector<CommunicationInterface *> *interfaces, vector<int> *lower_level_ids,
                       string pname = "",

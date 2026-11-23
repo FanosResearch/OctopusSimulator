@@ -134,6 +134,7 @@ namespace octopus
                 exit(2);
             }
             for (BaseController *b : banks) b->setBanks(home);
+            bus[0]->setLLCBanks(bank_ids);   // B6: broadcasts skip the banks they do not name
         }
 
         // Main memory: the basic MainMemoryController by default, or the MCsim DRAM

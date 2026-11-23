@@ -54,6 +54,7 @@ namespace octopus
 
         // Design B: tag this bus as the LLC<->DRAM (mem) bus for logging.
         void setMemBus() { if (interconnect_controller) interconnect_controller->setMemBus(); }
+        void setLLCBanks(const std::vector<int> &ids) { if (interconnect_controller) interconnect_controller->setLLCBanks(ids); }
 
         vector<int> *getLowerLevelIds();
         
