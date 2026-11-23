@@ -35,7 +35,9 @@ namespace MCsim
 		virtual void receiveFromBus(BusPacket *busPacket) = 0;
 
 	protected:
-		unsigned int clockCycle;
+		// 64-bit: a 32-bit counter wraps at DRAM cycle 2^32, after which every
+		// "clk < next[cmd]" timing check in DRAM.h fails and no command issues again.
+		uint64_t clockCycle;
 		unsigned int ranks;
 		unsigned int bankGroups;
 		unsigned int banks;

@@ -30,7 +30,7 @@ namespace MCsim
 	{
 	public:
 		BusPacket(BusPacketType packetType, uint64_t id, uint64_t addr,
-				  unsigned col, unsigned rw, unsigned bank, unsigned rank, unsigned sa, void *data, unsigned time) : busPacketType(packetType),
+				  unsigned col, unsigned rw, unsigned bank, unsigned rank, unsigned sa, void *data, uint64_t time) : busPacketType(packetType),
 																													 requestorID(id),
 																													 address(addr),
 																													 reqID(0),
@@ -49,7 +49,7 @@ namespace MCsim
 		}
 
 		BusPacket(BusPacketType packetType, uint64_t id, uint64_t addr,
-				  unsigned col, unsigned rw, unsigned bank, unsigned rank, unsigned sa, void *data, unsigned time, uint64_t reqID, unsigned Size) : busPacketType(packetType),
+				  unsigned col, unsigned rw, unsigned bank, unsigned rank, unsigned sa, void *data, uint64_t time, uint64_t reqID, unsigned Size) : busPacketType(packetType),
 																													 requestorID(id),
 																													 address(addr),
 																													 reqID(reqID),
@@ -78,7 +78,7 @@ namespace MCsim
 		unsigned bankGroup;
 		unsigned rank;
 		void *data;
-		unsigned arriveTime;
+		uint64_t arriveTime;    // controller cycles: 64-bit like the controller clock
 		bool postCommand;
 		unsigned postCounter;
 		unsigned int addressMap[4];
