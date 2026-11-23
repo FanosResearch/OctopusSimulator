@@ -47,7 +47,7 @@ I_a,0,1,Stall/,Stall/,Stall/,ClearOwner/I,,Fault/,Fault/,Fault/
 MN_d,0,1,Stall/,Stall/,Stall/,Fault/,,WriteBack/N,Fault/,SaveData/MN_d
 S_d,0,1,Stall/,Stall/,Stall/,Fault/,,SaveData/S,Fault/,MN_d
 I_d,0,1,Stall/,Stall/,Stall/,Fault/,,SaveData/I,Fault/,MN_d
-O,1,1,,SetOwner/M,IssueInv/,S_d,,SaveData/S,Fault/,ClearOwner/MN_d
+O,1,1,,SetOwner/M,IssueInv/,S_d,,SaveData/S_a,Fault/,ClearOwner/MN_d
 S_a,0,1,Stall/,Stall/,Stall/,ClearOwner/S,,Fault/,Fault/,Fault/
 O_d,0,1,Stall/,Stall/,Stall/,Fault/,,SaveData/O,Fault/,MN_d
 M,1,1,O,SetOwner/M,IssueInv/,ClearOwner/I_d,,SaveData/I_a,Fault/,ClearOwner/MN_d
