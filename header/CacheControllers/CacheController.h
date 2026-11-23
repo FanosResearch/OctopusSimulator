@@ -106,7 +106,7 @@ namespace octopus
         // GetS. True for snooping, where the LLC is waiting on that data and otherwise
         // parks in MN_d for ever. False under a directory: the home learns of the transfer
         // from the protocol, and an unsolicited copy faults its FSM. See performWriteBack.
-        virtual bool deferredSupplyCopiesToLLC() const { return true; }
+        virtual bool deferredSupplyCopiesToLLC() const { return m_protocol->llcExpectsDeferredSupplyCopy(); }
         virtual void updateCacheLine(void *) override;
 
         virtual void writeCacheLineData(void *);
