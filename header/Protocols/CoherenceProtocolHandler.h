@@ -33,6 +33,10 @@ namespace octopus
         CacheDataHandler *m_data_handler;
 
     public:
+        // Snooping: whether this protocol's LLC waits for a copy of a deferred supply to a parked
+        // GetS (MESI: S_d / MN_d). MOESI's LLC does not: E + GetS -> ClearOwner/S lets the owner
+        // supply the reader alone, and a copy arriving afterwards would fault it.
+        virtual bool llcExpectsDeferredSupplyCopy() const { return true; }
         CoherenceProtocolHandler(CacheDataHandler *cache, const std::string& fsm_path, int id, int sharedMemId);
         virtual ~CoherenceProtocolHandler();
 
