@@ -90,13 +90,28 @@ namespace octopus
             }
         }
 
-        BaseController *llc_controller;
-        int llc_id = std::get<int>(getSubMap(STRINGIFY(llc_controller)).at("m_id").value);
-        llc_controller = createController(llc_controller_type,
-                                          getSubMap(STRINGIFY(llc_controller)),
-                                          bus[1]->getInterfaceFor(llc_id),
-                                          bus[0]->getInterfaceFor(llc_id), name);
-        llc_controller->setLogRole(Logger::Role::LLC);   // Design B: tag LLC events
+        // LLC banks (docs/LLC_Banking_and_Partitioning_Design.md s4.1): llc_banks(i) complete LLC
+        // controllers, llc_controller[k] when banked, the plain llc_controller map when there is one
+        // (every existing preset). Each bank is its own endpoint on bus[0] and bus[1]; the cores'
+        // home_ids map lines onto them.
+        int llc_banks = parameters.count(STRINGIFY(llc_banks)) ? std::get<int>(parameters.at(STRINGIFY(llc_banks)).value) : 1;
+        BaseController *llc_controller = NULL;
+        int llc_id = -1;
+        for (int k = 0; k < llc_banks; k++)
+        {
+            ParametersMap lmap = llc_banks == 1 ? getSubMap(STRINGIFY(llc_controller)) : getSubMap(STRINGIFY(llc_controller), k);
+            int bank_id = std::get<int>(lmap.at("m_id").value);
+            if (bus[0]->getInterfaceFor(bank_id) == NULL || bus[1]->getInterfaceFor(bank_id) == NULL)
+            {
+                cerr << "MultiCoreSystem: LLC bank " << bank_id << " is not an endpoint of bus[0] (upper_level_cache_ids) and bus[1] (m_lower_level_ids)" << endl;
+                exit(2);
+            }
+            BaseController *bank = createController(llc_controller_type, lmap,
+                                                    bus[1]->getInterfaceFor(bank_id),
+                                                    bus[0]->getInterfaceFor(bank_id), name);
+            bank->setLogRole(Logger::Role::LLC);   // Design B: tag LLC events
+            if (k == 0) { llc_controller = bank; llc_id = bank_id; }   // MCsim's default reply target and clock
+        }
 
         // Main memory: the basic MainMemoryController by default, or the MCsim DRAM
         // simulator when `main_memory_type=MCsim` (configured for DDR4 in MCsimInterface).
