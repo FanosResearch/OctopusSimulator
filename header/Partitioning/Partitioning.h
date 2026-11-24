@@ -45,6 +45,8 @@ namespace octopus
         uint64_t sets = 1;
         const AddressMap *map = nullptr;   // complete: bank group and home map installed
         uint64_t page_bytes = 4096;        // partition[k].page_size(i): the placer's page
+        int mshr_entries = 16;             // the controller's num_mshr (-1 = unbounded)
+        int pwb_entries = 8;               // the write-back buffer depth, pwb_size (-1 = unbounded)
     };
 
     // What is split, and where it is enforced. Every hook has a no-op default.
@@ -61,7 +63,22 @@ namespace octopus
 
         // cache-side enforcement
         virtual void restrictVictims(int core, uint64_t set, uint32_t &way_mask) const {}
+        // whether `core` may open a new miss for `addr` (CacheController::canAdmitRequest)
         virtual bool admit(int core, uint64_t addr) const { return true; }
+
+        // Entry schemes (MSHR and write-back buffer entries, s6.10): a new entry takes a unit its
+        // core owns and holds it until it frees. allocate returns false when the core has no free
+        // unit (counted as a violation); release frees what entry `key` held. Their fills are the
+        // entries allocated, not the lines installed.
+        enum class Entry { MSHR, PWB };
+        virtual bool countsEntries() const { return false; }
+        virtual Entry entryKind() const { return Entry::MSHR; }   // which entries, for an entry scheme
+        virtual bool allocate(int core, uint64_t key) { return true; }
+        // units `core` may still take (an entry scheme with a restricting ownership; else no limit)
+        virtual int freeUnits(int core) const { return 1 << 30; }
+        virtual void release(uint64_t key) {}
+        // end-of-run lines for stdout (an entry scheme's per-core peak)
+        virtual void summary(std::ostream &os, const std::string &cache, int index) const {}
 
         // source-side enforcement (addresses chosen outside the cache): the PagePlacer moves a
         // page to a frame whose unit the core owns. withUnit keeps the page offset.
@@ -105,6 +122,7 @@ namespace octopus
         void add(std::unique_ptr<PartitionScheme> s, bool strict = false)
         {
             m_index.push_back((int)m_view.size());
+            if (s->countsEntries()) m_entries.push_back({m_view.size(), s.get()});
             m_view.push_back(s.get());
             m_owned.push_back(std::move(s));
             m_strict.push_back(strict);
@@ -135,6 +153,27 @@ namespace octopus
             for (auto *s : m_view) if (!s->admit(core, addr)) return false;
             return true;
         }
+        // an MSHR or write-back buffer entry `key` was opened for `core` / has freed
+        bool hasEntrySchemes() const { return !m_entries.empty(); }
+        bool hasEntryScheme(PartitionScheme::Entry e) const
+        {
+            for (auto &p : m_entries) if (p.second->entryKind() == e) return true;
+            return false;
+        }
+        // whether `core`, with `queued` requests at the cache that may each still open a miss,
+        // may send one more: every MSHR scheme has a free unit beyond those (s6.10)
+        bool admitsDemand(int core, int queued) const
+        {
+            for (auto &p : m_entries)
+                if (p.second->entryKind() == PartitionScheme::Entry::MSHR && p.second->freeUnits(core) <= queued) return false;
+            return true;
+        }
+        void allocate(PartitionScheme::Entry e, int core, uint64_t key);
+        void release(PartitionScheme::Entry e, uint64_t key)
+        {
+            for (auto &p : m_entries) if (p.second->entryKind() == e) p.second->release(key);
+        }
+        void summary(std::ostream &os) const;
         // a line was installed for `core` in (set, way); `memory` = a memory access (DramMap):
         // only schemes counted at memory count it, and caches skip those schemes
         void onFill(int core, uint64_t addr, uint64_t set, int way, bool memory = false);
@@ -151,6 +190,7 @@ namespace octopus
         std::vector<const PartitionScheme *> m_view;            // every scheme, in partition order
         std::vector<int> m_index;                               // its partition[k] number
         std::vector<std::unique_ptr<PartitionScheme>> m_owned;   // the ones this set built
+        std::vector<std::pair<size_t, PartitionScheme *>> m_entries;   // its entry schemes (index in m_view)
         std::vector<bool> m_strict;
         std::vector<Stats> m_stats;
     };

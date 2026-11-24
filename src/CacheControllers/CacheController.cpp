@@ -50,6 +50,7 @@ namespace octopus
         delete m_processing_queue;
 
         m_data_handler = new CacheDataHandler_COTS(getSubMap(STRINGIFY(m_data_handler)), parent_name + "." + name);
+        m_data_handler->setMshrEntries(m_num_mshr);
         installHomeMap();
         m_protocol = Protocols::getNewProtocol(protocol_type, m_data_handler, fsm_path, m_id, m_shared_memory_id);
 
@@ -437,6 +438,34 @@ namespace octopus
         if (!cots->pwbHasSpace())
             return true;
         return false;
+    }
+
+    void CacheController::installDemandGate()
+    {
+        if (!m_data_handler->gatesDemand())
+            return;
+        // The L1s' demand requests reach the LLC on its lower interface (the L1 bus).
+        if (m_log_role != Logger::Role::LLC || !m_lower_interface->m_demand_gating)
+        {
+            cerr << "CacheController " << m_id << ": an mshr partition is supported at the LLC on a split bus"
+                 << " (SplitBus or TripleBus), which holds a core's request back while it has no free unit" << endl;
+            exit(2);
+        }
+        // A core may send one more demand request while its free units exceed the requests it
+        // already has here, each of which may still open a miss: in the RX buffer, the
+        // processing queue, the data-array pipeline, or saved behind a write-back. A request
+        // that joined a miss, or holds one, is no longer counted (the miss holds the unit).
+        m_lower_interface->m_demand_gate = [this](const Message &m) {
+            int core = m.owner;
+            auto mine = [core](const Message &q) { return q.isDemandRequest() && q.owner == core; };
+            int queued = m_lower_interface->countRxDemand([&](const Message &q) { return q.owner == core && !notForThisBank(q); });
+            m_processing_queue->forEach([&](const Message &q, FRFCFS_State) { if (mine(q)) queued++; });
+            for (const DataArrayOp &op : m_array_ops)
+                if (op.kind == DataArrayOp::MESSAGE && mine(op.msg)) queued++;
+            for (auto &kv : m_saved_requests_for_wb)
+                for (const Message &q : kv.second) if (mine(q)) queued++;
+            return m_data_handler->admitsDemand(core, queued);
+        };
     }
 
     bool CacheController::canAdmitRequest(Message &msg)

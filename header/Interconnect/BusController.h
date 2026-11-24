@@ -63,6 +63,8 @@ namespace octopus
         bool skipsInterface(const Message &msg, int interface_id) const;
 
         virtual bool broadcast(Message &msg, MessageType type = MessageType::REQUEST);
+        // a demand request whose receivers' demand gates (MSHR partition, s6.10) all admit it
+        bool demandDeliverable(const Message &msg) const;
         virtual void send(Message &msg, MessageType type = MessageType::DATA_RESPONSE);
 
     public:

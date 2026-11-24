@@ -9,6 +9,7 @@
 #ifndef _COMMUNICATIONINTERFACE_H
 #define _COMMUNICATIONINTERFACE_H
 
+#include <functional>
 #include <iostream>
 #include <stdint.h>
 #include <string.h>
@@ -172,6 +173,16 @@ public:
     // in-flight reserve, so a response emitted by an already-broadcast transaction
     // never overflows. Default = effectively unbounded (non-bus interconnects).
     virtual int txResponseFreeSlots() { return 1 << 30; }
+
+    // MSHR partition back-pressure (docs/LLC_Banking_and_Partitioning_Design.md s6.10). A cache
+    // whose partition limits each core's misses sets m_demand_gate on the interface its demand
+    // requests arrive on; a bus that honours gates (m_demand_gating, set by SplitBusController)
+    // puts a demand request on the bus only when every receiver's gate admits it, so a refused
+    // request stays in its sender. countRxDemand counts the queued demand requests that match.
+    std::function<bool(const Message &)> m_demand_gate;
+    bool m_demand_gating = false;
+    bool admitsDemand(const Message &m) const { return !m_demand_gate || m_demand_gate(m); }
+    virtual int countRxDemand(const std::function<bool(const Message &)> &match) const { return 0; }
 
     virtual bool rollback(uint64_t address, uint64_t mask, Message *out_msg) { return false; }
     

@@ -184,6 +184,37 @@ int main()
         CHECK(even, "disjoint: %zu of 16 combinations used, not 4 pages each", all16.size());
         pp.configure(false, {}, 0);
     }
+    // 5. MSHR partition (P7): 8 entries, core 0 owns 0-1, cores 1-2 share 2-7, core 3 unlisted
+    //    (every unit is claimed, so it shares all of them)
+    {
+        PartitionContext c = ctx; c.mshr_entries = 8;
+        PartitionSet set; set.setName("test");
+        set.add(PartitionRegistry::build("mshr", "static", "0:0-1;1-2:2-7", c));
+        using E = PartitionScheme::Entry;
+        CHECK(set.admit(0, 0) && set.admit(1, 0), "empty: refused");
+        set.allocate(E::MSHR, 0, 0x1000); set.allocate(E::MSHR, 0, 0x2000);
+        CHECK(!set.admit(0, 0), "core 0 admitted with both its units held");
+        CHECK(set.admit(1, 0) && set.admit(-1, 0), "core 1 / no requester refused while its units are free");
+        set.allocate(E::PWB, 0, 0x3000);   // another kind of entry: not this scheme's
+        CHECK(set.fills(0, 0) == 2, "a PWB entry counted by the mshr scheme");
+        set.allocate(E::MSHR, 0, 0x1000);  // the same key again (no new entry)
+        CHECK(!set.admit(0, 0) && set.violations() == 0, "re-opening a held key changed the count");
+        set.release(E::MSHR, 0x1000);
+        CHECK(set.admit(0, 0), "core 0 refused after a release");
+        for (int i = 0; i < 6; i++) set.allocate(E::MSHR, 1 + i % 2, 0x10000 + i * 64);
+        CHECK(!set.admit(1, 0) && !set.admit(2, 0), "cores 1-2 admitted with units 2-7 held");
+        CHECK(set.admit(0, 0) && set.admit(3, 0), "core 0 / core 3 refused with unit 0 free");
+        set.allocate(E::MSHR, 2, 0x20000);  // core 2 without a free unit: a violation
+        CHECK(set.violations(0, 2) == 1 && set.fills(0, 2) == 4, "core 2: fills %llu violations %llu",
+              (unsigned long long)set.fills(0, 2), (unsigned long long)set.violations(0, 2));
+        set.release(E::MSHR, 0x20000); set.release(E::MSHR, 0x10000);   // the violating entry held no unit
+        CHECK(set.admit(1, 0), "core 1 refused after unit 2 freed");
+        CHECK(set.admit(2, 0), "core 2 refused: it shares the freed unit 2");
+        set.release(E::MSHR, 0x999999);      // an unknown key is ignored
+        CHECK(set.violations() == 1, "total violations %llu", (unsigned long long)set.violations());
+        PartitionContext u = ctx; u.mshr_entries = -1;
+        CHECK(!PartitionRegistry::schemes().at("mshr")(u)->invalid().empty(), "unbounded num_mshr not refused");
+    }
     CHECK(PartitionRegistry::schemes().count("way") == 1, "way scheme not registered");
     CHECK(PartitionRegistry::ownerships().count("static") == 1, "static ownership not registered");
     if (fails) printf("partition_test: %d FAILURES\n", fails);

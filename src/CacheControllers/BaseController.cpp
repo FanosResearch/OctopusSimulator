@@ -321,7 +321,10 @@ namespace octopus
     void BaseController::addtoPendingRequests(void *data_ptr)
     {
         Message *msg = (Message *)data_ptr;
-        this->m_pending_requests[this->getAddressKey(msg->addr)].push_back(*msg);
+        uint64_t key = this->getAddressKey(msg->addr);
+        bool opened = m_pending_requests.find(key) == m_pending_requests.end();   // a new miss, not a join
+        this->m_pending_requests[key].push_back(*msg);
+        if (opened) m_data_handler->entryOpened(PartitionScheme::Entry::MSHR, msg->owner, key);
 
         delete msg;
     }
@@ -378,6 +381,7 @@ namespace octopus
                 pending_messages.erase(pending_messages.begin());
             }
             this->m_pending_requests.erase(this->getAddressKey(msg->addr));
+            m_data_handler->entryFreed(PartitionScheme::Entry::MSHR, this->getAddressKey(msg->addr));
         }
         else
         { 

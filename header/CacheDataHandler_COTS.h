@@ -87,6 +87,7 @@ namespace octopus
         int pwbCount() const { return (int)m_pending_write_back_regs.size(); }
         int pwbPendingIssueCount() const { return (int)m_pwb_pending_issue.size(); }
         int pwbSize() const { return m_pwb_size; }
+        int pwbEntries() const override { return m_pwb_size; }
 
         // Headroom in the write-back buffer for one more evicted line.
         inline bool pwbHasSpace()

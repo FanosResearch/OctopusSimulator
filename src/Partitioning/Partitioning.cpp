@@ -17,7 +17,7 @@ namespace octopus
         if (core < 0) return;
         for (size_t k = 0; k < m_view.size(); k++)
         {
-            if (m_view[k]->countedAtMemory() != memory) continue;
+            if (m_view[k]->countedAtMemory() != memory || m_view[k]->countsEntries()) continue;
             m_stats[k].fills[core]++;
             if (m_view[k]->inPartition(core, addr, set, way)) continue;
             // A page the placer gave another core (its first toucher) is shared data: outside the
@@ -38,6 +38,31 @@ namespace octopus
                 exit(2);
             }
         }
+    }
+
+    void PartitionSet::allocate(PartitionScheme::Entry e, int core, uint64_t key)
+    {
+        for (auto &p : m_entries)
+        {
+            if (p.second->entryKind() != e) continue;
+            size_t k = p.first;
+            bool inside = p.second->allocate(core, key);
+            if (core < 0) continue;
+            m_stats[k].fills[core]++;
+            if (inside) continue;
+            m_stats[k].violations[core]++;
+            if (m_strict[k])
+            {
+                std::cerr << m_cache << ": partition[" << m_index[k] << "] (" << m_view[k]->name() << ") violated: core " << core
+                          << " opened an entry for line 0x" << std::hex << key << std::dec << " with none of its units free (strict)" << std::endl;
+                exit(2);
+            }
+        }
+    }
+
+    void PartitionSet::summary(std::ostream &os) const
+    {
+        for (auto &p : m_entries) p.second->summary(os, m_cache, m_index[p.first]);
     }
 
     uint64_t PartitionSet::fills(size_t k, int core) const

@@ -169,19 +169,25 @@ the NoC parts:
 Not ported: admission `restoreLast`, the Classifier, transmit reservations. They are NoC
 mechanisms.
 
-The B4 gate first ran under FCFS only. Running RR and TDM (test/banking/README.md) exposed three
-timing races that banking makes reachable; one LLC never hit them on these traces:
+The B4 gate first ran under FCFS only. Running RR and TDM (test/banking/README.md), and later the
+MSHR back-pressure of P7, exposed five timing races that banking makes reachable; one LLC never hit
+them on these traces:
 
 | Commit | Table | Race | Cell |
 |---|---|---|---|
 | 7fedc5b1 | directory MSI/MESI LLC | a Put loses a race with the LLC's eviction or a new owner | Fault becomes PutAck |
 | 722eb8f1 | snooping MSI/MESI/MOESI LLC | a late PutM arrives while the evicted line is refetched (`NM_d`, `NE_d`/`NIorS_d`) | Fault becomes ignore, as in `N` |
 | f4d9c2eb | `MOESI_directory_v2` (L1) | an owner still in `IS_d` took a younger `InvM` ahead of a held `Fwd_GetS` | `IS_d + InvM` stalls, as `SM_ad` does |
+| e257c1f7 | `MESI_directory_banked_v2` (L1), `MESI_LLC_directory_v3` | the LLC evicts a line it just granted exclusively (`I + GetS -> E`, then `Replacement`); the owner, still in `IS_d`, answers the plain `Inv` with an `InvAck` on the request bus and its data later on the response bus, and the LLC took the `InvAck` first | `E`/`M + Replacement` sends `InvM` (`SendInvM`, as MOESI); `IS_d + InvM` stalls; `E`/`M + InvM` answers once with `InvAck_Data` |
+| e257c1f7 | `MSI_LLC_directory_v2`, `MESI_LLC_directory_v3` | a stale PutM (or PutE) from the one sharer left: the owner evicted (`MI_a`/`EI_a`), served a `Fwd_GetS` (`SI_a`), and the other sharer then left; `PutAck/DecSharers` stayed in `S` with no sharer, and the next GetM sent no `Inv` (`map::at`) | new events `last_PutM_Data_fromNonOwner` / `last_PutE_fromNonOwner`: `S` goes to `I`, as `last_PutS` does |
 
-The last one is MOESI only: with `O` the LLC need not wait after `E + GetS`, so it can evict at once
-and invalidate an owner that has not received its data. MESI's LLC waits in `S_d` and stalls
-`Replacement` there. Every LLC-bound message of a line still reaches only its home bank (checked by
-`check_bank_trace.py` on every run): banking changes the timing, not the protocol.
+The fourth and fifth are protocol bugs of the unbanked tables too; banking and the TDM / MSHR
+back-pressure timing only made them reachable on these traces. The new events and `InvM` are decoded
+only when a table defines them (by name), so the older tables behave exactly as before. MOESI's L1
+leaves `MI_a + Fwd_GetS` for `OI_a` and stays the owner, so its late PutM is the owner's, not a
+stale one; the MOESI tables are unchanged and pass the same gates. Every
+LLC-bound message of a line still reaches only its home bank (checked by `check_bank_trace.py` on
+every run): banking changes the timing, not the protocol.
 
 ### 4.8 Logging and visualization
 
@@ -379,7 +385,7 @@ llc_controller.m_data_handler.partition[1].owners(s),0:0-127;1-3:128-255
 | `LlcBankPartition` | same, via the bank group (`AddressMap::banks`); needs page interleave | `PagePlacer`; each bank counts violations | P4 |
 | `SubBankPartition` | same, via `AddressMap::subBank` | `PagePlacer` | later |
 | `DramBankPartition` | same, via MCsim's address mapping (section 6.9) | `PagePlacer`; `MCsimInterface` counts violations | P6 |
-| `MshrPartition` (`mshr`) | `admit`, `allocate`/`release` (section 6.10) | the cache, on admitting a new miss | P7 |
+| `MshrPartition` (`mshr`) | `freeUnits`, `allocate`/`release` (section 6.10) | the sender: the request bus holds back a core's demand request while it has no free unit at the LLC | P7 |
 | `PwbPartition` (`pwb`) | same, on a write-back buffer entry (section 6.10) | the cache, on admitting a new miss (requester mode) | P8 |
 
 Ownership types: `StaticOwnership` (P1), `OverlappingOwnership` (`cat`, Intel CAT style,
@@ -523,14 +529,28 @@ Design:
 - **Entries hold a unit.** A new entry takes a free unit its core owns and keeps it until the
   entry frees. With a disjoint ownership this is a per-core quota; with an overlapping one
   (section 6.11) two cores draw on their common units. The scheme keeps the unit map, so the
-  hooks become stateful: `admit(core, addr)` asks whether a unit is free, `allocate(core, addr)`
-  takes one, `release(addr)` frees it. `PartitionSet` forwards all three; with no scheme they
-  return at once.
-- **MSHR** (`mshr`, P7). `canAdmitRequest` calls `admit` for a brand-new miss, after the existing
-  global check. The miss is charged to the core that opened it; a request from another core that
-  joins it takes no unit. `allocate` runs where a new `m_pending_requests` key is inserted,
-  `release` where it is erased. A turned-away miss waits in the queue and counts as an admit-fail
-  cycle, as today.
+  hooks become stateful: `admit(core, addr)` asks whether a unit is free, `allocate(core, key)`
+  takes one, `release(key)` frees it; the key is the line address. `entryKind()` says which
+  entries a scheme follows, and `PartitionSet::allocate(e, core, key)` / `release(e, key)` pass
+  each event to the schemes of that kind only. With no scheme they return at once.
+- **MSHR** (`mshr`, P7). The miss is charged to the core that opened it; a request from another
+  core that joins it takes no unit. `allocate` runs where a new `m_pending_requests` key is
+  inserted, `release` where it is erased.
+- **Back-pressure at the sender, not refusal at the cache.** A first version refused a core's new
+  miss in `canAdmitRequest`. On the banked EEMBC set under FCFS that faulted snoop MESI/MOESI and
+  hung snoop MSI and the directory protocols on 101 of 240 runs: a snooping LLC must act on a
+  request in bus order, and a request refused after the bus delivered it breaks that order. Now
+  the LLC installs a demand gate on its L1-side bus interface (`CacheController::installDemandGate`,
+  after the partitions are built). The request bus puts a core's demand request on the bus only
+  while every LLC bank it goes to admits it: the core has more free units there
+  (`PartitionScheme::freeUnits`) than demand requests already queued at that bank (RX buffer,
+  processing queue, data-array pipeline, requests saved behind a write-back), each of which may
+  still open a miss. The arbiter (FCFS, RR, TDM) elects each sender's oldest eligible message, so
+  a core without a free unit waits in its own buffer while the others use the bus; under TDM its
+  slot goes idle. Since every queued request already holds a free unit, `allocate` always finds
+  one: violations are 0 by construction, and the cache refuses nothing. Without an `mshr` scheme
+  no gate is installed and the arbiters take their old path (byte-identical). The gate needs a
+  split bus (SplitBus or TripleBus); on any other interconnect an `mshr` scheme is refused.
 - **PWB** (`pwb`, P8). An entry is charged by `partition[k].pwb_owner(s)`:
   - `requester` (default): the core whose fill evicted the line. The gate is in `canAdmitRequest`:
     a core with no free PWB unit cannot open a new miss. A fill is never refused (a response must
@@ -598,7 +618,7 @@ Each step is one commit with its gate. Steps B (banking) and P (partitioning) sh
 | D1 | docs: `SUPPORTED_CONFIGURATIONS.md`, manual section, presets | |
 | P5 | joint placement in `PagePlacer` (section 6.6): one frame for all placing schemes; refuse only a core with no common frame | `partition.sh` unchanged; unit test: two placing schemes on overlapping bits place every page inside both, an infeasible ownership is refused with a message (colours and LLC banks are disjoint by construction, so the first real overlap is P6) |
 | P6 | `DramBankPartition` (section 6.9) | DRAM-bank confinement per core on private traces, zero violations with the placer on; colour + DRAM bank under the default FRFCFS mapping; a changed `AddressMapping` followed; refused without MCsim; regression byte-identical |
-| P7 | stateful `admit`/`allocate`/`release` in `PartitionScheme` and `PartitionSet`, called from `canAdmitRequest` and the `m_pending_requests` insert/erase; `MshrPartition` (`mshr`) in a new file (section 6.10) | regression and `banked.sh` byte-identical with no scheme; with `mshr`, every core's peak entries <= its units; a streaming core no longer delays a victim core's misses on MSHRs (victim core's worst-case latency drops); refused when `num_mshr` is -1 |
+| P7 | stateful `allocate`/`release`/`freeUnits` in `PartitionScheme` and `PartitionSet`, called from the `m_pending_requests` insert/erase; the LLC's demand gate consulted by the request bus and its arbiters; `MshrPartition` (`mshr`) in a new file (section 6.10) | regression and `banked.sh` byte-identical with no scheme; with `mshr`, every core's peak entries <= its units; a streaming core no longer delays a victim core's misses on MSHRs (victim core's worst-case latency drops); refused when `num_mshr` is -1 |
 | P8 | `PwbPartition` (`pwb`) in the same file; `pwb_owner(s)` = `requester` (default) or `victim`; `GenericCacheLine::placed_by` (section 6.10) | byte-identical with no scheme; requester mode: entries(c) <= units(c) + mshr(c) on every run; victim mode: charges match a trace count of evicted lines by placing core; refused when `pwb_size` is -1 |
 | P9 | `OverlappingOwnership` (`cat`): hex masks, contiguity check, `schedule`, `PartitionSet::tick`; `shared_fills` and `evicted_by_other` columns (section 6.11) | the contract tests pass with `cat`; `cat` with disjoint masks gives the same timing as `static`; a non-contiguous mask is refused; a scheduled mask change takes effect at its cycle (fills before and after) |
 | P10 | optional: per-core round-robin PWB issue order (`pwb_drain(s),rr`) | default order byte-identical; with `rr`, no core's write-back waits behind more than one entry of each other core in the PWB |
@@ -640,6 +660,6 @@ B1 to B5 give stable a multi-bank LLC. P1 can start after A1, independent of B.
 | Hook overhead | hooks run on every fill | empty `PartitionSet` fast path; P1 timing gate |
 | Placing schemes sharing bits | e.g. banks interleaved at 4 KiB inside colour bits, DRAM bank bits inside colour bits | joint placement (P5); a core with no common frame is refused |
 | gem5 full system | page allocation is Linux's | violations reported only |
-| MSHR/PWB gates and back-pressure | a gate that refuses a response or a write-back deadlocks the system (the request/response shared-queue deadlock fixed in eb9744a6) | gates act only on brand-new demand misses in `canAdmitRequest`; fills, snoops and write-backs always proceed; RR/TDM `banked.sh` runs with the schemes on |
+| MSHR/PWB gates and back-pressure | a gate that refuses a response or a write-back deadlocks the system (the request/response shared-queue deadlock fixed in eb9744a6); a cache that refuses a delivered request breaks bus order (P7's first version: 101 of 240 banked runs failed) | the MSHR gate holds demand requests in their sender, before the bus; fills, snoops and write-backs always proceed; FCFS/RR/TDM `banked.sh` runs with the scheme on |
 | PWB quota overshoot | requester mode allows entries(c) up to units(c) + mshr(c) | stated bound; checked in P8; an `mshr` partition next to `pwb` caps it |
 | Merge with `network` | both branches touch `homeOf` and the builders | same names, parameters and semantics; `network` adopts `AddressMap` at merge |

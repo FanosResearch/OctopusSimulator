@@ -49,6 +49,8 @@ namespace octopus
             for (int i = 0; i < (int)m_interfaces->size(); i++)
                 if (!skipsInterface(msg, m_interfaces->at(i)->m_interface_id) && !m_interfaces->at(i)->canAcceptRX(type))
                     return false;
+            if (!demandDeliverable(msg))
+                return false;
         }
 
         Logger::getLogger()->event(msg.msg_id,
@@ -61,6 +63,16 @@ namespace octopus
             if (!skipsInterface(msg, m_interfaces->at(i)->m_interface_id))
                 m_interfaces->at(i)->pushMessage2RX(msg, type);
 
+        return true;
+    }
+
+    bool BusController::demandDeliverable(const Message &msg) const
+    {
+        if (!msg.isDemandRequest())
+            return true;
+        for (CommunicationInterface *itf : *m_interfaces)
+            if (itf->m_demand_gate && !skipsInterface(msg, itf->m_interface_id) && !itf->admitsDemand(msg))
+                return false;
         return true;
     }
 

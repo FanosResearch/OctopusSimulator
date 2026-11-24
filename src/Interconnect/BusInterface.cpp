@@ -111,6 +111,14 @@ namespace octopus
         return false;
     }
 
+    int BusInterface::countRxDemand(const std::function<bool(const Message &)> &match) const
+    {
+        int n = 0;
+        for (const Message &m : m_rx_request_buffer)
+            if (m.isDemandRequest() && match(m)) n++;
+        return n;
+    }
+
     void BusInterface::getCongregatedBuffers(vector<CommunicationInterface *>& interfaces, bool request_buffer, vector<vector<Message>*>* buffers)
     {
         for(int i = 0; i < (int)interfaces.size(); i++)

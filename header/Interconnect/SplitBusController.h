@@ -28,6 +28,7 @@ namespace octopus
         bool message_available_resp;
         vector<vector<Message> *> buffers_resp;
 
+        bool m_gates_scanned = false;   // demand gates looked for (they are installed before the first step)
         virtual void requestBusStep(uint64_t cycle_number);
         virtual void responseBusStep(uint64_t cycle_number);
         // True while any agent's response buffer free space is within its in-flight

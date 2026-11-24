@@ -181,7 +181,10 @@ namespace octopus
         Message *msg = (Message *)data_ptr;
 
         if (m_pending_requests.find(getAddressKey(msg->addr)) != m_pending_requests.end())
+        {
             this->m_pending_requests.erase(this->getAddressKey(msg->addr));
+            m_data_handler->entryFreed(PartitionScheme::Entry::MSHR, this->getAddressKey(msg->addr));
+        }
         else
         { 
             cout << "CacheControllerDirectory: Request is not found in the pending buffer." << endl;

@@ -23,6 +23,27 @@ namespace octopus
         uint64_t min_cycle = 0xFFFFFFFFFFFFFFFF;
         int min_buffer_index = -1;
 
+        if (m_eligible)
+        {
+            // each sender's oldest eligible message (see Arbiter::m_eligible)
+            int min_index = -1;
+            for (int i = 0; i < (int)buffers.size(); i++)
+            {
+                int j = firstEligible(*buffers[i]);
+                if (j >= 0 && buffers[i]->at(j).cycle < min_cycle)
+                {
+                    min_buffer_index = i;
+                    min_index = j;
+                    min_cycle = buffers[i]->at(j).cycle;
+                }
+            }
+            if (min_buffer_index == -1)
+                return false;
+            out_msg->copy(buffers[min_buffer_index]->at(min_index));
+            buffers[min_buffer_index]->erase(buffers[min_buffer_index]->begin() + min_index);
+            return true;
+        }
+
         for (int i = 0; i < (int)buffers.size(); i++)
         {
             if (!buffers[i]->empty() && buffers[i]->at(0).cycle < min_cycle)

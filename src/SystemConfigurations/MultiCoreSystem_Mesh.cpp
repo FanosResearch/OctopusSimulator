@@ -69,6 +69,7 @@ namespace octopus
         CacheDataHandler::finalizePartitions(parameters.count(STRINGIFY(page_placer)) &&
                                              std::get<int>(parameters.at(STRINGIFY(page_placer)).value) != 0,
                                              num_cores);
+        llc_controller->installDemandGate();   // MSHR partitions (s6.10): refused off a split bus
     }
 
     BaseController* MultiCoreSystem_Mesh::createController(string type, ParametersMap map,

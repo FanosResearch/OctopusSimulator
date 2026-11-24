@@ -15,6 +15,8 @@
 #   - bank partitions (4 page-interleaved banks) confine each core's private pages to its banks;
 #   - DRAM bank partitions (MCsim) confine each core's DRAM accesses to its banks with the placer on,
 #     also with a colour partition on shared address bits and under another .ini mapping;
+#   - an MSHR partition keeps a victim core's worst case near its run alone next to streamers,
+#     and every core's peak entries within its units;
 #   - configurations that cannot work are refused at startup (exit code 2).
 # Completed runs must have every LatencyReport footer. Prints one line per case; exits non-zero
 # on any failure.
@@ -106,5 +108,24 @@ run dram+colour-x "$SN" "$PRIV" $MC -p "$L.partition[0].scheme(s)=dram_bank" -p 
 # another .ini mapping (FCFS: AddressMapping=012345, banks above the rows) is followed
 run dram-fcfs     "$SN" "$PRIV" $MC -p "mcsim_scheduler(s)=FCFS" $DB $PL;       expect dram-bank-fcfs-mapping 0 "= 0" "= 0"
 run dram-fixed    "$SN" "$PRIV" $DB $PL;                                         expect dram-bank-needs-mcsim 2 "" ""
+
+# MSHR partition (s6.10): a victim core (a read every 40 cycles, all LLC misses) next to three
+# streamers (a new line every cycle) on an LLC with 16 MSHRs. Shared, the streamers hold the
+# MSHRs and the victim's worst case grows about 7x; with 8 units of its own it stays near its
+# run alone. Every core's peak entries stay within its units.
+ST="$OUT/stream"; mkdir -p "$ST"
+awk 'BEGIN { for (i = 0; i < 3000; i++) printf "%x 1 R %d\n", 268435456 + (i * 97 % 4096) * 64, 100 + i * 40 }' > "$ST/trace_C0.trc.shared"
+for c in 1 2 3; do
+  awk -v c=$c 'BEGIN { for (i = 0; i < 40000; i++) printf "%x 1 R %d\n", c * 2^36 + 536870912 + i * 64, 100 + i }' > "$ST/trace_C$c.trc.shared"
+done
+M16="-p llc_controller.num_mshr(i)=16"; MS="-p $L.partition[0].scheme(s)=mshr"
+wc0() { tail -1 "$D/LatencyReport_C0.csv" | cut -d, -f9; }   # core 0's worst-case total latency
+run mshr-none "$SN" "$ST" $M16; shared_wc=$(wc0)
+run mshr-split "$SN" "$ST" $M16 $MS -p "$L.partition[0].owners(s)=0:0-7;1-3:8-15"
+over=$(grep -o 'peak [0-9]* of [0-9]*' "$D/out" | awk '$2 > $4' | wc -l); np=$(grep -c 'peak [0-9]* of' "$D/out")
+if [ "$RC" = 0 ] && [ "$np" = 4 ] && [ "$over" = 0 ] && [ "$(wc0)" -lt $((shared_wc / 2)) ]; then
+  expect mshr-victim-isolated 0 "= 0" "= 0"; echo "     core 0 worst case $shared_wc shared, $(wc0) with 8 own MSHRs"
+else bad "mshr-victim-isolated: worst case $shared_wc -> $(wc0), $np peaks, $over over their units"; fi
+run mshr-unbounded "$SN" "$ST" -p "llc_controller.num_mshr(i)=-1" $MS -p "$L.partition[0].owners(s)=0:0";  expect mshr-unbounded-refused 2 "" ""
 [ $fails = 0 ] && echo "partition: all PASS" || echo "partition: $fails FAIL"
 exit $fails

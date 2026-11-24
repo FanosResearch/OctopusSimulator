@@ -41,7 +41,7 @@ namespace octopus
         for (int i = 0; i < (int)buffers.size(); i++)
         {
             // Within one buffer the first match is that owner's oldest (FIFO push).
-            int idx = findMessage(*buffers[i], owner);
+            int idx = m_eligible ? firstEligible(*buffers[i], owner) : findMessage(*buffers[i], owner);
             if (idx != -1 && buffers[i]->at(idx).cycle < best_cycle)
             {
                 best_buf = i;
@@ -56,6 +56,14 @@ namespace octopus
         out_msg->copy(buffers[best_buf]->at(best_idx));
         buffers[best_buf]->erase(buffers[best_buf]->begin() + best_idx);
         return true;
+    }
+
+    int Arbiter::firstEligible(const vector<Message> &buffer, int owner) const
+    {
+        for (int i = 0; i < (int)buffer.size(); i++)
+            if ((owner < 0 || buffer[i].owner == owner) && eligible(buffer[i]))
+                return i;
+        return -1;
     }
 
     bool Arbiter::forceElect(uint64_t cycle_number, vector<vector<Message> *> &buffers, Message *out_msg)

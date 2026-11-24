@@ -20,7 +20,10 @@ namespace octopus
         // LLC-sourced traffic (owner = LLC id) under owner-matched arbiters (RR/TDM),
         // which hang; FCFS ignores owner so it happened to work. Use the full set.
         for (CommunicationInterface *itf : *m_interfaces)
+        {
             m_arbiter_candidate_ids.push_back(itf->m_interface_id);
+            itf->m_demand_gating = true;   // the request bus honours demand gates (s6.10)
+        }
         vector<int> *cands = &m_arbiter_candidate_ids;
 
         string arbiter_type = std::get<string>(parameters.at(STRINGIFY(arbiter_type)).value);
@@ -93,6 +96,20 @@ namespace octopus
         // coherence order and per-transaction atomicity hold.
         if (responseBackpressured())
             return;
+
+        // MSHR partition back-pressure (s6.10): with a gated receiver, the arbiter elects only
+        // demand requests every receiver admits, so a core without a free unit waits in its own
+        // buffer while the others use the bus. Without gates nothing is installed.
+        if (!m_gates_scanned)
+        {
+            m_gates_scanned = true;
+            for (CommunicationInterface *itf : *m_interfaces)
+                if (itf->m_demand_gate)
+                {
+                    m_arbiters[(int)BusType::RequestBus]->setEligible([this](const Message &m) { return demandDeliverable(m); });
+                    break;
+                }
+        }
 
         // Slot timing. A message is elected in slot 0 and delivered in slot
         // latency-1, so a latency of 1 elects and delivers in the same cycle.

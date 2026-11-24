@@ -165,6 +165,7 @@ namespace octopus
         CacheDataHandler::finalizePartitions(parameters.count(STRINGIFY(page_placer)) &&
                                              std::get<int>(parameters.at(STRINGIFY(page_placer)).value) != 0,
                                              num_cores);
+        for (BaseController *b : banks) b->installDemandGate();   // MSHR partitions (s6.10)
     }
 
     BaseController* MultiCoreSystem::createController(string type, ParametersMap map,

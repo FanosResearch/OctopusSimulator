@@ -129,6 +129,9 @@ namespace octopus
         // This controller is one of the LLC banks of `banks` (the cores' home map): it serves only
         // what names it (s4.4) and indexes its sets with the bank digit removed (s5.2).
         void setBanks(const Interleave &banks);
+        // After the partitions are built (system construction): an LLC with an MSHR partition
+        // gates its cores' demand requests at the bus (s6.10). No-op without one.
+        virtual void installDemandGate() {}
         const Interleave &homeMap() const { return m_data_handler->addressMap().homeMap(); }
         BaseController(ParametersMap map, CommunicationInterface *upper_interface, 
                        CommunicationInterface *lower_interface, string pname = "",

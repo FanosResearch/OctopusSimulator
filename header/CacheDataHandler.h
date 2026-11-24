@@ -37,6 +37,7 @@ namespace octopus
         // depend on the bank group the system builder installs after the caches exist; built
         // lazily on first use if a builder does not call it.
         bool m_partitions_built = false;
+        int m_mshr_entries = -1;
         void ensurePartitions() { if (!m_partitions_built) { m_partitions_built = true; buildPartitions(); } }
         void buildPartitions();
         static std::vector<CacheDataHandler *> &handlers();   // every live handler
@@ -104,6 +105,18 @@ namespace octopus
         int findEmptyWay(uint64_t address, int core = -1);
         uint32_t allowedWays(int core, uint64_t set) const { return m_partitions.allowedWays(core, set, m_all_mask); }
         const PartitionSet &partitions() const { return m_partitions; }
+        // Entry partitions (MSHR and write-back buffer, s6.10). The controller gives its MSHR
+        // count before the partitions are built; with an MSHR scheme it gates demand requests
+        // at the sender (admitsDemand: `queued` = the core's requests already at this cache);
+        // entryOpened / entryFreed follow each entry, keyed by line address.
+        void setMshrEntries(int n) { m_mshr_entries = n; }
+        virtual int pwbEntries() const { return -1; }
+        bool gatesDemand() { ensurePartitions(); return m_partitions.hasEntryScheme(PartitionScheme::Entry::MSHR); }
+        bool admitsDemand(int core, int queued) const { return m_partitions.admitsDemand(core, queued); }
+        void entryOpened(PartitionScheme::Entry e, int core, uint64_t key)
+        { ensurePartitions(); if (m_partitions.hasEntrySchemes()) m_partitions.allocate(e, core, key); }
+        void entryFreed(PartitionScheme::Entry e, uint64_t key)
+        { if (m_partitions.hasEntrySchemes()) m_partitions.release(e, key); }
         // End of system construction: build every cache's partitions, then configure the page
         // placer (page_placer(i) of the system) with their placing schemes.
         static void finalizePartitions(bool page_placer, int num_cores = 0);

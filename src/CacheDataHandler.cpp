@@ -76,6 +76,7 @@ namespace octopus
         if (m_map.banked()) ctx.cache += "[bank " + std::to_string(m_map.bankIndex()) + "]";
         m_partitions.setName(ctx.cache);
         ctx.ways = m_ways_count; ctx.sets = m_sets_count; ctx.map = &m_map;
+        ctx.mshr_entries = m_mshr_entries; ctx.pwb_entries = pwbEntries();
         auto str = [](const ParametersMap &m, const char *key, const std::string &dflt) {
             auto it = m.find(key);
             return it == m.end() ? dflt : std::get<std::string>(it->second.value);
@@ -122,6 +123,7 @@ namespace octopus
                 for (CacheDataHandler *h : handlers()) { h->m_partitions.report(f); v += h->m_partitions.violations(); }
                 DramMap::instance().partitions().report(f); v += DramMap::instance().partitions().violations();
                 cout << "Partitioning: " << v << " violation(s); per-core fills in " << dir << "/Partitions.csv" << endl;
+                for (CacheDataHandler *h : handlers()) h->m_partitions.summary(cout);
                 if (PagePlacer::instance().enabled()) PagePlacer::instance().report(cout);
             });
     }
