@@ -8,9 +8,11 @@
 #include "../header/CacheDataHandler.h"
 #include "../header/Logger.h"
 #include "PagePlacer.h"
+#include "DramMap.h"
 
 #include <algorithm>
 #include <fstream>
+#include <set>
 
 namespace octopus
 {
@@ -118,6 +120,7 @@ namespace octopus
                 f << "Cache,Partition,Scheme,Core,Fills,Violations,SharedOutside\n";
                 uint64_t v = 0;
                 for (CacheDataHandler *h : handlers()) { h->m_partitions.report(f); v += h->m_partitions.violations(); }
+                DramMap::instance().partitions().report(f); v += DramMap::instance().partitions().violations();
                 cout << "Partitioning: " << v << " violation(s); per-core fills in " << dir << "/Partitions.csv" << endl;
                 if (PagePlacer::instance().enabled()) PagePlacer::instance().report(cout);
             });
@@ -132,10 +135,19 @@ namespace octopus
     void CacheDataHandler::finalizePartitions(bool page_placer, int num_cores)
     {
         std::vector<const PartitionScheme *> schemes;
+        DramMap &dram = DramMap::instance();
+        dram.clearPartitions();
+        std::set<std::string> dram_seen;   // one DRAM scheme per signature (every LLC bank has a copy)
         for (CacheDataHandler *h : handlers())
         {
             h->ensurePartitions();
-            for (auto &s : h->m_partitions.schemes()) schemes.push_back(s.get());
+            const auto &own = h->m_partitions.schemes();
+            for (size_t k = 0; k < own.size(); k++)
+            {
+                schemes.push_back(own[k].get());
+                if (own[k]->countedAtMemory() && dram_seen.insert(own[k]->signature()).second)
+                    dram.partitions().watch(own[k].get(), (int)k, h->m_partitions.strict(k));
+            }
         }
         PagePlacer::instance().configure(page_placer, schemes, num_cores);
     }

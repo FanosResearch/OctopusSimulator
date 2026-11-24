@@ -231,3 +231,16 @@ namespace MCsim
 	}
 
 } // namespace MCsim
+
+bool MultiChannelMemorySystem::dramFieldBits(unsigned field, unsigned &lo, unsigned &width)
+{
+	return channels[0]->memoryController->getAddressMapping()->fieldBits(field, lo, width);
+}
+
+void MultiChannelMemorySystem::dramDecode(unsigned long long address, unsigned &bank_group, unsigned &bank)
+{
+	Request r(0, DATA_READ, 64, address, NULL);
+	const_cast<AddressMapping *>(channels[0]->memoryController->getAddressMapping())->addressMapping(&r);
+	bank_group = r.bankGroup;
+	bank = r.bank;
+}

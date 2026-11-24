@@ -30,6 +30,7 @@ namespace octopus
         int m_id;
         int m_llc_id;
         int m_llc_line_size;
+        int m_num_cores = 0;
 
         uint64_t m_clk_cycle;
         uint64_t m_read_count;

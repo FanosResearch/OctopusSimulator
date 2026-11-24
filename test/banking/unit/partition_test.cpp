@@ -3,6 +3,7 @@
 // Runs on EVERY registered scheme, so a new scheme is covered by adding its source file.
 #include "Partitioning.h"
 #include "PagePlacer.h"
+#include "DramMap.h"
 #include <set>
 #include <cstdio>
 #include <map>
@@ -77,6 +78,8 @@ static std::string random_spec(std::mt19937 &rng, int cores, int units)
 int main()
 {
     std::mt19937 rng(7);
+    // a DRAM layout as MCsim's FRFCFS mapping of DDR4 8Gb x8 gives it: bank bits 13-14, group 15-16
+    DramMap::instance().set(13, 2, 15, 2, [](uint64_t x, unsigned &bg, unsigned &b) { b = (x >> 13) & 3; bg = (x >> 15) & 3; });
     // one bank of a 4-bank, page-interleaved LLC: every scheme (way, colour, bank) is valid here
     Interleave banks; banks.ids = {10, 11, 12, 13}; banks.shift = 6;
     AddressMap map(64, 1024); map.setBanks(banks, 0);

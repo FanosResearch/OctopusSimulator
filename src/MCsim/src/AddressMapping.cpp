@@ -134,6 +134,23 @@ void AddressMapping::addressMapping(Request *request)
 	//request->addressMap[SubArray] = request->subArray;
 }
 
+bool AddressMapping::fieldBits(unsigned field, unsigned &lo, unsigned &width) const
+{
+	// addressMapping() peels the fields from the last entry of decodeIndex (the lowest bits) up
+	unsigned at = 0;
+	for (int index = decodeIndex.size() - 1; index >= 0; index--)
+	{
+		if (decodeIndex[index].first == field)
+		{
+			lo = at;
+			width = decodeIndex[index].second;
+			return true;
+		}
+		at += decodeIndex[index].second;
+	}
+	return false;
+}
+
 unsigned int AddressMapping::lowestBitsValue(unsigned int bank, unsigned int bits)
 {
 	unsigned mask = 1;

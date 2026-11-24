@@ -13,6 +13,8 @@
 #     private traces (each core's addresses offset by core * 2^36) fill only their own colours,
 #     on one LLC and on 2 and 4 banks;
 #   - bank partitions (4 page-interleaved banks) confine each core's private pages to its banks;
+#   - DRAM bank partitions (MCsim) confine each core's DRAM accesses to its banks with the placer on,
+#     also with a colour partition on shared address bits and under another .ini mapping;
 #   - configurations that cannot work are refused at startup (exit code 2).
 # Completed runs must have every LatencyReport footer. Prints one line per case; exits non-zero
 # on any failure.
@@ -83,5 +85,26 @@ if [ -f "$ROOT/src/Partitioning/LlcBankPartition.cpp" ]; then
   if [ "$RC" = 0 ] && [ "$(grep -o 'pages on [0-9]*/[0-9]*' "$D/out" | sort -u)" = "pages on 4/4" ]; then expect bank-x-colour-all-pairs 0 "= 0" "= 0"
   else bad "bank-x-colour-all-pairs: $(grep 'pages placed' "$D/out")"; fi
 fi
+
+# DRAM bank partitions (s6.9): units are MCsim's banks; MCsimInterface counts every DRAM access.
+# The default FRFCFS .ini maps bank bits to 13-14 and bank-group bits to 15-16; the default LLC
+# (256 sets) has 4 colours on bits 12-13, so colour and DRAM bank share bit 13 (joint placement).
+MC="-p main_memory_type(s)=MCsim"
+DB="-p $L.partition[0].scheme(s)=dram_bank -p $L.partition[0].owners(s)=0:0-3;1:4-7;2:8-11;3:12-15"
+run dram-unplaced "$SN" "$PRIV" $MC $DB;                                         expect dram-bank-placer-off 0 "-gt 0" "= 0"
+run dram-private  "$SN" "$PRIV" $MC $DB $PL;                                     expect dram-bank-placer-private 0 "= 0" "= 0"
+run dram-group    "$SN" "$PRIV" $MC -p "$L.partition[0].scheme(s)=dram_bank_group" -p "$L.partition[0].owners(s)=0:0;1:1;2:2;3:3" $PL
+                                                                                expect dram-bank-group-private 0 "= 0" "= 0"
+# colour c has bit 13 = c >> 1, so core c can use only the two of its four banks with the same bit 13
+run dram+colour   "$SN" "$PRIV" $MC $DB -p "$L.partition[1].scheme(s)=colour" -p "$L.partition[1].owners(s)=0:0;1:1;2:2;3:3" $PL
+if [ "$RC" = 0 ] && grep -q "share address bits" "$D/out" && [ "$(grep -o 'pages on [0-9]*/[0-9]*' "$D/out" | sort -u)" = "pages on 2/2" ]
+then expect dram-bank-and-colour-overlapping 0 "= 0" "= 0"
+else bad "dram-bank-and-colour-overlapping: $(grep 'PagePlacer' "$D/out" | tr '\n' ' ')"; fi
+run dram+colour-x "$SN" "$PRIV" $MC -p "$L.partition[0].scheme(s)=dram_bank" -p "$L.partition[0].owners(s)=0:1;0:3;1-3:4-15" \
+                  -p "$L.partition[1].scheme(s)=colour" -p "$L.partition[1].owners(s)=0:0;1:1;2:2;3:3" $PL
+                                                                                expect dram-bank-colour-disagree-refused 2 "" ""
+# another .ini mapping (FCFS: AddressMapping=012345, banks above the rows) is followed
+run dram-fcfs     "$SN" "$PRIV" $MC -p "mcsim_scheduler(s)=FCFS" $DB $PL;       expect dram-bank-fcfs-mapping 0 "= 0" "= 0"
+run dram-fixed    "$SN" "$PRIV" $DB $PL;                                         expect dram-bank-needs-mcsim 2 "" ""
 [ $fails = 0 ] && echo "partition: all PASS" || echo "partition: $fails FAIL"
 exit $fails

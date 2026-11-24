@@ -12,23 +12,29 @@
 
 namespace octopus
 {
-    void PartitionSet::onFill(int core, uint64_t addr, uint64_t set, int way)
+    void PartitionSet::onFill(int core, uint64_t addr, uint64_t set, int way, bool memory)
     {
         if (core < 0) return;
-        for (size_t k = 0; k < m_schemes.size(); k++)
+        for (size_t k = 0; k < m_view.size(); k++)
         {
+            if (m_view[k]->countedAtMemory() != memory) continue;
             m_stats[k].fills[core]++;
-            if (m_schemes[k]->inPartition(core, addr, set, way)) continue;
+            if (m_view[k]->inPartition(core, addr, set, way)) continue;
             // A page the placer gave another core (its first toucher) is shared data: outside the
             // requester's units by design, counted apart and never strict.
-            int placed_for = m_schemes[k]->placesAddresses() ? PagePlacer::instance().frameOwner(addr) : -1;
+            int placed_for = m_view[k]->placesAddresses() ? PagePlacer::instance().frameOwner(addr) : -1;
             if (placed_for >= 0 && placed_for != core) { m_stats[k].shared[core]++; continue; }
             m_stats[k].violations[core]++;
             if (m_strict[k])
             {
-                std::cerr << m_cache << ": partition[" << k << "] (" << m_schemes[k]->name() << ") violated: core " << core
-                          << " filled line 0x" << std::hex << addr << std::dec << " into set " << set << " way " << way
-                          << " outside its units (strict)" << std::endl;
+                if (memory)
+                    std::cerr << m_cache << ": partition (" << m_view[k]->name() << ") violated: core " << core
+                              << " accessed line 0x" << std::hex << addr << std::dec << " in DRAM unit " << m_view[k]->unitOf(addr)
+                              << " outside its units (strict)" << std::endl;
+                else
+                    std::cerr << m_cache << ": partition[" << k << "] (" << m_view[k]->name() << ") violated: core " << core
+                              << " filled line 0x" << std::hex << addr << std::dec << " into set " << set << " way " << way
+                              << " outside its units (strict)" << std::endl;
                 exit(2);
             }
         }
@@ -61,9 +67,9 @@ namespace octopus
 
     void PartitionSet::report(std::ostream &os) const
     {
-        for (size_t k = 0; k < m_schemes.size(); k++)
+        for (size_t k = 0; k < m_view.size(); k++)
             for (auto &kv : m_stats[k].fills)
-                os << m_cache << "," << k << "," << m_schemes[k]->name() << "," << kv.first << ","
+                os << m_cache << "," << m_index[k] << "," << m_view[k]->name() << "," << kv.first << ","
                    << kv.second << "," << violations(k, kv.first) << "," << sharedOutside(k, kv.first) << "\n";
     }
 

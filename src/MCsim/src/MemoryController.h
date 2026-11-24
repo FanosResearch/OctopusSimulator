@@ -36,6 +36,7 @@ namespace MCsim
 		void displayConfiguration();
 		void setRequestor(unsigned int id, bool criticality);
 		void connectMemoryDevice(MemoryDevice *memDev);
+		const AddressMapping *getAddressMapping() const { return addressMapping; }   // Octopus: DRAM bank partitioning
 		bool addRequest(unsigned int requestorID, unsigned long long address, bool R_W, unsigned int size);
 		bool addRequest(unsigned int requestorID, unsigned long long address, bool R_W, unsigned int size, unsigned long long reqID);
 		bool isWriteModeFromController();

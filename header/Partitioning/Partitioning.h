@@ -80,6 +80,9 @@ namespace octopus
         // violates only when it had to fall back (the core owns no unit); a placing scheme
         // violates whenever an address reached the cache unplaced.
         virtual bool inPartition(int core, uint64_t addr, uint64_t set, int way) const { return true; }
+        // A scheme of a memory resource (DRAM banks): caches do not count its fills; the memory
+        // controller counts its accesses instead (DramMap, Partitions.csv rows "DRAM").
+        virtual bool countedAtMemory() const { return false; }
 
         // observation
         virtual void onAccess(int core, uint64_t addr, bool hit) {}
@@ -97,31 +100,44 @@ namespace octopus
     class PartitionSet
     {
     public:
-        bool empty() const { return m_schemes.empty(); }
+        bool empty() const { return m_view.empty(); }
         void setName(const std::string &cache) { m_cache = cache; }
         void add(std::unique_ptr<PartitionScheme> s, bool strict = false)
         {
-            m_schemes.push_back(std::move(s));
+            m_index.push_back((int)m_view.size());
+            m_view.push_back(s.get());
+            m_owned.push_back(std::move(s));
             m_strict.push_back(strict);
             m_stats.emplace_back();
         }
-        const std::vector<std::unique_ptr<PartitionScheme>> &schemes() const { return m_schemes; }
+        // a scheme owned elsewhere (a DRAM scheme configured as partition[index] of the LLC,
+        // counted by DramMap); reported under that index
+        void watch(const PartitionScheme *s, int index, bool strict = false)
+        {
+            m_index.push_back(index);
+            m_view.push_back(s);
+            m_strict.push_back(strict);
+            m_stats.emplace_back();
+        }
+        const std::vector<std::unique_ptr<PartitionScheme>> &schemes() const { return m_owned; }
+        bool strict(size_t k) const { return m_strict[k]; }
 
         // the ways `core` may fill in `set`, out of `all`
         uint32_t allowedWays(int core, uint64_t set, uint32_t all) const
         {
-            if (m_schemes.empty() || core < 0) return all;
+            if (m_view.empty() || core < 0) return all;
             uint32_t m = all;
-            for (auto &s : m_schemes) s->restrictVictims(core, set, m);
+            for (auto *s : m_view) s->restrictVictims(core, set, m);
             return m;
         }
         bool admit(int core, uint64_t addr) const
         {
-            for (auto &s : m_schemes) if (!s->admit(core, addr)) return false;
+            for (auto *s : m_view) if (!s->admit(core, addr)) return false;
             return true;
         }
-        // a line was installed for `core` in (set, way)
-        void onFill(int core, uint64_t addr, uint64_t set, int way);
+        // a line was installed for `core` in (set, way); `memory` = a memory access (DramMap):
+        // only schemes counted at memory count it, and caches skip those schemes
+        void onFill(int core, uint64_t addr, uint64_t set, int way, bool memory = false);
         uint64_t fills(size_t k, int core) const;
         uint64_t violations(size_t k, int core) const;
         uint64_t violations() const;                 // all schemes, all cores
@@ -132,7 +148,9 @@ namespace octopus
     private:
         struct Stats { std::map<int, uint64_t> fills, violations, shared; };
         std::string m_cache;
-        std::vector<std::unique_ptr<PartitionScheme>> m_schemes;
+        std::vector<const PartitionScheme *> m_view;            // every scheme, in partition order
+        std::vector<int> m_index;                               // its partition[k] number
+        std::vector<std::unique_ptr<PartitionScheme>> m_owned;   // the ones this set built
         std::vector<bool> m_strict;
         std::vector<Stats> m_stats;
     };

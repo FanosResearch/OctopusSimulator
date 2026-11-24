@@ -479,8 +479,15 @@ groups x 4 banks; option: the 4 bank groups). Decisions (2026-11-24):
   MCsim's own decode. A key to override the mapping from Octopus (`mcsim_address_mapping`) is a
   separate, optional step.
 - Violations are counted at `MCsimInterface`: a DRAM access whose bank is outside its core's
-  banks. Fills carry the requesting core. Write-backs carry the LLC's id, so they are attributed to
-  the page's owner in the placer's table, as `SharedOutside` does for shared pages.
+  banks. Reads carry the requesting core. A write-back's owner is whoever caused the eviction (the
+  LLC, or in snooping the core whose miss evicted the line), not the line's owner, so write-backs
+  are attributed to the page's owner in the placer's table (not counted when the placer is off).
+- Implementation: MCsim's `AddressMapping::fieldBits` gives each field's position and width;
+  `MCsimInterface` records the bank and bank-group fields in `DramMap` with MCsim's own decode.
+  `dram_bank` and `dram_bank_group` are two registered names of one class. A scheme with
+  `countedAtMemory()` is skipped by the caches' fill counting; `finalizePartitions` hands one copy
+  per signature to the `DRAM` `PartitionSet` in `DramMap` (`watch`, keeping its `partition[k]`
+  number), whose rows `Partitions.csv` prints after the caches'.
 - Refused unless `main_memory_type` is MCsim (fixed-latency memory has no banks).
 - Overlap with colour or LLC bank bits is handled by joint placement (P5), which comes first.
 - Known MCsim limit: the decode keeps 32 bits of the line address (`unsigned tempA`), so address

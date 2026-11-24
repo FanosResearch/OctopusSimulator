@@ -9,6 +9,8 @@
 #include <cstdlib>
 #include "../header/MCsimInterface.h"
 #include "../header/Logger.h"
+#include "DramMap.h"
+#include "PagePlacer.h"
 
 using namespace std;
 
@@ -49,6 +51,19 @@ namespace octopus
             1,
             1);
         m_mcsim->setCPUClockSpeed(core_clock_mhz * 1000000ull);
+
+        // where the loaded .ini's AddressMapping puts the DRAM bank fields, for DRAM bank
+        // partitioning (DramMap; fields of MCsim's memOrg: 1 BankGroup, 2 Bank; bit positions in
+        // the line address, so + 6 in the byte address)
+        {
+            unsigned blo = 0, bw = 0, glo = 0, gw = 0;
+            bool hb = m_mcsim->dramFieldBits(2, blo, bw), hg = m_mcsim->dramFieldBits(1, glo, gw);
+            MCsim::MultiChannelMemorySystem *mc = m_mcsim;
+            if (hb || hg)
+                DramMap::instance().set(hb ? (int)blo + 6 : 0, hb ? (int)bw : 0, hg ? (int)glo + 6 : 0, hg ? (int)gw : 0,
+                                        [mc](uint64_t a, unsigned &bg, unsigned &b) { mc->dramDecode(a, bg, b); });
+        }
+        m_num_cores = num_cores;
 
         MCsim::TransactionCompleteCB *read_cb = new MCsim::MCsimCallback<MCsimInterface, void, unsigned, uint64_t, uint64_t>(this, &MCsimInterface::read_callback);
         MCsim::TransactionCompleteCB *write_cb = new MCsim::MCsimCallback<MCsimInterface, void, unsigned, uint64_t, uint64_t>(this, &MCsimInterface::write_callback);
@@ -95,6 +110,12 @@ namespace octopus
                      << " owner " << ready_msg.owner << (ready_msg.data == NULL ? " READ" : " WRITE") << " pending " << m_pending_requests.size() << endl;
             if (m_mcsim->addRequest(ready_msg.owner, ready_msg.addr, ready_msg.data == NULL, m_llc_line_size)) // 1 -> Read, 0 -> Write
             {
+                // DRAM bank partitioning: a read counts for its requester. A write-back's owner is
+                // whoever caused the eviction (the LLC, or the core whose miss evicted the line), not
+                // the line's owner, so it counts for the core the page was placed for (none when unplaced)
+                DramMap::instance().onAccess(ready_msg.data == NULL && (int)ready_msg.owner < m_num_cores
+                                                 ? (int)ready_msg.owner : PagePlacer::instance().frameOwner(ready_msg.addr),
+                                             ready_msg.addr);
                 // Design B: request has entered DRAM (mirrors MainMemoryController's stamp).
                 Logger::getLogger()->event(ready_msg.msg_id, Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::ENTER);
                 Logger::getLogger()->trace(ready_msg, Logger::Role::DRAM, (uint32_t)m_id, Logger::Phase::ENTER);

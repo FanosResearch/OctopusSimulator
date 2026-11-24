@@ -20,7 +20,7 @@ below can be selected, swept, or combined without touching C++.
 | Arbitration | FCFS, FR-FCFS, RR, Weighted-RR, Harmonic-RR, TDM, GRROF |
 | Cache hierarchy | Arbitrary depth, private/shared, multi-bank LLC (line or page interleave), data-array sub-banks, non-blocking (MSHRs, WB/refill buffers) |
 | Replacement | LRU, FIFO, Random |
-| Predictable caching | Way, set (page colour) and LLC-bank partitioning with a page placer, predictable coherence protocols |
+| Predictable caching | Way, set (page colour), LLC-bank and DRAM-bank partitioning with a page placer, predictable coherence protocols |
 | Main memory | Fixed-latency model, or cycle-accurate DRAM via MCsim |
 | Operating modes | Standalone (trace-driven), full-system (gem5 Arm/Linux, MacSim, MCsim) |
 | Monitoring | Per-request per-stage latency, worst-case tracking, filterable CSV traces |
@@ -99,16 +99,21 @@ Several schemes can apply to one cache.
 | `way` | ways of a set | the cache, on fill and victim choice. `way_partition(s)` is its alias |
 | `colour` (set partitioning) | page colours: set-index bits above the page offset | the page placer |
 | `bank` | banks of a multi-bank LLC (needs page interleave) | the page placer |
+| `dram_bank`, `dram_bank_group` | MCsim's DRAM banks (bank group x bank: 16) or bank groups (4), at the bits the loaded `.ini`'s `AddressMapping` gives them; needs MCsim | the page placer; the memory controller counts the accesses |
 
 - **Page placer** (`page_placer(i),1` on the system): an OS-style page allocator in
   the trace path. A page's first access gets a fresh frame whose colour and bank the
-  core owns; one page table serves all cores, so shared pages stay coherent.
+  core owns; one page table serves all cores, so shared pages stay coherent. Schemes may
+  share address bits (DRAM bank and colour bits do under the default FRFCFS mapping): each
+  frame then satisfies all of them, and a core whose units disagree on a shared bit is
+  refused at startup. A core's pages go round-robin over every combination of its units.
 - **Report:** `Partitions.csv` in the report directory lists, per cache, scheme and
   core, the fills, the **violations** (fills outside the core's units) and the fills
-  into pages placed for another core (shared data). `partition[k].strict(i),1`
-  stops the run on the first violation.
-- Under gem5 full system, page allocation is the guest kernel's: colour and bank
-  partitions report violations but are not enforced.
+  into pages placed for another core (shared data). DRAM schemes have `DRAM` rows: their
+  fills are DRAM accesses (reads for the requester, write-backs for the page's owner).
+  `partition[k].strict(i),1` stops the run on the first violation.
+- Under gem5 full system, page allocation is the guest kernel's: colour, bank and DRAM
+  bank partitions report violations but are not enforced.
 - Predictable cache-coherent protocols (see Coherence protocols above)
 - Per-request **worst-case latency** tracking to support timing analysis
 

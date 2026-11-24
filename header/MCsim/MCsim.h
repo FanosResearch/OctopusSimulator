@@ -50,6 +50,10 @@ namespace MCsim
 		bool addRequest(unsigned int requestorID, unsigned long long address, bool R_W, unsigned int size, unsigned long long reqID);
 		void setCPUClockSpeed(uint64_t cpuClkFreqHz);
 		void update();
+		// Octopus (DRAM bank partitioning): the bit layout of a memOrg field in the line address of
+		// channel 0, and the bank group / bank MCsim's own decode gives an address.
+		bool dramFieldBits(unsigned field, unsigned &lo, unsigned &width);
+		void dramDecode(unsigned long long address, unsigned &bank_group, unsigned &bank);
 		void printStats(bool finalStats);
 		bool willAcceptTransaction();
 		bool willAcceptTransaction(uint64_t addr);

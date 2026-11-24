@@ -14,6 +14,10 @@ namespace MCsim
 		AddressMapping(const std::string &format, const unsigned int (&memTable)[6]);
 		void addressMapping(Request *request);
 		unsigned int lowestBitsValue(unsigned int bank, unsigned int bits);
+		// Octopus: where `field` (memOrg) sits in the line address (byte address >> 6): its lowest
+		// bit and its width, from the AddressMapping string and the device geometry. False when
+		// the mapping does not name the field.
+		bool fieldBits(unsigned field, unsigned &lo, unsigned &width) const;
 
 	private:
 		std::vector<std::pair<unsigned int, unsigned int>> decodeIndex;
