@@ -379,10 +379,11 @@ llc_controller.m_data_handler.partition[1].owners(s),0:0-127;1-3:128-255
 | `LlcBankPartition` | same, via the bank group (`AddressMap::banks`); needs page interleave | `PagePlacer`; each bank counts violations | P4 |
 | `SubBankPartition` | same, via `AddressMap::subBank` | `PagePlacer` | later |
 | `DramBankPartition` | same, via MCsim's address mapping (section 6.9) | `PagePlacer`; `MCsimInterface` counts violations | P6 |
-| `MshrPartition` | `admit` | the cache | later |
+| `MshrPartition` (`mshr`) | `admit`, `allocate`/`release` (section 6.10) | the cache, on admitting a new miss | P7 |
+| `PwbPartition` (`pwb`) | same, on a write-back buffer entry (section 6.10) | the cache, on admitting a new miss (requester mode) | P8 |
 
-Ownership types: `StaticOwnership` (P1). Later: `OverlappingOwnership` (CAT-style),
-`UtilityOwnership` (UCP).
+Ownership types: `StaticOwnership` (P1), `OverlappingOwnership` (`cat`, Intel CAT style,
+section 6.11, P9). Later: `UtilityOwnership` (UCP).
 
 A violation is a fill whose unit is outside the requester's allowed units: the scheme's
 `inPartition(core, addr, set, way)` returns false. `PartitionSet` counts fills and violations per
@@ -493,6 +494,89 @@ groups x 4 banks; option: the 4 bank groups). Decisions (2026-11-24):
 - Known MCsim limit: the decode keeps 32 bits of the line address (`unsigned tempA`), so address
   bits 38 and up are dropped. Bank bits are below that; rows of high trace addresses alias.
 
+### 6.10 MSHR and write-back buffer partitions
+
+Ways, colours, LLC banks and DRAM banks split space. MSHRs and the write-back buffer (PWB) are a
+second interference channel: they bound how many misses and evictions a cache has in flight, and
+one core can hold all of them. Today the LLC turns away a new miss when all `num_mshr` MSHRs are
+in use, whoever holds them (`CacheController::canAdmitRequest`; the run's "admit-fail cycles
+(MSHR/PWB full)" counter). These two schemes give each core its own entries. They matter only at
+a shared cache; on a private L1 every entry already belongs to one core.
+
+State of the code (2026-11-24):
+
+- `PartitionScheme::admit` exists but nothing calls it.
+- MSHRs are the controller's `m_pending_requests`, one entry per line address: a new key is a new
+  miss, and requests from other cores to the same line join it.
+- Every LLC victim goes to the PWB (`moveLine2WB`, from the fill in `updateLineData(addr, data,
+  core)`), clean or dirty, and leaves it when its write-back completes (`updateLineBits`). Entries
+  are issued oldest first over all cores (`addressOfLinePendingWB`).
+- `pwb_size` is enforced only at an L1's CPU intake (`demandAdmissionBlocked`). At the LLC the PWB
+  is unbounded; the comment in `canAdmitRequest` that it is "enforced strictly at fill time" is
+  out of date (`fillWouldOverflowPwb` has no caller).
+
+Design:
+
+- **Units** are entries: `num_mshr` for `mshr`, `pwb_size` for `pwb`. Owners use the usual
+  syntax, so `0:0-3;1-3:4-15` gives core 0 four entries and cores 1-3 twelve shared ones. A scheme
+  is refused when its size is unbounded (-1).
+- **Entries hold a unit.** A new entry takes a free unit its core owns and keeps it until the
+  entry frees. With a disjoint ownership this is a per-core quota; with an overlapping one
+  (section 6.11) two cores draw on their common units. The scheme keeps the unit map, so the
+  hooks become stateful: `admit(core, addr)` asks whether a unit is free, `allocate(core, addr)`
+  takes one, `release(addr)` frees it. `PartitionSet` forwards all three; with no scheme they
+  return at once.
+- **MSHR** (`mshr`, P7). `canAdmitRequest` calls `admit` for a brand-new miss, after the existing
+  global check. The miss is charged to the core that opened it; a request from another core that
+  joins it takes no unit. `allocate` runs where a new `m_pending_requests` key is inserted,
+  `release` where it is erased. A turned-away miss waits in the queue and counts as an admit-fail
+  cycle, as today.
+- **PWB** (`pwb`, P8). An entry is charged by `partition[k].pwb_owner(s)`:
+  - `requester` (default): the core whose fill evicted the line. The gate is in `canAdmitRequest`:
+    a core with no free PWB unit cannot open a new miss. A fill is never refused (a response must
+    always proceed, see the back-pressure row in section 9), so a core's entries can exceed its units by
+    at most its outstanding misses: entries(c) <= units(c) + mshr(c).
+  - `victim`: the core that last placed the line's data in this cache (its fill, or an L1
+    write-back into it). This needs a new field, `GenericCacheLine::placed_by`, set on every fill
+    and write into the line. The victim is chosen only at fill time, so no admission gate is
+    possible: the entry is charged to the victim's core, and an entry with no free unit of that
+    core is counted as a violation. This mode is for accounting (who occupies the buffer), not
+    isolation: core A's evictions of core B's lines are charged to B.
+  - Without a way partition the two modes differ. With one, the victim is in the requester's ways,
+    so they agree except on shared lines.
+- **Report.** `Partitions.csv` keeps its columns. For these schemes `fills` is entries allocated,
+  `violations` is entries charged beyond the core's units (always 0 for `mshr` and for `pwb`
+  requester mode, by construction), and the run prints each core's peak entries next to its units.
+- **Not covered: drain order.** A quota bounds how many entries a core holds, not how long they
+  wait. PWB entries are issued oldest first over all cores and then meet FR-FCFS write batching at
+  MCsim. A per-core round-robin issue order (`pwb_drain(s),rr`) is an optional later step (P10),
+  with its own test. The LLC's global `pwb_size` bound is a separate decision too: enforcing it
+  changes every LLC run, so it is not part of P8.
+
+### 6.11 OverlappingOwnership (Intel CAT style)
+
+`StaticOwnership` already accepts two cores naming the same unit; only the cores it does not list
+are limited to the unclaimed units. `cat` adds what Cache Allocation Technology defines on top:
+
+- **Capacity bit masks.** `owners` gives a hex mask per core group, bit u = unit u:
+  `0:0x00f;1:0x0f0;2-3:0xff0`. Cores not listed get every unit (CAT's default class of service
+  owns the whole cache), unlike `static`.
+- **Contiguous masks.** CAT requires the set bits of a mask to be contiguous and non-empty; a mask
+  that is not is refused at startup. `partition[k].contiguous(i),0` lifts the rule (Arm MPAM and
+  AMD allow arbitrary masks).
+- **Reprogramming at run time.** System software changes masks while tasks run.
+  `partition[k].schedule(s),<cycle>@<owners>|<cycle>@<owners>` applies a new mask set at each
+  cycle, through `Ownership::tick`. This needs `PartitionSet::tick(cycle)` called by the cache
+  each cycle (one empty check when no scheme is configured). As on CAT hardware, lines in units a
+  core loses stay and still hit; only new fills follow the new masks. A run with no `schedule` is
+  identical to `static` with the same masks.
+- **Report.** Sharing is the point of overlap, so two columns are appended to `Partitions.csv`
+  for every scheme: `shared_fills` (fills into a unit that another core also owns) and
+  `evicted_by_other` (this core's lines evicted by another core's fill, using `placed_by` from
+  P8). `partition.sh` checks the new header.
+- It works with any scheme, as every ownership does: overlapping ways, colours, banks, or MSHR and
+  PWB entries (a shared pool next to private entries).
+
 ## 7. Implementation plan
 
 Each step is one commit with its gate. Steps B (banking) and P (partitioning) share A1.
@@ -514,6 +598,10 @@ Each step is one commit with its gate. Steps B (banking) and P (partitioning) sh
 | D1 | docs: `SUPPORTED_CONFIGURATIONS.md`, manual section, presets | |
 | P5 | joint placement in `PagePlacer` (section 6.6): one frame for all placing schemes; refuse only a core with no common frame | `partition.sh` unchanged; unit test: two placing schemes on overlapping bits place every page inside both, an infeasible ownership is refused with a message (colours and LLC banks are disjoint by construction, so the first real overlap is P6) |
 | P6 | `DramBankPartition` (section 6.9) | DRAM-bank confinement per core on private traces, zero violations with the placer on; colour + DRAM bank under the default FRFCFS mapping; a changed `AddressMapping` followed; refused without MCsim; regression byte-identical |
+| P7 | stateful `admit`/`allocate`/`release` in `PartitionScheme` and `PartitionSet`, called from `canAdmitRequest` and the `m_pending_requests` insert/erase; `MshrPartition` (`mshr`) in a new file (section 6.10) | regression and `banked.sh` byte-identical with no scheme; with `mshr`, every core's peak entries <= its units; a streaming core no longer delays a victim core's misses on MSHRs (victim core's worst-case latency drops); refused when `num_mshr` is -1 |
+| P8 | `PwbPartition` (`pwb`) in the same file; `pwb_owner(s)` = `requester` (default) or `victim`; `GenericCacheLine::placed_by` (section 6.10) | byte-identical with no scheme; requester mode: entries(c) <= units(c) + mshr(c) on every run; victim mode: charges match a trace count of evicted lines by placing core; refused when `pwb_size` is -1 |
+| P9 | `OverlappingOwnership` (`cat`): hex masks, contiguity check, `schedule`, `PartitionSet::tick`; `shared_fills` and `evicted_by_other` columns (section 6.11) | the contract tests pass with `cat`; `cat` with disjoint masks gives the same timing as `static`; a non-contiguous mask is refused; a scheduled mask change takes effect at its cycle (fills before and after) |
+| P10 | optional: per-core round-robin PWB issue order (`pwb_drain(s),rr`) | default order byte-identical; with `rr`, no core's write-back waits behind more than one entry of each other core in the PWB |
 
 B1 to B5 give stable a multi-bank LLC. P1 can start after A1, independent of B.
 
@@ -552,4 +640,6 @@ B1 to B5 give stable a multi-bank LLC. P1 can start after A1, independent of B.
 | Hook overhead | hooks run on every fill | empty `PartitionSet` fast path; P1 timing gate |
 | Placing schemes sharing bits | e.g. banks interleaved at 4 KiB inside colour bits, DRAM bank bits inside colour bits | joint placement (P5); a core with no common frame is refused |
 | gem5 full system | page allocation is Linux's | violations reported only |
+| MSHR/PWB gates and back-pressure | a gate that refuses a response or a write-back deadlocks the system (the request/response shared-queue deadlock fixed in eb9744a6) | gates act only on brand-new demand misses in `canAdmitRequest`; fills, snoops and write-backs always proceed; RR/TDM `banked.sh` runs with the schemes on |
+| PWB quota overshoot | requester mode allows entries(c) up to units(c) + mshr(c) | stated bound; checked in P8; an `mshr` partition next to `pwb` caps it |
 | Merge with `network` | both branches touch `homeOf` and the builders | same names, parameters and semantics; `network` adopts `AddressMap` at merge |
