@@ -170,13 +170,15 @@ int main()
         CHECK(combos.size() == 2, "core 0 uses %zu unit combinations, 2 fit", combos.size());
         CHECK(pp.place(0, 0x5048) == pp.place(0, 0x5048), "a page placed twice moved");
 
-        // disjoint fields (12-13, 14-15) place as before P5: per-scheme round-robin, all 4 x 4 combinations
+        // disjoint fields (12-13, 14-15): the odometer uses all 4 x 4 combinations, each equally often
+        // (lockstep per-scheme cursors used only the 4 diagonal ones)
         FieldScheme c("fieldC", 12, 2), d("fieldD", 14, 2);
         own(c, ""); own(d, "");
         pp.configure(true, {&c, &d}, 4);
-        std::set<std::pair<int, int>> all16;
-        for (uint64_t page = 0; page < 64; page++) { uint64_t f = pp.place(2, page << 12); all16.insert({c.unitOf(f), d.unitOf(f)}); }
-        CHECK(all16.size() == 4, "disjoint: per-scheme round-robin gives %zu combinations, expected 4 (cursor i, i)", all16.size());
+        std::map<std::pair<int, int>, int> all16;
+        for (uint64_t page = 0; page < 64; page++) { uint64_t f = pp.place(2, page << 12); all16[{c.unitOf(f), d.unitOf(f)}]++; }
+        bool even = all16.size() == 16; for (auto &kv : all16) even = even && kv.second == 4;
+        CHECK(even, "disjoint: %zu of 16 combinations used, not 4 pages each", all16.size());
         pp.configure(false, {}, 0);
     }
     CHECK(PartitionRegistry::schemes().count("way") == 1, "way scheme not registered");

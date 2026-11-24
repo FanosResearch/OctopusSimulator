@@ -12,7 +12,7 @@ namespace octopus
 {
     void PagePlacer::configure(bool enabled, const std::vector<const PartitionScheme *> &schemes, int num_cores)
     {
-        m_schemes.clear(); m_table.clear(); m_frame_owner.clear(); m_next.clear(); m_cursor.clear(); m_pages_by_core.clear();
+        m_schemes.clear(); m_table.clear(); m_frame_owner.clear(); m_next.clear(); m_pages_by_core.clear();
         m_core_units.clear(); m_shared_bits = false;
         m_on = false;
         if (!enabled) return;
@@ -49,7 +49,7 @@ namespace octopus
         m_page_bits = (int)log2((double)page);
 
         // Do the schemes share address bits (placing for one moves another)? Then a frame must
-        // satisfy all of them at once (joint placement, P5); disjoint schemes place as before.
+        // satisfy all of them at once (joint placement, P5). Only the startup message depends on it.
         for (uint64_t k = 0; k < 64 && !m_shared_bits; k++)
         {
             std::vector<int> u;
@@ -114,7 +114,7 @@ namespace octopus
             for (size_t i = m_schemes.size(); i-- > 0;) { t[i] = mine[i][r % mine[i].size()]; r /= mine[i].size(); }
             if (satisfiable(t)) cu.tuples.push_back(t);
         }
-        cu.joint = cu.tuples.size() != combos;
+        cu.used.assign(cu.tuples.size(), false);
         return cu;
     }
 
@@ -152,19 +152,11 @@ namespace octopus
 
         CoreUnits &cu = coreUnits(core);
         if (cu.tuples.empty()) { std::cerr << "PagePlacer: " << conflict(core) << std::endl; exit(2); }
-        std::vector<int> units;
-        if (cu.joint)
-            units = cu.tuples[cu.cursor++ % cu.tuples.size()];   // round-robin over what a frame can hold
-        else
-            for (size_t i = 0; i < m_schemes.size(); i++)
-            {
-                const PartitionScheme *s = m_schemes[i];
-                std::vector<int> mine;
-                for (int u = 0; u < s->units(); u++) if (s->owners().owns(core, u)) mine.push_back(u);
-                size_t &c = m_cursor[{i, core}];
-                units.push_back(mine[c % mine.size()]);   // Ownership::invalid() guarantees one unit
-                c++;
-            }
+        // odometer over the core's combinations (the last scheme steps fastest), so every pair of
+        // units it owns is used; with one scheme this is plain round-robin over its units
+        size_t n = cu.cursor++ % cu.tuples.size();
+        const std::vector<int> &units = cu.tuples[n];
+        if (!cu.used[n]) { cu.used[n] = true; cu.distinct++; }
         uint64_t fp = frameFor(units);
         m_table[pg] = fp;
         m_frame_owner[fp] = core;
@@ -176,7 +168,14 @@ namespace octopus
     {
         os << "PagePlacer: " << m_table.size() << " pages placed (";
         bool first = true;
-        for (auto &kv : m_pages_by_core) { os << (first ? "" : ", ") << "core " << kv.first << ": " << kv.second; first = false; }
+        for (auto &kv : m_pages_by_core)
+        {
+            os << (first ? "" : ", ") << "core " << kv.first << ": " << kv.second;
+            auto it = m_core_units.find(kv.first);
+            if (it != m_core_units.end() && m_schemes.size() > 1)
+                os << " pages on " << it->second.distinct << "/" << it->second.tuples.size() << " unit combinations";
+            first = false;
+        }
         os << ")" << std::endl;
     }
 }

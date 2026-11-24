@@ -403,9 +403,14 @@ bank. They are enforced where addresses are chosen, as an OS page allocator does
 
 `PagePlacer` sits in the trace path (`src/CPU.cpp`), in front of the L1s:
 
-- A page's first access picks, for every scheme with `placesAddresses()`, the next unit the core
-  owns (round-robin), and composes them by chaining `withUnit()`. Until P5 this needs the schemes'
-  bits to be disjoint: with a shared bit, a later `withUnit()` overwrites an earlier one.
+- A page's first access picks the core's next combination of owned units, one per scheme with
+  `placesAddresses()`, and composes them by chaining `withUnit()`. Pages go round-robin over all
+  the core's combinations in odometer order (the last scheme steps fastest), so a core owning 2
+  banks and 2 colours uses all 4 pairs. (Before, each scheme kept its own cursor and all cursors
+  advanced together, so only lcm(a, b) of the a x b combinations were used: 2 of 4 here, half the
+  core's capacity. With one scheme both are plain round-robin.) Until P5 the schemes' bits had to
+  be disjoint: with a shared bit, a later `withUnit()` overwrites an earlier one. The run's
+  `PagePlacer:` line reports, per core, how many of its combinations its pages use.
 - Joint placement (P5): the frame is chosen for all placing schemes at once. The placer walks
   candidate frames and takes the first free one whose `unitOf()` is a unit the core owns for every
   scheme, keeping the round-robin over the core's units for each scheme where the shared bits allow

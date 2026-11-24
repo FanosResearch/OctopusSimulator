@@ -76,6 +76,12 @@ if [ -f "$ROOT/src/Partitioning/LlcBankPartition.cpp" ]; then
   run bank+colour   "$OUT/Snoop_2B_s6.csv" "$PRIV" -p "$LB.partition[0].scheme(s)=bank" -p "$LB.partition[0].owners(s)=0-1:0;2-3:1" \
                     -p "$LB.partition[1].scheme(s)=colour" -p "$LB.partition[1].owners(s)=0:0;1:1;2:0;3:1" $PL
                                                                                 expect bank-and-colour-together 0 "= 0" "= 0"
+  # every core owns both banks and both colours: its pages must cover all 4 (bank, colour) pairs
+  # (lockstep per-scheme round-robin covered only (0,0) and (1,1), half its capacity)
+  run bank-x-colour "$OUT/Snoop_2B_s6.csv" "$PRIV" -p "$LB.partition[0].scheme(s)=bank" -p "$LB.partition[0].owners(s)=0-3:0-1" \
+                    -p "$LB.partition[1].scheme(s)=colour" -p "$LB.partition[1].owners(s)=0-3:0-1" $PL
+  if [ "$RC" = 0 ] && [ "$(grep -o 'pages on [0-9]*/[0-9]*' "$D/out" | sort -u)" = "pages on 4/4" ]; then expect bank-x-colour-all-pairs 0 "= 0" "= 0"
+  else bad "bank-x-colour-all-pairs: $(grep 'pages placed' "$D/out")"; fi
 fi
 [ $fails = 0 ] && echo "partition: all PASS" || echo "partition: $fails FAIL"
 exit $fails

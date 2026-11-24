@@ -3,8 +3,8 @@
  *
  * Source-side enforcement of placing partition schemes (docs/LLC_Banking_and_Partitioning_Design.md
  * s6.6), as an OS page allocator does. It sits in the trace path (CPU.cpp), in front of the L1s:
- * the first access to a page picks, for every placing scheme, a unit the core owns (round-robin)
- * and gives the page a fresh frame with those units. Schemes may share address bits (P5): the
+ * the first access to a page picks the core's next combination of owned units, one per placing
+ * scheme (round-robin over all combinations), and gives the page a fresh frame with those units. Schemes may share address bits (P5): the
  * frame must then satisfy all of them at once, and only the core's unit combinations that some
  * frame satisfies are used; a core with none is refused. One page table
  * serves all cores, so a shared page has one frame and coherence is unaffected; its units come
@@ -61,10 +61,10 @@ namespace octopus
         bool matches(uint64_t frame, const std::vector<int> &units) const;      // every unitOf agrees
         bool satisfiable(const std::vector<int> &units) const;
 
-        // The core's owned unit combinations that a frame can satisfy. `joint` = some owned
-        // combination cannot (the schemes share bits): place round-robin over `tuples` instead of
-        // per scheme. Disjoint schemes never set it, so they place exactly as before P5.
-        struct CoreUnits { bool joint = false; std::vector<std::vector<int>> tuples; size_t cursor = 0; };
+        // The core's owned unit combinations that a frame can satisfy, in odometer order (the last
+        // scheme steps fastest). Pages go round-robin over them, so a core uses every pair of units
+        // it owns; `distinct` counts the combinations used so far (report()).
+        struct CoreUnits { std::vector<std::vector<int>> tuples; size_t cursor = 0; std::vector<bool> used; size_t distinct = 0; };
         CoreUnits &coreUnits(int core);
 
         bool m_on = false;
@@ -73,7 +73,6 @@ namespace octopus
         std::unordered_map<uint64_t, uint64_t> m_table;          // original page -> frame page
         std::unordered_map<uint64_t, int> m_frame_owner;         // frame page -> core placed for
         std::map<std::vector<int>, uint64_t> m_next;             // per unit tuple: next candidate
-        std::map<std::pair<size_t, int>, size_t> m_cursor;       // (scheme, core): round-robin position
         std::map<int, uint64_t> m_pages_by_core;
         std::map<int, CoreUnits> m_core_units;
         bool m_shared_bits = false;
