@@ -158,11 +158,30 @@ Banked directory runs need the race fixes `network` made in commit 973fe821, por
 the NoC parts:
 
 - PutE goes to `homeOf(addr)`; the MOESI L1 identifies home data with `isHome(msg.from)`.
-- `MESI_LLC_directory_v2`, `MOESI_LLC_directory_v2`, `MOESI_directory_v2` FSM tables: stale
-  PutS / last_PutS and PutM_Data_fromNonOwner are acknowledged; MOESI `EI_a + Fwd_GetS`.
+- MOESI: the `MOESI_LLC_directory_v2` and `MOESI_directory_v2` tables (MOESI `EI_a + Fwd_GetS`).
+  MESI: `MESI_directory_banked`, an L1 table whose owner can be evicted while it still collects
+  acks.
+- Stale Puts are acknowledged, not Faults: PutS / last_PutS, and PutM / PutE from a core that is no
+  longer the owner, in the LLC states reached by the LLC's own eviction or a refetch. On `stable`
+  these cells are in the existing `MSI_LLC_directory` and `MESI_LLC_directory` tables (7fedc5b1);
+  `MESI_LLC_directory` is now identical to `network`'s `MESI_LLC_directory_v2`.
 
 Not ported: admission `restoreLast`, the Classifier, transmit reservations. They are NoC
 mechanisms.
+
+The B4 gate first ran under FCFS only. Running RR and TDM (test/banking/README.md) exposed three
+timing races that banking makes reachable; one LLC never hit them on these traces:
+
+| Commit | Table | Race | Cell |
+|---|---|---|---|
+| 7fedc5b1 | directory MSI/MESI LLC | a Put loses a race with the LLC's eviction or a new owner | Fault becomes PutAck |
+| 722eb8f1 | snooping MSI/MESI/MOESI LLC | a late PutM arrives while the evicted line is refetched (`NM_d`, `NE_d`/`NIorS_d`) | Fault becomes ignore, as in `N` |
+| f4d9c2eb | `MOESI_directory_v2` (L1) | an owner still in `IS_d` took a younger `InvM` ahead of a held `Fwd_GetS` | `IS_d + InvM` stalls, as `SM_ad` does |
+
+The last one is MOESI only: with `O` the LLC need not wait after `E + GetS`, so it can evict at once
+and invalidate an owner that has not received its data. MESI's LLC waits in `S_d` and stalls
+`Replacement` there. Every LLC-bound message of a line still reaches only its home bank (checked by
+`check_bank_trace.py` on every run): banking changes the timing, not the protocol.
 
 ### 4.8 Logging and visualization
 
@@ -439,7 +458,7 @@ Each step is one commit with its gate. Steps B (banking) and P (partitioning) sh
 | B1 | home map plumbing: `homeOf`/`isHome` in controller and protocol handler; factory installs it | byte-identical |
 | B2 | system builder: `llc_banks`, `llc_controller[k]` on both buses; memory replies to the requester | 1 bank byte-identical; 2-bank directory MSI EEMBC |
 | B3 | addressing: every LLC-bound emit names `homeOf(addr)`; LLC filter; assertion | snooping MSI/MESI/MOESI EEMBC at 1/2/4 banks; one supplier per request (trace check) |
-| B4 | directory race fixes and v2 FSM tables from `network` 973fe821 | directory MSI/MESI/MOESI EEMBC at 1/2/4 banks, FCFS/RR/TDM |
+| B4 | directory race fixes and v2 FSM tables from `network` 973fe821 (and the RR/TDM fixes of section 4.7) | directory MSI/MESI/MOESI EEMBC at 1/2/4 banks, FCFS/RR/TDM |
 | B5 | set-index fix active for banks; Logger/octoviz per-bank check | every set of every bank used (occupancy test); banked results re-baselined |
 | B6 | optional: broadcast capacity check skips non-home banks | timing difference measured and documented |
 | B7 | `sub_banks`: per-sub-bank data-array occupancy | same-vs-different sub-bank latency gap matches the occupancy formula |
