@@ -51,9 +51,11 @@ namespace octopus
             DecSharers,
             Fault,
             SendEData,
+            SendInvM,            // MESI_LLC_directory_v3: invalidate the owner with InvM (MESIDirectory::REQUEST_TYPE_INVM)
         };
 
         virtual void readEvent(Message &msg, GenericCacheLine &cache_line, LLCMSIDirectory::EventId *out_id) override;
+        int m_ev_last_pute_nonowner = -2;     // last_PutE_fromNonOwner (MESI_LLC_directory_v3)
 
         virtual std::vector<ControllerAction> handleAction(std::vector<int> &actions, Message &msg,
                                                             GenericCacheLine &cache_line, int next_state) override;

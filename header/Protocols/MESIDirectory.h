@@ -18,6 +18,11 @@ namespace octopus
     public:
         static const uint64_t REQUEST_TYPE_PUTE             = 7;
         static const uint64_t RESPONSE_TYPE_EXECLUSIVE_DATA = 0xFFFFFFFF;
+        // The home's invalidation of the line's owner (E or M) when it evicts the line. Unlike Inv,
+        // which a sharer acks, the owner answers it once, with the data. An L1 still waiting for
+        // its exclusive data (IS_d) can tell the two apart and waits for the data instead of
+        // acking first and returning the data later on the other bus (MESI_directory_banked_v2).
+        static const uint64_t REQUEST_TYPE_INVM = 11;   // not 10: Message::isInvalidation() reads 10 as the snoop INV and gates it per line
 
     protected:
         enum class EventId
@@ -35,6 +40,7 @@ namespace octopus
             InvAck,
             lastInvAck,
             Data_execlusive,
+            InvM,                // only in tables that define it (MESI_directory_banked_v2)
         };
 
         enum class ActionId

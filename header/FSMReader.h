@@ -48,6 +48,8 @@ namespace octopus
         // reverse lookups (id -> name) for readable coherence traces / debugging
         std::string getStateName(int id);
         std::string getEventName(int id);
+        // id of the named event, -1 when the table does not define it (events only newer tables carry)
+        int getEventId(const std::string &event_name) const;
 
     private:
         class FSMState

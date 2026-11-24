@@ -96,6 +96,12 @@ namespace octopus
         return std::to_string(id);
     }
 
+    int FSMReader::getEventId(const std::string &event_name) const
+    {
+        auto it = m_eventIds.find(event_name);
+        return it == m_eventIds.end() ? -1 : it->second;
+    }
+
     bool FSMReader::isValidState(int state)
     {
         return this->m_states[state].is_data_valid;

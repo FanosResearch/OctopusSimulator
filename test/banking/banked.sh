@@ -9,7 +9,7 @@
 # plus the end-of-run "Average" footer. JOBS sets the parallelism; ARB overrides the arbiter;
 # EXTRA="-p ..." adds settings to every run. PROPS=1 also traces every run and checks the banking
 # properties of s8.3 with check_bank_trace.py (home, single, reached); the trace is deleted after.
-# BMDIR=<dir> and BENCHES="a b" run other traces, e.g. the SPLASH subset (see splash_banked.sh). ONLY=<regex> selects families; DIR_MESI_L1, DIR_MESI_LLC, DIR_MOESI_L1, DIR_MOESI_LLC pick the directory FSM tables.
+# BMDIR=<dir> and BENCHES="a b" run other traces, e.g. the SPLASH subset (see splash_banked.sh). ONLY=<regex> selects families; DIR_MSI_L1, DIR_MSI_LLC, DIR_MESI_L1, DIR_MESI_LLC, DIR_MOESI_L1, DIR_MOESI_LLC pick the directory FSM tables.
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUT="$1"; shift; BANKS="${*:-2 4}"; JOBS="${JOBS:-16}"
@@ -21,8 +21,8 @@ FAMILIES=(
   "snoop-msi|MultiCoreSystem_Snoop|"
   "snoop-mesi|MultiCoreSystem_Snoop|$EXCL $(p SNOOP_MESI MESI_splitBus_snooping SNOOP_LLC_MESI MESI_LLC)"
   "snoop-moesi|MultiCoreSystem_Snoop|$EXCL $(p SNOOP_MOESI MOESI_splitBus_snooping SNOOP_LLC_MOESI MOESI_LLC)"
-  "dir-msi|MultiCoreSystem_Directory|"
-  "dir-mesi|MultiCoreSystem_Directory|$(p DIRECTORY_MESI ${DIR_MESI_L1:-MESI_directory_banked} DIRECTORY_LLC_MESI ${DIR_MESI_LLC:-MESI_LLC_directory})"
+  "dir-msi|MultiCoreSystem_Directory|$(p DIRECTORY_MSI ${DIR_MSI_L1:-MSI_directory} DIRECTORY_LLC_MSI ${DIR_MSI_LLC:-MSI_LLC_directory_v2})"
+  "dir-mesi|MultiCoreSystem_Directory|$(p DIRECTORY_MESI ${DIR_MESI_L1:-MESI_directory_banked_v2} DIRECTORY_LLC_MESI ${DIR_MESI_LLC:-MESI_LLC_directory_v3})"
   "dir-moesi|MultiCoreSystem_Directory|$(p DIRECTORY_MOESI ${DIR_MOESI_L1:-MOESI_directory_v2} DIRECTORY_LLC_MOESI ${DIR_MOESI_LLC:-MOESI_LLC_directory_v2})"
 )
 [ -n "${ARB:-}" ] && ARBP="-p bus[0].interconnect_controller.arbiter_type(s)=$ARB" || ARBP=""

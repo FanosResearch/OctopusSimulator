@@ -14,7 +14,7 @@ end-of-run `Average` footer: the simulator can stop early on a protocol Fault wi
 | `banked.sh <dir> [banks...]` | EEMBC on 2 and 4 banks (default), line and page interleave, all six protocol families: 240 runs complete | 50 s |
 | `PROPS=1 banked.sh <dir>` | the same, plus the banking properties of design s8.3 on every run (`check_bank_trace.py`) | 70 s |
 | `splash_banked.sh <dir> [splash_dir]` | the SPLASH subset of s8.1 (ocean, water_nsquared, water_spatial, fmm, lu_non_contig, cholesky): snooping MOESI on 2 banks, both interleaves, with the properties | 4 min |
-| `partition.sh [dir]` | way, colour, LLC bank and DRAM bank partitions, the page placer (joint placement, all unit combinations), `strict`, `Partitions.csv` | 60 s |
+| `partition.sh [dir]` | way, colour, LLC bank, DRAM bank and MSHR partitions, the page placer (joint placement, all unit combinations), `strict`, `Partitions.csv` | 60 s |
 | `subbanks.sh [dir]` | per-sub-bank data-array occupancy against the formula | < 1 s |
 | `mcsim_wrap.sh [bin] [dir]` | MCsim keeps issuing DRAM commands past device cycle 2^32 | 10 s |
 | `unit/addressmap_test.cpp` | AddressMap round trip, home map, colours (build line at the top of the file) | < 1 s |
@@ -44,7 +44,7 @@ no records is noted, not failed (`mi_pingpong` has 4 requests in total).
 | `BMDIR`, `BENCHES` | other trace directory and benchmark list |
 | `EXTRA="-p ..."` | settings added to every run |
 | `JOBS`, `CAP` | parallel runs (16) and per-run timeout in seconds (1800) |
-| `DIR_MESI_L1`, `DIR_MESI_LLC`, `DIR_MOESI_L1`, `DIR_MOESI_LLC` | directory FSM tables |
+| `DIR_MSI_L1`, `DIR_MSI_LLC`, `DIR_MESI_L1`, `DIR_MESI_LLC`, `DIR_MOESI_L1`, `DIR_MOESI_LLC` | directory FSM tables (defaults: `MSI_directory` + `MSI_LLC_directory_v2`, `MESI_directory_banked_v2` + `MESI_LLC_directory_v3`, `MOESI_directory_v2` + `MOESI_LLC_directory_v2`) |
 
 The full check after a protocol change is `banked.sh` with `PROPS=1` under each of the three arbiters,
 plus `regress.sh cmp`. FCFS alone hides timing races that RR and TDM reach.

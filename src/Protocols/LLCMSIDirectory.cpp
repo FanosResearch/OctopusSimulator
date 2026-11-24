@@ -206,7 +206,11 @@ namespace octopus
                 break;
 
             case ActionId::Fault:
-                std::cout << " LLCMSIDirectory: Fault Transaction is detected" << std::endl;
+                std::cout << " LLCMSIDirectory: Fault Transaction is detected (controller " << m_id << ", line state "
+                          << this->m_fsm->getStateName(cache_line.state) << ", addr 0x" << std::hex << msg.addr << std::dec
+                          << ", msg " << msg.msg_id << ", source " << (int)msg.source << ", from " << msg.from << ", owner "
+                          << msg.owner << ", type " << msg.complementary_value << ", data " << (msg.data != NULL)
+                          << ", line owner " << cache_line.owner_id << ")" << std::endl;
                 exit(0);
                 break;
             }
@@ -231,6 +235,13 @@ namespace octopus
         return controller_actions;
     }
 
+    bool LLCMSIDirectory::isLastSharer(const Message &msg)
+    {
+        uint64_t addr_key = msg.addr & ~uint64_t(m_data_handler->getBlockSize() -1);
+        auto it = protocol_counters->find(addr_key);
+        return it != protocol_counters->end() && it->second.size() == 1 && it->second.front() == msg.owner;
+    }
+
     void LLCMSIDirectory::readEvent(Message &msg, GenericCacheLine &cache_line, EventId *out_id)
     {
         switch (msg.source)
@@ -253,7 +264,18 @@ namespace octopus
                     if (msg.owner == cache_line.owner_id)
                         *out_id = EventId::PutM_Data_fromOwner;
                     else
-                        *out_id = EventId::PutM_Data_fromNonOwner;
+                    {
+                        // A stale PutM: its sender stopped being the owner while the PutM was in
+                        // flight (MI_a + Fwd_GetS -> SI_a supplied the data and left it a sharer).
+                        // When it is the one sharer left, the home must leave S as last_PutS does;
+                        // a plain DecSharers stayed in S with no sharer, and the next GetM sent no
+                        // Inv to anyone (directory MESI, TDM, iirflt01).
+                        int last = optionalEvent(m_ev_last_putm_nonowner, "last_PutM_Data_fromNonOwner");
+                        if (last >= 0 && isLastSharer(msg))
+                            *out_id = (EventId)last;
+                        else
+                            *out_id = EventId::PutM_Data_fromNonOwner;
+                    }
                 }
                 else
                     *out_id = EventId::Data_fromLowerInterface;

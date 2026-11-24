@@ -66,6 +66,14 @@ namespace octopus
             }
         }
 
+        // InvM exists only in a table that defines event 13 as InvM (MOESI decodes its own InvM first)
+        if (msg.source == Message::Source::UPPER_INTERCONNECT && msg.data == NULL && msg.complementary_value == REQUEST_TYPE_INVM &&
+            m_fsm->getEventName((int)EventId::InvM) == "InvM")
+        {
+            *out_id = (MSIDirectory::EventId)EventId::InvM;
+            return;
+        }
+
         MSIDirectory::readEvent(msg, out_id);
     }
 }
