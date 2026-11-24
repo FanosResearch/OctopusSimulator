@@ -17,6 +17,8 @@
 #     also with a colour partition on shared address bits and under another .ini mapping;
 #   - an MSHR partition keeps a victim core's worst case near its run alone next to streamers,
 #     and every core's peak entries within its units;
+#   - a write-back buffer partition (requester mode) keeps every core's peak entries within its
+#     units with no violation; victim mode counts;
 #   - configurations that cannot work are refused at startup (exit code 2).
 # Completed runs must have every LatencyReport footer. Prints one line per case; exits non-zero
 # on any failure.
@@ -127,5 +129,26 @@ if [ "$RC" = 0 ] && [ "$np" = 4 ] && [ "$over" = 0 ] && [ "$(wc0)" -lt $((shared
   expect mshr-victim-isolated 0 "= 0" "= 0"; echo "     core 0 worst case $shared_wc shared, $(wc0) with 8 own MSHRs"
 else bad "mshr-victim-isolated: worst case $shared_wc -> $(wc0), $np peaks, $over over their units"; fi
 run mshr-unbounded "$SN" "$ST" -p "llc_controller.num_mshr(i)=-1" $MS -p "$L.partition[0].owners(s)=0:0";  expect mshr-unbounded-refused 2 "" ""
+
+# Write-back buffer partition (s6.10): the same pattern with writes, so an evicted line is dirty in
+# an L1 and holds its entry until the data comes back, on an 8-entry LLC buffer. Requester mode
+# holds a core back while its free units do not exceed its queued requests plus its open misses:
+# no violation, every core's peak within its units. Victim mode charges the core that placed the
+# evicted line and only counts.
+WS="$OUT/wstream"; mkdir -p "$WS"
+awk 'BEGIN { for (i = 0; i < 3000; i++) printf "%x 1 W %d\n", 268435456 + (i * 97 % 4096) * 64, 100 + i * 40 }' > "$WS/trace_C0.trc.shared"
+for c in 1 2 3; do
+  awk -v c=$c 'BEGIN { for (i = 0; i < 40000; i++) printf "%x 1 W %d\n", c * 2^36 + 536870912 + i * 64, 100 + i }' > "$WS/trace_C$c.trc.shared"
+done
+P8="-p $L.pwb_size(i)=8"; PW="-p $L.partition[0].scheme(s)=pwb -p $L.partition[0].owners(s)=0:0-1;1-3:2-7"
+peaks() { np=$(grep -c 'peak [0-9]* of' "$D/out"); over=$(grep -o 'peak [0-9]* of [0-9]*' "$D/out" | awk '$2 > $4' | wc -l); }
+run pwb-req "$SN" "$WS" $P8 $PW; peaks
+if [ "$np" = 4 ] && [ "$over" = 0 ]; then expect pwb-requester-bounded 0 "= 0" "= 0"
+else bad "pwb-requester-bounded: $np peaks, $over over their units"; fi
+run pwb-vic "$SN" "$WS" $P8 $PW -p "$L.partition[0].pwb_owner(s)=victim"; peaks
+if [ "$np" = 4 ] && [ "$(col 5)" -gt 0 ]; then expect pwb-victim-counted 0 "-ge 0" "= 0"
+else bad "pwb-victim-counted: $np peaks, $(col 5) fills"; fi
+run pwb-owner-bad  "$SN" "$WS" $P8 $PW -p "$L.partition[0].pwb_owner(s)=owner";  expect pwb-owner-refused 2 "" ""
+run pwb-unbounded  "$SN" "$WS" -p "$L.pwb_size(i)=-1" $PW;                        expect pwb-unbounded-refused 2 "" ""
 [ $fails = 0 ] && echo "partition: all PASS" || echo "partition: $fails FAIL"
 exit $fails

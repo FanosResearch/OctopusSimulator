@@ -100,7 +100,7 @@ main memory & \file{main_memory_type} & \code{MainMemoryController}, \code{MCsim
 DRAM scheduler & \file{mcsim_scheduler} & \code{FRFCFS}, \code{FCFS}, \code{BLISS}, \code{AMC}, \code{MAG}, \ldots \\
 LLC geometry & \file{llc_controller.m_data_handler.cache_size}, \file{llc_controller.m_data_handler.m_ways_count} & bytes, ways \\
 LLC way partition & \file{llc_controller.m_data_handler.way_partition} & e.g.\ \code{0:0;1-3:1} \\
-LLC partitions & \file{llc_controller.m_data_handler.partition[k].scheme}, \file{.owners}, \file{.strict} & \code{way}, \code{colour}, \code{bank}, \code{dram\_bank}, \code{dram\_bank\_group}, \code{mshr} \\
+LLC partitions & \file{llc_controller.m_data_handler.partition[k].scheme}, \file{.owners}, \file{.strict} & \code{way}, \code{colour}, \code{bank}, \code{dram\_bank}, \code{dram\_bank\_group}, \code{mshr}, \code{pwb} (\file{.pwb_owner}) \\
 page placer & \file{page_placer} & \code{0} off, \code{1} on \\
 LLC banks & \file{llc_banks}, \file{cache_controller[*].home_ids}, \file{home_interleave_shift} & bank count, bank ids, \code{0} line or \code{6} page \\
 data-array sub-banks & \file{*.m_data_handler.sub_banks}, \file{sub_bank_shift} & integers \\

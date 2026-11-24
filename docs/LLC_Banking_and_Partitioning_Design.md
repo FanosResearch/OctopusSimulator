@@ -386,7 +386,7 @@ llc_controller.m_data_handler.partition[1].owners(s),0:0-127;1-3:128-255
 | `SubBankPartition` | same, via `AddressMap::subBank` | `PagePlacer` | later |
 | `DramBankPartition` | same, via MCsim's address mapping (section 6.9) | `PagePlacer`; `MCsimInterface` counts violations | P6 |
 | `MshrPartition` (`mshr`) | `freeUnits`, `allocate`/`release` (section 6.10) | the sender: the request bus holds back a core's demand request while it has no free unit at the LLC | P7 |
-| `PwbPartition` (`pwb`) | same, on a write-back buffer entry (section 6.10) | the cache, on admitting a new miss (requester mode) | P8 |
+| `PwbPartition` (`pwb`) | same, on a write-back buffer entry (section 6.10) | the sender, as `mshr` (requester mode); none, accounting only (victim mode) | P8 |
 
 Ownership types: `StaticOwnership` (P1), `OverlappingOwnership` (`cat`, Intel CAT style,
 section 6.11, P9). Later: `UtilityOwnership` (UCP).
@@ -552,10 +552,16 @@ Design:
   no gate is installed and the arbiters take their old path (byte-identical). The gate needs a
   split bus (SplitBus or TripleBus); on any other interconnect an `mshr` scheme is refused.
 - **PWB** (`pwb`, P8). An entry is charged by `partition[k].pwb_owner(s)`:
-  - `requester` (default): the core whose fill evicted the line. The gate is in `canAdmitRequest`:
-    a core with no free PWB unit cannot open a new miss. A fill is never refused (a response must
-    always proceed, see the back-pressure row in section 9), so a core's entries can exceed its units by
-    at most its outstanding misses: entries(c) <= units(c) + mshr(c).
+  - `requester` (default): the core whose fill evicted the line. The gate is the sender's, as for
+    `mshr`, with one difference: a miss takes a PWB entry only when its data arrives and evicts a
+    line, so every miss the core has open may still need one. The request bus holds a core back
+    while its free PWB units do not exceed its queued demand requests plus its open misses (the
+    `m_pending_requests` keys it opened). A fill is never refused (a response must always proceed,
+    see the back-pressure row in section 9), and with this reservation it never needs to be:
+    violations are 0 by construction. The cost is that a core with u PWB units has at most u
+    requests queued or in flight at that bank, whether or not they evict. A rule that counts only
+    queued requests was measured and rejected: on the writing-streamer case of `partition.sh` it
+    never held anyone back, and core 0 reached 4 entries of its 2 (350 violations).
   - `victim`: the core that last placed the line's data in this cache (its fill, or an L1
     write-back into it). This needs a new field, `GenericCacheLine::placed_by`, set on every fill
     and write into the line. The victim is chosen only at fill time, so no admission gate is
@@ -619,7 +625,7 @@ Each step is one commit with its gate. Steps B (banking) and P (partitioning) sh
 | P5 | joint placement in `PagePlacer` (section 6.6): one frame for all placing schemes; refuse only a core with no common frame | `partition.sh` unchanged; unit test: two placing schemes on overlapping bits place every page inside both, an infeasible ownership is refused with a message (colours and LLC banks are disjoint by construction, so the first real overlap is P6) |
 | P6 | `DramBankPartition` (section 6.9) | DRAM-bank confinement per core on private traces, zero violations with the placer on; colour + DRAM bank under the default FRFCFS mapping; a changed `AddressMapping` followed; refused without MCsim; regression byte-identical |
 | P7 | stateful `allocate`/`release`/`freeUnits` in `PartitionScheme` and `PartitionSet`, called from the `m_pending_requests` insert/erase; the LLC's demand gate consulted by the request bus and its arbiters; `MshrPartition` (`mshr`) in a new file (section 6.10) | regression and `banked.sh` byte-identical with no scheme; with `mshr`, every core's peak entries <= its units; a streaming core no longer delays a victim core's misses on MSHRs (victim core's worst-case latency drops); refused when `num_mshr` is -1 |
-| P8 | `PwbPartition` (`pwb`) in the same file; `pwb_owner(s)` = `requester` (default) or `victim`; `GenericCacheLine::placed_by` (section 6.10) | byte-identical with no scheme; requester mode: entries(c) <= units(c) + mshr(c) on every run; victim mode: charges match a trace count of evicted lines by placing core; refused when `pwb_size` is -1 |
+| P8 | `PwbPartition` (`pwb`) in the same file; `pwb_owner(s)` = `requester` (default) or `victim`; `GenericCacheLine::placed_by`; the sender's gate also reserves a PWB unit per open miss (section 6.10) | byte-identical with no scheme; requester mode: 0 violations and every core's peak entries <= its units on every run; victim mode: entries charged to the placing core, accounting only; refused when `pwb_size` is -1 or `pwb_owner` is neither mode |
 | P9 | `OverlappingOwnership` (`cat`): hex masks, contiguity check, `schedule`, `PartitionSet::tick`; `shared_fills` and `evicted_by_other` columns (section 6.11) | the contract tests pass with `cat`; `cat` with disjoint masks gives the same timing as `static`; a non-contiguous mask is refused; a scheduled mask change takes effect at its cycle (fills before and after) |
 | P10 | optional: per-core round-robin PWB issue order (`pwb_drain(s),rr`) | default order byte-identical; with `rr`, no core's write-back waits behind more than one entry of each other core in the PWB |
 
@@ -661,5 +667,5 @@ B1 to B5 give stable a multi-bank LLC. P1 can start after A1, independent of B.
 | Placing schemes sharing bits | e.g. banks interleaved at 4 KiB inside colour bits, DRAM bank bits inside colour bits | joint placement (P5); a core with no common frame is refused |
 | gem5 full system | page allocation is Linux's | violations reported only |
 | MSHR/PWB gates and back-pressure | a gate that refuses a response or a write-back deadlocks the system (the request/response shared-queue deadlock fixed in eb9744a6); a cache that refuses a delivered request breaks bus order (P7's first version: 101 of 240 banked runs failed) | the MSHR gate holds demand requests in their sender, before the bus; fills, snoops and write-backs always proceed; FCFS/RR/TDM `banked.sh` runs with the scheme on |
-| PWB quota overshoot | requester mode allows entries(c) up to units(c) + mshr(c) | stated bound; checked in P8; an `mshr` partition next to `pwb` caps it |
+| PWB quota overshoot | a miss takes its PWB entry only at fill time | the sender reserves a unit for each queued request and open miss: 0 violations, at the cost of at most units(c) requests in flight per core and bank |
 | Merge with `network` | both branches touch `homeOf` and the builders | same names, parameters and semantics; `network` adopts `AddressMap` at merge |

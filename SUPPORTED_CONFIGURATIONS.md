@@ -101,6 +101,7 @@ Several schemes can apply to one cache.
 | `bank` | banks of a multi-bank LLC (needs page interleave) | the page placer |
 | `dram_bank`, `dram_bank_group` | MCsim's DRAM banks (bank group x bank: 16) or bank groups (4), at the bits the loaded `.ini`'s `AddressMapping` gives them; needs MCsim | the page placer; the memory controller counts the accesses |
 | `mshr` | the cache's MSHR entries (`num_mshr` of its controller; each LLC bank has its own) | the sender: the request bus holds back a core's demand request while that core has no free unit at the LLC bank it goes to (counting its requests already queued there); a request joining another core's outstanding miss takes no unit. LLC only, on a SplitBus or TripleBus |
+| `pwb` | the cache's write-back buffer entries (`pwb_size`; each LLC bank has its own). `partition[k].pwb_owner(s)`: `requester` (default) charges an evicted line to the core whose fill evicted it, `victim` to the core that placed the line | requester: the sender, as `mshr`, also counting the core's open misses (each may still evict a line), so violations are 0; LLC only, on a SplitBus or TripleBus. victim: none (accounting only) |
 
 - **Page placer** (`page_placer(i),1` on the system): an OS-style page allocator in
   the trace path. A page's first access gets a fresh frame whose colour and bank the
@@ -113,7 +114,8 @@ Several schemes can apply to one cache.
   into pages placed for another core (shared data). DRAM schemes have `DRAM` rows: their
   fills are DRAM accesses (reads for the requester, write-backs for the page's owner).
   `partition[k].strict(i),1` stops the run on the first violation. For `mshr` the fills
-  are the misses a core opened, and the run prints each core's peak entries against its units.
+  are the misses a core opened, for `pwb` the evicted lines charged to it, and the run prints
+  each core's peak entries against its units.
 - Under gem5 full system, page allocation is the guest kernel's: colour, bank and DRAM
   bank partitions report violations but are not enforced.
 - Predictable cache-coherent protocols (see Coherence protocols above)

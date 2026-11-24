@@ -106,15 +106,16 @@ namespace octopus
         uint32_t allowedWays(int core, uint64_t set) const { return m_partitions.allowedWays(core, set, m_all_mask); }
         const PartitionSet &partitions() const { return m_partitions; }
         // Entry partitions (MSHR and write-back buffer, s6.10). The controller gives its MSHR
-        // count before the partitions are built; with an MSHR scheme it gates demand requests
-        // at the sender (admitsDemand: `queued` = the core's requests already at this cache);
+        // count before the partitions are built; an MSHR scheme, or a requester-charged write-back
+        // buffer scheme, gates demand requests at the sender (admitsDemand: `queued` = the core's
+        // requests already at this cache, `outstanding` = the misses it has open here);
         // entryOpened / entryFreed follow each entry, keyed by line address.
         void setMshrEntries(int n) { m_mshr_entries = n; }
         virtual int pwbEntries() const { return -1; }
-        bool gatesDemand() { ensurePartitions(); return m_partitions.hasEntryScheme(PartitionScheme::Entry::MSHR); }
-        bool admitsDemand(int core, int queued) const { return m_partitions.admitsDemand(core, queued); }
-        void entryOpened(PartitionScheme::Entry e, int core, uint64_t key)
-        { ensurePartitions(); if (m_partitions.hasEntrySchemes()) m_partitions.allocate(e, core, key); }
+        bool gatesDemand() { ensurePartitions(); return m_partitions.gatesDemand(); }
+        bool admitsDemand(int core, int queued, int outstanding) const { return m_partitions.admitsDemand(core, queued, outstanding); }
+        void entryOpened(PartitionScheme::Entry e, int core, uint64_t key, int placed_by = -1)
+        { ensurePartitions(); if (m_partitions.hasEntrySchemes()) m_partitions.allocate(e, core, key, placed_by); }
         void entryFreed(PartitionScheme::Entry e, uint64_t key)
         { if (m_partitions.hasEntrySchemes()) m_partitions.release(e, key); }
         // End of system construction: build every cache's partitions, then configure the page

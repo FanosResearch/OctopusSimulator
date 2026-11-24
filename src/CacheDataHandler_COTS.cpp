@@ -64,12 +64,13 @@ namespace octopus
         m_miss_status_holding_regs[mask_offset(address)].m_block_size = this->m_block_size;
     }
 
-    void CacheDataHandler_COTS::moveLine2WB(uint64_t set, int way)
+    void CacheDataHandler_COTS::moveLine2WB(uint64_t set, int way, int core)
     {
         GenericCacheLine *line = (GenericCacheLine *)getLine(set, way);
         uint64_t wb_address = calculate_address(line->tag, set);
         m_pending_write_back_regs[wb_address] = *line;
         line->valid = false;
+        entryOpened(PartitionScheme::Entry::PWB, core, wb_address, line->placed_by);   // pwb partition (s6.10)
 
         // Queue this eviction so its write-back is always issued (see header).
         m_pwb_pending_issue.push_back(wb_address);
@@ -87,7 +88,7 @@ namespace octopus
         {
             m_miss_status_holding_regs[mask_offset(address)].copyData(data);
             if (findEmptyWay(address, core) == -1) //ToDo: add clean flag
-                moveLine2WB(set, chooseEvictionWay(set, core));
+                moveLine2WB(set, chooseEvictionWay(set, core), core);
 
             if (writeCacheLine(address, &m_miss_status_holding_regs[mask_offset(address)], core))
             {
@@ -118,7 +119,10 @@ namespace octopus
                 if (checkMSHR(set))
                     m_miss_status_holding_regs.erase(set);
                 else if (checkPWB(set))
+                {
                     m_pending_write_back_regs.erase(set);
+                    entryFreed(PartitionScheme::Entry::PWB, set);
+                }
             }
         }
 

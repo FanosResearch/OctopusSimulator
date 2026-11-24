@@ -121,7 +121,7 @@ int main()
             {
                 uint32_t m = all; s->restrictVictims(core, rng() % 256, m);
                 for (int w = 0; w < 8; w++)
-                    if (m & (1u << w)) CHECK(s->units() != (int)ctx.ways || s->owners().owns(core, w),
+                    if (m & (1u << w)) CHECK(s->countsEntries() || s->units() != (int)ctx.ways || s->owners().owns(core, w),
                                              "%s '%s': core %d may fill way %d it does not own", key.c_str(), spec.c_str(), core, w);
             }
         }
@@ -214,6 +214,43 @@ int main()
         CHECK(set.violations() == 1, "total violations %llu", (unsigned long long)set.violations());
         PartitionContext u = ctx; u.mshr_entries = -1;
         CHECK(!PartitionRegistry::schemes().at("mshr")(u)->invalid().empty(), "unbounded num_mshr not refused");
+        // the sender's gate: core 0 holds unit 1 (0x2000), so 1 unit is free
+        CHECK(set.gatesDemand(), "an mshr scheme does not gate demand");
+        CHECK(set.admitsDemand(0, 0, 5) && !set.admitsDemand(0, 1, 0), "mshr gate: 1 free unit, queued 0 / 1");
+    }
+    // 6. write-back buffer partition (P8): 4 entries, core 0 owns 0-1, core 1 owns 2-3
+    {
+        using E = PartitionScheme::Entry;
+        PartitionContext c = ctx; c.pwb_entries = 4;
+        PartitionSet req; req.setName("test");
+        req.add(PartitionRegistry::build("pwb", "static", "0:0-1;1:2-3", c));
+        CHECK(req.gatesDemand(), "pwb requester does not gate demand");
+        req.allocate(E::MSHR, 0, 0x1000);   // an MSHR entry: not this scheme's
+        CHECK(req.fills(0, 0) == 0, "an MSHR entry counted by the pwb scheme");
+        req.allocate(E::PWB, 0, 0x1000, 1);  // core 0's fill evicts core 1's line: charged to core 0
+        CHECK(req.fills(0, 0) == 1 && req.fills(0, 1) == 0, "requester mode charged the victim");
+        // core 0: 1 free unit; it may send while queued + open misses < 1
+        CHECK(req.admitsDemand(0, 0, 0) && !req.admitsDemand(0, 0, 1) && !req.admitsDemand(0, 1, 0),
+              "pwb gate counts queued requests and open misses");
+        CHECK(req.admitsDemand(1, 1, 0), "core 1 refused with 2 free units");
+        req.release(E::PWB, 0x1000);
+        CHECK(req.admitsDemand(0, 1, 0), "core 0 refused after its write-back completed");
+
+        PartitionContext v = c; v.pwb_owner = "victim";
+        PartitionSet vic; vic.setName("test");
+        vic.add(PartitionRegistry::build("pwb", "static", "0:0-1;1:2-3", v));
+        CHECK(!vic.gatesDemand(), "pwb victim gates demand (the victim is known only at fill time)");
+        vic.allocate(E::PWB, 0, 0x1000, 1); vic.allocate(E::PWB, 0, 0x2000, 1); vic.allocate(E::PWB, 0, 0x3000, 1);
+        CHECK(vic.fills(0, 1) == 3 && vic.fills(0, 0) == 0, "victim mode: fills core0 %llu core1 %llu",
+              (unsigned long long)vic.fills(0, 0), (unsigned long long)vic.fills(0, 1));
+        CHECK(vic.violations(0, 1) == 1, "victim mode: core 1's third entry is not a violation");
+        vic.allocate(E::PWB, 0, 0x4000, -1);  // unknown placer: counted for nobody
+        CHECK(vic.violations() == 1, "an entry of unknown placer counted");
+
+        PartitionContext bad = c; bad.pwb_owner = "owner";
+        CHECK(!PartitionRegistry::schemes().at("pwb")(bad)->invalid().empty(), "pwb_owner 'owner' not refused");
+        PartitionContext u = c; u.pwb_entries = -1;
+        CHECK(!PartitionRegistry::schemes().at("pwb")(u)->invalid().empty(), "unbounded pwb_size not refused");
     }
     CHECK(PartitionRegistry::schemes().count("way") == 1, "way scheme not registered");
     CHECK(PartitionRegistry::ownerships().count("static") == 1, "static ownership not registered");

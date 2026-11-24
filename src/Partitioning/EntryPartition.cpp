@@ -1,16 +1,27 @@
 /*
  * File  :      EntryPartition.cpp
  *
- * MSHR partitioning (docs/LLC_Banking_and_Partitioning_Design.md s6.10): the units are a cache's
- * MSHR entries (num_mshr). A new miss takes a free unit its core owns and holds it until the miss
- * completes, so one core cannot hold every MSHR. Requests from other cores that join an
- * outstanding miss take no unit: the miss is charged to the core that opened it.
+ * MSHR and write-back buffer partitioning (docs/LLC_Banking_and_Partitioning_Design.md s6.10).
  *
- * The limit is back-pressure at the sender, not a refusal at the cache: the cache's demand gate
+ * mshr: the units are a cache's MSHR entries (num_mshr). A new miss takes a free unit its core
+ * owns and holds it until the miss completes, so one core cannot hold every MSHR. Requests from
+ * other cores that join an outstanding miss take no unit: the miss is charged to the core that
+ * opened it.
+ *
+ * pwb: the units are the write-back buffer entries (pwb_size). An evicted line takes a unit until
+ * its write-back completes. pwb_owner(s) picks the core it is charged to:
+ *   requester (default)  the core whose fill evicted it. Gated at the sender, as mshr is.
+ *   victim               the core that last placed the line's data here (GenericCacheLine::
+ *                        placed_by). The victim is known only at fill time, so nothing can hold
+ *                        it back: an entry beyond the victim core's units is a violation.
+ *                        Accounting only.
+ *
+ * The limits are back-pressure at the sender, not a refusal at the cache: the cache's demand gate
  * (CacheController::installDemandGate) admits a core's demand request onto the bus only while the
- * core has more free units than requests already queued at the cache, each of which may still
- * open a miss. A cache never turns away a request the bus delivered, which would break the bus
- * order a snooping protocol relies on.
+ * core has more free MSHR units than requests already queued at the cache (each may still open a
+ * miss), and, for a requester-charged pwb scheme, more free write-back units than those requests
+ * plus its open misses (each may still evict a line when it fills). A cache never turns away a
+ * request the bus delivered, which would break the bus order a snooping protocol relies on.
  *
  * With a disjoint ownership this is a per-core quota; with an overlapping one two cores draw on
  * their common units.
@@ -43,8 +54,9 @@ namespace octopus
         // a new miss of `core` is admitted while one of its units is free
         bool admit(int core, uint64_t addr) const override
         {
-            return core < 0 || !m_owners->restricts() || freeUnit(core) >= 0;
+            return !m_gates || core < 0 || !m_owners->restricts() || freeUnit(core) >= 0;
         }
+        bool gatesDemand() const override { return m_gates && m_owners->restricts(); }
         int freeUnits(int core) const override
         {
             if (core < 0 || !m_owners->restricts()) return 1 << 30;
@@ -82,6 +94,9 @@ namespace octopus
             }
         }
 
+    protected:
+        bool m_gates = true;                  // the sender holds a core back while it has no free unit
+
     private:
         static constexpr int FREE = -2;
         struct Held { int unit; int core; };
@@ -106,5 +121,25 @@ namespace octopus
         explicit MshrPartition(const PartitionContext &c) : EntryPartition(Entry::MSHR, "mshr", "num_mshr", c.mshr_entries) {}
     };
 
+    class PwbPartition : public EntryPartition
+    {
+    public:
+        explicit PwbPartition(const PartitionContext &c)
+            : EntryPartition(Entry::PWB, "pwb", "pwb_size", c.pwb_entries), m_victim(c.pwb_owner == "victim"), m_mode(c.pwb_owner)
+        { m_gates = !m_victim; }
+        std::string invalid() const override
+        {
+            if (m_mode != "requester" && m_mode != "victim")
+                return "pwb_owner(s) is '" + m_mode + "' (requester or victim)";
+            return EntryPartition::invalid();
+        }
+        int chargedCore(int core, int placed_by) const override { return m_victim ? placed_by : core; }
+
+    private:
+        bool m_victim;
+        std::string m_mode;
+    };
+
     REGISTER_PARTITION_SCHEME("mshr", MshrPartition);
+    REGISTER_PARTITION_SCHEME("pwb", PwbPartition);
 }

@@ -47,6 +47,7 @@ namespace octopus
         uint64_t page_bytes = 4096;        // partition[k].page_size(i): the placer's page
         int mshr_entries = 16;             // the controller's num_mshr (-1 = unbounded)
         int pwb_entries = 8;               // the write-back buffer depth, pwb_size (-1 = unbounded)
+        std::string pwb_owner = "requester";   // partition[k].pwb_owner(s): requester or victim
     };
 
     // What is split, and where it is enforced. Every hook has a no-op default.
@@ -73,9 +74,14 @@ namespace octopus
         enum class Entry { MSHR, PWB };
         virtual bool countsEntries() const { return false; }
         virtual Entry entryKind() const { return Entry::MSHR; }   // which entries, for an entry scheme
-        virtual bool allocate(int core, uint64_t key) { return true; }
+        // the core an entry is charged to: the requester, or (pwb victim mode) the core that placed
+        // the evicted line (`placed_by`, -1 = unknown)
+        virtual int chargedCore(int core, int placed_by) const { return core; }
+        virtual bool allocate(int core, uint64_t key) { return true; }   // core = chargedCore(...)
         // units `core` may still take (an entry scheme with a restricting ownership; else no limit)
         virtual int freeUnits(int core) const { return 1 << 30; }
+        // whether the scheme holds a core's demand requests back at the sender (s6.10)
+        virtual bool gatesDemand() const { return false; }
         virtual void release(uint64_t key) {}
         // end-of-run lines for stdout (an entry scheme's per-core peak)
         virtual void summary(std::ostream &os, const std::string &cache, int index) const {}
@@ -155,20 +161,26 @@ namespace octopus
         }
         // an MSHR or write-back buffer entry `key` was opened for `core` / has freed
         bool hasEntrySchemes() const { return !m_entries.empty(); }
-        bool hasEntryScheme(PartitionScheme::Entry e) const
+        bool gatesDemand() const
         {
-            for (auto &p : m_entries) if (p.second->entryKind() == e) return true;
+            for (auto &p : m_entries) if (p.second->gatesDemand()) return true;
             return false;
         }
-        // whether `core`, with `queued` requests at the cache that may each still open a miss,
-        // may send one more: every MSHR scheme has a free unit beyond those (s6.10)
-        bool admitsDemand(int core, int queued) const
+        // whether `core` may send one more demand request (s6.10). `queued` = its requests at the
+        // cache that may each still open a miss; `outstanding` = the misses it has open, each of
+        // which may still evict a line when it fills. An MSHR scheme needs a free unit beyond the
+        // queued requests; a requester-charged write-back buffer scheme one beyond both.
+        bool admitsDemand(int core, int queued, int outstanding) const
         {
             for (auto &p : m_entries)
-                if (p.second->entryKind() == PartitionScheme::Entry::MSHR && p.second->freeUnits(core) <= queued) return false;
+            {
+                if (!p.second->gatesDemand()) continue;
+                int need = queued + (p.second->entryKind() == PartitionScheme::Entry::PWB ? outstanding : 0);
+                if (p.second->freeUnits(core) <= need) return false;
+            }
             return true;
         }
-        void allocate(PartitionScheme::Entry e, int core, uint64_t key);
+        void allocate(PartitionScheme::Entry e, int core, uint64_t key, int placed_by = -1);
         void release(PartitionScheme::Entry e, uint64_t key)
         {
             for (auto &p : m_entries) if (p.second->entryKind() == e) p.second->release(key);

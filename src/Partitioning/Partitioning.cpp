@@ -40,12 +40,13 @@ namespace octopus
         }
     }
 
-    void PartitionSet::allocate(PartitionScheme::Entry e, int core, uint64_t key)
+    void PartitionSet::allocate(PartitionScheme::Entry e, int requester, uint64_t key, int placed_by)
     {
         for (auto &p : m_entries)
         {
             if (p.second->entryKind() != e) continue;
             size_t k = p.first;
+            int core = p.second->chargedCore(requester, placed_by);
             bool inside = p.second->allocate(core, key);
             if (core < 0) continue;
             m_stats[k].fills[core]++;

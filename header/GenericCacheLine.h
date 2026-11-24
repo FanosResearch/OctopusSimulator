@@ -27,6 +27,10 @@ namespace octopus
         int64_t tag;
         int state;
         int owner_id;
+        // the core that last placed this line's data in this cache (its fill, or an L1 write-back
+        // into it); -1 = unknown. Set by the data handler only, not copied with the line's bits:
+        // write-back buffer partitions charge an evicted line to it (pwb_owner victim, s6.10).
+        int placed_by = -1;
 
         uint32_t m_block_size;
         uint8_t *m_data;

@@ -38,7 +38,7 @@ namespace octopus
         virtual bool findline(uint64_t address, uint64_t *set, int *way) override;
 
         int chooseEvictionWay(uint64_t set, int core);
-        void moveLine2WB(uint64_t set, int way);
+        void moveLine2WB(uint64_t set, int way, int core);   // core: whose fill evicts the line
 
         inline bool checkMSHR(uint64_t address)
         {

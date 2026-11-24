@@ -447,14 +447,16 @@ namespace octopus
         // The L1s' demand requests reach the LLC on its lower interface (the L1 bus).
         if (m_log_role != Logger::Role::LLC || !m_lower_interface->m_demand_gating)
         {
-            cerr << "CacheController " << m_id << ": an mshr partition is supported at the LLC on a split bus"
-                 << " (SplitBus or TripleBus), which holds a core's request back while it has no free unit" << endl;
+            cerr << "CacheController " << m_id << ": an mshr or pwb (requester) partition is supported at the LLC on a"
+                 << " split bus (SplitBus or TripleBus), which holds a core's request back while it has no free unit" << endl;
             exit(2);
         }
         // A core may send one more demand request while its free units exceed the requests it
         // already has here, each of which may still open a miss: in the RX buffer, the
         // processing queue, the data-array pipeline, or saved behind a write-back. A request
         // that joined a miss, or holds one, is no longer counted (the miss holds the unit).
+        // A requester-charged write-back buffer partition also counts the core's open misses:
+        // each may still evict a line into the buffer when its data arrives.
         m_lower_interface->m_demand_gate = [this](const Message &m) {
             int core = m.owner;
             auto mine = [core](const Message &q) { return q.isDemandRequest() && q.owner == core; };
@@ -464,7 +466,10 @@ namespace octopus
                 if (op.kind == DataArrayOp::MESSAGE && mine(op.msg)) queued++;
             for (auto &kv : m_saved_requests_for_wb)
                 for (const Message &q : kv.second) if (mine(q)) queued++;
-            return m_data_handler->admitsDemand(core, queued);
+            int outstanding = 0;
+            for (auto &kv : m_pending_requests)
+                if (!kv.second.empty() && kv.second.front().owner == core) outstanding++;
+            return m_data_handler->admitsDemand(core, queued, outstanding);
         };
     }
 

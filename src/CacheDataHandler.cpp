@@ -109,6 +109,7 @@ namespace octopus
             bool strict = pm.count("strict") && std::get<int>(pm.at("strict").value) != 0;
             PartitionContext c = ctx;
             if (pm.count("page_size")) c.page_bytes = (uint64_t)std::get<int>(pm.at("page_size").value);
+            c.pwb_owner = str(pm, "pwb_owner", "requester");
             m_partitions.add(PartitionRegistry::build(scheme, str(pm, "ownership", "static"), str(pm, "owners", ""), c), strict);
         }
         if (m_partitions.empty()) return;
@@ -220,6 +221,7 @@ namespace octopus
 
         *((GenericCacheLine *)getLine(set, way)) = *line;
         ((GenericCacheLine *)getLine(set, way))->tag = calculate_tag(address);
+        ((GenericCacheLine *)getLine(set, way))->placed_by = core;
         if (core >= 0 && !m_partitions.empty()) m_partitions.onFill(core, address, set, way);   // built by findEmptyWay
         
         if(!soft_write)
@@ -260,6 +262,7 @@ namespace octopus
         if (findline(address, &set, &way) && isReady(address))
         {
             ((GenericCacheLine *)getLine(set, way))->copyData(data);
+            if (core >= 0) ((GenericCacheLine *)getLine(set, way))->placed_by = core;
             occupy(address);
             m_replacement_policy->update(set, way, m_cycle); //ToDo: this should change to support allocation on miss
             return true;
