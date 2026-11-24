@@ -2,6 +2,8 @@
 //   g++ -std=c++17 -O1 -I header -I header/Partitioning test/banking/unit/partition_test.cpp src/Partitioning/*.cpp -o /tmp/pt && /tmp/pt
 // Runs on EVERY registered scheme, so a new scheme is covered by adding its source file.
 #include "Partitioning.h"
+#include "PagePlacer.h"
+#include <set>
 #include <cstdio>
 #include <map>
 #include <random>
@@ -10,6 +12,30 @@ using namespace octopus;
 
 static int fails = 0;
 #define CHECK(c, ...) do { if (!(c)) { fails++; if (fails < 20) { printf("FAIL %s:%d: ", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n"); } } } while (0)
+
+
+// A placing scheme on address bits [lo, lo + bits): the unit is that field. Two of these on
+// overlapping fields exercise joint placement (P5).
+class FieldScheme : public PartitionScheme
+{
+public:
+    FieldScheme(const char *n, int lo, int bits) : m_name(n), m_lo(lo), m_bits(bits) {}
+    const char *name() const override { return m_name; }
+    int units() const override { return 1 << m_bits; }
+    bool placesAddresses() const override { return true; }
+    uint64_t pageBytes() const override { return 4096; }
+    int unitOf(uint64_t a) const override { return (int)((a >> m_lo) & ((1u << m_bits) - 1)); }
+    uint64_t withUnit(uint64_t a, int u) const override
+    { uint64_t m = (uint64_t)((1u << m_bits) - 1) << m_lo; return (a & ~m) | ((uint64_t)u << m_lo); }
+private:
+    const char *m_name; int m_lo, m_bits;
+};
+static void own(FieldScheme &s, const std::string &spec)
+{
+    auto o = PartitionRegistry::ownerships().at("static")();
+    o->configure(spec, s.units());
+    s.setOwnership(std::move(o), spec);
+}
 
 // The way_partition(s) parser as it was before the framework (CacheDataHandler.cpp at 4baae8dd).
 static uint32_t old_allowed(const std::string &spec, uint32_t ways, int core)
@@ -121,6 +147,37 @@ int main()
         CHECK(set.fills(0, 1) == 1 && set.violations(0, 1) == 0, "core 1");
         CHECK(set.fills(0, 2) == 2 && set.violations(0, 2) == 1, "core 2");
         CHECK(set.violations() == 2, "total violations %llu", (unsigned long long)set.violations());
+    }
+    // 4. joint placement (P5): A on bits 12-13 and B on bits 13-14 share bit 13.
+    {
+        FieldScheme a("fieldA", 12, 2), b("fieldB", 13, 2);
+        // core 0: A {0,1} (bit 13 = 0), B {0,1} (bit 13 = 0 for 0, 1 for 1): 2 of 4 combinations fit;
+        // core 1: A {2,3} (bit 13 = 1), B {0,2} (bit 13 = 0): none fits
+        own(a, "0:0-1;1:2-3"); own(b, "0:0-1;1:0;1:2");
+        PagePlacer &pp = PagePlacer::instance();
+        pp.configure(true, {&a, &b}, 0);
+        CHECK(pp.conflict(0).empty(), "core 0 refused: %s", pp.conflict(0).c_str());
+        CHECK(!pp.conflict(1).empty(), "core 1 (units disagree on bit 13) not refused");
+        std::set<uint64_t> frames; std::set<std::pair<int, int>> combos; bool inside = true;
+        for (uint64_t page = 0; page < 256; page++)
+        {
+            uint64_t f = pp.place(0, (page << 12) | 0x48);
+            inside = inside && a.owners().owns(0, a.unitOf(f)) && b.owners().owns(0, b.unitOf(f)) && (f & 0xfff) == 0x48;
+            frames.insert(f >> 12); combos.insert({a.unitOf(f), b.unitOf(f)});
+        }
+        CHECK(inside, "a page of core 0 was placed outside its units of A or B");
+        CHECK(frames.size() == 256, "pages share frames (%zu frames for 256 pages)", frames.size());
+        CHECK(combos.size() == 2, "core 0 uses %zu unit combinations, 2 fit", combos.size());
+        CHECK(pp.place(0, 0x5048) == pp.place(0, 0x5048), "a page placed twice moved");
+
+        // disjoint fields (12-13, 14-15) place as before P5: per-scheme round-robin, all 4 x 4 combinations
+        FieldScheme c("fieldC", 12, 2), d("fieldD", 14, 2);
+        own(c, ""); own(d, "");
+        pp.configure(true, {&c, &d}, 4);
+        std::set<std::pair<int, int>> all16;
+        for (uint64_t page = 0; page < 64; page++) { uint64_t f = pp.place(2, page << 12); all16.insert({c.unitOf(f), d.unitOf(f)}); }
+        CHECK(all16.size() == 4, "disjoint: per-scheme round-robin gives %zu combinations, expected 4 (cursor i, i)", all16.size());
+        pp.configure(false, {}, 0);
     }
     CHECK(PartitionRegistry::schemes().count("way") == 1, "way scheme not registered");
     CHECK(PartitionRegistry::ownerships().count("static") == 1, "static ownership not registered");

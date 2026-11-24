@@ -163,7 +163,8 @@ namespace octopus
 
         // Partitions need the complete system (bank groups installed); then the page placer.
         CacheDataHandler::finalizePartitions(parameters.count(STRINGIFY(page_placer)) &&
-                                             std::get<int>(parameters.at(STRINGIFY(page_placer)).value) != 0);
+                                             std::get<int>(parameters.at(STRINGIFY(page_placer)).value) != 0,
+                                             num_cores);
     }
 
     BaseController* MultiCoreSystem::createController(string type, ParametersMap map,

@@ -3,8 +3,10 @@
  *
  * Source-side enforcement of placing partition schemes (docs/LLC_Banking_and_Partitioning_Design.md
  * s6.6), as an OS page allocator does. It sits in the trace path (CPU.cpp), in front of the L1s:
- * the first access to a page picks, for every placing scheme, the next unit the core owns
- * (round-robin over its units), and gives the page a fresh frame with those units. One page table
+ * the first access to a page picks, for every placing scheme, a unit the core owns (round-robin)
+ * and gives the page a fresh frame with those units. Schemes may share address bits (P5): the
+ * frame must then satisfy all of them at once, and only the core's unit combinations that some
+ * frame satisfies are used; a core with none is refused. One page table
  * serves all cores, so a shared page has one frame and coherence is unaffected; its units come
  * from the first core that touches it. Off by default (page_placer(i),0): addresses pass through.
  */
@@ -18,6 +20,7 @@
 #include <map>
 #include <ostream>
 #include <set>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -30,8 +33,13 @@ namespace octopus
         static PagePlacer &instance() { static PagePlacer p; return p; }
 
         // Called once the system is built. `schemes`: every cache's placing schemes; the same
-        // scheme on several caches (one per LLC bank) is used once. Exits on an inconsistent set.
-        void configure(bool enabled, const std::vector<const PartitionScheme *> &schemes);
+        // scheme on several caches (one per LLC bank) is used once. Exits on an inconsistent set,
+        // and on a core in 0..num_cores-1 with no common frame (conflict()).
+        void configure(bool enabled, const std::vector<const PartitionScheme *> &schemes, int num_cores = 0);
+
+        // Why no frame can hold a page of `core` (its owned units disagree on a shared address
+        // bit); empty when the core can be placed. Exposed for tests.
+        std::string conflict(int core);
         bool enabled() const { return m_on; }
 
         uint64_t place(int core, uint64_t addr) { return m_on ? placeSlow(core, addr) : addr; }
@@ -49,6 +57,15 @@ namespace octopus
     private:
         uint64_t placeSlow(int core, uint64_t addr);
         uint64_t frameFor(const std::vector<int> &units);
+        uint64_t compose(uint64_t frame, const std::vector<int> &units) const;   // chained withUnit
+        bool matches(uint64_t frame, const std::vector<int> &units) const;      // every unitOf agrees
+        bool satisfiable(const std::vector<int> &units) const;
+
+        // The core's owned unit combinations that a frame can satisfy. `joint` = some owned
+        // combination cannot (the schemes share bits): place round-robin over `tuples` instead of
+        // per scheme. Disjoint schemes never set it, so they place exactly as before P5.
+        struct CoreUnits { bool joint = false; std::vector<std::vector<int>> tuples; size_t cursor = 0; };
+        CoreUnits &coreUnits(int core);
 
         bool m_on = false;
         int m_page_bits = 12;
@@ -58,6 +75,8 @@ namespace octopus
         std::map<std::vector<int>, uint64_t> m_next;             // per unit tuple: next candidate
         std::map<std::pair<size_t, int>, size_t> m_cursor;       // (scheme, core): round-robin position
         std::map<int, uint64_t> m_pages_by_core;
+        std::map<int, CoreUnits> m_core_units;
+        bool m_shared_bits = false;
     };
 }
 

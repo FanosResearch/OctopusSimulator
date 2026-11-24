@@ -129,7 +129,7 @@ namespace octopus
         return v;
     }
 
-    void CacheDataHandler::finalizePartitions(bool page_placer)
+    void CacheDataHandler::finalizePartitions(bool page_placer, int num_cores)
     {
         std::vector<const PartitionScheme *> schemes;
         for (CacheDataHandler *h : handlers())
@@ -137,7 +137,7 @@ namespace octopus
             h->ensurePartitions();
             for (auto &s : h->m_partitions.schemes()) schemes.push_back(s.get());
         }
-        PagePlacer::instance().configure(page_placer, schemes);
+        PagePlacer::instance().configure(page_placer, schemes, num_cores);
     }
 
     CacheDataHandler::~CacheDataHandler()

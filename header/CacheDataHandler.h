@@ -106,7 +106,7 @@ namespace octopus
         const PartitionSet &partitions() const { return m_partitions; }
         // End of system construction: build every cache's partitions, then configure the page
         // placer (page_placer(i) of the system) with their placing schemes.
-        static void finalizePartitions(bool page_placer);
+        static void finalizePartitions(bool page_placer, int num_cores = 0);
         // The address map (design doc s5): geometry, bank group, sub-banks and home map. The
         // controller installs the home map and the bank group; the protocol reads it.
         AddressMap &addressMap() { return m_map; }
