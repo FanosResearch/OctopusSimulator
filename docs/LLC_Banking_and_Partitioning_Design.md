@@ -286,7 +286,9 @@ IEEE TC 2024).
 - `address(tag(a), set(a)) == a` (line-aligned) is checked by a unit test over random
   addresses for every configuration in the test matrix.
 - A configuration whose colour bits fall inside the page offset is refused.
-- Two placing schemes (section 6) that use overlapping address bits are refused.
+- Placing schemes (section 6) may share address bits (P5). A core whose owned units of the
+  placing schemes have no frame in common (they disagree on a shared bit) is refused, naming the
+  core and the schemes.
 
 ## 6. Partitioning framework
 
@@ -376,7 +378,7 @@ llc_controller.m_data_handler.partition[1].owners(s),0:0-127;1-3:128-255
 | `ColourPartition` (set partitioning) | `placesAddresses`, `unitOf`/`withUnit` via `AddressMap::colour`, `inPartition` | `PagePlacer`; the cache counts violations | P3 |
 | `LlcBankPartition` | same, via the bank group (`AddressMap::banks`); needs page interleave | `PagePlacer`; each bank counts violations | P4 |
 | `SubBankPartition` | same, via `AddressMap::subBank` | `PagePlacer` | later |
-| `DramBankPartition` | same, via MCsim's address mapping | `PagePlacer` | later |
+| `DramBankPartition` | same, via MCsim's address mapping (section 6.9) | `PagePlacer`; `MCsimInterface` counts violations | P6 |
 | `MshrPartition` | `admit` | the cache | later |
 
 Ownership types: `StaticOwnership` (P1). Later: `OverlappingOwnership` (CAT-style),
@@ -402,7 +404,15 @@ bank. They are enforced where addresses are chosen, as an OS page allocator does
 `PagePlacer` sits in the trace path (`src/CPU.cpp`), in front of the L1s:
 
 - A page's first access picks, for every scheme with `placesAddresses()`, the next unit the core
-  owns (round-robin), and composes them by chaining `withUnit()`.
+  owns (round-robin), and composes them by chaining `withUnit()`. Until P5 this needs the schemes'
+  bits to be disjoint: with a shared bit, a later `withUnit()` overwrites an earlier one.
+- Joint placement (P5): the frame is chosen for all placing schemes at once. The placer walks
+  candidate frames and takes the first free one whose `unitOf()` is a unit the core owns for every
+  scheme, keeping the round-robin over the core's units for each scheme where the shared bits allow
+  it. Disjoint bits place exactly as before. Overlapping bits are the normal case: under MCsim's
+  default FRFCFS mapping the DRAM bank bits (13 to 16) overlap the colour bits of a 1024-set LLC
+  (12 to 15) and the LLC bank bits of page interleave (12, 13 at 4 banks), the bank/colour conflict
+  that OS allocators such as PALLOC resolve the same way.
 - One page table serves all cores, keyed by the original page. A shared page maps to one frame
   for every core, so coherence is unaffected. Its units come from the first core that touches it.
   A fill by another core into such a page is outside that core's units by design; it is counted
@@ -413,8 +423,9 @@ bank. They are enforced where addresses are chosen, as an OS page allocator does
   first unused one, so two pages never share a frame.
 - Off by default (`page_placer(i),0`, a system parameter): addresses pass through unchanged.
   The placer uses every placing scheme of every cache once (the same scheme on every LLC bank,
-  by `signature()`). Two schemes of one name that differ, different `page_size(i)`, or schemes
-  whose bits overlap (one undoes another) are refused at startup.
+  by `signature()`). Two schemes of one name that differ, or different `page_size(i)`, are
+  refused at startup; so is a core with no common frame (section 5.5). Before P5, schemes whose
+  bits overlap are refused as well.
 - Partitions are built when the system is complete (`CacheDataHandler::finalizePartitions`,
   called by both system builders), because colours and banks depend on the bank group the
   builder installs after the caches exist.
@@ -448,6 +459,28 @@ Example, MSHR partitioning:
 
 No cache, controller, protocol, `PartitionSet` or `PagePlacer` code changes.
 
+### 6.9 DramBankPartition
+
+Units are the DRAM banks of the MCsim device (default: the 16 banks of DDR4 8Gb x8, 4 bank
+groups x 4 banks; option: the 4 bank groups). Decisions (2026-11-24):
+
+- Placer-side, like colours and LLC banks: the `PagePlacer` gives each core frames whose DRAM
+  bank bits are in its banks, so the address alone decides the bank. MCsim's compile-time bank
+  privatisation (`CORE4_BANK_PRIVATIZATION` and similar, `bank = requestorID`) is not used: it
+  maps one line to different banks for different requesters, and write-backs carry the LLC's id.
+- The bank bits come from the `AddressMapping` parameter of the MCsim `.ini` actually loaded
+  (`mcsim_scheduler` selects the file; the mapping is a setting of that file, not of the
+  scheduler) and the device geometry. At startup `unitOf(withUnit(a, u)) == u` is checked through
+  MCsim's own decode. A key to override the mapping from Octopus (`mcsim_address_mapping`) is a
+  separate, optional step.
+- Violations are counted at `MCsimInterface`: a DRAM access whose bank is outside its core's
+  banks. Fills carry the requesting core. Write-backs carry the LLC's id, so they are attributed to
+  the page's owner in the placer's table, as `SharedOutside` does for shared pages.
+- Refused unless `main_memory_type` is MCsim (fixed-latency memory has no banks).
+- Overlap with colour or LLC bank bits is handled by joint placement (P5), which comes first.
+- Known MCsim limit: the decode keeps 32 bits of the line address (`unsigned tempA`), so address
+  bits 38 and up are dropped. Bank bits are below that; rows of high trace addresses alias.
+
 ## 7. Implementation plan
 
 Each step is one commit with its gate. Steps B (banking) and P (partitioning) share A1.
@@ -467,6 +500,8 @@ Each step is one commit with its gate. Steps B (banking) and P (partitioning) sh
 | P3 | `ColourPartition` + `PagePlacer` | per-core sets confined to owned colours; zero violations with the placer on |
 | P4 | `LlcBankPartition` | added without touching any file outside its own (modularity check) |
 | D1 | docs: `SUPPORTED_CONFIGURATIONS.md`, manual section, presets | |
+| P5 | joint placement in `PagePlacer` (section 6.6): one frame for all placing schemes; refuse only a core with no common frame | `partition.sh` unchanged; unit test: two placing schemes on overlapping bits place every page inside both, an infeasible ownership is refused with a message (colours and LLC banks are disjoint by construction, so the first real overlap is P6) |
+| P6 | `DramBankPartition` (section 6.9) | DRAM-bank confinement per core on private traces, zero violations with the placer on; colour + DRAM bank under the default FRFCFS mapping; a changed `AddressMapping` followed; refused without MCsim; regression byte-identical |
 
 B1 to B5 give stable a multi-bank LLC. P1 can start after A1, independent of B.
 
@@ -503,6 +538,6 @@ B1 to B5 give stable a multi-bank LLC. P1 can start after A1, independent of B.
 | Snooping write-back ordering per bank | a line's write-back and a later request now meet at one bank, as today; no cross-bank ordering exists | covered by the single-supplier and EEMBC checks |
 | Broadcast capacity stall | a full non-home bank holds demand requests | correct; B6 removes it if measured as significant |
 | Hook overhead | hooks run on every fill | empty `PartitionSet` fast path; P1 timing gate |
-| Placing schemes sharing bits | e.g. banks interleaved at 4 KiB inside colour bits | refused at construction |
+| Placing schemes sharing bits | e.g. banks interleaved at 4 KiB inside colour bits, DRAM bank bits inside colour bits | joint placement (P5); a core with no common frame is refused |
 | gem5 full system | page allocation is Linux's | violations reported only |
 | Merge with `network` | both branches touch `homeOf` and the builders | same names, parameters and semantics; `network` adopts `AddressMap` at merge |
