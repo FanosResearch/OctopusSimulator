@@ -110,6 +110,8 @@ namespace octopus
             PartitionContext c = ctx;
             if (pm.count("page_size")) c.page_bytes = (uint64_t)std::get<int>(pm.at("page_size").value);
             c.pwb_owner = str(pm, "pwb_owner", "requester");
+            c.contiguous = !pm.count("contiguous") || std::get<int>(pm.at("contiguous").value) != 0;
+            c.schedule = str(pm, "schedule", "");
             m_partitions.add(PartitionRegistry::build(scheme, str(pm, "ownership", "static"), str(pm, "owners", ""), c), strict);
         }
         if (m_partitions.empty()) return;
@@ -119,7 +121,7 @@ namespace octopus
         if (!hooked && (hooked = true))
             Logger::atRunEnd([](const std::string &dir) {
                 std::ofstream f(dir + "/Partitions.csv");
-                f << "Cache,Partition,Scheme,Core,Fills,Violations,SharedOutside\n";
+                f << "Cache,Partition,Scheme,Core,Fills,Violations,SharedOutside,SharedFills,EvictedByOther\n";
                 uint64_t v = 0;
                 for (CacheDataHandler *h : handlers()) { h->m_partitions.report(f); v += h->m_partitions.violations(); }
                 DramMap::instance().partitions().report(f); v += DramMap::instance().partitions().violations();
@@ -144,6 +146,7 @@ namespace octopus
         for (CacheDataHandler *h : handlers())
         {
             h->ensurePartitions();
+            h->m_partitions.setCores(num_cores);
             const auto &own = h->m_partitions.schemes();
             for (size_t k = 0; k < own.size(); k++)
             {
@@ -152,6 +155,7 @@ namespace octopus
                     dram.partitions().watch(own[k].get(), (int)k, h->m_partitions.strict(k));
             }
         }
+        dram.partitions().setCores(num_cores);
         PagePlacer::instance().configure(page_placer, schemes, num_cores);
     }
 
@@ -357,6 +361,7 @@ namespace octopus
     void CacheDataHandler::updateCycle(uint64_t cycle)
     {
         m_cycle = cycle;
+        if (m_partitions_built) m_partitions.tick(cycle);   // cat schedule (s6.11)
     }
 
     bool CacheDataHandler::isReady()

@@ -28,6 +28,7 @@
  */
 #include "Partitioning.h"
 
+#include <algorithm>
 #include <map>
 #include <ostream>
 #include <vector>
@@ -65,14 +66,49 @@ namespace octopus
                 if (m_holder[u] == FREE && m_owners->owns(core, u)) n++;
             return n;
         }
-        bool allocate(int core, uint64_t key) override
+        bool admitsDemand(int core, const std::map<int, int> &need) const override
+        {
+            if (core < 0 || !m_owners->restricts()) return true;
+            return matchable(need, core, -1);
+        }
+        void setCores(int n) override { m_cores = n; m_overlap = -1; }
+        bool overlaps() const override
+        {
+            if (m_overlap < 0)
+            {
+                m_overlap = 0;
+                for (int u = 0; u < m_entries && !m_overlap; u++)
+                {
+                    int owners = 0;
+                    for (int c = 0; c < m_cores; c++) owners += m_owners->owns(c, u);
+                    m_overlap = owners > 1;
+                }
+            }
+            return m_overlap == 1;
+        }
+        // A new entry takes the free unit of its core that the fewest other cores own (its private
+        // units first). With `waiting`, the first such unit whose loss still leaves every waiting
+        // request a free unit of its own core; if none does, the least shared one.
+        bool allocate(int core, uint64_t key, const std::map<int, int> *waiting = nullptr) override
         {
             if (m_held.count(key)) return true;
-            int u = freeUnit(core);
+            std::vector<std::pair<int, int>> free;   // (cores sharing it, unit) of the core's free units
+            for (int v = 0; v < m_entries; v++)
+                if (m_holder[v] == FREE && m_owners->owns(core, v)) free.push_back({sharers(v), v});
+            std::sort(free.begin(), free.end());
+            int u = free.empty() ? -1 : free.front().second;
+            if (waiting)
+                for (auto &f : free)
+                    if (matchable(*waiting, -1, f.second)) { u = f.second; break; }
             if (u >= 0) m_holder[u] = core;
             m_held[key] = {u, core};
             if (core >= 0) { int n = ++m_count[core]; if (n > m_peak[core]) m_peak[core] = n; }
             return u >= 0;
+        }
+        int entryUnit(uint64_t key) const override
+        {
+            auto it = m_held.find(key);
+            return it == m_held.end() ? -1 : it->second.unit;
         }
         void release(uint64_t key) override
         {
@@ -96,6 +132,7 @@ namespace octopus
 
     protected:
         bool m_gates = true;                  // the sender holds a core back while it has no free unit
+        void ownershipChanged() override { m_overlap = -1; }
 
     private:
         static constexpr int FREE = -2;
@@ -106,6 +143,67 @@ namespace octopus
                 if (m_holder[u] == FREE && m_owners->owns(core, u)) return u;
             return -1;
         }
+        int sharers(int u) const
+        {
+            int n = 0;
+            for (int c = 0; c < m_cores; c++) n += m_owners->owns(c, u);
+            return n;
+        }
+        // Hall's condition: every set of cores can give each of its waiting requests (`need`, plus
+        // one for `extra`) a distinct free unit (unit `removed` taken) that one of its cores owns.
+        // Cores owning the same units form one group. Only the sets the change can affect are
+        // checked: those holding `extra`'s group, or whose units include `removed`. With disjoint
+        // owners this is the per-core rule: free units > waiting requests.
+        bool matchable(const std::map<int, int> &need, int extra, int removed) const
+        {
+            int top = m_cores;
+            for (auto &kv : need) top = std::max(top, kv.first + 1);
+            top = std::max(top, extra + 1);
+            std::map<std::vector<bool>, int> groups;   // owned units -> requests waiting
+            std::vector<bool> extra_mask;
+            for (int c = 0; c < top; c++)
+            {
+                auto it = need.find(c);
+                int n = (it == need.end() ? 0 : it->second) + (c == extra);
+                if (n == 0 && c != extra) continue;
+                std::vector<bool> m(m_entries);
+                for (int u = 0; u < m_entries; u++) m[u] = m_owners->owns(c, u);
+                groups[m] += n;
+                if (c == extra) extra_mask = m;
+            }
+            std::vector<std::pair<std::vector<bool>, int>> g(groups.begin(), groups.end());
+            if (g.size() > 16)   // too many distinct owner sets to enumerate: per core only
+            {
+                for (auto &p : g)
+                {
+                    int f = 0;
+                    for (int u = 0; u < m_entries; u++) f += p.first[u] && m_holder[u] == FREE && u != removed;
+                    if (p.second > f) return false;
+                }
+                return true;
+            }
+            for (uint32_t s = 1; s < (1u << g.size()); s++)
+            {
+                bool has_extra = extra < 0, has_removed = removed < 0;
+                int waiting = 0;
+                std::vector<bool> uni(m_entries, false);
+                for (size_t i = 0; i < g.size(); i++)
+                {
+                    if (!(s >> i & 1)) continue;
+                    waiting += g[i].second;
+                    if (extra >= 0 && g[i].first == extra_mask) has_extra = true;
+                    for (int u = 0; u < m_entries; u++) uni[u] = uni[u] || g[i].first[u];
+                }
+                if (removed >= 0 && uni[removed]) has_removed = true;
+                if (!has_extra || !has_removed) continue;
+                int free = 0;
+                for (int u = 0; u < m_entries; u++) free += uni[u] && m_holder[u] == FREE && u != removed;
+                if (waiting > free) return false;
+            }
+            return true;
+        }
+        int m_cores = 0;
+        mutable int m_overlap = -1;           // overlaps(): -1 = not computed
         Entry m_kind;
         const char *m_name;
         const char *m_size_key;

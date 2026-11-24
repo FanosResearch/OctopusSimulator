@@ -90,9 +90,17 @@ below can be selected, swept, or combined without touching C++.
 ## Predictable caching / real-time support
 
 Cache partitioning is configured per cache as `partition[k].scheme(s)` (what is
-split), `ownership(s)` (who owns which units; default `static`) and `owners(s)`
-(`cores:units;...` with `a-b` ranges; unlisted cores share the unclaimed units).
-Several schemes can apply to one cache.
+split), `ownership(s)` (who owns which units) and `owners(s)`. Several schemes can
+apply to one cache, and any ownership works with any scheme.
+
+| Ownership | `owners(s)` | Cores not listed |
+|---|---|---|
+| `static` (default) | `cores:units;...` with `a-b` ranges, e.g. `0:0-3;1-3:4-15` | share the units nobody claimed |
+| `cat` (Intel CAT style) | `cores:mask;...` with a hex capacity bit mask (bit u = unit u), e.g. `0:0x00f;1:0x0f0;2-3:0xff0`; masks may overlap and must be contiguous unless `contiguous(i),0` | own every unit |
+
+With `cat`, `schedule(s)` = `<cycle>@<owners>|<cycle>@<owners>...` changes the masks while the
+run goes on, from each of those cycles of the cache: lines and entries in units a core loses
+stay; new fills follow the new masks. Only for cache-enforced schemes (`way`, `mshr`, `pwb`).
 
 | Scheme | Units | Enforced by |
 |---|---|---|
@@ -113,6 +121,8 @@ Several schemes can apply to one cache.
   core, the fills, the **violations** (fills outside the core's units) and the fills
   into pages placed for another core (shared data). DRAM schemes have `DRAM` rows: their
   fills are DRAM accesses (reads for the requester, write-backs for the page's owner).
+  The last two columns are `SharedFills` (fills in a unit another core also owns) and
+  `EvictedByOther` (the core's lines evicted by another core's fill).
   `partition[k].strict(i),1` stops the run on the first violation. For `mshr` the fills
   are the misses a core opened, for `pwb` the evicted lines charged to it, and the run prints
   each core's peak entries against its units.

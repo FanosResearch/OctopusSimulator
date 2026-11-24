@@ -158,9 +158,14 @@ Banked directory runs need the race fixes `network` made in commit 973fe821, por
 the NoC parts:
 
 - PutE goes to `homeOf(addr)`; the MOESI L1 identifies home data with `isHome(msg.from)`.
-- MOESI: the `MOESI_LLC_directory_v2` and `MOESI_directory_v2` tables (MOESI `EI_a + Fwd_GetS`).
-  MESI: `MESI_directory_banked`, an L1 table whose owner can be evicted while it still collects
-  acks.
+- MOESI: `network`'s `MOESI_LLC_directory_v2` and `MOESI_directory_v2` tables (MOESI `EI_a +
+  Fwd_GetS`), now the content of `MOESI_LLC_directory` and `MOESI_directory`. MESI and MSI: an L1
+  owner can be evicted while it still collects acks (`IM_aInv`).
+- **One table per protocol and level.** Every fix is in the base tables (`MSI_directory`,
+  `MESI_directory`, `MOESI_directory` and their `_LLC_directory`), not in variant files: the races
+  are protocol bugs, not banking ones. Apart from E and O, the MSI tables are a subset of the MESI
+  ones and the MESI ones of the MOESI ones (checked cell by cell); the MSI L1 table now has MESI's
+  `IM_aInv`, `SM_aS`/`SM_aSI`/`SM_aI` and `IS_d + Fwd` stall.
 - Stale Puts are acknowledged, not Faults: PutS / last_PutS, and PutM / PutE from a core that is no
   longer the owner, in the LLC states reached by the LLC's own eviction or a refetch. On `stable`
   these cells are in the existing `MSI_LLC_directory` and `MESI_LLC_directory` tables (7fedc5b1);
@@ -170,8 +175,9 @@ Not ported: admission `restoreLast`, the Classifier, transmit reservations. They
 mechanisms.
 
 The B4 gate first ran under FCFS only. Running RR and TDM (test/banking/README.md), and later the
-MSHR back-pressure of P7, exposed five timing races that banking makes reachable; one LLC never hit
-them on these traces:
+MSHR back-pressure of P7, exposed six timing races that banking makes reachable; one LLC never hit
+them on these traces. The Table column names the file the fix first went into; all of them are
+now in the base tables (277e553c):
 
 | Commit | Table | Race | Cell |
 |---|---|---|---|
@@ -180,12 +186,13 @@ them on these traces:
 | f4d9c2eb | `MOESI_directory_v2` (L1) | an owner still in `IS_d` took a younger `InvM` ahead of a held `Fwd_GetS` | `IS_d + InvM` stalls, as `SM_ad` does |
 | e257c1f7 | `MESI_directory_banked_v2` (L1), `MESI_LLC_directory_v3` | the LLC evicts a line it just granted exclusively (`I + GetS -> E`, then `Replacement`); the owner, still in `IS_d`, answers the plain `Inv` with an `InvAck` on the request bus and its data later on the response bus, and the LLC took the `InvAck` first | `E`/`M + Replacement` sends `InvM` (`SendInvM`, as MOESI); `IS_d + InvM` stalls; `E`/`M + InvM` answers once with `InvAck_Data` |
 | e257c1f7 | `MSI_LLC_directory_v2`, `MESI_LLC_directory_v3` | a stale PutM (or PutE) from the one sharer left: the owner evicted (`MI_a`/`EI_a`), served a `Fwd_GetS` (`SI_a`), and the other sharer then left; `PutAck/DecSharers` stayed in `S` with no sharer, and the next GetM sent no `Inv` (`map::at`) | new events `last_PutM_Data_fromNonOwner` / `last_PutE_fromNonOwner`: `S` goes to `I`, as `last_PutS` does |
+| 277e553c | `MSI_directory` (L1) | as a60198ca for MESI: the LLC evicts a line whose new owner has its data and still collects acks (`IM_a`/`SM_a + Inv`); MSI kept the Fault (dir-msi, TDM, overlapping MSHR masks, iirflt01) | MESI's cells: `IM_a`/`SM_a + Inv -> IM_aInv`, which completes the store and returns the data; `SM_a + Fwd_*` saved (`SM_aS`/`SM_aSI`/`SM_aI`); `IS_d + Fwd_*` stalls |
 
-The fourth and fifth are protocol bugs of the unbanked tables too; banking and the TDM / MSHR
+The last three are protocol bugs of the unbanked tables too; banking and the TDM / MSHR
 back-pressure timing only made them reachable on these traces. The new events and `InvM` are decoded
-only when a table defines them (by name), so the older tables behave exactly as before. MOESI's L1
-leaves `MI_a + Fwd_GetS` for `OI_a` and stays the owner, so its late PutM is the owner's, not a
-stale one; the MOESI tables are unchanged and pass the same gates. Every
+only when a table defines them (by name), so a table without them (another branch's) behaves as
+before. MOESI's L1 leaves `MI_a + Fwd_GetS` for `OI_a` and stays the owner, so its late PutM is the
+owner's, not a stale one. Every
 LLC-bound message of a line still reaches only its home bank (checked by `check_bank_trace.py` on
 every run): banking changes the timing, not the protocol.
 
@@ -591,17 +598,35 @@ are limited to the unclaimed units. `cat` adds what Cache Allocation Technology 
   that is not is refused at startup. `partition[k].contiguous(i),0` lifts the rule (Arm MPAM and
   AMD allow arbitrary masks).
 - **Reprogramming at run time.** System software changes masks while tasks run.
-  `partition[k].schedule(s),<cycle>@<owners>|<cycle>@<owners>` applies a new mask set at each
-  cycle, through `Ownership::tick`. This needs `PartitionSet::tick(cycle)` called by the cache
-  each cycle (one empty check when no scheme is configured). As on CAT hardware, lines in units a
-  core loses stay and still hit; only new fills follow the new masks. A run with no `schedule` is
-  identical to `static` with the same masks.
+  `partition[k].schedule(s),<cycle>@<owners>|<cycle>@<owners>` applies a new mask set from each
+  cycle (the cache's cycle; cycles must increase), through `Ownership::tick`, which returns
+  whether the owners changed; the scheme then drops what it cached (`ownershipChanged`, the way
+  scheme's per-core masks). `CacheDataHandler::updateCycle` calls `PartitionSet::tick(cycle)`,
+  one flag check when no ownership ticks. As on CAT hardware, lines in units a core loses stay
+  and still hit, and MSHR or PWB entries keep their units; only new fills and new entries follow
+  the new masks. A run with no `schedule` is identical to `static` with the same units per core.
+  A schedule applies to cache-enforced schemes (`way`, `mshr`, `pwb`): a placing scheme (`colour`,
+  `bank`, `dram_bank`) places each page once, at its first touch, so a schedule there is refused,
+  as is a schedule with any ownership other than `cat`.
 - **Report.** Sharing is the point of overlap, so two columns are appended to `Partitions.csv`
-  for every scheme: `shared_fills` (fills into a unit that another core also owns) and
-  `evicted_by_other` (this core's lines evicted by another core's fill, using `placed_by` from
-  P8). `partition.sh` checks the new header.
+  for every scheme: `SharedFills` (fills, or entries, in a unit that another of the run's cores
+  also owns, under the masks in force) and `EvictedByOther` (this core's lines evicted by another
+  core's fill, using `placed_by` from P8; cache-space schemes only, 0 for entry and DRAM
+  schemes). The scheme reports the unit of a fill (`fillUnit`: the way, or the placed unit) or of
+  an entry (`entryUnit`). `partition.sh` checks the new header.
 - It works with any scheme, as every ownership does: overlapping ways, colours, banks, or MSHR and
   PWB entries (a shared pool next to private entries).
+- **Overlapping entries and the sender's gate.** The per-core rule of section 6.10 (free units >
+  waiting requests) is not enough once two cores own a unit: both count on it, and one of them
+  then opens an entry with no unit (the first P9 gate: 6477 violations, overlapping MSHR masks,
+  TDM). The gate and the allocator now look at every core. The controller reports each core's
+  waiting requests (queued, plus open misses for a requester-charged `pwb`). A request is admitted
+  only if Hall's condition still holds with it: every set of cores has at least as many free units
+  in the union of their masks as requests waiting (cores with the same mask form one group; only
+  the sets holding the requester's group are checked). A new entry takes the requester's free unit
+  that the fewest other cores own, and among those the first whose loss still leaves every waiting
+  request a unit of its own core. With disjoint owners both reduce to the per-core rule and the
+  lowest free unit, so `static` runs are unchanged.
 
 ## 7. Implementation plan
 
@@ -626,7 +651,7 @@ Each step is one commit with its gate. Steps B (banking) and P (partitioning) sh
 | P6 | `DramBankPartition` (section 6.9) | DRAM-bank confinement per core on private traces, zero violations with the placer on; colour + DRAM bank under the default FRFCFS mapping; a changed `AddressMapping` followed; refused without MCsim; regression byte-identical |
 | P7 | stateful `allocate`/`release`/`freeUnits` in `PartitionScheme` and `PartitionSet`, called from the `m_pending_requests` insert/erase; the LLC's demand gate consulted by the request bus and its arbiters; `MshrPartition` (`mshr`) in a new file (section 6.10) | regression and `banked.sh` byte-identical with no scheme; with `mshr`, every core's peak entries <= its units; a streaming core no longer delays a victim core's misses on MSHRs (victim core's worst-case latency drops); refused when `num_mshr` is -1 |
 | P8 | `PwbPartition` (`pwb`) in the same file; `pwb_owner(s)` = `requester` (default) or `victim`; `GenericCacheLine::placed_by`; the sender's gate also reserves a PWB unit per open miss (section 6.10) | byte-identical with no scheme; requester mode: 0 violations and every core's peak entries <= its units on every run; victim mode: entries charged to the placing core, accounting only; refused when `pwb_size` is -1 or `pwb_owner` is neither mode |
-| P9 | `OverlappingOwnership` (`cat`): hex masks, contiguity check, `schedule`, `PartitionSet::tick`; `shared_fills` and `evicted_by_other` columns (section 6.11) | the contract tests pass with `cat`; `cat` with disjoint masks gives the same timing as `static`; a non-contiguous mask is refused; a scheduled mask change takes effect at its cycle (fills before and after) |
+| P9 | `CatOwnership` (`cat`, src/Partitioning/CatOwnership.cpp): hex masks, contiguity check, `schedule`, `PartitionSet::tick`; `SharedFills` and `EvictedByOther` columns (section 6.11) | the contract tests pass with `cat`; `cat` with disjoint masks gives the same timing as `static`; a non-contiguous mask is refused; a scheduled mask change takes effect at its cycle (fills before and after) |
 | P10 | optional: per-core round-robin PWB issue order (`pwb_drain(s),rr`) | default order byte-identical; with `rr`, no core's write-back waits behind more than one entry of each other core in the PWB |
 
 B1 to B5 give stable a multi-bank LLC. P1 can start after A1, independent of B.

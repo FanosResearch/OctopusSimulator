@@ -71,6 +71,7 @@ namespace octopus
         m_pending_write_back_regs[wb_address] = *line;
         line->valid = false;
         entryOpened(PartitionScheme::Entry::PWB, core, wb_address, line->placed_by);   // pwb partition (s6.10)
+        lineEvicted(line->placed_by, core);
 
         // Queue this eviction so its write-back is always issued (see header).
         m_pwb_pending_issue.push_back(wb_address);

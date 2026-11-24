@@ -38,6 +38,7 @@ namespace octopus
         // lazily on first use if a builder does not call it.
         bool m_partitions_built = false;
         int m_mshr_entries = -1;
+        PartitionSet::Waiting m_waiting;   // set by the controller's demand gate
         void ensurePartitions() { if (!m_partitions_built) { m_partitions_built = true; buildPartitions(); } }
         void buildPartitions();
         static std::vector<CacheDataHandler *> &handlers();   // every live handler
@@ -107,15 +108,23 @@ namespace octopus
         const PartitionSet &partitions() const { return m_partitions; }
         // Entry partitions (MSHR and write-back buffer, s6.10). The controller gives its MSHR
         // count before the partitions are built; an MSHR scheme, or a requester-charged write-back
-        // buffer scheme, gates demand requests at the sender (admitsDemand: `queued` = the core's
-        // requests already at this cache, `outstanding` = the misses it has open here);
-        // entryOpened / entryFreed follow each entry, keyed by line address.
+        // buffer scheme, gates demand requests at the sender (admitsDemand). The controller
+        // installs `waiting`: per core, its requests at this cache that may still open a miss and
+        // the misses it has open. Entries follow entryOpened / entryFreed, keyed by line address.
         void setMshrEntries(int n) { m_mshr_entries = n; }
         virtual int pwbEntries() const { return -1; }
         bool gatesDemand() { ensurePartitions(); return m_partitions.gatesDemand(); }
-        bool admitsDemand(int core, int queued, int outstanding) const { return m_partitions.admitsDemand(core, queued, outstanding); }
+        void setWaiting(PartitionSet::Waiting w) { m_waiting = std::move(w); }
+        bool admitsDemand(int core) const
+        {
+            std::map<int, int> queued, outstanding;
+            if (m_waiting) m_waiting(queued, outstanding);
+            return m_partitions.admitsDemand(core, queued, outstanding);
+        }
         void entryOpened(PartitionScheme::Entry e, int core, uint64_t key, int placed_by = -1)
-        { ensurePartitions(); if (m_partitions.hasEntrySchemes()) m_partitions.allocate(e, core, key, placed_by); }
+        { ensurePartitions(); if (m_partitions.hasEntrySchemes()) m_partitions.allocate(e, core, key, placed_by, &m_waiting); }
+        // a fill by `evictor` evicted line `line` (EvictedByOther column)
+        void lineEvicted(int placed_by, int evictor) { if (!m_partitions.empty()) m_partitions.onEvicted(placed_by, evictor); }
         void entryFreed(PartitionScheme::Entry e, uint64_t key)
         { if (m_partitions.hasEntrySchemes()) m_partitions.release(e, key); }
         // End of system construction: build every cache's partitions, then configure the page

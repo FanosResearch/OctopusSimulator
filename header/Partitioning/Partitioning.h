@@ -23,18 +23,26 @@
 
 namespace octopus
 {
+    struct PartitionContext;
+
     // Who owns which units. `core` < 0 is an access with no known requester: it owns everything.
     class Ownership
     {
     public:
         virtual ~Ownership() = default;
+        // the partition's other settings (cat: contiguous, schedule); called before configure
+        virtual void setContext(const PartitionContext &) {}
         virtual void configure(const std::string &owners, int units) = 0;
         virtual bool owns(int core, int unit) const = 0;
         virtual bool restricts() const = 0;                    // some core is limited
         // why this ownership cannot work (e.g. a core owns no unit); empty = fine
         virtual std::string invalid() const { return ""; }
         virtual void onAccess(int core, int unit, bool hit) {}
-        virtual void tick(uint64_t cycle) {}
+        // Run-time reprogramming (cat schedule, s6.11): ticks() says the ownership changes over
+        // time; tick applies what is due at `cycle` and returns whether the owners changed.
+        virtual bool ticks() const { return false; }
+        virtual bool schedules() const { return false; }   // accepts a schedule(s) setting
+        virtual bool tick(uint64_t cycle) { return false; }
     };
 
     // What the cache tells a scheme about itself when the scheme is built.
@@ -48,6 +56,8 @@ namespace octopus
         int mshr_entries = 16;             // the controller's num_mshr (-1 = unbounded)
         int pwb_entries = 8;               // the write-back buffer depth, pwb_size (-1 = unbounded)
         std::string pwb_owner = "requester";   // partition[k].pwb_owner(s): requester or victim
+        bool contiguous = true;            // partition[k].contiguous(i): cat masks must be contiguous
+        std::string schedule;              // partition[k].schedule(s): cat masks over time
     };
 
     // What is split, and where it is enforced. Every hook has a no-op default.
@@ -77,11 +87,19 @@ namespace octopus
         // the core an entry is charged to: the requester, or (pwb victim mode) the core that placed
         // the evicted line (`placed_by`, -1 = unknown)
         virtual int chargedCore(int core, int placed_by) const { return core; }
-        virtual bool allocate(int core, uint64_t key) { return true; }   // core = chargedCore(...)
+        // core = chargedCore(...). `waiting` (if given): every core's requests that may still take
+        // a unit; with overlapping owners the unit is chosen so that they all still can (s6.11).
+        virtual bool allocate(int core, uint64_t key, const std::map<int, int> *waiting = nullptr) { return true; }
         // units `core` may still take (an entry scheme with a restricting ownership; else no limit)
         virtual int freeUnits(int core) const { return 1 << 30; }
         // whether the scheme holds a core's demand requests back at the sender (s6.10)
         virtual bool gatesDemand() const { return false; }
+        // whether `core` may send one more request, given every core's requests that may still
+        // take a unit (`need`): they, and the new one, can each get a free unit of their own core
+        virtual bool admitsDemand(int core, const std::map<int, int> &need) const { return true; }
+        // some unit is owned by two of the run's cores (then the allocator needs `waiting`)
+        virtual bool overlaps() const { return false; }
+        virtual void setCores(int n) {}
         virtual void release(uint64_t key) {}
         // end-of-run lines for stdout (an entry scheme's per-core peak)
         virtual void summary(std::ostream &os, const std::string &cache, int index) const {}
@@ -103,13 +121,18 @@ namespace octopus
         // violates only when it had to fall back (the core owns no unit); a placing scheme
         // violates whenever an address reached the cache unplaced.
         virtual bool inPartition(int core, uint64_t addr, uint64_t set, int way) const { return true; }
+        // the unit a fill of `addr` into (set, way) lands in, -1 = none (for the SharedFills column)
+        virtual int fillUnit(uint64_t addr, uint64_t set, int way) const { return placesAddresses() ? unitOf(addr) : -1; }
+        // the unit entry `key` holds, -1 = none (entry schemes)
+        virtual int entryUnit(uint64_t key) const { return -1; }
         // A scheme of a memory resource (DRAM banks): caches do not count its fills; the memory
         // controller counts its accesses instead (DramMap, Partitions.csv rows "DRAM").
         virtual bool countedAtMemory() const { return false; }
 
         // observation
         virtual void onAccess(int core, uint64_t addr, bool hit) {}
-        virtual void tick(uint64_t cycle) {}
+        // a scheduled ownership change takes effect (cached masks are dropped)
+        virtual void tick(uint64_t cycle) { if (m_owners && m_owners->tick(cycle)) ownershipChanged(); }
 
     protected:
         virtual void ownershipChanged() {}
@@ -124,12 +147,19 @@ namespace octopus
     {
     public:
         bool empty() const { return m_view.empty(); }
+        // the run's core count (the SharedFills column: a unit another core also owns)
+        void setCores(int n) { m_cores = n; for (auto &s : m_owned) s->setCores(n); }
+        // the cache's cycle: applies scheduled ownership changes (one check when none ticks)
+        void tick(uint64_t cycle) { if (m_ticking) for (auto &s : m_owned) s->tick(cycle); }
+        // a fill by `evictor` evicted a line `victim` placed (EvictedByOther column)
+        void onEvicted(int victim, int evictor);
         void setName(const std::string &cache) { m_cache = cache; }
         void add(std::unique_ptr<PartitionScheme> s, bool strict = false)
         {
             m_index.push_back((int)m_view.size());
             if (s->countsEntries()) m_entries.push_back({m_view.size(), s.get()});
             m_view.push_back(s.get());
+            if (s->owners().ticks()) m_ticking = true;
             m_owned.push_back(std::move(s));
             m_strict.push_back(strict);
             m_stats.emplace_back();
@@ -166,21 +196,21 @@ namespace octopus
             for (auto &p : m_entries) if (p.second->gatesDemand()) return true;
             return false;
         }
-        // whether `core` may send one more demand request (s6.10). `queued` = its requests at the
-        // cache that may each still open a miss; `outstanding` = the misses it has open, each of
-        // which may still evict a line when it fills. An MSHR scheme needs a free unit beyond the
-        // queued requests; a requester-charged write-back buffer scheme one beyond both.
-        bool admitsDemand(int core, int queued, int outstanding) const
+        // Per core: requests at the cache that may each still open a miss (queued), and the
+        // misses it has open, each of which may still evict a line when it fills (outstanding).
+        using Waiting = std::function<void(std::map<int, int> &queued, std::map<int, int> &outstanding)>;
+        // whether `core` may send one more demand request (s6.10): an MSHR scheme counts the
+        // queued requests, a requester-charged write-back buffer scheme both
+        bool admitsDemand(int core, const std::map<int, int> &queued, const std::map<int, int> &outstanding) const
         {
             for (auto &p : m_entries)
             {
                 if (!p.second->gatesDemand()) continue;
-                int need = queued + (p.second->entryKind() == PartitionScheme::Entry::PWB ? outstanding : 0);
-                if (p.second->freeUnits(core) <= need) return false;
+                if (!p.second->admitsDemand(core, need(p.second, queued, outstanding))) return false;
             }
             return true;
         }
-        void allocate(PartitionScheme::Entry e, int core, uint64_t key, int placed_by = -1);
+        void allocate(PartitionScheme::Entry e, int core, uint64_t key, int placed_by = -1, const Waiting *waiting = nullptr);
         void release(PartitionScheme::Entry e, uint64_t key)
         {
             for (auto &p : m_entries) if (p.second->entryKind() == e) p.second->release(key);
@@ -193,11 +223,22 @@ namespace octopus
         uint64_t violations(size_t k, int core) const;
         uint64_t violations() const;                 // all schemes, all cores
         uint64_t sharedOutside(size_t k, int core) const;
-        // CSV rows "cache,partition,scheme,core,fills,violations,shared_outside", one per scheme and core
+        // CSV rows "cache,partition,scheme,core,fills,violations,shared_outside,shared_fills,
+        // evicted_by_other", one per scheme and core
         void report(std::ostream &os) const;
 
     private:
-        struct Stats { std::map<int, uint64_t> fills, violations, shared; };
+        struct Stats { std::map<int, uint64_t> fills, violations, shared, shared_fills, evicted_by_other; };
+        static uint64_t get(const std::map<int, uint64_t> &m, int core) { auto it = m.find(core); return it == m.end() ? 0 : it->second; }
+        bool sharedUnit(size_t k, int core, int unit) const;   // another core also owns `unit`
+        static std::map<int, int> need(const PartitionScheme *s, const std::map<int, int> &queued, const std::map<int, int> &outstanding)
+        {
+            std::map<int, int> n = queued;
+            if (s->entryKind() == PartitionScheme::Entry::PWB) for (auto &kv : outstanding) n[kv.first] += kv.second;
+            return n;
+        }
+        int m_cores = 0;
+        bool m_ticking = false;
         std::string m_cache;
         std::vector<const PartitionScheme *> m_view;            // every scheme, in partition order
         std::vector<int> m_index;                               // its partition[k] number

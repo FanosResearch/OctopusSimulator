@@ -457,20 +457,22 @@ namespace octopus
         // that joined a miss, or holds one, is no longer counted (the miss holds the unit).
         // A requester-charged write-back buffer partition also counts the core's open misses:
         // each may still evict a line into the buffer when its data arrives.
-        m_lower_interface->m_demand_gate = [this](const Message &m) {
-            int core = m.owner;
-            auto mine = [core](const Message &q) { return q.isDemandRequest() && q.owner == core; };
-            int queued = m_lower_interface->countRxDemand([&](const Message &q) { return q.owner == core && !notForThisBank(q); });
-            m_processing_queue->forEach([&](const Message &q, FRFCFS_State) { if (mine(q)) queued++; });
+        // Every core's counts at once: with overlapping owners (cat, s6.11) the gate and the
+        // allocator check that all waiting requests can still get a unit, not one core alone.
+        m_data_handler->setWaiting([this](std::map<int, int> &queued, std::map<int, int> &outstanding) {
+            auto demand = [](const Message &q) { return q.isDemandRequest() && q.owner >= 0; };
+            m_lower_interface->countRxDemand([&](const Message &q) {
+                if (q.owner >= 0 && !notForThisBank(q)) queued[q.owner]++;
+                return false; });
+            m_processing_queue->forEach([&](const Message &q, FRFCFS_State) { if (demand(q)) queued[q.owner]++; });
             for (const DataArrayOp &op : m_array_ops)
-                if (op.kind == DataArrayOp::MESSAGE && mine(op.msg)) queued++;
+                if (op.kind == DataArrayOp::MESSAGE && demand(op.msg)) queued[op.msg.owner]++;
             for (auto &kv : m_saved_requests_for_wb)
-                for (const Message &q : kv.second) if (mine(q)) queued++;
-            int outstanding = 0;
+                for (const Message &q : kv.second) if (demand(q)) queued[q.owner]++;
             for (auto &kv : m_pending_requests)
-                if (!kv.second.empty() && kv.second.front().owner == core) outstanding++;
-            return m_data_handler->admitsDemand(core, queued, outstanding);
-        };
+                if (!kv.second.empty()) outstanding[kv.second.front().owner]++;
+        });
+        m_lower_interface->m_demand_gate = [this](const Message &m) { return m_data_handler->admitsDemand(m.owner); };
     }
 
     bool CacheController::canAdmitRequest(Message &msg)

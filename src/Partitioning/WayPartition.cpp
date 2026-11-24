@@ -28,6 +28,7 @@ namespace octopus
             restrictVictims(core, set, m);
             return way >= 0 && way < 32 && (m & (1u << way));
         }
+        int fillUnit(uint64_t addr, uint64_t set, int way) const override { return way; }
 
     protected:
         void ownershipChanged() override { m_mask.clear(); }

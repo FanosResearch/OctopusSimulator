@@ -19,6 +19,8 @@
 #     and every core's peak entries within its units;
 #   - a write-back buffer partition (requester mode) keeps every core's peak entries within its
 #     units with no violation; victim mode counts;
+#   - cat ownership: hex masks equal static, non-contiguous masks are refused, a schedule takes
+#     effect at its cycle;
 #   - configurations that cannot work are refused at startup (exit code 2).
 # Completed runs must have every LatencyReport footer. Prints one line per case; exits non-zero
 # on any failure.
@@ -150,5 +152,34 @@ if [ "$np" = 4 ] && [ "$(col 5)" -gt 0 ]; then expect pwb-victim-counted 0 "-ge 
 else bad "pwb-victim-counted: $np peaks, $(col 5) fills"; fi
 run pwb-owner-bad  "$SN" "$WS" $P8 $PW -p "$L.partition[0].pwb_owner(s)=owner";  expect pwb-owner-refused 2 "" ""
 run pwb-unbounded  "$SN" "$WS" -p "$L.pwb_size(i)=-1" $PW;                        expect pwb-unbounded-refused 2 "" ""
+
+# cat ownership (s6.11): hex masks give the same run as static with the same units (the preset LLC
+# has 2 ways); a non-contiguous mask is refused; a schedule applied at cycle 0 equals its masks, one
+# past the end changes nothing, and one at cycle T first changes a request issued at or after T.
+# Partitions.csv has the SharedFills and EvictedByOther columns.
+CW="-p $L.partition[0].scheme(s)=way -p $L.partition[0].ownership(s)=cat"
+CM="-p $L.partition[0].owners(s)=0:0x1;1-3:0x2"; md5d() { cat "$D"/LatencyReport_C*.csv | md5sum; }
+run cat-masks "$SN" "$SHARED" $CW $CM; c1=$(md5d); cd1="$D"
+hdr=$(head -1 "$D/Partitions.csv")
+[ "$c1" = "$a" ] && [ "$hdr" = "Cache,Partition,Scheme,Core,Fills,Violations,SharedOutside,SharedFills,EvictedByOther" ] &&
+  expect cat-equals-static 0 "= 0" "= 0" || bad "cat-equals-static: differs from static ($hdr)"
+run cat-gap "$SN" "$SHARED" -p "$L.m_ways_count(i)=4" $CW -p "$L.partition[0].owners(s)=0:0x5"
+grep -q "not contiguous" "$D/out" && expect cat-noncontiguous-refused 2 "" "" || bad "cat-noncontiguous-refused: $(tail -1 "$D/out")"
+run cat-gap-ok "$SN" "$SHARED" -p "$L.m_ways_count(i)=4" $CW -p "$L.partition[0].owners(s)=0:0x5" -p "$L.partition[0].contiguous(i)=0"
+                                                                                expect cat-noncontiguous-allowed 0 "= 0" "= 0"
+run cat-sched0 "$SN" "$SHARED" $CW -p "$L.partition[0].owners(s)=0:0x3" -p "$L.partition[0].schedule(s)=0@0:0x1;1-3:0x2"; s0=$(md5d)
+run cat-late "$SN" "$SHARED" $CW $CM -p "$L.partition[0].schedule(s)=999999999@0:0x2;1-3:0x1"; sl=$(md5d)
+T=800000
+run cat-mid "$SN" "$SHARED" $CW $CM -p "$L.partition[0].schedule(s)=$T@0:0x2;1-3:0x1"; sm=$(md5d)
+early=0; for c in 0 1 2 3; do   # issue cycle (ready + CPU) of each core's first request that differs
+  f=$(paste -d'|' "$cd1/LatencyReport_C$c.csv" "$D/LatencyReport_C$c.csv" | awk -F'|' 'NR > 1 && $1 != $2 { split($1, a, ","); print a[3] + a[4]; exit }')
+  [ -n "$f" ] && [ "$f" -lt $T ] && early=$((early + 1))
+done
+if [ "$s0" = "$c1" ] && [ "$sl" = "$c1" ] && [ "$sm" != "$c1" ] && [ $early = 0 ]; then expect cat-schedule-at-its-cycle 0 "= 0" "= 0"
+else bad "cat-schedule-at-its-cycle: at 0 $([ "$s0" = "$c1" ] && echo same || echo differs), late $([ "$sl" = "$c1" ] && echo same || echo differs), mid $([ "$sm" != "$c1" ] && echo differs || echo same), $early core(s) differ before $T"; fi
+run cat-sched-static "$SN" "$SHARED" -p "$L.partition[0].scheme(s)=way" -p "$L.partition[0].owners(s)=0:0" -p "$L.partition[0].schedule(s)=10@0:1"
+                                                                                expect schedule-needs-cat-refused 2 "" ""
+run cat-sched-colour "$SN" "$SHARED" -p "$L.partition[0].scheme(s)=colour" -p "$L.partition[0].ownership(s)=cat" -p "$L.partition[0].owners(s)=0:0x1" -p "$L.partition[0].schedule(s)=10@0:0x2"
+                                                                                expect schedule-placing-refused 2 "" ""
 [ $fails = 0 ] && echo "partition: all PASS" || echo "partition: $fails FAIL"
 exit $fails

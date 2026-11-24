@@ -19,6 +19,8 @@ namespace octopus
         {
             if (m_view[k]->countedAtMemory() != memory || m_view[k]->countsEntries()) continue;
             m_stats[k].fills[core]++;
+            int unit = m_view[k]->fillUnit(addr, set, way);
+            if (unit >= 0 && sharedUnit(k, core, unit)) m_stats[k].shared_fills[core]++;
             if (m_view[k]->inPartition(core, addr, set, way)) continue;
             // A page the placer gave another core (its first toucher) is shared data: outside the
             // requester's units by design, counted apart and never strict.
@@ -40,16 +42,28 @@ namespace octopus
         }
     }
 
-    void PartitionSet::allocate(PartitionScheme::Entry e, int requester, uint64_t key, int placed_by)
+    void PartitionSet::allocate(PartitionScheme::Entry e, int requester, uint64_t key, int placed_by, const Waiting *waiting)
     {
+        std::map<int, int> queued, outstanding;
+        bool counted = false;
         for (auto &p : m_entries)
         {
             if (p.second->entryKind() != e) continue;
             size_t k = p.first;
             int core = p.second->chargedCore(requester, placed_by);
-            bool inside = p.second->allocate(core, key);
+            bool inside;
+            if (waiting && *waiting && p.second->overlaps())
+            {
+                if (!counted) { (*waiting)(queued, outstanding); counted = true; }
+                std::map<int, int> n = need(p.second, queued, outstanding);
+                inside = p.second->allocate(core, key, &n);
+            }
+            else
+                inside = p.second->allocate(core, key);
             if (core < 0) continue;
             m_stats[k].fills[core]++;
+            int unit = p.second->entryUnit(key);
+            if (unit >= 0 && sharedUnit(k, core, unit)) m_stats[k].shared_fills[core]++;
             if (inside) continue;
             m_stats[k].violations[core]++;
             if (m_strict[k])
@@ -59,6 +73,20 @@ namespace octopus
                 exit(2);
             }
         }
+    }
+
+    bool PartitionSet::sharedUnit(size_t k, int core, int unit) const
+    {
+        for (int c = 0; c < m_cores; c++)
+            if (c != core && m_view[k]->owners().owns(c, unit)) return true;
+        return false;
+    }
+
+    void PartitionSet::onEvicted(int victim, int evictor)
+    {
+        if (victim < 0 || evictor < 0 || victim == evictor) return;
+        for (size_t k = 0; k < m_view.size(); k++)
+            if (!m_view[k]->countsEntries() && !m_view[k]->countedAtMemory()) m_stats[k].evicted_by_other[victim]++;
     }
 
     void PartitionSet::summary(std::ostream &os) const
@@ -96,7 +124,8 @@ namespace octopus
         for (size_t k = 0; k < m_view.size(); k++)
             for (auto &kv : m_stats[k].fills)
                 os << m_cache << "," << m_index[k] << "," << m_view[k]->name() << "," << kv.first << ","
-                   << kv.second << "," << violations(k, kv.first) << "," << sharedOutside(k, kv.first) << "\n";
+                   << kv.second << "," << violations(k, kv.first) << "," << sharedOutside(k, kv.first) << ","
+                   << get(m_stats[k].shared_fills, kv.first) << "," << get(m_stats[k].evicted_by_other, kv.first) << "\n";
     }
 
     std::unique_ptr<PartitionScheme> PartitionRegistry::build(const std::string &scheme, const std::string &ownership,
@@ -123,11 +152,23 @@ namespace octopus
             exit(2);
         }
         std::unique_ptr<Ownership> o = of->second();
+        o->setContext(ctx);
         o->configure(owners, s->units());
         std::string why = o->invalid();
         if (!why.empty())
         {
             std::cerr << ctx.cache << ": partition scheme '" << scheme << "' owners '" << owners << "': " << why << std::endl;
+            exit(2);
+        }
+        if (!ctx.schedule.empty() && !o->schedules())
+        {
+            std::cerr << ctx.cache << ": partition scheme '" << scheme << "': schedule(s) needs ownership(s) cat" << std::endl;
+            exit(2);
+        }
+        if (o->ticks() && s->placesAddresses())
+        {
+            std::cerr << ctx.cache << ": partition scheme '" << scheme << "' places pages once, at their first touch;"
+                      << " schedule(s) applies to cache-enforced schemes (way, mshr, pwb)" << std::endl;
             exit(2);
         }
         s->setOwnership(std::move(o), owners);

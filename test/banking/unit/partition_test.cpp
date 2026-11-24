@@ -5,11 +5,14 @@
 #include "PagePlacer.h"
 #include "DramMap.h"
 #include <set>
+#include <sstream>
 #include <cstdio>
 #include <map>
 #include <random>
 #include <string>
 using namespace octopus;
+// the sender's gate with only `core`'s own counts (queued, outstanding)
+static bool adm(const PartitionSet &s, int core, int q, int o) { return s.admitsDemand(core, {{core, q}}, {{core, o}}); }
 
 static int fails = 0;
 #define CHECK(c, ...) do { if (!(c)) { fails++; if (fails < 20) { printf("FAIL %s:%d: ", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n"); } } } while (0)
@@ -216,7 +219,7 @@ int main()
         CHECK(!PartitionRegistry::schemes().at("mshr")(u)->invalid().empty(), "unbounded num_mshr not refused");
         // the sender's gate: core 0 holds unit 1 (0x2000), so 1 unit is free
         CHECK(set.gatesDemand(), "an mshr scheme does not gate demand");
-        CHECK(set.admitsDemand(0, 0, 5) && !set.admitsDemand(0, 1, 0), "mshr gate: 1 free unit, queued 0 / 1");
+        CHECK(adm(set, 0, 0, 5) && !adm(set, 0, 1, 0), "mshr gate: 1 free unit, queued 0 / 1");
     }
     // 6. write-back buffer partition (P8): 4 entries, core 0 owns 0-1, core 1 owns 2-3
     {
@@ -230,11 +233,11 @@ int main()
         req.allocate(E::PWB, 0, 0x1000, 1);  // core 0's fill evicts core 1's line: charged to core 0
         CHECK(req.fills(0, 0) == 1 && req.fills(0, 1) == 0, "requester mode charged the victim");
         // core 0: 1 free unit; it may send while queued + open misses < 1
-        CHECK(req.admitsDemand(0, 0, 0) && !req.admitsDemand(0, 0, 1) && !req.admitsDemand(0, 1, 0),
+        CHECK(adm(req, 0, 0, 0) && !adm(req, 0, 0, 1) && !adm(req, 0, 1, 0),
               "pwb gate counts queued requests and open misses");
-        CHECK(req.admitsDemand(1, 1, 0), "core 1 refused with 2 free units");
+        CHECK(adm(req, 1, 1, 0), "core 1 refused with 2 free units");
         req.release(E::PWB, 0x1000);
-        CHECK(req.admitsDemand(0, 1, 0), "core 0 refused after its write-back completed");
+        CHECK(adm(req, 0, 1, 0), "core 0 refused after its write-back completed");
 
         PartitionContext v = c; v.pwb_owner = "victim";
         PartitionSet vic; vic.setName("test");
@@ -251,6 +254,94 @@ int main()
         CHECK(!PartitionRegistry::schemes().at("pwb")(bad)->invalid().empty(), "pwb_owner 'owner' not refused");
         PartitionContext u = c; u.pwb_entries = -1;
         CHECK(!PartitionRegistry::schemes().at("pwb")(u)->invalid().empty(), "unbounded pwb_size not refused");
+    }
+    // 7. cat ownership (P9): hex capacity masks, unlisted cores own everything, contiguity,
+    //    run-time schedule; with every core listed and disjoint masks it owns as static does
+    {
+        auto cat = [](const std::string &owners, int units, bool contiguous = true, const std::string &sched = "") {
+            PartitionContext c; c.contiguous = contiguous; c.schedule = sched;
+            auto o = PartitionRegistry::ownerships().at("cat")();
+            o->setContext(c); o->configure(owners, units);
+            return o;
+        };
+        auto o = cat("0:0x00f;1:0x0f0;2-3:0xff0", 12);
+        CHECK(o->invalid().empty(), "valid masks refused: %s", o->invalid().c_str());
+        CHECK(o->owns(0, 3) && !o->owns(0, 4) && o->owns(1, 4) && !o->owns(1, 8), "core 0 / 1 masks");
+        CHECK(o->owns(2, 4) && o->owns(3, 11) && !o->owns(2, 3), "cores 2-3 mask 0xff0");
+        CHECK(o->owns(5, 0) && o->owns(5, 11) && o->owns(-1, 0), "an unlisted core does not own every unit");
+        CHECK(o->restricts() && !o->ticks(), "restricts / ticks");
+        CHECK(!cat("0:0xfff", 12)->restricts(), "a full mask restricts");
+        CHECK(!cat("0:0x5", 4)->invalid().empty(), "non-contiguous mask 0x5 not refused");
+        CHECK(cat("0:0x5", 4, false)->invalid().empty(), "contiguous(i),0 still refuses 0x5");
+        CHECK(!cat("0:0x0", 4)->invalid().empty(), "empty mask not refused");
+        CHECK(!cat("0:0x10", 4)->invalid().empty(), "a bit past the units not refused");
+        CHECK(!cat("0:zz", 4)->invalid().empty(), "a non-hex mask not refused");
+        // disjoint masks for every core: the same owners as static, for every scheme's units
+        for (auto &kv : PartitionRegistry::schemes())
+        {
+            int units = kv.second(ctx)->units();
+            if (units > 64 || units < 4) continue;
+            int q = units / 4; std::string cs, ss;
+            for (int c = 0; c < 4; c++)
+            {
+                int lo = c * q, hi = (c == 3) ? units - 1 : (c + 1) * q - 1;
+                uint64_t m = 0; for (int u = lo; u <= hi; u++) m |= 1ull << u;
+                char b[64]; snprintf(b, sizeof b, "%d:0x%llx;", c, (unsigned long long)m); cs += b;
+                ss += std::to_string(c) + ":" + std::to_string(lo) + "-" + std::to_string(hi) + ";";
+            }
+            auto a = PartitionRegistry::build(kv.first, "cat", cs, ctx), s = PartitionRegistry::build(kv.first, "static", ss, ctx);
+            for (int c = -1; c < 4; c++) for (int u = 0; u < units; u++)
+                CHECK(a->owners().owns(c, u) == s->owners().owns(c, u), "%s: cat '%s' vs static '%s' core %d unit %d",
+                      kv.first.c_str(), cs.c_str(), ss.c_str(), c, u);
+        }
+        // schedule: from cycle 100 core 0 owns units 2-3, from 200 unit 0 only
+        auto t = cat("0:0x3", 4, true, "100@0:0xc|200@0:0x1");
+        CHECK(t->invalid().empty() && t->ticks(), "schedule refused: %s", t->invalid().c_str());
+        CHECK(!t->tick(99) && t->owns(0, 1) && !t->owns(0, 2), "before cycle 100");
+        CHECK(t->tick(100) && t->owns(0, 2) && !t->owns(0, 1), "at cycle 100");
+        CHECK(!t->tick(150) && t->tick(250) && t->owns(0, 0) && !t->owns(0, 2), "at cycle 200");
+        CHECK(!cat("0:0x3", 4, true, "200@0:0x1|100@0:0x2")->invalid().empty(), "decreasing schedule not refused");
+        CHECK(!cat("0:0x3", 4, true, "100@0:0x5")->invalid().empty(), "non-contiguous scheduled mask not refused");
+        CHECK(!cat("0:0x3", 4, true, "x@0:0x1")->invalid().empty(), "bad schedule cycle not refused");
+        // the way scheme follows a schedule (its cached masks are dropped at the change)
+        PartitionContext c = ctx; c.schedule = "100@0:0xf0";
+        auto w = PartitionRegistry::build("way", "cat", "0:0x0f", c);
+        uint32_t m1 = 0xff; w->restrictVictims(0, 0, m1);
+        w->tick(100);
+        uint32_t m2 = 0xff; w->restrictVictims(0, 0, m2);
+        CHECK(m1 == 0x0f && m2 == 0xf0, "way under a schedule: %x then %x", m1, m2);
+        // SharedFills: a fill into a unit another core also owns
+        PartitionSet set; set.setName("test"); set.setCores(2);
+        set.add(PartitionRegistry::build("way", "cat", "0:0x0f;1:0x3c", ctx));
+        set.onFill(0, 0x1000, 0, 0); set.onFill(0, 0x1000, 0, 3);
+        set.onEvicted(1, 0); set.onEvicted(0, 0);
+        std::ostringstream rep; set.report(rep);
+        CHECK(rep.str().find("test,0,way,0,2,0,0,1,0") != std::string::npos && rep.str().find(",1,0,0,0,0,1") == std::string::npos,
+              "report: %s", rep.str().c_str());
+    }
+    // 8. overlapping entry owners (cat): the sender's gate and the allocator look at every core
+    {
+        using E = PartitionScheme::Entry;
+        PartitionContext c = ctx; c.mshr_entries = 4;
+        // A = core 0 owns units 0-1, B = core 1 owns 1-2 (unit 1 shared)
+        PartitionSet set; set.setName("test");
+        set.add(PartitionRegistry::build("mshr", "cat", "0:0x3;1:0x6", c)); set.setCores(2);
+        CHECK(set.admitsDemand(0, {{0, 1}, {1, 1}}, {}), "A refused: A 2 + B 1 fit units 0-2");
+        // B has 2 waiting: A alone has 2 free units for 1 + 1, but A and B need 4 of units 0-2
+        CHECK(!set.admitsDemand(0, {{0, 1}, {1, 2}}, {}), "A admitted although A and B need 4 of 3 units");
+        CHECK(set.admitsDemand(0, {{0, 0}, {1, 2}}, {}), "A refused: A 1 + B 2 fit units 0-2");
+        // A's new miss takes its private unit 0, not the shared unit 1
+        set.allocate(E::MSHR, 0, 0x1000);
+        CHECK(set.violations() == 0 && set.admitsDemand(1, {{1, 1}}, {}), "A took the shared unit");
+
+        // least shared is not enough: A owns 0-1, B 0, C 1-2, D 2; every unit has two owners.
+        // With B waiting, A must leave unit 0 to B and take unit 1.
+        PartitionSet s4; s4.setName("test");
+        s4.add(PartitionRegistry::build("mshr", "cat", "0:0x3;1:0x1;2:0x6;3:0x4", c)); s4.setCores(4);
+        PartitionSet::Waiting w = [](std::map<int, int> &q, std::map<int, int> &) { q[1] = 1; };
+        s4.allocate(E::MSHR, 0, 0x1000, -1, &w);
+        CHECK(s4.admitsDemand(1, {{1, 0}}, {}), "A took unit 0, the only one B owns");
+        CHECK(!s4.admitsDemand(2, {{2, 0}, {3, 2}}, {}), "C admitted although C and D need 3 of units 1-2 with 1 held");
     }
     CHECK(PartitionRegistry::schemes().count("way") == 1, "way scheme not registered");
     CHECK(PartitionRegistry::ownerships().count("static") == 1, "static ownership not registered");
