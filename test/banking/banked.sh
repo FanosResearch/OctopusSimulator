@@ -21,9 +21,9 @@ FAMILIES=(
   "snoop-msi|MultiCoreSystem_Snoop|"
   "snoop-mesi|MultiCoreSystem_Snoop|$EXCL $(p SNOOP_MESI MESI_splitBus_snooping SNOOP_LLC_MESI MESI_LLC)"
   "snoop-moesi|MultiCoreSystem_Snoop|$EXCL $(p SNOOP_MOESI MOESI_splitBus_snooping SNOOP_LLC_MOESI MOESI_LLC)"
-  "dir-msi|MultiCoreSystem_Directory|$(p DIRECTORY_MSI ${DIR_MSI_L1:-MSI_directory} DIRECTORY_LLC_MSI ${DIR_MSI_LLC:-MSI_LLC_directory_v2})"
-  "dir-mesi|MultiCoreSystem_Directory|$(p DIRECTORY_MESI ${DIR_MESI_L1:-MESI_directory_banked_v2} DIRECTORY_LLC_MESI ${DIR_MESI_LLC:-MESI_LLC_directory_v3})"
-  "dir-moesi|MultiCoreSystem_Directory|$(p DIRECTORY_MOESI ${DIR_MOESI_L1:-MOESI_directory_v2} DIRECTORY_LLC_MOESI ${DIR_MOESI_LLC:-MOESI_LLC_directory_v2})"
+  "dir-msi|MultiCoreSystem_Directory|$(p DIRECTORY_MSI ${DIR_MSI_L1:-MSI_directory} DIRECTORY_LLC_MSI ${DIR_MSI_LLC:-MSI_LLC_directory})"
+  "dir-mesi|MultiCoreSystem_Directory|$(p DIRECTORY_MESI ${DIR_MESI_L1:-MESI_directory} DIRECTORY_LLC_MESI ${DIR_MESI_LLC:-MESI_LLC_directory})"
+  "dir-moesi|MultiCoreSystem_Directory|$(p DIRECTORY_MOESI ${DIR_MOESI_L1:-MOESI_directory} DIRECTORY_LLC_MOESI ${DIR_MOESI_LLC:-MOESI_LLC_directory})"
 )
 [ -n "${ARB:-}" ] && ARBP="-p bus[0].interconnect_controller.arbiter_type(s)=$ARB" || ARBP=""
 mkdir -p "$OUT/cfg"; : > "$OUT/jobs"

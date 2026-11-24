@@ -146,7 +146,7 @@ namespace octopus
     {
         if(msg.source == Message::Source::LOWER_INTERCONNECT)
         {
-            // last_PutM_fromOwner / last_PutE_fromOwner exist only in MOESI_LLC_directory_v2; with an older
+            // last_PutM_fromOwner / last_PutE_fromOwner exist only in tables that define them (MOESI_LLC_directory); with an older
             // table (no such events) the owner's put is classified as before
             auto defines = [this](EventId e, const char *name) { return m_fsm->getEventName((int)e) == name; };
             if (msg.data == NULL && msg.complementary_value == MESIDirectory::REQUEST_TYPE_PUTE && msg.owner == cache_line.owner_id &&

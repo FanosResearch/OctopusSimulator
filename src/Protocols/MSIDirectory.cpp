@@ -50,6 +50,14 @@ namespace octopus
         if (dprint)   // coherence transition hook (docs/Debugger.md): readable names + raw-trace FSM record
             dprint->transition(&request_msg, (uint32_t)m_id, cache_line.state, (int)event_id, next_state, false, this->m_fsm);
 
+        for (int a : actions)
+            if (a == (int)ActionId::Fault)   // name the cell before the Fault action ends the run
+                std::cout << " MSIDirectory: Fault cell (controller " << m_id << ", state " << m_fsm->getStateName(cache_line.state)
+                          << " + event " << m_fsm->getEventName((int)event_id) << ", addr 0x" << std::hex << request_msg.addr << std::dec
+                          << ", msg " << request_msg.msg_id << ", source " << (int)request_msg.source << ", from " << request_msg.from
+                          << ", owner " << request_msg.owner << ", type " << request_msg.complementary_value << ", data "
+                          << (request_msg.data != NULL) << ")" << std::endl;
+
         return handleAction(actions, request_msg, cache_line, next_state);
     }
 
