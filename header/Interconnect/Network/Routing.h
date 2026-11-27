@@ -39,6 +39,10 @@ namespace octopus { namespace net
         // (Duato: the escape route of an adaptive algorithm); alt_port < 0 = none
         int alt_port = -1;
         uint32_t alt_mask = 0;
+        // a second choice VC allocation tries after the primary and before alt (the next best
+        // minimal output of an adaptive algorithm); sec_port < 0 = none
+        int sec_port = -1;
+        uint32_t sec_mask = 0;
     };
 
     class RoutingAlgorithm

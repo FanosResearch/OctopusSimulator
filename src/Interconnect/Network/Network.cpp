@@ -485,6 +485,13 @@ namespace octopus { namespace net
                         fatal("routing " + m_cfg.routing + " returned a bad fallback route at router " + std::to_string(t.routerId(r)) + " for packet " + std::to_string(p.seq));
                     v.alt_port = rt.alt_port; v.alt_mask = rt.alt_mask & allVCs(m_cfg.vcs_per_class);
                 }
+                v.sec_port = -1; v.sec_mask = 0;
+                if (rt.sec_port >= 0)
+                {
+                    if (rt.sec_port >= t.ports(r) || (!t.isLocalPort(r, rt.sec_port) && !t.canSend(r, rt.sec_port)) || (rt.sec_mask & allVCs(m_cfg.vcs_per_class)) == 0)
+                        fatal("routing " + m_cfg.routing + " returned a bad second route at router " + std::to_string(t.routerId(r)) + " for packet " + std::to_string(p.seq));
+                    v.sec_port = rt.sec_port; v.sec_mask = rt.sec_mask & allVCs(m_cfg.vcs_per_class);
+                }
                 p.hops++; p.pipe += routerLatency(r) + switchLatency(r);
             }
         }
@@ -493,11 +500,12 @@ namespace octopus { namespace net
     // ---- phase 4: VC allocation (spec §11.2)
     void Network::phaseVCAlloc()
     {
-        // Pass 0 grants primary routes. Pass 1 (only for algorithms with an escape network) grants
-        // the fallback route to heads still without a VC: Duato's condition that a waiting head
-        // can always use the escape network.
+        // Pass 0 grants primary routes. For algorithms with an escape network, pass 1 grants the
+        // second choice (Route::sec, the next best minimal output) and pass 2 the fallback route to
+        // heads still without a VC: Duato's condition that a waiting head can always use the
+        // escape network.
         const Topology &t = *m_topo;
-        int passes = m_routing->needsEscapeVC() ? 2 : 1;
+        int passes = m_routing->needsEscapeVC() ? 3 : 1;
         for (int pass = 0; pass < passes; pass++)
         for (int r = 0; r < t.routers(); r++)
         {
@@ -516,7 +524,8 @@ namespace octopus { namespace net
                     {
                         VCState &v = R.in[q][c][w];
                         if (!v.routed || v.out_vc >= 0) continue;
-                        int want = pass == 0 ? v.out_port : v.alt_port; uint32_t mask = pass == 0 ? v.vc_mask : v.alt_mask;
+                        int want = pass == 0 ? v.out_port : pass == 1 ? v.sec_port : v.alt_port;
+                        uint32_t mask = pass == 0 ? v.vc_mask : pass == 1 ? v.sec_mask : v.alt_mask;
                         if (want != p || !(mask & (1u << ov))) continue;
                         if (m_tick < v.head_arrival + (uint64_t)routerLatency(r)) continue;   // implicit routers add no latency
                         Packet &pk = m_packets.at(v.cur);
@@ -527,7 +536,8 @@ namespace octopus { namespace net
                     int w = cands.size() == 1 ? 0 : o.va->electIndex(m_tick, cands);
                     if (w < 0) continue;
                     VCState &v = *who[w];
-                    if (pass == 1) { v.out_port = v.alt_port; v.vc_mask = v.alt_mask; }
+                    if (pass == 1) { v.out_port = v.sec_port; v.vc_mask = v.sec_mask; }
+                    if (pass == 2) { v.out_port = v.alt_port; v.vc_mask = v.alt_mask; }
                     v.out_vc = ov; o.holder = v.cur; v.va_tick = m_tick;
                     Logger::getLogger()->trace(m_packets.at(v.cur).msg, Logger::Role::NOC, (uint32_t)t.routerId(r), Logger::Phase::SERVICE, (uint16_t)((p << 8) | ov));
                     if (local) m_nis.at(m_packets.at(v.cur).dst_endpoint)->reserve(c);
@@ -626,7 +636,7 @@ namespace octopus { namespace net
         {
             ov.holder = 0;
             uint64_t seq = v.cur;
-            v.cur = 0; v.routed = false; v.out_port = -1; v.out_vc = -1; v.vc_mask = 0; v.alt_port = -1; v.alt_mask = 0;
+            v.cur = 0; v.routed = false; v.out_port = -1; v.out_vc = -1; v.vc_mask = 0; v.alt_port = -1; v.alt_mask = 0; v.sec_port = -1; v.sec_mask = 0;
             if (local) eject(seq, r, p);
         }
     }

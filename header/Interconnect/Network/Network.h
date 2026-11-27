@@ -98,6 +98,8 @@ namespace octopus { namespace net
             uint32_t vc_mask = 0;
             int alt_port = -1;         // the fallback route (Route::alt), granted only if VA picks it
             uint32_t alt_mask = 0;
+            int sec_port = -1;         // the second choice (Route::sec), tried before the fallback
+            uint32_t sec_mask = 0;
             uint64_t head_arrival = 0;
             uint64_t va_tick = 0;      // the tick the head won its output VC
         };

@@ -197,10 +197,12 @@ TEST("T5-ADAPTIVE-FALLBACK")
     CHECK_EQ(rt.vc_mask, 1u);                            // adaptive VC 0
     CHECK(rt.alt_port >= 0); CHECK_EQ(rt.alt_mask, 2u);  // escape VC 1 on the XY port
     CHECK_EQ(rt.alt_port, g.dirPort(0, 0, +1));
+    // the other minimal output is the second choice, on the adaptive VCs, tried before the escape
+    CHECK_EQ(rt.out_port, g.dirPort(0, 0, +1)); CHECK_EQ(rt.sec_port, g.dirPort(0, 1, +1)); CHECK_EQ(rt.sec_mask, 1u);
     // a packet that arrived over a link on the escape VC stays on it, with no fallback
     c.router = 1; c.in_port = g.dirPort(1, 0, -1); c.in_vc = 1;
     Route st = am->nextHop(c);
-    CHECK_EQ(st.vc_mask, 2u); CHECK_EQ(st.alt_port, -1);
+    CHECK_EQ(st.vc_mask, 2u); CHECK_EQ(st.alt_port, -1); CHECK_EQ(st.sec_port, -1);
 }
 
 // ---------------------------------------------------------------- T4: features on the plug-ins

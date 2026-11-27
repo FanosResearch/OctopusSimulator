@@ -1,8 +1,9 @@
 # Octopus NoC against BookSim 2
 
-Status: 2026-11-22. Octopus at commit 6585fc6b (branch `network`) plus this work, and the
-AdaptiveMinimal fix of §8.1 (atomic reallocation of adaptive VCs), which changed only the
-AdaptiveMinimal rows. BookSim 2 at
+Status: 2026-11-27. Octopus at commit 6585fc6b (branch `network`) plus this work, the
+AdaptiveMinimal fix of §8.1 (atomic reallocation of adaptive VCs) and the AdaptiveMinimal
+second choice of §8.2 (VC allocation tries the other minimal output before the escape VC). Both
+changed only the AdaptiveMinimal rows. BookSim 2 at
 commit `28f43299f1706a3160ffac721ca461d74eb6e618` (github.com/booksim/booksim2, the head of its
 master branch, June 2017). Platform: Linux on aarch64.
 
@@ -292,15 +293,16 @@ are a workload difference (§7.1). XFAIL.
 
 | pattern | zero-load Octopus+3 / BookSim | diff | saturation Octopus / BookSim | rel. diff | knee Octopus / BookSim | worst curve diff (to 0.8 knee) | criteria missed |
 |---|---|---|---|---|---|---|---|
-| uniform | 32.15 / 33.49 | -1.34 | 0.207 / 0.270 | 23.3% | 0.220 / 0.270 | +1.8 | C2, C3 |
-| transpose | 35.18 / 36.03 | -0.85 | 0.212 / 0.237 | 10.6% | 0.160 / 0.140 | -1.2 | C2, C3 |
-| bitcomp | 42.86 / 44.19 | -1.34 | 0.123 / 0.176 | 29.9% | 0.125 / 0.175 | +4.8 | C2, C3 |
-| bitrev | 35.05 / 35.77 | -0.73 | 0.177 / 0.166 | 7.0% | 0.165 / 0.140 | -3.0 | C3 |
-| shuffle | 27.78 / 28.44 | -0.66 | 0.257 / 0.308 | 16.6% | 0.200 / 0.225 | -1.0 | C2, C3 |
-| tornado | 41.02 / 42.02 | -1.00 | 0.143 / 0.188 | 24.2% | 0.155 / 0.190 | +2.8 | C2, C3 |
+| uniform | 32.14 / 33.49 | -1.35 | 0.214 / 0.270 | 20.9% | 0.225 / 0.270 | -1.0 | C2, C3 |
+| transpose | 35.16 / 36.03 | -0.87 | 0.233 / 0.237 | 1.8% | 0.195 / 0.140 | -3.6 | C3 |
+| bitcomp | 42.84 / 44.19 | -1.35 | 0.127 / 0.176 | 27.9% | 0.130 / 0.175 | +3.0 | C2, C3 |
+| bitrev | 35.04 / 35.77 | -0.74 | 0.184 / 0.166 | 10.0% | 0.175 / 0.140 | -4.5 | C3, C4 |
+| shuffle | 27.77 / 28.44 | -0.67 | 0.263 / 0.308 | 14.6% | 0.210 / 0.225 | -1.8 | C2 |
+| tornado | 41.01 / 42.02 | -1.01 | 0.151 / 0.188 | 19.9% | 0.165 / 0.190 | -1.3 | C2, C3 |
 
-S8-88-ADAPTIVE: 0 of 6 by C1 to C4. Zero load and the curve below the knee agree. Saturation does
-not (§7.3). XFAIL.
+S8-88-ADAPTIVE: 0 of 6 by C1 to C4. Zero load agrees. Saturation does not (§7.3): Octopus is
+lower on four patterns and higher on bitrev, where its curve also stays below BookSim's by
+4.5 cycles at 0.8 of the knee. XFAIL.
 
 ![AdaptiveMinimal](imgs/booksim/booksim_AdaptiveMinimal.png)
 
@@ -366,24 +368,50 @@ left: O1TURN bitrev, 0.140 against 0.160. At 0.135 Octopus's latency is 52.2 cyc
 thresholds (a full 16-packet queue at times against a mean delay of 16 packet times), which matters
 when a flow saturates gradually. The saturation throughputs of the case agree within 0.3 percent.
 
-### 7.3 Adaptive routing selects differently
+### 7.3 Adaptive routing selects differently, and releases adaptive VCs atomically
 
-Zero-load latency and the curve below the knee agree (C1 and C4 hold on all six patterns). The
-saturation throughput does not: Octopus is 11 to 30 percent lower on every pattern but bitrev, and
-7 percent higher on bitrev. The selection functions differ:
+Zero-load latency agrees on all six patterns (C1). The saturation throughput does not: Octopus is
+15 to 28 percent lower on uniform, bitcomp, shuffle and tornado, within 2 percent on transpose
+and 10 percent higher on bitrev. Two things differ.
+
+The selection functions:
 
 - BookSim gives the VC allocator every free output VC on every minimal port (adaptive VCs at
-  priority 1, the escape VC at priority 0) and lets allocation choose.
-- Octopus picks one primary port, the minimal port whose adaptive VCs hold the most credits, ties to
-  the lowest port. It counts credits whether or not the VC is held by another packet
-  (`Routing.cpp`, `AdaptiveMinimal::nextHop`). When that VC is held the head cannot be granted it,
-  and VC allocation's second pass sends it to the escape VC (spec §11.2). Once there it stays on the
-  dimension-order escape network for the rest of its path.
+  priority 1, the escape VC at priority 0) and lets allocation choose. A packet may leave the
+  escape VC at the next hop.
+- Octopus ranks the minimal ports by the credits of their adaptive VCs, ties to the lowest port.
+  VC allocation tries the adaptive VCs of the best port, then those of the next best port (the
+  second choice, spec §11.2), then the escape VC. A head retries all three every tick until it
+  is granted. A packet that arrived on the escape VC stays on the dimension-order escape network
+  for the rest of its path.
 
-Under load many packets therefore drop onto the single escape VC, and Octopus's adaptive routing
-carries less than its own XY on 2 VCs (0.207 against 0.298 on uniform). BookSim's `min_adapt` also
-loses to `dor` on uniform (0.270 against 0.296), but by less. This is a design choice of the spec,
-not a fault, and a definitional difference for the comparison. It may be worth revisiting (§8.2).
+The VC release rule:
+
+- BookSim (`wait_for_tail_credit = 0`) frees every output VC when the tail is sent.
+- Octopus frees the escape VC when the tail is sent, but grants an adaptive VC to a new packet
+  only when its downstream buffer is empty, all credits back (§8.1). This is what makes
+  Octopus's `AdaptiveMinimal` deadlock-free. It also leaves the adaptive VC idle for the credit
+  round trip after each packet.
+
+The release rule accounts for most of the gap. With `wait_for_tail_credit = 1`, which applies the
+same rule to every VC, BookSim's `min_adapt` falls below Octopus on all six patterns:
+
+| pattern | Octopus `AdaptiveMinimal` | BookSim `min_adapt` | BookSim `min_adapt`, `wait_for_tail_credit = 1` |
+|---|---|---|---|
+| uniform | 0.214 | 0.270 | 0.177 |
+| transpose | 0.233 | 0.237 | 0.165 |
+| bitcomp | 0.127 | 0.176 | 0.112 |
+| bitrev | 0.184 | 0.166 | 0.116 |
+| shuffle | 0.263 | 0.308 | 0.226 |
+| tornado | 0.151 | 0.188 | 0.131 |
+
+(Saturation throughput in flits/cycle/node, measured by `compare.py` with `mesh88.cfg` changed
+only in that key. The committed matrix keeps `wait_for_tail_credit = 0`.)
+
+Octopus's `AdaptiveMinimal` still carries less than its own XY on 2 VCs (0.214 against 0.298 on
+uniform), and so does BookSim's `min_adapt` against `dor` on every pattern (0.270 against 0.296 on
+uniform). With 3 and 4 VCs the gap to XY narrows (uniform: 0.281 against 0.355 with 3 VCs,
+0.334 against 0.381 with 4) but does not close. §8.2 lists the selection changes tried.
 
 ### 7.4 One cycle of tail residual at zero load
 
@@ -450,11 +478,47 @@ AdaptiveMinimal rows of §6.2 by a few percent and left every other routing unch
 
 ### 8.2 AdaptiveMinimal selection by credit count (performance, not correctness)
 
-§7.3. Choosing the primary port by the credits of VCs that may be held, and then falling to the
-escape network for good, makes `AdaptiveMinimal` carry less than `XY` under uniform traffic
-(8x8, 2 VCs, BookSim pipeline: 0.207 against 0.298 flits/cycle/node). Repro: `compare.py --routings AdaptiveMinimal,XY --patterns uniform`. A selection
-that only counts free VCs, or a VA that may try the other minimal port before the escape, would
-likely close most of the gap.
+The study first found `AdaptiveMinimal` choosing one primary port by the credits of VCs that may
+be held, and falling to the escape network as soon as that port's adaptive VC could not be
+granted. On 8x8, 2 VCs, the BookSim pipeline, uniform, it carried 0.207 flits/cycle/node against
+0.298 for XY. Repro: `compare.py --routings AdaptiveMinimal,XY --patterns uniform`.
+
+Three changes were tried, one at a time, on the AdaptiveMinimal rows of the matrix
+(saturation throughput, flits/cycle/node):
+
+| pattern | before | (a) free VCs only | (b) second choice | (a) + (b) + (c) return from escape | BookSim `min_adapt` | Octopus XY |
+|---|---|---|---|---|---|---|
+| uniform | 0.207 | 0.208 | 0.214 | 0.219 | 0.270 | 0.298 |
+| transpose | 0.212 | 0.215 | 0.233 | 0.235 | 0.237 | 0.244 |
+| bitcomp | 0.123 | 0.123 | 0.127 | 0.120 | 0.176 | 0.208 |
+| bitrev | 0.177 | 0.180 | 0.184 | 0.188 | 0.166 | 0.172 |
+| shuffle | 0.257 | 0.258 | 0.263 | 0.267 | 0.308 | 0.340 |
+| tornado | 0.143 | 0.144 | 0.151 | 0.155 | 0.188 | 0.233 |
+
+- (a) The primary port ranked by the credits of adaptive VCs that no packet holds. Within one
+  percent of the old selection everywhere: under load the adaptive VC of the chosen port is
+  usually draining (unheld, credits not all back) rather than held, and draining VCs count the
+  same either way.
+- (b) VC allocation tries the adaptive VCs of the next best minimal port before the escape VC
+  (`Route::sec`, a third VA pass, spec §11.2). Better on all six patterns, by 2 to 10 percent.
+  (b) alone and (a) with (b) differ by less than one percent, so only (b) is kept.
+- (c) A packet on the escape VC may return to the adaptive VCs at the next hop. Up to 3 percent
+  more on five patterns but 5 percent less on bitcomp, and it needs a new deadlock argument (the
+  escape network's extended dependency graph). Not kept.
+
+Two diagnostics point at the release rule instead. With (a) and (b) and non-atomic adaptive VCs
+(the rule before §8.1), uniform reached only 0.209 while packets stayed on the escape network for
+good, and the runs wedged at full load once (c) was added. With (a), (b) and (c), holding the
+fallback to the escape VC back by 2 to 64 ticks lowered uniform to between 0.204 and 0.069. The
+remaining gap to BookSim is the release rule of §7.3, which deadlock freedom requires.
+
+**Kept: (b)**, from this study on. Deadlock freedom is unchanged: the second choice is an adaptive
+VC of a minimal port, which `candidates()` already listed, and it is granted under the same atomic
+rule. A head that is still waiting is offered the escape VC in the same tick (pass 2), so Duato's
+condition holds as before. The 66-run stress sweep of §8.1, widened to 150 full-load runs (8x8
+grid with 2, 3 or 4 VCs and either escape VC, 8x8 torus with 3 or 4 VCs, uniform, transpose,
+tornado and bitcomp, the default and the BookSim pipeline, VC depth 1, 2 and 4, and a 4x4x4 mesh),
+completes with every packet delivered. Every other routing's rows are byte-identical.
 
 ### 8.3 Transpose fallback (documented behaviour)
 
@@ -471,7 +535,11 @@ partner. The comparison silences the diagonal generators to match BookSim (§3).
 - Valiant agrees within 3.3 percent on saturation where the workloads are the same. It differs by
   10 to 11 percent where BookSim routes self packets through the network. Stock BookSim's
   `valiant_mesh` deadlocks under full load. A one-line fix is applied for the comparison.
-- The two minimal adaptive algorithms agree at low load and differ at saturation, because their
-  selection functions differ. Octopus's `AdaptiveMinimal` deadlocked once in this study, through
-non-atomic reallocation of adaptive VCs. That is fixed (§8.1).
+- The two minimal adaptive algorithms agree at zero load and differ at saturation. Most of the
+  difference is the release rule of the adaptive VCs: Octopus reallocates them atomically, which
+  makes its `AdaptiveMinimal` deadlock-free (it deadlocked once in this study without it, §8.1).
+  BookSim with the same rule on every VC carries less than Octopus on all six patterns. Trying the
+  next best minimal port before the escape VC (§8.2) raised Octopus's saturation throughput by 2 to
+  10 percent on every pattern. Like BookSim's `min_adapt`, it still carries less than
+  dimension-order routing on most patterns.
 - The 4x4 S8-BOOKSIM test now runs natively on Linux and passes (3 percent).

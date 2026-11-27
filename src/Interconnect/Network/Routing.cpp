@@ -516,8 +516,9 @@ namespace octopus { namespace net
 
     // ------------------------------------------------------------------ AdaptiveMinimal
     // Minimal adaptive routing with an escape network (Duato). A head takes the minimal output
-    // with the most adaptive credits; if it cannot get an adaptive VC there, VC allocation may
-    // grant it the escape route instead (Route::alt). A packet that arrived over a link on an
+    // with the most adaptive credits; if it cannot get an adaptive VC there, VC allocation tries
+    // the adaptive VCs of the next best minimal output (Route::sec) and then grants it the escape
+    // route (Route::alt). A packet that arrived over a link on an
     // escape VC stays on the escape network. The escape network is dimension-order routing; on a
     // wrapped dimension it uses two VCs, escape_vc and escape_vc + 1, with a memoryless dateline:
     // a hop whose remaining leg in that dimension still crosses the wrap link uses escape_vc + 1,
@@ -577,10 +578,17 @@ namespace octopus { namespace net
             if (stays(c)) return esc;
             std::vector<int> cand = minimalPorts(c);
             if (cand.empty()) return esc;                          // arrived: the local port, any VC
-            int best = cand[0], bestc = sumCredits(c, cand[0]);
-            for (size_t i = 1; i < cand.size(); i++) { int cr = sumCredits(c, cand[i]); if (cr > bestc) { best = cand[i]; bestc = cr; } }
+            // the most adaptive credits first (ties to the lowest port), the next best second
+            int best = cand[0], bestc = sumCredits(c, cand[0]), sec = -1, secc = -1;
+            for (size_t i = 1; i < cand.size(); i++)
+            {
+                int cr = sumCredits(c, cand[i]);
+                if (cr > bestc) { sec = best; secc = bestc; best = cand[i]; bestc = cr; }
+                else if (cr > secc) { sec = cand[i]; secc = cr; }
+            }
             if (c.here && bestc == 0) return esc;                 // no adaptive credit anywhere: escape
             Route rt; rt.out_port = best; rt.vc_mask = adaptiveMask();
+            if (sec >= 0) { rt.sec_port = sec; rt.sec_mask = adaptiveMask(); }   // VA tries it before the escape
             rt.alt_port = esc.out_port; rt.alt_mask = esc.vc_mask;  // Duato: the escape stays available
             return rt;
         }

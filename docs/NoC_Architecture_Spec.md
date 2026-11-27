@@ -571,12 +571,13 @@ struct RouteContext { int router, in_port, in_vc, dst_router, cls, src_router;
                       const Packet *packet;              // null in the deadlock check and in path()
                       const RouterView *here; };         // credit counts only; may be null
 struct Route        { int out_port; uint32_t vc_mask;    // bit i set = output VC i of the class allowed
-                      int alt_port = -1; uint32_t alt_mask = 0; };   // a fallback for VC allocation
+                      int alt_port = -1; uint32_t alt_mask = 0;      // a fallback for VC allocation
+                      int sec_port = -1; uint32_t sec_mask = 0; };   // a second choice, tried before alt
 class RoutingAlgorithm {
 public:
     virtual Route    nextHop(const RouteContext &) const = 0;
     virtual Ordering ordering() const = 0;                          // NONE or PAIR_PER_CLASS
-    virtual bool     needsEscapeVC() const { return false; }        // true: VA runs a second pass for alt
+    virtual bool     needsEscapeVC() const { return false; }        // true: VA runs extra passes for sec and alt
     virtual void     onInject(Packet &) const {}                    // draws Packet::route_aux
     virtual bool     fixesVCPerPair() const { return false; }       // the VC is a function of (src, dst, class)
     virtual std::vector<Route> candidates(const RouteContext &) const;   // default: { nextHop }
@@ -599,7 +600,9 @@ the VC (dateline rules, escape channels, VC sets). `~0` means any VC of the clas
   the packet's `seq` and `routing_seed`. The draw depends on nothing else, so runs stay
   deterministic.
 - **Fallback.** `alt_port`/`alt_mask` name a second route that VC allocation may grant when the
-  primary cannot be granted (§11.2). Only algorithms with `needsEscapeVC()` get the second pass.
+  primary cannot be granted (§11.2). `sec_port`/`sec_mask` name a second choice that VC allocation
+  tries after the primary and before the fallback. Only algorithms with `needsEscapeVC()` get these
+  passes.
 - **Candidates.** `candidates` lists every output the algorithm may use at this hop, whatever the
   credits: every allowed port of a turn model, both orders of `O1TURN` at the source, every
   phase-1 continuation of `Valiant`. The channel dependency check (§14.3) explores these.
@@ -626,7 +629,7 @@ port index.
 | `Valiant` | a lattice without wraps (grid2d, mesh3d); `vcs_per_class ≥ 2` | dimension order to an intermediate router drawn uniformly among all routers, on set A, then dimension order to the destination on set B. Not minimal | NONE |
 | `ROMM` | as `Valiant` | as `Valiant`, with the intermediate drawn per dimension inside the minimal box of source and destination, so paths are minimal | NONE |
 | `DOR` | `flattened_butterfly` (it reads the `flat_rank` and `flat_c<d>` attributes) | dimension order on a flattened butterfly: dimension 0 first, then 1, and so on. In each dimension one hop straight to the destination's coordinate, so a route takes one hop per coordinate that differs. `vc_mask = ~0`. Deadlock-free with one VC: each dimension takes one link and dimensions are taken in order | PAIR_PER_CLASS |
-| `AdaptiveMinimal` | any lattice; `escape_vc ≥ 0`, `vcs_per_class ≥ 2`; on a wrapped lattice `vcs_per_class ≥ 3` and `escape_vc + 1 < vcs_per_class` | minimal adaptive routing with an escape network (Duato). The minimal outputs are one per dimension still to cover (the shorter way on a wrapped dimension). The primary route is the one with the most credits on the adaptive VCs (every VC but the escape VCs), with the escape route as its fallback (`alt`). A head that sees no adaptive credit on any minimal output gets the escape route as its primary. A packet that arrived over a link on an escape VC stays on the escape network. The escape route is dimension order on `escape_vc`; on a wrapped dimension a hop whose remaining leg still crosses the wrap link uses `escape_vc + 1` (a memoryless dateline) | NONE |
+| `AdaptiveMinimal` | any lattice; `escape_vc ≥ 0`, `vcs_per_class ≥ 2`; on a wrapped lattice `vcs_per_class ≥ 3` and `escape_vc + 1 < vcs_per_class` | minimal adaptive routing with an escape network (Duato). The minimal outputs are one per dimension still to cover (the shorter way on a wrapped dimension). The primary route is the one with the most credits on the adaptive VCs (every VC but the escape VCs), the next best minimal output on the adaptive VCs is the second choice (`sec`), and the escape route is the fallback (`alt`). A head that sees no adaptive credit on any minimal output gets the escape route as its primary. A packet that arrived over a link on an escape VC stays on the escape network. The escape route is dimension order on `escape_vc`; on a wrapped dimension a hop whose remaining leg still crosses the wrap link uses `escape_vc + 1` (a memoryless dateline) | NONE |
 
 VC sets: `O1TURN`, `Valiant` and `ROMM` split each class's VCs into A = `[0, vcs/2)` and
 B = `[vcs/2, vcs)`. Each set carries dimension-order routes only, and a packet moves from A to B
@@ -686,10 +689,13 @@ head is at least `router_latency` ticks old (0 at an implicit router). This is t
 one with no packet holding it; on a local port, VA additionally requires one packet credit for the
 destination (§8.4) and consumes it.
 
-For an algorithm with `needsEscapeVC()` VA runs twice per tick. Pass 0 grants primary routes over
-all routers. Pass 1 offers each head still without an output VC its fallback route (`alt_port`,
-`alt_mask`, §10.1) under the same rules. A head granted there takes the fallback as its route.
-This is Duato's condition: a waiting head can always use the escape network.
+For an algorithm with `needsEscapeVC()` VA runs three times per tick. Pass 0 grants primary routes
+over all routers. Pass 1 offers each head still without an output VC its second choice (`sec_port`,
+`sec_mask`, §10.1), and pass 2 its fallback route (`alt_port`, `alt_mask`), under the same rules. A
+head granted in pass 1 or 2 takes that route as its route. A head re-enters the passes every tick
+until it is granted, so a primary or second choice that frees up later can still be taken. Pass 2
+is Duato's condition: a waiting head can always use the escape network. Pass 1 only adds adaptive
+choices that `candidates()` already lists, so it changes no dependency.
 
 An output VC for which the routing's `atomicVC(vc)` is true (the adaptive VCs of
 `AdaptiveMinimal`) is granted only when its downstream buffer is empty: all `vc_depth` credits back.
@@ -762,8 +768,8 @@ iteration order is therefore part of the definition, and it keeps the run determ
    Credits whose return tick is now increment their counters.
 3. **Route computation.** Every current packet whose head is at the FIFO front and has no route
    gets `nextHop`.
-4. **VC allocation** (§11.2), with the `router_latency` gate, and a second pass for fallback
-   routes when the algorithm has an escape network.
+4. **VC allocation** (§11.2), with the `router_latency` gate, and two more passes, for second
+   choices and for fallback routes, when the algorithm has an escape network.
 5. **Switch allocation, link traversal and ejection** (§11.3), with the `switch_latency` gate on
    heads. Flits popped here schedule a credit
    return to the upstream side at `tick + credit_latency`, or return it at once when
