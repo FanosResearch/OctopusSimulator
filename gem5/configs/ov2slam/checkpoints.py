@@ -13,6 +13,11 @@ arguments) so its checkpoints restore there.
 
     gem5.opt checkpoints.py --stage env --resources /opt/gem5-resources
     gem5.opt checkpoints.py --stage roi --clip 1s --resources /opt/gem5-resources
+    gem5.opt checkpoints.py --stage roi --clip 3s --params params_3s_rate2.sh --suffix _rate2 ...
+
+The bag's playback options (BAG_ARGS) are fixed once the roi checkpoint is
+taken: a --readfile given to fs_arm.py does not change them. A different rate
+needs its own roi checkpoint (--params, --suffix) and fs_arm.py --checkpoint.
 """
 import argparse
 import os
@@ -41,6 +46,11 @@ parser = argparse.ArgumentParser(description=__doc__,
 parser.add_argument("--stage", choices=["env", "roi"], required=True)
 parser.add_argument("--clip", choices=["0.5s", "1s", "3s"], default="1s",
                     help="which params_<clip>.sh the roi stage delivers")
+parser.add_argument("--params", default=None,
+                    help="roi stage: params file to deliver instead of params_<clip>.sh "
+                         "(e.g. other BAG_ARGS such as --rate 2; they are fixed in the checkpoint)")
+parser.add_argument("--suffix", default="",
+                    help="roi stage: appended to the checkpoint name, ov2_start_trim_<clip><suffix>")
 parser.add_argument("--resources", default="/opt/gem5-resources",
                     help="directory with the kernel, bootloader and disk image")
 parser.add_argument("--image", default="arm-ubuntu-22.04-trim.img")
@@ -51,7 +61,7 @@ parser.add_argument("--stop-at-roi", action="store_true",
 args = parser.parse_args()
 ckpt_dir = args.checkpoint_dir or args.resources
 env_ckpt = os.path.join(ckpt_dir, "ov2_env_trim")
-roi_ckpt = os.path.join(ckpt_dir, f"ov2_start_trim_{args.clip}")
+roi_ckpt = os.path.join(ckpt_dir, f"ov2_start_trim_{args.clip}{args.suffix}")
 
 # Same board as fs_arm.py, with the functional CPU and no caches.
 processor = SimpleProcessor(cpu_type=CPUTypes.ATOMIC, num_cores=4, isa=ISA.ARM)
@@ -77,7 +87,7 @@ workload = dict(
 if args.stage == "env":
     workload["readfile"] = os.path.join(HERE, "ov2slam_generic.rcS")
 else:
-    workload["readfile"] = os.path.join(HERE, f"params_{args.clip}.sh")
+    workload["readfile"] = args.params or os.path.join(HERE, f"params_{args.clip}.sh")
     workload["checkpoint"] = CheckpointResource(env_ckpt)
 board.set_kernel_disk_workload(**workload)
 
