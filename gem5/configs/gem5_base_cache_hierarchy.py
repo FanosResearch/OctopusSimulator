@@ -12,7 +12,7 @@ from m5.objects import (
     L2XBar,
     SystemXBar,
 )
-from m5.params import Port
+from m5.params import NULL, Port
 
 from gem5.components.boards.abstract_board import AbstractBoard
 from gem5.components.cachehierarchies.classic.abstract_classic_cache_hierarchy import (
@@ -100,13 +100,25 @@ def _load_csv_cache_config(config_name: str) -> tuple[_CacheConfig, _CacheConfig
         latency=_preset_int(v, "cache_controller[*].m_data_handler.m_data_access_latency", 0),
         mshrs=_preset_int(v, "cache_controller[*].num_mshr", 16),
     )
+    # Single-LLC presets name the LLC "llc_controller", the banked (mesh) presets
+    # "llc_controller[*]" with llc_banks banks: the classic L2 is then all banks together.
+    llc = "llc_controller" if "llc_controller.m_data_handler.cache_size" in v else "llc_controller[*]"
+    banks = v.get("llc_banks", 1) if llc == "llc_controller[*]" else 1
     l2 = _CacheConfig(
-        size_bytes=_preset_int(v, "llc_controller.m_data_handler.cache_size", 32768),
-        assoc=_preset_int(v, "llc_controller.m_data_handler.m_ways_count", 2),
-        latency=_preset_int(v, "llc_controller.m_data_handler.m_data_access_latency", 10),
-        mshrs=_preset_int(v, "llc_controller.num_mshr", 64),
+        size_bytes=banks * _preset_int(v, f"{llc}.m_data_handler.cache_size", 32768),
+        assoc=_preset_int(v, f"{llc}.m_data_handler.m_ways_count", 2),
+        latency=_preset_int(v, f"{llc}.m_data_handler.m_data_access_latency", 10),
+        mshrs=banks * _preset_int(v, f"{llc}.num_mshr", 64),
     )
     return l1, l2
+
+
+def _parse_size(text: str) -> int:
+    units = {"KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "B": 1}
+    for unit, factor in units.items():
+        if text.endswith(unit):
+            return int(text[: -len(unit)]) * factor
+    return int(text)
 
 
 class Gem5BaseCacheHierarchy(AbstractClassicCacheHierarchy):
@@ -122,7 +134,11 @@ class Gem5BaseCacheHierarchy(AbstractClassicCacheHierarchy):
         membus.default = membus.badaddr_responder.pio
         return membus
 
-    def __init__(self, config_name: str, output_path: str, atp_files=None) -> None:
+    def __init__(self, config_name: str, output_path: str, atp_files=None,
+                 l1=None, l2=None, prefetch: bool = True) -> None:
+        """l1 / l2: optional "SIZE,ASSOC" (e.g. "32KiB,8") replacing the preset's size and
+        associativity. prefetch=False removes the stdlib caches' default StridePrefetcher
+        (Octopus has no prefetcher)."""
         AbstractClassicCacheHierarchy.__init__(self=self)
 
         self._config_name = config_name
@@ -131,6 +147,15 @@ class Gem5BaseCacheHierarchy(AbstractClassicCacheHierarchy):
         self.membus = self._get_default_membus()
 
         self._l1_cfg, self._l2_cfg = _load_csv_cache_config(config_name)
+        if l1:
+            size, assoc = l1.split(",")
+            self._l1_cfg = _CacheConfig(_parse_size(size), int(assoc), self._l1_cfg.latency,
+                                        self._l1_cfg.mshrs)
+        if l2:
+            size, assoc = l2.split(",")
+            self._l2_cfg = _CacheConfig(_parse_size(size), int(assoc), self._l2_cfg.latency,
+                                        self._l2_cfg.mshrs)
+        self._prefetch = {} if prefetch else {"PrefetcherCls": lambda: NULL}
 
     def get_mem_side_port(self) -> Port:
         return self.membus.mem_side_ports
@@ -153,6 +178,7 @@ class Gem5BaseCacheHierarchy(AbstractClassicCacheHierarchy):
                 data_latency=L1_DATA_LATENCY,
                 response_latency=L1_RESPONSE_LATENCY,
                 mshrs=self._l1_cfg.mshrs,
+                **self._prefetch,
             )
             for _ in range(board.get_processor().get_num_cores())
         ]
@@ -165,6 +191,7 @@ class Gem5BaseCacheHierarchy(AbstractClassicCacheHierarchy):
                 data_latency=L1_DATA_LATENCY,
                 response_latency=L1_RESPONSE_LATENCY,
                 mshrs=self._l1_cfg.mshrs,
+                **self._prefetch,
             )
             for _ in range(board.get_processor().get_num_cores())
         ]
@@ -177,6 +204,7 @@ class Gem5BaseCacheHierarchy(AbstractClassicCacheHierarchy):
             data_latency=self._l2_cfg.latency,
             response_latency=self._l2_cfg.latency,
             mshrs=self._l2_cfg.mshrs,
+            **self._prefetch,
         )
 
         if board.has_coherent_io():

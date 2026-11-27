@@ -1,0 +1,65 @@
+diff --git a/src/mem/ruby/network/garnet/GarnetNetwork.cc b/src/mem/ruby/network/garnet/GarnetNetwork.cc
+index 5792269..aab5eb1 100644
+--- a/src/mem/ruby/network/garnet/GarnetNetwork.cc
++++ b/src/mem/ruby/network/garnet/GarnetNetwork.cc
+@@ -642,6 +642,19 @@ GarnetNetwork::functionalRead(Packet *pkt, WriteMask &mask)
+     return read;
+ }
+ 
++bool GarnetNetwork::s_unmaskedRead = false;
++
++bool
++GarnetNetwork::functionalRead(Packet *pkt)
++{
++    WriteMask mask;
++    mask.setBlockSize(getRubySystem()->getBlockSizeBytes());
++    s_unmaskedRead = true;
++    bool read = functionalRead(pkt, mask);
++    s_unmaskedRead = false;
++    return read;
++}
++
+ uint32_t
+ GarnetNetwork::functionalWrite(Packet *pkt)
+ {
+diff --git a/src/mem/ruby/network/garnet/GarnetNetwork.hh b/src/mem/ruby/network/garnet/GarnetNetwork.hh
+index db37628..27cfea1 100644
+--- a/src/mem/ruby/network/garnet/GarnetNetwork.hh
++++ b/src/mem/ruby/network/garnet/GarnetNetwork.hh
+@@ -107,6 +107,11 @@ class GarnetNetwork : public Network
+                           PortDirection dest_inport_dirn);
+ 
+     bool functionalRead(Packet *pkt, WriteMask &mask);
++    //! Whole-line functional read for protocols without partial functional
++    //! reads (MESI_Two_Level): walks the same flits as the masked read, but
++    //! asks each message with its unmasked functionalRead(pkt).
++    bool functionalRead(Packet *pkt) override;
++    static bool s_unmaskedRead;
+     //! Function for performing a functional write. The return value
+     //! indicates the number of messages that were written.
+     uint32_t functionalWrite(Packet *pkt);
+diff --git a/src/mem/ruby/network/garnet/flit.cc b/src/mem/ruby/network/garnet/flit.cc
+index 21e6dcd..5da5ce9 100644
+--- a/src/mem/ruby/network/garnet/flit.cc
++++ b/src/mem/ruby/network/garnet/flit.cc
+@@ -32,6 +32,7 @@
+ 
+ #include "base/intmath.hh"
+ #include "debug/RubyNetwork.hh"
++#include "mem/ruby/network/garnet/GarnetNetwork.hh"
+ 
+ namespace gem5
+ {
+@@ -129,6 +130,12 @@ bool
+ flit::functionalRead(Packet *pkt, WriteMask &mask)
+ {
+     Message *msg = m_msg_ptr.get();
++    if (GarnetNetwork::s_unmaskedRead) {
++        if (!msg->functionalRead(pkt))
++            return false;
++        mask.fillMask();
++        return true;
++    }
+     return msg->functionalRead(pkt, mask);
+ }
+ 

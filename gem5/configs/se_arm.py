@@ -25,13 +25,14 @@ from gem5.components.memory import DualChannelDDR4_2400
 from gem5.components.processors.cpu_types import CPUTypes
 from gem5.components.processors.simple_processor import SimpleProcessor
 from gem5.isas import ISA
-from gem5.resources.resource import BinaryResource
+from gem5.resources.resource import BinaryResource, FileResource
 from gem5.simulate.simulator import (
     ExitEvent,
     Simulator,
 )
 from gem5.utils.requires import requires
 
+from matched_dram import DRAM_MODELS, make_memory
 from octopus_cache_hierarchy import OctopusCacheHierarchy
 from gem5_base_cache_hierarchy import Gem5BaseCacheHierarchy
 
@@ -116,6 +117,38 @@ parser.add_argument(
          "2,1 is a typical L1)",
 )
 parser.add_argument(
+    "--stdin",
+    type=str,
+    default=None,
+    help="File given to the binary as its standard input",
+)
+parser.add_argument(
+    "--dram",
+    choices=DRAM_MODELS,
+    default="ddr4_2400",
+    help="gem5 DRAM model (matched_dram.py). Octopus times DRAM itself (MCsim), so this only "
+         "matters for --classic; mcsim_match is the DRAM of the Ruby comparison",
+)
+parser.add_argument(
+    "--classic-l1",
+    type=str,
+    default=None,
+    metavar="SIZE,ASSOC",
+    help="--classic: L1I and L1D size and associativity instead of the preset's, e.g. 32KiB,8",
+)
+parser.add_argument(
+    "--classic-l2",
+    type=str,
+    default=None,
+    metavar="SIZE,ASSOC",
+    help="--classic: shared L2 size and associativity instead of the preset's, e.g. 8MiB,8",
+)
+parser.add_argument(
+    "--classic-no-prefetch",
+    action="store_true",
+    help="--classic: no prefetchers (the stdlib caches default to a StridePrefetcher at every level)",
+)
+parser.add_argument(
     "--max-ticks",
     type=int,
     default=None,
@@ -125,14 +158,16 @@ args = parser.parse_args()
 octopus_out = args.octopus_out or m5.options.outdir
 
 if args.classic:
-    cache_hierarchy = Gem5BaseCacheHierarchy(args.octopus_config, octopus_out)
+    cache_hierarchy = Gem5BaseCacheHierarchy(
+        args.octopus_config, octopus_out, l1=args.classic_l1, l2=args.classic_l2,
+        prefetch=not args.classic_no_prefetch)
 else:
     cache_hierarchy = OctopusCacheHierarchy(
         args.octopus_config, octopus_out, extra_params=args.octopus_param
     )
 
-# Same memory as the FS configuration.
-memory = DualChannelDDR4_2400(size="8GiB")
+# Same memory as the FS configuration (ddr4_2400), or timed as Octopus's MCsim (mcsim_match).
+memory = make_memory(args.dram, size="8GiB")
 
 cpu_type = {"o3": CPUTypes.O3, "timing": CPUTypes.TIMING}[args.cpu_type]
 processor = SimpleProcessor(
@@ -167,17 +202,18 @@ if args.workload_type == "dynamic":
 board.set_se_binary_workload(
     binary=BinaryResource(local_path=args.binary),
     arguments=args.args,
+    stdin_file=FileResource(local_path=os.path.abspath(args.stdin)) if args.stdin else None,
 )
 
 
 def handle_workbegin():
-    print("Resetting stats at the start of ROI!")
+    print(f"Resetting stats at the start of ROI! tick {m5.curTick()}")
     m5.stats.reset()
     yield False
 
 
 def handle_workend():
-    print("Dump stats at the end of the ROI!")
+    print(f"Dump stats at the end of the ROI! tick {m5.curTick()}")
     m5.stats.dump()
     yield False
 
