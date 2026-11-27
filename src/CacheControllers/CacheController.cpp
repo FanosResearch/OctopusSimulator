@@ -396,7 +396,16 @@ namespace octopus
     void CacheController::stall(void *data_ptr)
     {
         Message *msg = (Message *)data_ptr;
-        
+
+        // A stalled message keeps its age, as an admission-refused one does (restoreLast).
+        // At the back, a younger forward to its line that admission had restored in place ran first
+        // (directory MOESI: Fwd_GetM overtook a stalled Fwd_GetS in OM_a; Fwd_GetS then faulted in I).
+        if (m_dispatching_pop)
+        {
+            m_processing_queue->restoreLast(*msg, FRFCFS_State::NonReady);
+            delete msg;
+            return;
+        }
         if (!m_processing_queue->pushBack(*msg, FRFCFS_State::NonReady))
         {
             cout << "CacheController: error there is no free space to push request to processing queue" << endl;

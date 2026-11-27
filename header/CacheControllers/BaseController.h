@@ -107,6 +107,7 @@ namespace octopus
         // gate still counts it as older. Keyed by msg_id and held only while the message is a CPU demand
         // (admitHeld), so completion traffic that shares the request's msg_id stays eligible.
         std::set<uint64_t> m_admit_hold;
+        bool m_dispatching_pop = false;   // true while the actions of the message just popped by getFirstReady run
         bool admitHeld(const Message &m) const { return !m_admit_hold.empty() && m_admit_hold.count(m.msg_id) && m_protocol->isCpuDemand(m); }
         bool m_hang_dumped = false;
         [[noreturn]] void pushRefused(const char *where, const Message &msg);

@@ -195,8 +195,10 @@ namespace octopus
             vector<ControllerAction> actions = m_protocol->processRequest(ready_msg, dprint);
 
             beginTransition(ready_msg);
+            m_dispatching_pop = true;
             for (ControllerAction action : actions)
                 action_functions[action.type](action.data);
+            m_dispatching_pop = false;
             txRelease(ready_msg);
         }
     }
