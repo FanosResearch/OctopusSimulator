@@ -33,6 +33,7 @@ from m5.objects import (
     RubySequencer,
     RubySystem,
     SimpleExtLink,
+    SimpleMemory,
     SimpleIntLink,
     SimpleNetwork,
     Switch,
@@ -161,6 +162,11 @@ class MeshMESITwoLevel(AbstractRubyCacheHierarchy):
         self.ruby_system.number_of_virtual_networks = 3
         self.ruby_system.network = self._network()
         net = self.ruby_system.network
+        # Functional accesses (SE syscalls, the loader) read and write a backing copy of memory, as
+        # configs/ruby/Ruby.py --access-backing-store does: without it, a line in transient states in
+        # several controllers fails the functional read (BARNES, WATER-SPATIAL). Timing is unchanged.
+        self.ruby_system.access_backing_store = True
+        self.ruby_system.phys_mem = SimpleMemory(range=board.mem_ranges[0], in_addr_map=False)
 
         self._l1_controllers = []
         for i, core in enumerate(board.get_processor().get_cores()):
