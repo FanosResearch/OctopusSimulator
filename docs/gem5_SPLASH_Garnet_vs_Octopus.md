@@ -1,7 +1,8 @@
 # gem5 Ruby/Garnet against gem5 + Octopus on SPLASH-3
 
-Status: 2026-11-27, pilot done (3 programs, small inputs, 16 cores, 4 configurations). Octopus
-branch `network` at 2c37cf53 plus the uncommitted files listed in §8. gem5 v25.1.0.1 (`c8222cc`).
+Status: 2026-11-27, pilot done (3 programs, small inputs, 16 cores, 4 configurations), plus the
+`garnet1vc` configuration (Garnet with 1 VC per vnet) and a post-fix FFT check of Octopus (§7, §9.1).
+Octopus branch `network` at 2c37cf53 plus the files listed in §8 for the pilot. gem5 v25.1.0.1 (`c8222cc`).
 Platform: Linux on aarch64, 20 cores shared with other jobs.
 
 Contents
@@ -74,7 +75,7 @@ is not applied: its extra statistic is not needed here.
 | topology, routing | 4x4 mesh, XY (Garnet `routing_algorithm 1`; SimpleNetwork link weights x 1, y 2) | 4x4 `grid2d`, XY | |
 | router + link | Garnet router latency 1, link latency 1 | `router_latency 0`, `link_latency 2`, `credit_latency 2` (= Garnet 1 + 1, validation §2) | |
 | flits | `ni_flit_size` 16 B; control 8 B = 1 flit, data 72 B = 5 flits | `flit_bytes 16`, `header_bytes 8`: 1 and 5 flits | |
-| VCs, buffers | Garnet 4 VCs per vnet, `buffers_per_data_vc` 4, `buffers_per_ctrl_vc` 4; SimpleNetwork: no VCs, unbounded buffers, 16 B/cycle per link | 1 VC per class, `vc_depth` 4 (§4) | |
+| VCs, buffers | Garnet 4 VCs per vnet (`garnet`) or 1 (`garnet1vc`, `--vcs-per-vnet 1`), `buffers_per_data_vc` 4, `buffers_per_ctrl_vc` 4; SimpleNetwork: no VCs, unbounded buffers, 16 B/cycle per link | 1 VC per class, `vc_depth` 4 (§4) | |
 | allocation | Garnet separable input-first, round robin | `sa_allocator input_first`, `arbiter_type RRArbiter` | |
 | classes | 3 vnets | 3 classes (request, forward, response) | |
 | network clock | core clock (RubySystem in the board clock domain) | core clock (`m_clk_period 100`) | |
@@ -126,7 +127,10 @@ Protocol:
   preset cannot use Garnet's 4 VCs. MESI_Two_Level's vnets are unordered. With one VC, Octopus's
   non-atomic VC reuse still carries a single flow at the link rate (validation §2: 1 VC depth 4
   reaches 1.0 flit/cycle on Octopus against Garnet's 0.5), but under contention packets queue
-  behind each other (radix: 22 cycles of NoC wait per miss, §7).
+  behind each other (radix: 22 cycles of NoC wait per miss, §7). The `garnet1vc` configuration
+  runs Garnet with 1 VC per vnet, so both networks have the same VC count. MESI_Two_Level needs no
+  ordered vnet and XY routing is deadlock-free with one VC, so it runs with 1 VC: FFT, LU and RADIX
+  small complete with no deadlock (§7).
 - **Message classes**: Ruby vnet 0 carries L1 and L2 requests (L1 to L2, L2 to Directory), vnet 1
   responses (data, acks, memory data), vnet 2 L2-to-L1 forwards and invalidations plus L1 unblocks.
   Octopus: request, forward (forwards, invalidations, put-acks and memory reads) and response (data,
@@ -173,7 +177,8 @@ python3 test/gem5_splash/run_matrix.py --bench fft,lu_contig,radix --config all 
 python3 test/gem5_splash/collect.py /home/mohassan/Octopus_transfer/runs/gem5_splash_pilot
 ```
 
-- `--bench all --size small,default` is the full matrix (14 programs, 112 runs). `--dry-run` lists
+- `--config all` is `garnet`, `garnet1vc`, `simple`, `octopus` and `classic`; `--bench all
+  --size small,default --config all` is the full matrix (14 programs, 140 runs). `--dry-run` lists
   the commands. A run whose `rc.txt` holds 0 is skipped; `--force` reruns it.
 - `--selfcheck` adds the suite's `-t`. LU, RADIX and CHOLESKY check after the ROI, so their ROI is
   unchanged; FFT's check adds an inverse FFT inside the ROI, so the pilot runs FFT without it.
@@ -236,16 +241,25 @@ messages = messages delivered to the controllers' network buffers.
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | fft `-m14` | garnet | 303.7 k | 1.00 | 45.4 k | 4.95 | 89.9 | 199 k / 458 k | 466 k | 12.3 (+3.0 queueing) | 28 | 1395 |
 | | simple | 281.1 k | 0.93 | 45.6 k | 4.42 | 73.8 | 199 k msgs | 467 k msgs | | 25 | 1395 |
-| | octopus | 385.0 k | 1.27 | 46.2 k | 15.5 | 136.4 | | 240 k | 9.2 | 93 | 432 |
+| | garnet1vc | 323.4 k | 1.06 | 45.5 k | 5.86 | 116.8 | 199 k / 459 k | 467 k | 12.1 (+12.3) | 25 | 1393 |
+| | octopus | 385.0 k | 1.27 | 46.2 k | 15.5 | 136.4 | | 240 k | 9.2 | 91 | 314 |
 | | classic | 299.4 k | 0.99 | 44.4 k | | 164.0 | | | | 18 | 550 |
 | lu_contig `-n256` | garnet | 4.246 M | 1.00 | 112.4 k | 2.18 | 51.1 | 406 k / 1.04 M | 954 k | 10.7 (+3.5) | 146 | 1384 |
 | | simple | 4.163 M | 0.98 | 113.5 k | 2.13 | 37.5 | 411 k msgs | 963 k msgs | | 127 | 1385 |
+| | garnet1vc | 4.284 M | 1.01 | 112.4 k | 2.20 | 56.0 | 406 k / 1.04 M | 924 k | 10.4 (+5.3) | 128 | 1383 |
 | | octopus | 5.311 M | 1.25 | 114.3 k | 2.36 | 60.5 | | 572 k | 6.9 | 441 | 431 |
 | | classic | 4.108 M | 0.97 | 109.5 k | | 15.8 | | | | 100 | 546 |
 | radix `-n262144` | garnet | 4.850 M | 1.00 | 783.1 k | 7.71 | 95.1 | 4.00 M / 9.54 M | 8.18 M | 18.8 (+4.6) | 220 | 1641 |
 | | simple | 4.645 M | 0.96 | 783.3 k | 6.11 | 70.6 | 4.00 M msgs | 8.18 M msgs | | 156 | 1641 |
+| | garnet1vc | 5.356 M | 1.10 | 783.1 k | 11.8 | 160.2 | 4.00 M / 9.54 M | 8.02 M | 14.9 (+31.8) | 201 | 1640 |
 | | octopus | 5.626 M | 1.16 | 780.1 k | 19.0 | 166.6 | | 3.42 M | 14.3 | 369 | 615 |
 | | classic | 6.284 M | 1.30 | 776.4 k | | 292.9 | | | | 128 | 624 |
+
+The `garnet1vc` rows come from `/home/mohassan/Octopus_transfer/runs/gem5_splash_task2/results.csv`
+(LU and RADIX without `-t`, which runs after the ROI). The FFT Octopus row is the post-fix run of
+§9.1 (true 512 KiB banks), from the same file: its ROI cycles and `octopus_requests.json` are
+identical to the pilot's run with the 16x declared banks, and its peak RSS drops from 432 to
+314 MB. The LU and RADIX Octopus rows are the pilot's (same set and tag mapping, §9.1).
 
 Octopus per miss (ROI, LatencyReport): fft 8.3 hops and 10.4 cycles of NoC wait, lu_contig 8.3 and
 1.0, radix 7.2 and 22.2 (hops and wait summed over the request's packets).
@@ -267,6 +281,10 @@ What the pilot shows:
   8.2 M for RADIX. MESI_Two_Level adds an unblock to most transactions and splits every memory
   access into L2-Directory traffic; Octopus's memory reads and fills also cross the network, so
   the difference is mostly the unblocks and the coalescing.
+- With 1 VC per vnet Garnet's ROI grows by 6 percent (FFT), 1 percent (LU) and 10 percent (RADIX),
+  and its queueing before flitisation by 4 to 7 times (RADIX 31.8 cycles against 4.6). Against
+  `garnet1vc`, Octopus's ROI is 19 percent (FFT), 24 percent (LU) and 5 percent (RADIX) longer, so
+  the VC count accounts for about half of the RADIX gap and little of the LU gap.
 - SimpleNetwork is 2 to 7 percent faster than Garnet and its miss latency 18 to 27 percent lower:
   no flit serialisation at the routers, no VC allocation, unbounded buffers.
 - classic, with its crossbar and no network, matches Garnet on FFT and LU and is 30 percent slower
@@ -392,6 +410,10 @@ single-thread time ratio default / small (BARNES 10.2, VOLREND 27, LU 5.7, OCEAN
 | small inputs | 56 | about 4.3 h | about 0.8 h |
 | default inputs | 56 | about 28 h | about 4.7 h |
 | full matrix | 112 | about 32 h | about 5.5 to 6 h |
+
+These rows cover the four pilot configurations. `garnet1vc` adds 28 runs at about Garnet's cost
+(Garnet is 1.0 of the 4.7 in the ratio above, so about 7 h serial): the five-configuration matrix
+is 140 runs, about 39 h serial, about 6.5 to 7 h wall at 6 jobs.
 
 The longest single run, VOLREND default on Octopus, is estimated at about 4.5 h and bounds the wall
 time from below. The estimate carries a factor of 2 to 3 of uncertainty (instruction counts of the

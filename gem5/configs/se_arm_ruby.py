@@ -249,7 +249,8 @@ g.add_argument("--l2-response-latency", type=int, default=11,
 g.add_argument("--router-latency", type=int, default=1)
 g.add_argument("--link-latency", type=int, default=1)
 g.add_argument("--flit-bytes", type=int, default=16)
-g.add_argument("--vcs-per-vnet", type=int, default=4)
+g.add_argument("--vcs-per-vnet", type=int, default=4,
+               help="Garnet vcs_per_vnet (run_matrix.py: 4 = garnet, 1 = garnet1vc)")
 g.add_argument("--vc-depth", type=int, default=4, help="Garnet buffers_per_data_vc")
 g.add_argument("--ctrl-vc-depth", type=int, default=4,
                help="Garnet buffers_per_ctrl_vc (gem5 default 1; Octopus vc_depth is per class)")

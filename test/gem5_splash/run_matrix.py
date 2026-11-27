@@ -10,7 +10,8 @@ nice 19. Standard-library Python only.
 
 Configurations (all: 16 O3 cores at 3 GHz, 32 KiB 8-way L1I/L1D, 8 MiB shared L2/LLC,
 DRAM timed as MCsim's DDR4-2400U, see the doc):
-  garnet   Ruby MESI_Two_Level, Garnet 4x4 Mesh_XY             (se_arm_ruby.py, gem5-ruby build)
+  garnet   Ruby MESI_Two_Level, Garnet 4x4 Mesh_XY, 4 VCs/vnet (se_arm_ruby.py, gem5-ruby build)
+  garnet1vc  the same with 1 VC per vnet, the VC count of the Octopus preset (1 VC per class)
   simple   Ruby MESI_Two_Level, SimpleNetwork 4x4 mesh, XY     (se_arm_ruby.py --network simple)
   octopus  Octopus directory MESI on its 4x4 mesh NoC          (se_arm.py, gem5 linked with Octopus)
   classic  gem5 classic caches, crossbar, no prefetchers       (se_arm.py --classic, reference)
@@ -39,7 +40,7 @@ BASE = "/home/mohassan/Octopus_transfer"
 BENCHES = ["barnes", "fmm", "ocean_contig", "ocean_non_contig", "radiosity", "raytrace",
            "volrend", "water_nsquared", "water_spatial", "cholesky", "fft", "lu_contig",
            "lu_non_contig", "radix"]
-CONFIGS = ["garnet", "simple", "octopus", "classic"]
+CONFIGS = ["garnet", "garnet1vc", "simple", "octopus", "classic"]
 OCTOPUS_PRESET = "MultiCoreSystem_gem5_mesh_ruby"
 
 sys.path.insert(0, HERE)
@@ -55,9 +56,12 @@ def bench_cmd(splash, bench, size, threads, selfcheck=False):
 
 
 def gem5_command(a, config, cores, binary, bargs, stdin, outdir):
-    if config in ("garnet", "simple"):
+    if config in ("garnet", "garnet1vc", "simple"):
         cmd = [a.gem5_ruby, "-re", "-d", outdir, os.path.join(CONFIGS_DIR, "se_arm_ruby.py"),
-               "--network", config, "--num-cores", str(cores), "--dram", "mcsim_match"]
+               "--network", "simple" if config == "simple" else "garnet",
+               "--num-cores", str(cores), "--dram", "mcsim_match"]
+        if config == "garnet1vc":
+            cmd += ["--vcs-per-vnet", "1"]
     elif config == "octopus":
         cmd = [a.gem5_octopus, "-re", "-d", outdir, os.path.join(CONFIGS_DIR, "se_arm.py"),
                "--num-cores", str(cores), "--octopus-config", OCTOPUS_PRESET,
@@ -135,7 +139,7 @@ def main():
     for c in configs:
         assert c in CONFIGS, c
     # longest first: Octopus, then Ruby, then classic
-    order = {"octopus": 0, "garnet": 1, "simple": 2, "classic": 3}
+    order = {"octopus": 0, "garnet": 1, "garnet1vc": 2, "simple": 3, "classic": 4}
     runs = [(b, s, c) for s in sizes for c in sorted(configs, key=order.get) for b in benches]
     print(f"{len(runs)} runs, {a.jobs} at a time, results in {a.out}", flush=True)
     with cf.ThreadPoolExecutor(max_workers=1 if a.dry_run else a.jobs) as ex:

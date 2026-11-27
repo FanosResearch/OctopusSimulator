@@ -185,7 +185,7 @@ def one_run(rundir):
     row["roi_cycles"] = s.get("simTicks", 0) / TICKS_PER_CYCLE
     row["insts"] = s.get("simInsts")
     cfg = meta["config"]
-    if cfg in ("garnet", "simple"):
+    if cfg in ("garnet", "garnet1vc", "simple"):
         req = ssum(s, r".*ruby_system\.m_latencyHistSeqr::samples")
         miss = ssum(s, r".*ruby_system\.m_missLatencyHistSeqr::samples")
         row["l1_requests"] = req
