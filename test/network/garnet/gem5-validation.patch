@@ -1,0 +1,156 @@
+diff --git a/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.cc b/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.cc
+index 3d5eb90..c7661a1 100644
+--- a/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.cc
++++ b/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.cc
+@@ -85,6 +85,7 @@ GarnetSyntheticTraffic::GarnetSyntheticTraffic(const Params &p)
+       numPacketsSent(0),
+       singleSender(p.single_sender),
+       singleDest(p.single_dest),
++      skipSelf(p.skip_self),
+       trafficType(p.traffic_type),
+       injRate(p.inj_rate),
+       injVnet(p.inj_vnet),
+@@ -196,6 +197,10 @@ GarnetSyntheticTraffic::generatePkt()
+     if (singleDest >= 0)
+     {
+         destination = singleDest;
++    } else if (traffic == UNIFORM_RANDOM_ && skipSelf) {
++        destination = rng->random<unsigned>(0, num_destinations - 2);
++        if (destination >= id)
++            destination++;
+     } else if (traffic == UNIFORM_RANDOM_) {
+         destination = rng->random<unsigned>(0, num_destinations - 1);
+     } else if (traffic == BIT_COMPLEMENT_) {
+@@ -242,6 +247,9 @@ GarnetSyntheticTraffic::generatePkt()
+         fatal("Unknown Traffic Type: %s!\n", traffic);
+     }
+ 
++    if (skipSelf && destination == id)
++        return;
++
+     // The source of the packets is a cache.
+     // The destination of the packets is a directory.
+     // The destination bits are embedded in the address after byte-offset.
+diff --git a/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.hh b/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.hh
+index 965396c..4388d8d 100644
+--- a/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.hh
++++ b/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.hh
+@@ -125,6 +125,7 @@ class GarnetSyntheticTraffic : public ClockedObject
+     int numPacketsSent;
+     int singleSender;
+     int singleDest;
++    bool skipSelf;
+ 
+     std::string trafficType; // string
+     TrafficType traffic; // enum from string
+diff --git a/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.py b/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.py
+index 6b7e7b8..5c41693 100644
+--- a/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.py
++++ b/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.py
+@@ -56,6 +56,11 @@ class GarnetSyntheticTraffic(ClockedObject):
+                                  Default depends on traffic_type",
+     )
+     traffic_type = Param.String("uniform_random", "Traffic type")
++    skip_self = Param.Bool(
++        False,
++        "Never send to the sender itself: uniform_random draws from the "
++        "other nodes and a permutation fixed point sends nothing",
++    )
+     inj_rate = Param.Float(0.1, "Packet injection rate")
+     inj_vnet = Param.Int(
+         -1,
+diff --git a/src/mem/ruby/network/garnet/GarnetNetwork.cc b/src/mem/ruby/network/garnet/GarnetNetwork.cc
+index 5792269..f01c422 100644
+--- a/src/mem/ruby/network/garnet/GarnetNetwork.cc
++++ b/src/mem/ruby/network/garnet/GarnetNetwork.cc
+@@ -407,6 +407,18 @@ GarnetNetwork::regStats()
+         .flags(statistics::oneline)
+         ;
+ 
++    m_packet_head_sent_latency
++        .init(m_virtual_networks)
++        .name(name() + ".packet_head_sent_latency")
++        .flags(statistics::oneline)
++        ;
++
++    m_packets_head_sent_received
++        .init(m_virtual_networks)
++        .name(name() + ".packets_head_sent_received")
++        .flags(statistics::oneline)
++        ;
++
+     m_packet_queueing_latency
+         .init(m_virtual_networks)
+         .name(name() + ".packet_queueing_latency")
+diff --git a/src/mem/ruby/network/garnet/GarnetNetwork.hh b/src/mem/ruby/network/garnet/GarnetNetwork.hh
+index db37628..2606eb2 100644
+--- a/src/mem/ruby/network/garnet/GarnetNetwork.hh
++++ b/src/mem/ruby/network/garnet/GarnetNetwork.hh
+@@ -33,6 +33,7 @@
+ #define __MEM_RUBY_NETWORK_GARNET_0_GARNETNETWORK_HH__
+ 
+ #include <iostream>
++#include <unordered_map>
+ #include <vector>
+ 
+ #include "mem/ruby/network/Network.hh"
+@@ -121,6 +122,25 @@ class GarnetNetwork : public Network
+     void increment_injected_packets(int vnet) { m_packets_injected[vnet]++; }
+     void increment_received_packets(int vnet) { m_packets_received[vnet]++; }
+ 
++    // head left its source NI (validation statistic, see Octopus
++    // docs/NoC_Garnet_Validation.md); no effect on timing
++    void
++    mark_head_sent(int packet_id, Tick t)
++    {
++        m_head_sent[packet_id] = t;
++    }
++
++    void
++    increment_packet_head_sent_latency(int packet_id, Tick now, int vnet)
++    {
++        auto it = m_head_sent.find(packet_id);
++        if (it == m_head_sent.end())
++            return;
++        m_packet_head_sent_latency[vnet] += now - it->second;
++        m_packets_head_sent_received[vnet]++;
++        m_head_sent.erase(it);
++    }
++
+     void
+     increment_packet_network_latency(Tick latency, int vnet)
+     {
+@@ -172,6 +192,9 @@ class GarnetNetwork : public Network
+     statistics::Vector m_packets_received;
+     statistics::Vector m_packets_injected;
+     statistics::Vector m_packet_network_latency;
++    statistics::Vector m_packet_head_sent_latency;
++    statistics::Vector m_packets_head_sent_received;
++    std::unordered_map<int, Tick> m_head_sent;
+     statistics::Vector m_packet_queueing_latency;
+ 
+     statistics::Formula m_avg_packet_vnet_latency;
+diff --git a/src/mem/ruby/network/garnet/NetworkInterface.cc b/src/mem/ruby/network/garnet/NetworkInterface.cc
+index bbf8061..dd9ed5d 100644
+--- a/src/mem/ruby/network/garnet/NetworkInterface.cc
++++ b/src/mem/ruby/network/garnet/NetworkInterface.cc
+@@ -171,6 +171,8 @@ NetworkInterface::incrementStats(flit *t_flit)
+     if (t_flit->get_type() == TAIL_ || t_flit->get_type() == HEAD_TAIL_) {
+         m_net_ptr->increment_received_packets(vnet);
+         m_net_ptr->increment_packet_network_latency(network_delay, vnet);
++        m_net_ptr->increment_packet_head_sent_latency(
++            t_flit->getPacketID(), t_flit->get_dequeue_time(), vnet);
+         m_net_ptr->increment_packet_queueing_latency(queueing_delay, vnet);
+     }
+ 
+@@ -532,6 +534,10 @@ NetworkInterface::scheduleOutputPort(OutputPort *oPort)
+                // Just removing the top flit
+                flit *t_flit = niOutVcs[vc].getTopFlit();
+                t_flit->set_time(clockEdge(Cycles(1)));
++               if (t_flit->get_type() == HEAD_ ||
++                   t_flit->get_type() == HEAD_TAIL_)
++                   m_net_ptr->mark_head_sent(t_flit->getPacketID(),
++                                             curTick());
+ 
+                // Scheduling the flit
+                scheduleFlit(t_flit);

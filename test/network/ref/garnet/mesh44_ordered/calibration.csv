@@ -1,0 +1,8 @@
+kind,src,dst,hops,vcs,depth,octopus,garnet_stock,stock_minus_octopus,garnet_head_sent,head_sent_minus_octopus
+zero,0,1,1,,,6.0000,10.0000,4.0000,11.0000,5.0000
+zero,0,2,2,,,8.0000,12.0000,4.0000,13.0000,5.0000
+zero,0,3,3,,,10.0000,14.0000,4.0000,15.0000,5.0000
+zero,0,15,6,,,16.0000,20.0000,4.0000,21.0000,5.0000
+flow_throughput,0,15,6,1,2,0.5000,0.3333,,,
+flow_throughput,0,15,6,1,4,1.0000,0.5000,,,
+flow_throughput,0,15,6,4,4,1.0000,0.8334,,,

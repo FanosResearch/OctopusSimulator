@@ -1,0 +1,8 @@
+pattern,fixed_points,mismatches
+transpose,8,
+bit_complement,0,
+bit_reverse,8,
+shuffle,2,
+tornado,0,
+neighbor,0,
+bit_rotation,2,
