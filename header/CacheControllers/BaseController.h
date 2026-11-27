@@ -10,6 +10,7 @@
 #define _BaseController_H
 
 #include <set>
+#include <algorithm>
 #include "CommunicationInterface.h"
 #include "CacheDataHandler.h"
 #include "CacheXml.h"
@@ -158,6 +159,16 @@ namespace octopus
 
         virtual void init();
         void setCpuPort(ExternalCPU *port) { m_cpu_port = port; }
+        // the home map: the next-level caches serving this cache's lines (an L1's LLC banks)
+        const std::vector<int> &homeIds() const { return m_home_ids; }
+        int homeShift() const { return m_home_shift; }
+        // This controller is one of the LLC banks `ids` (the cores' home map, interleaved every
+        // 2^shift lines): its data array indexes sets with the bank-select digit removed.
+        void setBanks(const std::vector<int> &ids, int shift)
+        {
+            int idx = (int)(std::find(ids.begin(), ids.end(), m_id) - ids.begin());
+            m_data_handler->setBanks((int)ids.size(), shift, idx < (int)ids.size() ? idx : -1);
+        }
         // One line per controller that ever refused or stalled: how close the
         // queue, MSHR and write-back bounds came to binding in this run.
         static void reportOccupancy(std::ostream &os);

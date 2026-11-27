@@ -64,7 +64,7 @@ is not applied: its extra statistic is not needed here.
 | L1I, L1D | 32 KiB 8-way each, 64 B lines, LRU | 32 KiB 8-way each, 64 B lines, LRU | 32 KiB 8-way each, LRU |
 | L1 hit | `mandatory_queue_latency` 2: 2 cycles (Sequencer hit histogram mean 2.000) | 2 cycles (LatencyReport L1 Stall 1 + L1 Access 1) | tag 3, data 3 |
 | L1 outstanding misses | Sequencer `max_outstanding_requests` 16 (I and D together) | `num_mshr` 16 per L1 (I and D separately) | 16 MSHRs per L1 |
-| shared L2 / LLC | 16 banks x 512 KiB 8-way (8 MiB), line-interleaved (bank = line address bits 0-3), LRU | 16 banks x 512 KiB 8-way (8 MiB effective, §9.1), `home_interleave_shift 0`, LRU | one 8 MiB 8-way L2 (the same sets as 16 line-interleaved banks of 1024 sets) |
+| shared L2 / LLC | 16 banks x 512 KiB 8-way (8 MiB), line-interleaved (bank = line address bits 0-3), LRU | 16 banks x 512 KiB 8-way (8 MiB, set = address bits 10-19, §9.1), `home_interleave_shift 0`, LRU | one 8 MiB 8-way L2 (the same sets as 16 line-interleaved banks of 1024 sets) |
 | L2 data access | `l2_response_latency` 11 | `m_data_access_latency` 10, pipelined, 1 port (LatencyReport L2 Access 11) | tag/data/response 10 |
 | directory | in the L2 tags (inclusive L2) | in the LLC bank (inclusive LLC) | snooping crossbar |
 | other latencies | `l1_request_latency` 1, `l1_response_latency` 1, `l2_request_latency` 1, `to_l1/to_l2_latency` 1 | the controllers' own pipelines | |
@@ -297,39 +297,44 @@ In the gem5-ruby worktree: `build_opts/ARM_MESI_Two_Level` (new) and the patch o
 
 ## 9. Bugs found
 
-### 9.1 Octopus: a banked LLC indexes its sets with the bank-select bits (not fixed)
+### 9.1 Octopus: a banked LLC indexed its sets with the bank-select bits (fixed)
 
-`CacheDataHandler::calculate_set` (`header/CacheDataHandler.h`) takes the set from the line-address
+`CacheDataHandler::calculate_set` (`header/CacheDataHandler.h`) took the set from the line-address
 bits right above the offset: `(addr >> log2(block)) & (sets - 1)`. With line-interleaved banks
 (`home_interleave_shift 0`), bank k only receives lines whose low `log2(banks)` line-address bits
-equal k, so it only ever touches the sets whose low index bits equal k: 1/16 of its sets with 16
-banks. `MultiCoreSystem_gem5_mesh` (16 x 512 KiB) therefore has an effective LLC of 512 KiB, not
-8 MiB, and every banked network preset loses capacity the same way (2 banks: half).
+equal k, so it only ever touched the sets whose low index bits equal k: 1/16 of its sets with 16
+banks. `MultiCoreSystem_gem5_mesh` (16 x 512 KiB) therefore had an effective LLC of 512 KiB, not
+8 MiB, and every banked network preset lost capacity the same way (2 banks: half).
 
-Repro: any banked preset, e.g. `MultiCoreSystem_gem5_mesh`; print `calculate_set` for the lines a
-bank fills: only sets with `set % 16 == k` appear in bank k. Expected consequence (not run here):
-with the workaround below removed (bank `cache_size` 524288), the Octopus LLC misses of a program
-whose footprint lies between 0.5 and 8 MiB rise above the Ruby and classic L2 misses.
+Fix: the data handler of an LLC bank removes the bank-select digit from the line number before it
+takes the set and the tag, and `calculate_address` (the write-back address of an evicted line)
+puts it back. The semantics are those of the `llc-banking` branch's address map
+(`Interleave::strip/insert`): with N banks interleaved every 2^s lines, line l becomes
+`((l >> s) / N << s) | (l & (2^s - 1))`, for any N. `MultiCoreSystem_Mesh` hands each bank the
+cores' home map (`home_ids`, `home_interleave_shift`), after checking that every core names
+exactly the LLC bank ids with one shift. A bank asked about a line of another bank stops with an
+error (the stripped line would alias one of its own). A cache that is not a bank keeps the plain
+split, so non-banked presets produce byte-identical outputs.
 
-Workaround in `MultiCoreSystem_gem5_mesh_ruby.csv`: each bank is declared 16 times larger
-(8 MiB, 8-way, 16384 sets), so the 1024 sets a bank does use hold 8 ways each: 512 KiB 8-way per
-bank, and the line-to-set mapping equals Ruby's L2 (`start_index_bit` 10). It costs host memory
-only (about 15 MB per bank).
+With the fix, a 512 KiB 8-way bank of `MultiCoreSystem_gem5_mesh` and
+`MultiCoreSystem_gem5_mesh_ruby` uses all 1024 sets, set = address bits 10-19, the same mapping as
+Ruby's L2 (`start_index_bit` 10). Each of the two banks of `MultiCoreSystem_Grid2B` (16 KiB 2-way,
+128 sets) fills all 128 sets on cacheb01 and a2time01, where it filled the 64 sets of one parity
+before.
 
-Planned fix: remove the home-select bits from the line address before the set and tag are taken,
-as the `llc-banking` branch does with its address map (`m_map.set/tag/address` in that branch's
-`CacheDataHandler.h`): the data handler learns the bank count and `home_interleave_shift`,
-`calculate_set` and `calculate_tag` drop those bits, `calculate_address` puts them back. That
-changes the results of every banked preset, so the network-branch reference outputs that use one
-need regenerating.
+The pilot of §7 ran with a workaround in `MultiCoreSystem_gem5_mesh_ruby.csv`: each bank was
+declared 16 times larger (8 MiB, 8-way, 16384 sets), so the 1024 sets a bank used held 8 ways each.
+That gives the same set and tag of every line as the fix, so the pilot's Octopus results stand
+(§7). The preset now declares the true 512 KiB 8-way per bank.
 
 ### 9.2 gem5 config: the classic baseline ignored the banked LLC (fixed)
 
 `gem5_base_cache_hierarchy.py` read `llc_controller.m_data_handler.*`, which the banked mesh presets
 do not have (they use `llc_controller[*]`), and silently fell back to a 32 KiB 2-way L2. With
 `--octopus-config MultiCoreSystem_gem5_mesh` the classic reference had a 32 KiB L2. It now reads
-`llc_controller[*]` and multiplies size and MSHRs by `llc_banks`. Note: with the 9.1 workaround the
-new preset declares 16 x 8 MiB, so the runner passes `--classic-l2 8MiB,8`.
+`llc_controller[*]` and multiplies size and MSHRs by `llc_banks`. The runner also passes
+`--classic-l2 8MiB,8` explicitly (the preset's 16 x 512 KiB gives the same size; the option dates
+from the §9.1 workaround, when the preset declared 16 x 8 MiB).
 
 ### 9.3 gem5 config: the classic baseline had prefetchers (option added)
 

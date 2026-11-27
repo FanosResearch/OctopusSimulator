@@ -183,7 +183,7 @@ llc_controller[*].m_shared_memory_id(i),100
 llc_controller[*].protocol_type(s),DIRECTORY_LLC_MESI
 llc_controller[*].fsm_filename(s),MESI_LLC_directory_v2
 llc_controller[*].m_clk_period(i),100
-llc_controller[*].m_data_handler.cache_size(i),8388608,#EFFECTIVE 512 KiB 8-way per bank (8 MiB in total); declared 16x, see make_preset.py
+llc_controller[*].m_data_handler.cache_size(i),524288,#512 KiB 8-way per bank (8 MiB in total)
 llc_controller[*].m_data_handler.m_block_size(i),64
 llc_controller[*].m_data_handler.m_ways_count(i),8
 llc_controller[*].m_data_handler.m_data_access_latency(i),10

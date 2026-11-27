@@ -78,6 +78,8 @@ namespace octopus
         }
 
         // iterate over each core
+        std::vector<BaseController *> cores, banks;
+        std::vector<int> bank_ids;
         for (int i = 0; i < num_cores; i++)
         {
             string file_path = workload_path + "/trace_C" + std::to_string(i) + ".trc.shared";
@@ -100,6 +102,7 @@ namespace octopus
                                                 getSubMap(STRINGIFY(cache_controller), i),
                                                 interfaceFor(cache_id),
                                                 cpu_interconnect->getInterfaceFor(cache_id), name);
+            cores.push_back(cache_controller);
             if (external_cpu != NULL)
             {
                 cache_controller->setCpuPort(external_cpu);
@@ -150,6 +153,28 @@ namespace octopus
             // whose stages do not sum to Total. Mirrors MultiCoreSystem.
             llc_controller->setLogRole(Logger::Role::LLC);
             m_llc_period = llc_controller->getClkPeriod();
+            banks.push_back(llc_controller); bank_ids.push_back(llc_id);
+        }
+        if (llc_banks > 1)
+        {
+            // The banks interleave lines exactly as the cores' home map does: every core must name
+            // the same banks, in the same order, with the same granularity, and name only banks.
+            // Each bank then indexes its sets with the bank-select digit removed, so it uses all of
+            // its sets (without this, bank k of N used only the sets s with s % N == k).
+            std::vector<int> home = cores.empty() ? std::vector<int>() : cores[0]->homeIds();
+            int shift = cores.empty() ? 0 : cores[0]->homeShift();
+            std::vector<int> want = bank_ids, got = home;
+            std::sort(want.begin(), want.end()); std::sort(got.begin(), got.end());
+            bool ok = (got == want);
+            for (BaseController *c : cores)
+                ok = ok && c->homeIds() == home && c->homeShift() == shift;
+            if (!ok)
+            {
+                cerr << "MultiCoreSystem_Mesh: llc_banks(i) = " << llc_banks << " needs every core's home_ids(vi) to list exactly the"
+                     << " LLC bank ids, with one home_interleave_shift(i) for all cores" << endl;
+                exit(2);
+            }
+            for (BaseController *b : banks) b->setBanks(home, shift);
         }
 
         // the memory controllers: m_main_memory.m_id, or the union of the banks' mem_ids (spec s25.4)

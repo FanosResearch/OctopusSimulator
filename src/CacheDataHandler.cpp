@@ -32,6 +32,8 @@ namespace octopus
         //Constructor
         int lines_count = cache_size / m_block_size;
         m_sets_count = lines_count / m_ways_count;
+        m_block_bits = (int)log2(m_block_size);
+        m_set_bits = (int)log2(m_sets_count);
 
         m_cache = new GenericCacheLine[lines_count];
         m_replacement_policy = Policy::getReplacementPolicy(replacement_policy_name, m_ways_count);
@@ -101,6 +103,15 @@ namespace octopus
     uint32_t CacheDataHandler::getDataAccessLatency()
     {
         return m_data_access_latency;
+    }
+
+    // Stripping the bank digit maps the lines of all banks onto one bank's line space, so a
+    // line of another bank would alias one of ours: every bank-bound message must reach its home.
+    void CacheDataHandler::foreignLine(uint64_t address) const
+    {
+        cerr << "CacheDataHandler: LLC bank " << m_bank_idx << " of " << m_bank_n << " asked about line 0x" << std::hex << address
+             << std::dec << ", which belongs to bank " << (((address >> m_block_bits) >> m_bank_shift) % (uint64_t)m_bank_n) << endl;
+        exit(2);
     }
 
     bool CacheDataHandler::findline(uint64_t address, uint64_t *set, int *way)

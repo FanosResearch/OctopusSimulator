@@ -55,21 +55,44 @@ namespace octopus
             return (void *)&m_cache[set * m_ways_count + way];
         }
 
+        // Set, tag and the inverse. A cache that is one of N interleaved banks (an LLC bank:
+        // line -> bank (line >> shift) % N) indexes its sets with the bank-select digit removed,
+        // so every bank uses all of its sets; a cache that is not banked (N = 1) uses the plain
+        // modulo split. Same semantics as AddressMap/Interleave on llc-banking.
+        int m_block_bits = 0, m_set_bits = 0;
+        int m_bank_n = 1, m_bank_shift = 0, m_bank_idx = -1;   // m_bank_idx < 0 = not a bank
+
+        inline uint64_t packed_line(uint64_t address) const
+        {
+            uint64_t line = address >> m_block_bits;
+            if (m_bank_idx < 0) return line;
+            if ((int)((line >> m_bank_shift) % (uint64_t)m_bank_n) != m_bank_idx) foreignLine(address);
+            uint64_t low = line & ((1ull << m_bank_shift) - 1);
+            return (((line >> m_bank_shift) / (uint64_t)m_bank_n) << m_bank_shift) | low;
+        }
+
         inline uint64_t calculate_tag(uint64_t address)
         {
-            return (address >> ((int)log2(m_block_size) + (int)log2(m_sets_count)));
+            return packed_line(address) >> m_set_bits;
         }
 
         inline uint64_t calculate_set(uint64_t address)
         {
-            return ((address >> (int)log2(m_block_size)) & (m_sets_count - 1));
+            return packed_line(address) & (m_sets_count - 1);
         }
 
         inline uint64_t calculate_address(uint64_t tag, uint64_t set)
         {
-            return (tag << ((int)log2(m_block_size) + (int)log2(m_sets_count))) |
-                   (set << ((int)log2(m_block_size)));
+            uint64_t p = (tag << m_set_bits) | set;
+            if (m_bank_idx >= 0)
+            {
+                uint64_t low = p & ((1ull << m_bank_shift) - 1);
+                p = (((p >> m_bank_shift) * (uint64_t)m_bank_n + (uint64_t)m_bank_idx) << m_bank_shift) | low;
+            }
+            return p << m_block_bits;
         }
+
+        [[noreturn]] void foreignLine(uint64_t address) const;   // a bank asked about another bank's line
 
         virtual bool findline(uint64_t address, uint64_t *set, int *way);
 
@@ -87,6 +110,19 @@ namespace octopus
         virtual uint32_t getDataAccessLatency();
         bool isPipelined() const { return m_data_array_pipelined; }
         uint32_t getDataArrayPorts() const { return m_data_array_ports; }
+
+        // This cache is bank `self_idx` of `n` banks that interleave lines every 2^shift lines.
+        // n <= 1 or self_idx < 0 = not banked.
+        void setBanks(int n, int shift, int self_idx)
+        {
+            bool banked = n > 1 && self_idx >= 0 && self_idx < n;
+            m_bank_n = banked ? n : 1;
+            m_bank_shift = banked ? shift : 0;
+            m_bank_idx = banked ? self_idx : -1;
+        }
+        bool banked() const { return m_bank_idx >= 0; }
+        int bankIndex() const { return m_bank_idx; }
+        uint32_t getSetsCount() const { return m_sets_count; }
 
         virtual bool writeCacheLine_bypassLatency(uint64_t address, GenericCacheLine *line, bool soft_write = false);
         virtual bool writeCacheLine(uint64_t address, GenericCacheLine *line);

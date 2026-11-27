@@ -20,11 +20,9 @@ MEM_ROUTERS = [4, 11]          # (x,y) = (0,1) and (3,2): the middle of the west
 
 L1_SIZE, L1_WAYS = 32 * 1024, 8
 BANK_SIZE, BANK_WAYS = 512 * 1024, 8
-# The network-branch CacheDataHandler takes the set index from the line-address bits right above the
-# offset, which with line-interleaved banks are the bank-select bits: a bank only ever touches 1/16 of
-# its sets. Declaring each bank 16x larger restores the intended 512 KiB 8-way per bank (1024 used sets
-# of 8 ways, the same set mapping as Ruby's L2 with start_index_bit 10). See the doc, "Bugs found".
-BANK_SIZE_DECLARED = BANK_SIZE * N
+# Each bank indexes its sets with the bank-select digit removed (CacheDataHandler, set by
+# MultiCoreSystem_Mesh from the cores' home map), so a 512 KiB 8-way bank uses all of its 1024 sets:
+# set = address bits 10-19, the same set mapping as Ruby's L2 with start_index_bit 10.
 
 rows = []
 def kv(key, *vals, comment=""):
@@ -101,8 +99,8 @@ kv("llc_controller[*].m_shared_memory_id(i)", MEM[0])
 kv("llc_controller[*].protocol_type(s)", "DIRECTORY_LLC_MESI")
 kv("llc_controller[*].fsm_filename(s)", "MESI_LLC_directory_v2")
 kv("llc_controller[*].m_clk_period(i)", 100)
-kv("llc_controller[*].m_data_handler.cache_size(i)", BANK_SIZE_DECLARED,
-   comment="EFFECTIVE 512 KiB 8-way per bank (8 MiB in total); declared 16x, see make_preset.py")
+kv("llc_controller[*].m_data_handler.cache_size(i)", BANK_SIZE,
+   comment="512 KiB 8-way per bank (8 MiB in total)")
 kv("llc_controller[*].m_data_handler.m_block_size(i)", 64)
 kv("llc_controller[*].m_data_handler.m_ways_count(i)", BANK_WAYS)
 kv("llc_controller[*].m_data_handler.m_data_access_latency(i)", 10)
