@@ -23,29 +23,48 @@ class OctopusCacheHierarchy(AbstractClassicCacheHierarchy):
     instruction caches at ids 0..n-1 and the data caches at n..2n-1.
     """
 
-    def __init__(self, config_name, output_path, atp_files=None, extra_params=None) -> None:
+    def __init__(self, config_name, output_path, atp_files=None, extra_params=None,
+                 system_name=None) -> None:
         AbstractClassicCacheHierarchy.__init__(self=self)
         self._useATP = False
         self._configName = config_name
+        # The Octopus system class the preset is written for (the -s of the
+        # standalone simulator). A preset that names an interconnect_type
+        # (Mesh, NoC, Network) is a MultiCoreSystem_Mesh one; the bus presets
+        # (bus_type) are MultiCoreSystem.
+        self._systemName = system_name or self._preset_system(config_name)
         self._outputPath = output_path
         # Octopus 'name(type)=value' overrides applied on top of the preset,
         # e.g. "bus[0].interconnect_controller.m_response_latency(i)=1".
         # Every bridge must carry the same list: only the first one built
         # constructs the Octopus system.
         self._extraParams = list(extra_params or [])
-        # Request logging (cpu[*].log_requests(i)=1) writes under
-        # <outdir>/newLogger, which the Logger does not create itself.
-        if any("log_requests" in p for p in self._extraParams):
+        # Request logging (cpu[*].log_requests(i)=1) and, on a Network preset,
+        # NetworkStats.csv (written at exit) go under <outdir>/newLogger, which
+        # the Logger does not create itself.
+        if (any("log_requests" in p for p in self._extraParams)
+                or self._systemName == "MultiCoreSystem_Mesh"):
             os.makedirs(os.path.join(self._outputPath, "newLogger"), exist_ok=True)
         self.membus = SystemXBar(width=64)
         if atp_files is not None:
             self._useATP = True
 
+    @staticmethod
+    def _preset_system(config_name):
+        path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "..",
+            "configuration", "SystemConfigurations", f"{config_name}.csv")
+        with open(path) as f:
+            for line in f:
+                if line.startswith("interconnect_type("):
+                    return "MultiCoreSystem_Mesh"
+        return "MultiCoreSystem"
+
     def _bridge(self, cache_id, core):
         return Octopus(
             cache_id=cache_id,
             log_core=core,
-            system_name="MultiCoreSystem",
+            system_name=self._systemName,
             config_name=self._configName,
             # The Logger writes its per-core reports under <workload_path>/newLogger.
             cl_params=[f"workload_path(s)={self._outputPath}"] + self._extraParams,

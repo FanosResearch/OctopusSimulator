@@ -76,6 +76,10 @@ namespace octopus
 
         virtual std::vector<ControllerAction> processRequest(Message &request_msg, DebugPrint* dprint = NULL) override;
         virtual FRFCFS_State getRequestState(const Message &, FRFCFS_State) override;
+        // A state the core can load from (a Load hits): drives the invalidation an external core
+        // model (the gem5 bridge) receives when the line leaves it. Without it a directory L1 never
+        // reports one. Load is event 0 in the MSI, MESI and MOESI directory L1 FSMs.
+        virtual bool isReadableState(int state) override { return this->m_fsm->isHit(state, (int)EventId::Load); }
     };
 }
 

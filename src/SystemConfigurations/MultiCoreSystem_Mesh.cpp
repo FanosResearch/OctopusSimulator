@@ -23,6 +23,11 @@ namespace octopus
         int num_cores = std::get<int>(parameters.at(STRINGIFY(num_cores)).value);
         string cache_controller_type = std::get<string>(parameters.at(STRINGIFY(cache_controller_type)).value);
         string interconnect_type = std::get<string>(parameters.at(STRINGIFY(interconnect_type)).value);
+        // Core model: the trace-driven CPU by default, or ExternalCPU when an embedder (the gem5
+        // bridge) injects the requests itself. As in MultiCoreSystem.
+        string cpu_type = STRINGIFY(CPU);
+        if (parameters.count(STRINGIFY(cpu_type)))
+            cpu_type = std::get<string>(parameters.at(STRINGIFY(cpu_type)).value);
 
         //Constructor
         uint64_t m_llc_period = 0;   // MCsim ticks once per core cycle: the LLC's period (as in MultiCoreSystem)
@@ -81,12 +86,25 @@ namespace octopus
 
             DirectInterconnect *cpu_interconnect = new DirectInterconnect(getSubMap(STRINGIFY(cpu_interconnect), i), cache_id, -1, name);
 
-            CPU *cpu = new CPU(getSubMap(STRINGIFY(cpu), i), cache_id, cpu_interconnect->getInterfaceFor(-1), file_path, name);
+            ExternalCPU *external_cpu = NULL;
+            if (cpu_type == STRINGIFY(ExternalCPU))
+            {
+                external_cpu = new ExternalCPU(getSubMap(STRINGIFY(cpu), i), cache_id,
+                                               cpu_interconnect->getInterfaceFor(-1), name);
+                ExternalCPU::getExtCPUs()->emplace(cache_id, external_cpu);
+            }
+            else
+                new CPU(getSubMap(STRINGIFY(cpu), i), cache_id, cpu_interconnect->getInterfaceFor(-1), file_path, name);
 
             cache_controller = createController(cache_controller_type, 
                                                 getSubMap(STRINGIFY(cache_controller), i),
                                                 interfaceFor(cache_id),
                                                 cpu_interconnect->getInterfaceFor(cache_id), name);
+            if (external_cpu != NULL)
+            {
+                cache_controller->setCpuPort(external_cpu);
+                external_cpu->attachCache(cache_controller);
+            }
         }
 
         // Memory on the network (spec s25): each LLC bank reaches memory through its memory port, a

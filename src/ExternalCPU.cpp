@@ -214,6 +214,9 @@ namespace octopus
                                 (uint64_t)type,           // Complementary_value
                                 this->m_id);              // Owner
             request_msg.source = Message::Source::LOWER_INTERCONNECT;
+            // Addressed to this core's L1, as the trace CPU does: the directory L1 drops a
+            // CPU-side message whose destination list does not name it.
+            request_msg.to.push_back(this->m_id);
             request_msg.data_size = size;
             if(type == RequestType::WRITE && data != NULL)
                 request_msg.copy(data, size);

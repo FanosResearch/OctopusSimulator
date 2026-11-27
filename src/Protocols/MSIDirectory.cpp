@@ -7,6 +7,7 @@
  */
 
 #include "../../header/Protocols/MSIDirectory.h"
+#include <algorithm>
 using namespace std;
 
 namespace octopus
@@ -58,6 +59,15 @@ namespace octopus
     {
         vector<ControllerAction> controller_actions;
 
+        // A Hit in a transition that leaves the line invalid (IM_aI / SM_aI / IM_aSI / SM_aSI on
+        // lastInvAck: the store completes, then the line goes to the forwarded requester) serves the
+        // CPU from the data array. The state update runs after it, or the Hit finds the line already
+        // gone (dataArrayReadFailed: fatal with an external core, a silent mock-data response without).
+        bool update_after_hit = !this->m_fsm->isValidState(next_state) &&
+                                std::find(actions.begin(), actions.end(), (int)ActionId::Hit) != actions.end();
+        ControllerAction deferred_update;
+        bool have_deferred_update = false;
+
         if (!((actions.size() > 0) && (actions[0] == (int)ActionId::Stall))) //Skip cache line update if the action is stall
         {
             // update cache line
@@ -72,7 +82,8 @@ namespace octopus
             new (controller_action.data) Message(msg);
             new ((uint8_t *)controller_action.data + sizeof(Message)) GenericCacheLine(cache_line);
 
-            controller_actions.push_back(controller_action);
+            if (update_after_hit) { deferred_update = controller_action; have_deferred_update = true; }
+            else controller_actions.push_back(controller_action);
         }
 
         for (int action : actions)
@@ -239,6 +250,9 @@ namespace octopus
 
             controller_actions.push_back(controller_action);
         }
+
+        if (have_deferred_update)
+            controller_actions.push_back(deferred_update);
 
         return controller_actions;
     }
