@@ -28,8 +28,6 @@ Non-goals:
 
 - The NoC, memory on the network, and several memory controllers. They stay on `network`.
 - Changes to any coherence FSM. Banking is handled by message addressing (section 4).
-- Enforcing set/bank partitioning inside gem5 full-system runs. Linux owns the page allocation
-  there. Octopus reports violations only (section 6.5).
 
 ## 2. Current state on `stable`
 
@@ -404,7 +402,7 @@ scheme and core; at the end of the run they are written to `Partitions.csv` in t
 directory (`Cache,Partition,Scheme,Core,Fills,Violations`) and the total is printed.
 `partition[k].strict(i),1` stops the run on the first violation (tests). A cache-enforced scheme
 such as `way` cannot violate. A placing scheme violates whenever an address reaches the cache
-unplaced (the placer off, or a gem5 full-system run).
+unplaced (the placer off).
 
 An ownership in which a listed core owns no unit is refused at startup (`Ownership::invalid()`):
 such a core could never fill. (Before P2 a `way_partition` naming only ways past the cache's
@@ -415,7 +413,17 @@ way count ended the run early, with exit code 0.)
 Set and bank partitioning cannot be enforced inside the cache: the address fixes the set and the
 bank. They are enforced where addresses are chosen, as an OS page allocator does.
 
-`PagePlacer` sits in the trace path (`src/CPU.cpp`), in front of the L1s:
+`PagePlacer` sits where requests enter Octopus, in front of the L1s: the trace path
+(`src/CPU.cpp`) and the embedder's path (`ExternalCPU::addRequest`, used by the gem5 bridge).
+In gem5 the data stays at the guest's own physical address (the bridge performs every access
+against gem5 memory), and Octopus models only the placed frame: its LLC set, LLC bank and DRAM
+bank. Every address Octopus hands back to the bridge (commit, completion, invalidation) goes
+through `unplace()`, the inverse page table, so the bridge and the CPU's LSQ see the original
+line. Functional accesses, device and uncacheable requests never enter Octopus and are not
+placed. This is an idealised colouring allocator: per 4 KiB physical page, with no per-colour
+capacity limit, huge pages included (an OS allocator such as PALLOC has both limits).
+Enable it with `page_placer(i),1`; logging (`cpu[*].log_requests(i),1`) is what writes
+`Partitions.csv` at the end of a gem5 run.
 
 - A page's first access picks the core's next combination of owned units, one per scheme with
   `placesAddresses()`, and composes them by chaining `withUnit()`. Pages go round-robin over all
@@ -452,8 +460,7 @@ bank. They are enforced where addresses are chosen, as an OS page allocator does
 | Front end | Set/bank partitioning |
 |---|---|
 | trace-driven Octopus | `PagePlacer`: enforced |
-| ATP in gem5 | each master's window chosen from its units, with the same `AddressMap` maths |
-| gem5 full system | violations reported; enforcement would need a colouring allocator in the guest kernel |
+| gem5 (SE, full system, ATP masters) | `PagePlacer` in `ExternalCPU::addRequest`: enforced; `unplace()` on every address handed back |
 
 ### 6.7 Explicit requester
 
@@ -690,7 +697,7 @@ B1 to B5 give stable a multi-bank LLC. P1 can start after A1, independent of B.
 | Broadcast capacity stall | a full non-home bank holds demand requests | correct; B6 removes it if measured as significant |
 | Hook overhead | hooks run on every fill | empty `PartitionSet` fast path; P1 timing gate |
 | Placing schemes sharing bits | e.g. banks interleaved at 4 KiB inside colour bits, DRAM bank bits inside colour bits | joint placement (P5); a core with no common frame is refused |
-| gem5 full system | page allocation is Linux's | violations reported only |
+| gem5 full system | page allocation is Linux's | the placer remaps in `ExternalCPU` (Octopus models the frame, gem5 keeps the data at the original address); an idealised allocator, stated as such |
 | MSHR/PWB gates and back-pressure | a gate that refuses a response or a write-back deadlocks the system (the request/response shared-queue deadlock fixed in eb9744a6); a cache that refuses a delivered request breaks bus order (P7's first version: 101 of 240 banked runs failed) | the MSHR gate holds demand requests in their sender, before the bus; fills, snoops and write-backs always proceed; FCFS/RR/TDM `banked.sh` runs with the scheme on |
 | PWB quota overshoot | a miss takes its PWB entry only at fill time | the sender reserves a unit for each queued request and open miss: 0 violations, at the cost of at most units(c) requests in flight per core and bank |
 | Merge with `network` | both branches touch `homeOf` and the builders | same names, parameters and semantics; `network` adopts `AddressMap` at merge |

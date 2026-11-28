@@ -44,6 +44,17 @@ namespace octopus
 
         uint64_t place(int core, uint64_t addr) { return m_on ? placeSlow(core, addr) : addr; }
 
+        // The inverse of place(): the original address of a placed one, page offset kept. A front
+        // end whose data lives at the original addresses (the gem5 bridge) maps every address
+        // Octopus hands back to it (commit, completion, invalidation). Off or never placed =
+        // unchanged.
+        uint64_t unplace(uint64_t addr) const
+        {
+            if (!m_on) return addr;
+            auto it = m_reverse.find(addr >> m_page_bits);
+            return it == m_reverse.end() ? addr : (it->second << m_page_bits) | (addr & ((1ull << m_page_bits) - 1));
+        }
+
         // the core a frame was placed for (its first toucher); -1 = not placed by this placer
         int frameOwner(uint64_t addr) const
         {
@@ -71,6 +82,7 @@ namespace octopus
         int m_page_bits = 12;
         std::vector<const PartitionScheme *> m_schemes;
         std::unordered_map<uint64_t, uint64_t> m_table;          // original page -> frame page
+        std::unordered_map<uint64_t, uint64_t> m_reverse;        // frame page -> original page
         std::unordered_map<uint64_t, int> m_frame_owner;         // frame page -> core placed for
         std::map<std::vector<int>, uint64_t> m_next;             // per unit tuple: next candidate
         std::map<int, uint64_t> m_pages_by_core;

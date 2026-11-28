@@ -9,6 +9,7 @@
 #include "../header/ExternalCPU.h"
 #include "../header/CacheControllers/BaseController.h"
 #include "../header/Logger.h"
+#include "PagePlacer.h"
 
 using namespace std;
 
@@ -100,7 +101,7 @@ namespace octopus
                     Logger::getLogger()->trace(ready_msg, Logger::Role::CPU, (uint32_t)logCore(), Logger::Phase::EXIT);
                 }
                 if(m_cpu_callback != NULL)
-                    (*m_cpu_callback)(ready_msg.msg_id, ready_msg.addr, this->m_clk_cycle,
+                    (*m_cpu_callback)(ready_msg.msg_id, PagePlacer::instance().unplace(ready_msg.addr), this->m_clk_cycle,
                                       (RequestType)ready_msg.complementary_value, ready_msg.data);
                 else
                 {
@@ -160,13 +161,13 @@ namespace octopus
     void ExternalCPU::commit(uint64_t msg_id, uint64_t address)
     {
         if (m_commit_callback != NULL)
-            (*m_commit_callback)(msg_id, address);
+            (*m_commit_callback)(msg_id, PagePlacer::instance().unplace(address));
     }
 
     void ExternalCPU::invalidate(uint64_t address)
     {
         if (m_invalidate_callback != NULL)
-            (*m_invalidate_callback)(address);
+            (*m_invalidate_callback)(PagePlacer::instance().unplace(address));
     }
 
     bool ExternalCPU::isBlocked(int outstanding) const
@@ -208,8 +209,11 @@ namespace octopus
         }
         else
         {
+            // page_placer(i),1: Octopus models the placed frame (its sets, LLC bank and DRAM
+            // bank) while the embedder keeps the data at `address`; every address handed back
+            // (commit, completion, invalidate) is unplaced. Off = unchanged.
             Message request_msg(IdGenerator::nextReqId(), // id
-                                address,                  // Addr
+                                PagePlacer::instance().place(m_id, address), // Addr
                                 0,                        // Cycle
                                 (uint64_t)type,           // Complementary_value
                                 this->m_id);              // Owner

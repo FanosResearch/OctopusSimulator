@@ -12,7 +12,7 @@ namespace octopus
 {
     void PagePlacer::configure(bool enabled, const std::vector<const PartitionScheme *> &schemes, int num_cores)
     {
-        m_schemes.clear(); m_table.clear(); m_frame_owner.clear(); m_next.clear(); m_pages_by_core.clear();
+        m_schemes.clear(); m_table.clear(); m_reverse.clear(); m_frame_owner.clear(); m_next.clear(); m_pages_by_core.clear();
         m_core_units.clear(); m_shared_bits = false;
         m_on = false;
         if (!enabled) return;
@@ -159,6 +159,7 @@ namespace octopus
         if (!cu.used[n]) { cu.used[n] = true; cu.distinct++; }
         uint64_t fp = frameFor(units);
         m_table[pg] = fp;
+        m_reverse[fp] = pg;
         m_frame_owner[fp] = core;
         m_pages_by_core[core]++;
         return (fp << m_page_bits) | off;

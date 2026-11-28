@@ -1,6 +1,6 @@
 workload_path(s),BMs/TestBM/,,,#Absolute path is recommended,,
 num_cores(i),4,,,,,
-page_placer(i),0,,,#1: place each page in a frame whose colour/bank (partition[k] colour|bank schemes) the first-touching core owns. Trace-driven runs only,,
+page_placer(i),0,,,#1: place each page in a frame whose colour/bank (partition[k] colour|bank schemes) the first-touching core owns. Trace runs and gem5 (gem5 keeps the data at the original address),,
 bus_type(vs),TripleBus,Bus,,#Bus[0] is the interconnect between private caches and LLC and Bus[1] is between LLC and main memory,,
 cache_controller_type(s),CacheControllerDirectory,,,#Type should match the name of the class,,
 ,,,,,,

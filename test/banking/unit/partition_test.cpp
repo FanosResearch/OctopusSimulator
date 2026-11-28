@@ -175,6 +175,15 @@ int main()
         CHECK(frames.size() == 256, "pages share frames (%zu frames for 256 pages)", frames.size());
         CHECK(combos.size() == 2, "core 0 uses %zu unit combinations, 2 fit", combos.size());
         CHECK(pp.place(0, 0x5048) == pp.place(0, 0x5048), "a page placed twice moved");
+        // unplace() inverts place() (the gem5 bridge maps every address handed back to the guest's
+        // own): every placed line comes back to its original address, offset included; an address
+        // never placed passes through
+        bool back = true;
+        for (uint64_t page = 0; page < 256; page++)
+            for (uint64_t off : {0x0ull, 0x48ull, 0xfc0ull})
+                back = back && pp.unplace(pp.place(0, (page << 12) | off)) == ((page << 12) | off);
+        CHECK(back, "unplace(place(a)) != a");
+        CHECK(pp.unplace(0x7fff00000048ull) == 0x7fff00000048ull, "an unplaced address changed");
 
         // disjoint fields (12-13, 14-15): the odometer uses all 4 x 4 combinations, each equally often
         // (lockstep per-scheme cursors used only the 4 diagonal ones)
@@ -186,6 +195,7 @@ int main()
         bool even = all16.size() == 16; for (auto &kv : all16) even = even && kv.second == 4;
         CHECK(even, "disjoint: %zu of 16 combinations used, not 4 pages each", all16.size());
         pp.configure(false, {}, 0);
+        CHECK(pp.unplace(0x5048) == 0x5048 && pp.place(1, 0x5048) == 0x5048, "placer off: addresses changed");
     }
     // 5. MSHR partition (P7): 8 entries, core 0 owns 0-1, cores 1-2 share 2-7, core 3 unlisted
     //    (every unit is claimed, so it shares all of them)
