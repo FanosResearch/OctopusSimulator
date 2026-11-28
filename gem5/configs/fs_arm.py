@@ -99,6 +99,12 @@ parser.add_argument(
          "2,1 is a typical L1)",
 )
 parser.add_argument(
+    "--cpu-freq",
+    default="3GHz",
+    help="Core clock (the board clock domain), e.g. 1.43GHz for the Jetson Nano's Cortex-A57s. "
+         "Set the preset's mcsim_core_clock_mhz to match: MCsim converts DRAM cycles against it",
+)
+parser.add_argument(
     "--max-ticks",
     type=int,
     default=None,
@@ -208,7 +214,7 @@ if args.cache_ports:
 # Armv8 default release; the Foundation platform matches the kernel and
 # bootloader shipped with the resources.
 board = ArmBoard(
-    clk_freq="3GHz",
+    clk_freq=args.cpu_freq,
     processor=processor,
     memory=memory,
     cache_hierarchy=cache_hierarchy,
