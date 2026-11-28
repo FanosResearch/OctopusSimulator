@@ -46,6 +46,9 @@ namespace MCsim
 		void returnReadData(const Request *req);
 		void writeDataDone(const Request *req);
 		unsigned int generalBufferSize();
+		// Octopus (OCTOPUS_MEM_PROBE): requests accepted and not yet completed
+		unsigned int pendingReads() const { return (unsigned)pendingReadRequest.size(); }
+		unsigned int pendingWrites() const { return (unsigned)pendingWriteRequest.size(); }
 		void printResult();
 		void trackError(int id);
 

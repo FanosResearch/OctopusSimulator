@@ -113,6 +113,20 @@ namespace octopus
         m_mcsim->update();
 
         m_clk_cycle++;
+
+        // OCTOPUS_MEM_PROBE=N: every N cycles, the DRAM-side backlog and the process's resident
+        // memory (diagnostic for runs whose memory grows: is it a queue that never drains?)
+        static const uint64_t probe = [](){ const char *t = getenv("OCTOPUS_MEM_PROBE"); return t ? strtoull(t, NULL, 0) : 0ULL; }();
+        if (probe && m_clk_cycle % probe == 0)
+        {
+            long rss_pages = 0;
+            if (FILE *f = fopen("/proc/self/statm", "r")) { long sz; if (fscanf(f, "%ld %ld", &sz, &rss_pages) != 2) rss_pages = 0; fclose(f); }
+            unsigned q = 0, pr = 0, pw = 0; m_mcsim->dramBacklog(q, pr, pw);
+            cout << "[memprobe] cyc " << m_clk_cycle << " mcsim_queue " << q << " mcsim_reads " << pr << " mcsim_writes " << pw
+                 << " pending_reads " << m_pending_requests.size() << " octopus_pq " << m_processing_queue->size()
+                 << " out_buf " << m_output_buffer.size() << " reads " << m_read_count << " writes " << m_write_count
+                 << " rss_mb " << rss_pages * 4096 / 1048576 << endl;
+        }
     }
 
     void MCsimInterface::init()

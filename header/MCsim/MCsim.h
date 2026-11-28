@@ -54,6 +54,8 @@ namespace MCsim
 		// channel 0, and the bank group / bank MCsim's own decode gives an address.
 		bool dramFieldBits(unsigned field, unsigned &lo, unsigned &width);
 		void dramDecode(unsigned long long address, unsigned &bank_group, unsigned &bank);
+		// Octopus (OCTOPUS_MEM_PROBE): channel 0's request-queue depth and accepted, uncompleted reads / writes
+		void dramBacklog(unsigned &queued, unsigned &reads, unsigned &writes);
 		void printStats(bool finalStats);
 		bool willAcceptTransaction();
 		bool willAcceptTransaction(uint64_t addr);

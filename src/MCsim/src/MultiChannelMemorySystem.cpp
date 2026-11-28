@@ -244,3 +244,11 @@ void MultiChannelMemorySystem::dramDecode(unsigned long long address, unsigned &
 	bank_group = r.bankGroup;
 	bank = r.bank;
 }
+
+void MultiChannelMemorySystem::dramBacklog(unsigned &queued, unsigned &reads, unsigned &writes)
+{
+	const MemoryController *mc = channels[0]->memoryController;
+	queued = channels[0]->generalBufferSize();
+	reads = mc->pendingReads();
+	writes = mc->pendingWrites();
+}

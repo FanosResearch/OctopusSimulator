@@ -38,6 +38,8 @@ namespace MCsim
 		void displayConfiguration();
 		bool isWriteModeFromController();
 		unsigned int generalBufferSize();
+		// Octopus (OCTOPUS_MEM_PROBE): channel 0's request-queue depth and accepted, uncompleted reads / writes
+		void dramBacklog(unsigned &queued, unsigned &reads, unsigned &writes);
 		void flushWrite(bool sw);
 
 		//output file
