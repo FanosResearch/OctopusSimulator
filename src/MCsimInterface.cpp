@@ -7,6 +7,7 @@
  */
 
 #include <cstdlib>
+#include <cstring>
 #include "../header/MCsimInterface.h"
 #include "../header/Logger.h"
 #include "../header/MemHazard.h"
@@ -207,7 +208,11 @@ namespace octopus
                                       m_pending_requests[i].owner); // Owner
                 msg.to.push_back(m_pending_requests[i].from ? m_pending_requests[i].from : (uint16_t)m_llc_id);   // To: the bank that asked
                 msg.kind = Message::K_FILL;
-                msg.copy((uint8_t *)&data);
+                // a line-sized payload (the read counter, then zeros): copy() takes a full line,
+                // and copying it straight from the 8-byte counter read 56 bytes past it on the stack
+                uint8_t line[64] = {0};
+                memcpy(line, &data, sizeof(data));
+                msg.copy(line);   // 64 B, as before
                 m_output_buffer.push_back(msg);
 
                 m_pending_requests.erase(m_pending_requests.begin() + i);
