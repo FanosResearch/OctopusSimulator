@@ -325,14 +325,16 @@ namespace octopus
             data_msg = *msg;
         else
         {
-            delete[] (uint8_t *)data_ptr;
+            delete msg;
             return;
         }
 
         m_data_handler->modifyData(data_msg.addr, data_msg.data, data_msg.data_size);
         m_modifying_data_messages.erase(msg->msg_id);
 
-        delete[] (uint8_t *)data_ptr;
+        // the protocol's `new Message(msg)` (MODIFY_DATA): a Message, not a placement buffer, so
+        // its destructor must run (delete[] of the bytes leaked its data and destination vector)
+        delete msg;
     }
     
     void CacheController::saveReqForWriteBack(void *data_ptr)
