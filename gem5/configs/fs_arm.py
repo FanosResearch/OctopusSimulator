@@ -6,11 +6,20 @@ from there: stats are reset at the workload's workbegin marker and dumped at
 its workend marker. Resources (kernel, bootloader, disk image, ATP files,
 checkpoints) live in one directory, /opt/gem5-resources in the container.
 
+--atp adds Arm ATP traffic generators as aggressors: ATP's GPU (4K frame
+buffer, 19.9 GB/s) and DPU (four display layers, 1.24 GB/s each) example
+profiles, gem5/configs/atp/. Each ATP master drives its own Octopus bridge, so
+its requests contend with the cores in Octopus's bus, LLC and DRAM model. The
+streams loop for as long as the workload runs and never end the simulation.
+They address the top 2 GiB of DRAM, which Linux does not use (mem=6GB). It
+needs a gem5 built with ATP-Engine as an EXTRAS module.
+
     gem5.opt fs_arm.py --clip 1s                      # restore ov2_start_trim_1s, Octopus
     gem5.opt fs_arm.py --clip 0.5s --classic          # same clip, classic caches
     gem5.opt fs_arm.py --resources /path --clip 3s    # resources elsewhere
     gem5.opt fs_arm.py --no-checkpoint --readfile x.rcS   # fresh boot with your own script
     gem5.opt fs_arm.py --switch-at-workbegin          # fresh boot on atomic cores, /se_test on O3
+    gem5.opt fs_arm.py --clip 1s --atp                # plus GPU and DPU aggressors (ATP)
 
 --switch-at-workbegin is the other way to skip the boot: no checkpoint, the
 image boots on atomic cores (Octopus bypassed) and the cores switch to O3 at
@@ -52,14 +61,21 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     "--octopus-config",
     type=str,
-    default="MultiCoreSystem_gem5",
-    help="Octopus system preset: configuration/SystemConfigurations/<name>.csv",
+    default=None,
+    help="Octopus system preset: configuration/SystemConfigurations/<name>.csv "
+         "(default MultiCoreSystem_gem5, or MultiCoreSystem_gem5_atp with --atp)",
 )
 parser.add_argument(
     "--octopus-out",
     type=str,
     default=None,
     help="Directory for Octopus's own logs (default: gem5's outdir)",
+)
+parser.add_argument(
+    "--atp",
+    action="store_true",
+    help="Add the ATP GPU and DPU aggressors (gem5/configs/atp/) on their own Octopus "
+         "bridges; implies --octopus-config MultiCoreSystem_gem5_atp unless one is given",
 )
 parser.add_argument(
     "--classic",
@@ -91,7 +107,7 @@ parser.add_argument(
 parser.add_argument(
     "--resources",
     default="/opt/gem5-resources",
-    help="directory with the kernel, bootloader, disk image, atp_files/ and the checkpoints",
+    help="directory with the kernel, bootloader, disk image and the checkpoints",
 )
 parser.add_argument(
     "--image", default="arm-ubuntu-22.04-trim.img", help="disk image file name under --resources"
@@ -136,24 +152,38 @@ if args.switch_at_workbegin:
     if args.cache_ports:
         parser.error("--cache-ports is not supported with --switch-at-workbegin")
     args.no_checkpoint = True
+if args.atp and args.classic:
+    parser.error("--atp needs the Octopus hierarchy; the --classic baseline has no ATP bridges")
+if args.octopus_config is None:
+    args.octopus_config = "MultiCoreSystem_gem5_atp" if args.atp else "MultiCoreSystem_gem5"
 octopus_out = args.octopus_out or m5.options.outdir
 
-
-def get_atp_files(atp_files_path):
-    atp_files = set()
-    for path in atp_files_path:
-        for dname, _, fnames in os.walk(path):
-            atp_files.update([os.path.join(dname, fname) for fname in fnames])
-    return list(atp_files)
-
-
-atp_files = get_atp_files([os.path.join(args.resources, "atp_files")])
+# ATP aggressors. DRAM spans 0x80000000-0x280000000 (8 GiB); Linux uses the first
+# 6 GiB (mem=6GB below), so the streams live in 0x200000000-0x280000000. Each
+# stream gets its own window; ATP fits the profile's addresses into it.
+MAX_ADDR = 2**64 - 1
+ATP_BASE = 0x200000000
+ATP = dict(
+    files=[os.path.join(HERE, "atp", f) for f in ("gpu.atp", "dpu.atp")],
+    masters=["GPU", "DPU_1"],
+    streams=[
+        # GPU: one stream rooted at GPU_READS; GPU_WRITES is gated on its send
+        # status (wait_for PROFILE_LOCKED) and takes the write window
+        ("GPU", "GPU_READS", ATP_BASE, 0x4000000, ATP_BASE + 0x4000000, 0x4000000),
+    ] + [
+        # DPU: four independent display layers, reads only
+        ("DPU_1", f"DPU_1_LAYER_{k}", ATP_BASE + 0x10000000 + (k - 1) * 0x8000000,
+         0x8000000, MAX_ADDR, MAX_ADDR)
+        for k in range(1, 5)
+    ],
+)
 
 if args.classic:
     cache_hierarchy = Gem5BaseCacheHierarchy(args.octopus_config, octopus_out)
 else:
     cache_hierarchy = OctopusCacheHierarchy(
-        args.octopus_config, octopus_out, extra_params=args.octopus_param
+        args.octopus_config, octopus_out, atp=ATP if args.atp else None,
+        extra_params=args.octopus_param,
     )
 
 memory = DualChannelDDR4_2400(size="8GiB")
@@ -266,7 +296,6 @@ simulator = Simulator(
     },
 )
 
-print(atp_files)
 if args.max_ticks:
     simulator.run(max_ticks=args.max_ticks)
 else:

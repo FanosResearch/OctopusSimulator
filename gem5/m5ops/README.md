@@ -1,7 +1,7 @@
 # m5ops for aarch64 workloads
 
 The pieces of gem5's m5ops that the SE workloads in this repository need
-(`gem5/se_test`),
+(`gem5/se_test`, `tutorial/04-gem5-and-fullsystem-stack/01-gem5-se/slam_demo`),
 copied unchanged from gem5 v25.1.0.1 so those programs build without a gem5
 checkout:
 
