@@ -73,7 +73,11 @@ void MemoryDevice::update()
 		if (dataCycles.front() == 0)
 		{
 			dataCycles.erase(dataCycles.begin());
-			memoryController->receiveData(pendingReadData.front());
+			// Octopus: receiveData() keeps no pointer to the packet generateData() allocated;
+			// free it (it leaked 104 B per DRAM read)
+			BusPacket *data = pendingReadData.front();
+			memoryController->receiveData(data);
+			delete data;
 			pendingReadData.erase(pendingReadData.begin());
 		}
 	}
