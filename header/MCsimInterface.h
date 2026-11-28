@@ -31,6 +31,12 @@ namespace octopus
         int m_llc_id;
         int m_llc_line_size;
         int m_num_cores = 0;
+        // mcsim_bank_shift(i): the DRAM bank and bank-group fields are taken k bits higher in
+        // the address than MCsim's AddressMapping puts them; the k bits above them take their
+        // place (toMCsim()). 0 = MCsim's mapping unchanged.
+        int m_bank_shift = 0;
+        int m_swz_lo = 0, m_swz_w = 0;
+        uint64_t toMCsim(uint64_t a) const;
 
         uint64_t m_clk_cycle;
         uint64_t m_read_count;
@@ -64,7 +70,8 @@ namespace octopus
         // core_clock_mhz / the real core clock (gem5: set it to the CPU clock).
         MCsimInterface(CommunicationInterface *lower_interface, int dram_id, int llc_id,
                        int num_cores, int block_size, uint64_t clk_period,
-                       const std::string &mem_system = "FRFCFS", uint64_t core_clock_mhz = 2400);
+                       const std::string &mem_system = "FRFCFS", uint64_t core_clock_mhz = 2400,
+                       int bank_shift = 0);
         ~MCsimInterface();
 
         virtual void init();

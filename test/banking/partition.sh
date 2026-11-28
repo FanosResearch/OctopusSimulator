@@ -109,6 +109,15 @@ else bad "dram-bank-and-colour-overlapping: $(grep 'PagePlacer' "$D/out" | tr '\
 run dram+colour-x "$SN" "$PRIV" $MC -p "$L.partition[0].scheme(s)=dram_bank" -p "$L.partition[0].owners(s)=0:1;0:3;1-3:4-15" \
                   -p "$L.partition[1].scheme(s)=colour" -p "$L.partition[1].owners(s)=0:0;1:1;2:2;3:3" $PL
                                                                                 expect dram-bank-colour-disagree-refused 2 "" ""
+# mcsim_bank_shift(i)=4 reads the bank fields from bits 17-20 instead of 13-16 (the bits there move
+# down into MCsim's bank positions): colour and DRAM bank no longer share a bit, so each core uses
+# all 4 of its (colour, bank) pairs, the same placement that overlapped above
+run dram+colour-shift "$SN" "$PRIV" $MC $DB -p "mcsim_bank_shift(i)=4" -p "$L.partition[1].scheme(s)=colour" -p "$L.partition[1].owners(s)=0:0;1:1;2:2;3:3" $PL
+if [ "$RC" = 0 ] && grep -q "bits moved from 13-16 to 17-20" "$D/out" && ! grep -q "share address bits" "$D/out" \
+   && [ "$(grep -o 'pages on [0-9]*/[0-9]*' "$D/out" | sort -u)" = "pages on 4/4" ]
+then expect dram-bank-shift-separates-colour 0 "= 0" "= 0"
+else bad "dram-bank-shift-separates-colour: $(grep 'PagePlacer\|MCsimInterface' "$D/out" | tr '\n' ' ')"; fi
+run dram-shift-neg "$SN" "$PRIV" $MC $DB -p "mcsim_bank_shift(i)=-1";          expect dram-bank-shift-negative-refused 2 "" ""
 # another .ini mapping (FCFS: AddressMapping=012345, banks above the rows) is followed
 run dram-fcfs     "$SN" "$PRIV" $MC -p "mcsim_scheduler(s)=FCFS" $DB $PL;       expect dram-bank-fcfs-mapping 0 "= 0" "= 0"
 run dram-fixed    "$SN" "$PRIV" $DB $PL;                                         expect dram-bank-needs-mcsim 2 "" ""

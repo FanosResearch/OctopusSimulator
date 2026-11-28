@@ -513,6 +513,18 @@ groups x 4 banks; option: the 4 bank groups). Decisions (2026-11-24):
 - Overlap with colour or LLC bank bits is handled by joint placement (P5), which comes first.
 - Known MCsim limit: the decode keeps 32 bits of the line address (`unsigned tempA`), so address
   bits 38 and up are dropped. Bank bits are below that; rows of high trace addresses alias.
+- Separating DRAM banks from colours: under the default FRFCFS mapping (`401235`) the bank and
+  bank-group bits are 13-16, inside the colour bits of a larger LLC (a 2-bank, 1024-set-per-bank
+  LLC has colours on bits 12-16), so each colour sits in one DRAM bank and a colour split is also
+  a DRAM-bank split. `mcsim_bank_shift(i),k` (system parameter, default 0) reads the bank and
+  bank-group fields k bits higher: before MCsim decodes, `MCsimInterface::toMCsim()` moves address
+  bits [13 + k, 17 + k) into MCsim's bank positions and bits [13, 13 + k) up above them (a
+  bijection; for k = 4 a swap), and `DramMap` is given the shifted
+  positions, so the schemes, the placer and the startup decode check follow it. With k = 4 the
+  banks sit on bits 17-20 (the bank changes every 128 KiB instead of every 8 KiB) and colour and
+  DRAM-bank partitions are independent. It changes the platform (a stream sees less bank
+  parallelism), so a run with it is compared with a baseline that has it too. It needs adjacent
+  bank and bank-group fields and refuses k < 0.
 
 ### 6.10 MSHR and write-back buffer partitions
 

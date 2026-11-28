@@ -8,6 +8,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <algorithm>
 #include "../header/MCsimInterface.h"
 #include "../header/Logger.h"
 #include "DramMap.h"
@@ -21,7 +22,7 @@ namespace octopus
 {
     MCsimInterface::MCsimInterface(CommunicationInterface *lower_interface, int dram_id, int llc_id,
                                    int num_cores, int block_size, uint64_t clk_period,
-                                   const std::string &mem_system, uint64_t core_clock_mhz)
+                                   const std::string &mem_system, uint64_t core_clock_mhz, int bank_shift)
         : ClockedObj(clk_period) // == LLC period: one tick per core cycle (see header). Must be
                                  // non-zero: ClockManager reschedules at current_time+period, so
                                  // period 0 self-reschedules at the same timestamp forever.
@@ -60,9 +61,39 @@ namespace octopus
             unsigned blo = 0, bw = 0, glo = 0, gw = 0;
             bool hb = m_mcsim->dramFieldBits(2, blo, bw), hg = m_mcsim->dramFieldBits(1, glo, gw);
             MCsim::MultiChannelMemorySystem *mc = m_mcsim;
+            // mcsim_bank_shift(i) = k: the bank and bank-group fields must be adjacent; they are
+            // then read k bits higher in the address, and the k bits above them move down into
+            // MCsim's bank positions (rows still decode from the rest), so the banks sit above
+            // e.g. an LLC's page-colour bits and the two partitionings are independent
+            m_bank_shift = bank_shift;
+            if (m_bank_shift < 0)
+            {
+                cerr << "MCsimInterface: mcsim_bank_shift(i) must be >= 0" << endl;
+                exit(2);
+            }
+            if (m_bank_shift > 0)
+            {
+                unsigned lo = hb && hg ? std::min(blo, glo) : hb ? blo : glo;
+                unsigned w = (hb ? bw : 0) + (hg ? gw : 0);
+                bool adjacent = !(hb && hg) || blo + bw == glo || glo + gw == blo;
+                if (!(hb || hg) || !adjacent || w == 0)
+                {
+                    cerr << "MCsimInterface: mcsim_bank_shift(i) needs adjacent bank and bank-group fields in the AddressMapping" << endl;
+                    exit(2);
+                }
+                m_swz_lo = (int)lo + 6; m_swz_w = (int)w;
+                if (m_swz_lo + m_swz_w + m_bank_shift > 38)
+                {
+                    cerr << "MCsimInterface: mcsim_bank_shift(i) " << m_bank_shift << " moves the bank bits past bit 38 (MCsim decodes 32 bits of the line address)" << endl;
+                    exit(2);
+                }
+                cout << "MCsimInterface: DRAM bank/bank-group bits moved from " << m_swz_lo << "-" << m_swz_lo + m_swz_w - 1
+                     << " to " << m_swz_lo + m_bank_shift << "-" << m_swz_lo + m_swz_w + m_bank_shift - 1 << " (mcsim_bank_shift " << m_bank_shift << ")" << endl;
+            }
+            const int k = m_bank_shift;
             if (hb || hg)
-                DramMap::instance().set(hb ? (int)blo + 6 : 0, hb ? (int)bw : 0, hg ? (int)glo + 6 : 0, hg ? (int)gw : 0,
-                                        [mc](uint64_t a, unsigned &bg, unsigned &b) { mc->dramDecode(a, bg, b); });
+                DramMap::instance().set(hb ? (int)blo + 6 + k : 0, hb ? (int)bw : 0, hg ? (int)glo + 6 + k : 0, hg ? (int)gw : 0,
+                                        [mc, this](uint64_t a, unsigned &bg, unsigned &b) { mc->dramDecode(toMCsim(a), bg, b); });
         }
         m_num_cores = num_cores;
 
@@ -109,7 +140,7 @@ namespace octopus
             if (mcsimTraced(ready_msg.addr))
                 cout << "[mcsim] cyc " << m_clk_cycle << " request addr 0x" << std::hex << ready_msg.addr << std::dec << " msg " << ready_msg.msg_id
                      << " owner " << ready_msg.owner << (ready_msg.data == NULL ? " READ" : " WRITE") << " pending " << m_pending_requests.size() << endl;
-            if (m_mcsim->addRequest(ready_msg.owner, ready_msg.addr, ready_msg.data == NULL, m_llc_line_size)) // 1 -> Read, 0 -> Write
+            if (m_mcsim->addRequest(ready_msg.owner, toMCsim(ready_msg.addr), ready_msg.data == NULL, m_llc_line_size)) // 1 -> Read, 0 -> Write
             {
                 // DRAM bank partitioning: a read counts for its requester. A write-back's owner is
                 // whoever caused the eviction (the LLC, or the core whose miss evicted the line), not
@@ -169,7 +200,7 @@ namespace octopus
             cout << "[mcsim] cyc " << m_clk_cycle << " read_callback addr 0x" << std::hex << address << std::dec << " id " << id << " pending " << m_pending_requests.size() << endl;
         for (int i = 0; i < (int)m_pending_requests.size(); i++)
         {
-            if (m_pending_requests[i].addr == address)
+            if (toMCsim(m_pending_requests[i].addr) == address)
             {
                 uint64_t data = m_read_count;
                 m_read_count++;
@@ -199,6 +230,18 @@ namespace octopus
             cout << "MCsimInterface: Error read_callback couldn't find the pending request" << endl;
             exit(0);
         }
+    }
+
+    uint64_t MCsimInterface::toMCsim(uint64_t a) const
+    {
+        // MCsim's bank fields [lo, lo + w) get the address's bits [lo + k, lo + k + w); the bits
+        // [lo, lo + k) move up to [lo + w, lo + w + k). A bijection on [lo, lo + w + k).
+        if (m_bank_shift == 0) return a;
+        const int lo = m_swz_lo, w = m_swz_w, k = m_bank_shift;
+        const uint64_t span = ((1ull << (w + k)) - 1) << lo;
+        const uint64_t bank = (a >> (lo + k)) & ((1ull << w) - 1);
+        const uint64_t low = (a >> lo) & ((1ull << k) - 1);
+        return (a & ~span) | (bank << lo) | (low << (lo + w));
     }
 
     void MCsimInterface::write_callback(unsigned id, uint64_t address, uint64_t clock_cycle)

@@ -152,7 +152,9 @@ namespace octopus
             new MCsimInterface(bus[1]->getInterfaceFor(main_memory_id), main_memory_id, llc_id,
                                num_cores, /*block_size=*/64, llc_controller->getClkPeriod(), mem_system,
                                parameters.count(STRINGIFY(mcsim_core_clock_mhz))
-                                   ? (uint64_t)std::get<int>(parameters.at(STRINGIFY(mcsim_core_clock_mhz)).value) : 2400);
+                                   ? (uint64_t)std::get<int>(parameters.at(STRINGIFY(mcsim_core_clock_mhz)).value) : 2400,
+                               parameters.count(STRINGIFY(mcsim_bank_shift))
+                                   ? std::get<int>(parameters.at(STRINGIFY(mcsim_bank_shift)).value) : 0);
         }
         else
         {
