@@ -1,4 +1,4 @@
-llc_banks(i),2,,,#2-bank LLC derived from nano_single.csv by test/banking/make_banked.py (home_interleave_shift 0)
+llc_banks(i),2,,,#2-bank LLC: MultiCoreSystem_gem5_atp.csv with Nano L1/LLC sizes and mcsim_core_clock_mhz 1430 then banked by test/banking/make_banked.py (2 banks; home_interleave_shift 0)
 workload_path(s),log/,,,#Overridden by the gem5 bridge with its output directory (Logger report path),,
 num_cores(i),10,,,#gem5 L1 bridges: instruction caches 0-3 and data caches 4-7 (octopus_cache_hierarchy.py); ATP aggressor bridges 8 (DPU_1) and 9 (GPU),,
 cpu_type(s),ExternalCPU,,,#Requests are injected by the gem5 bridge,,
